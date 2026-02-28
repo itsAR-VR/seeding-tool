@@ -1,0 +1,108 @@
+1.0 Executive Overview
+Project Seed-Scale is an end-to-end workflow automation designed to manage high-volume
+influencer seeding. Its purpose is to drastically reduce manual coordinator hours, eliminate
+human error in order processing, and create a scalable, repeatable system for generating
+organic content.
+This v1.0 build is fully operational and ready for initial testing. It transforms the seeding process
+from a series of manual tasks into a centralized, automated flow, allowing one coordinator to
+manage the workload of several.
+2.0 The Automated Workflow (Step-by-Step)
+The system operates on a trigger-and-action basis, managed from a central Google Sheet.
+1. 2. 3. 4. 5. 6. 7. 8. 9. [MANUAL] Data Input: The process begins when an outreach coordinator populates a
+new row in the Google Sheet with an identified influencer's essential data (Name,
+Instagram Handle, Email).
+Automated Email Outreach: Upon QA confirmation, triggers a pre-approved,
+brand-specific email sequence from the brand's designated email alias.
+AI-Powered Response Handling: The integrated AI agent monitors the email thread for
+replies. It is trained to understand responses and engage in a natural conversation to
+acquire the necessary shipping information (Full Address, Product Choice, Size,
+Color, etc.).
+Automated Draft Order Creation: Once the AI successfully obtains the address, it
+connects to the brand's Shopify store via API and upon APPROVAL within the sheet
+creates a complete draft order with the correct products and Order Info [Tracking
+Number, Order ID, Fulfilment Status] being posted within the sheet.
+[MANUAL] Fulfillment: The brand's fulfillment team sees the new draft order and fulfills
+it as normal.
+Delivery Confirmation: The system continuously monitors the tracking number to
+confirm the package's delivery status.
+Automated Post-Delivery Follow-Up: 24 hours after a confirmed delivery, the system
+sends a pre-scripted follow-up email (e.g.,
+"Hope you love the product! Can't wait to see
+what you think.
+"). [To finalize by 11-06-25]
+Content Tracking (via Refunnel): The system connects to Refunnel to monitor the
+influencer's handle for new posts that tag the brand. It pulls the link for the content itself
+and the date for when it was posted. [Still to do is multiple posts with their relevant links
+being pulled in separate columns]
+Automated Non-Post Follow Up: If the influencer hasn't posted another 2 days after
+the first message at that point triggers another message, which then follows up with
+them again.
+10. Manual Intervention Flag: If an influencer does not respond to the initial email
+sequence after a set period or asks a question that requires human intervention, the
+corresponding cell in the Google Sheet is flagged RED, signaling to the coordinator that a
+manual intervention (e.g., an Instagram DM/email) is required. Once the coordinator
+manually obtains the info and inputs it, the automation resumes from Step 4.
+3.0 Per-Brand Deployment Requirements
+To deploy Project Seed-Scale for a new client, the following assets are required:
+●
+●
+●
+●
+●
+Shopify API & Webhook : A private app must be created with these permissions.
+[write_customers, read_customers, write_draft_orders,
+read_draft_orders, read_inventory, write_order_edits,
+read_order_edits, write_orders, read_orders, read_products,
+read_shipping, read_third_party_fulfillment_orders,
+read_custom_fulfillment_services,
+write_custom_fulfillment_services,
+read_fulfillment_constraint_rules,
+write_fulfillment_constraint_rules]
+Webhooks to our n8n workflow needs to be created in Shopify with a link to the
+production environment which is brand dependent.
+[example:
+https://companyname.app.n8n.cloud/webhook/shopify/fulfillment-cre
+ated • JSON]
+Dedicated Email Account: A G-Suite email account or alias for the brand (e.g.,
+collabs@brand.com) to be used for all automated outreach.
+Brand Persona & Voice Prompt: A 30-minute interview or a detailed document
+outlining the brand's tone of voice, key value propositions, and rules of engagement for
+the AI response agent.
+Email Sequence Copy: Pre-approved copy for the initial outreach and post-delivery
+follow-up emails.
+N8N account: All brand automations can be run through the same n8n account, but one
+needs to be provided for all workflows and automations to be in one place.
+4.0 v1.0 Limitations & v2.0 Feature Roadmap
+This initial version is a robust proof of concept with clear areas for expansion.
+●
+●
+Current v1.0 Limitations:
+○
+Does not automate the initial influencer identification process. This remains a
+manual task.
+○
+Does not automate or read Instagram DMs;.
+○
+Content tracking is limited to [Platform, Handle, Follower Count,
+Media URL, Media Type, Date Posted]
+Proposed v2.0 Roadmap (incorporating our discussion):
+○
+Automated Usage Rights: Upon detecting a post, trigger a secondary AI agent
+to automatically request usage rights via email or DM.
+○
+Advanced Content Ingestion: Integrate a tool to automatically download new
+content (video and static) once usage rights are secured.
+○
+AI-Powered Creative Editing: Connect the ingestion system to an AI video
+editor (e.g., based on the Sora/Imagen models) to automatically reformat content
+into ad-ready assets (9x16, 1x1, 4x5) and add brand-approved
+captions/headlines.
+○
+Automated Asset Delivery: Push the final, ad-ready assets directly into the
+brand's designated Dropbox/Google Drive folder and, ultimately, into the ad
+account.
+○
+Advanced Influencer Identification: Develop/Connect to an AI scraper to
+proactively identify on-brand influencers based on a complex set of criteria
+(persona, audience demographics, content style, engagement patterns), creating
+a continuously refreshed target list.

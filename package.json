@@ -1,0 +1,29 @@
+{
+  "name": "seeding-tool",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "audit:marketing": "tsx src/audit/runners/marketing.ts",
+    "audit:platform:bootstrap": "tsx src/audit/runners/platform-bootstrap.ts",
+    "audit:platform:campaign": "tsx src/audit/runners/platform-campaign.ts",
+    "audit:platform": "tsx src/audit/runners/platform.ts",
+    "audit:competitors": "tsx src/audit/runners/competitors.ts",
+    "audit:report": "tsx src/audit/report/report.ts",
+    "audit:all": "npm run audit:marketing && npm run audit:competitors && npm run audit:report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/node": "^25.2.0",
+    "playwright": "^1.58.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}
