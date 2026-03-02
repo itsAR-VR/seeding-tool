@@ -1,0 +1,2494 @@
+{
+  "name": "[AC] (2) Follow Up Seeding [PROD]",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "getAll",
+        "filters": {
+          "q": "=from:{{ $json.Email }} subject: Kalm - Partnership!"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -2352,
+        624
+      ],
+      "id": "0ccb3de4-b0ce-4f53-908f-35b5073f4e7f",
+      "name": "Get many messages",
+      "webhookId": "cd2d2bf1-188b-400c-886a-4a863f6de69c",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a564a374-c452-4cf3-88da-6104916ee390",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "={{ undefined }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "f246f2bf-b291-4d8e-b30c-87b66845b6b2",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "\"\"",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2160,
+        624
+      ],
+      "id": "7fb9467f-2e67-4918-97c7-97d48badc82c",
+      "name": "Answer ?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1f787a6-d42b-4024-a49b-8395cb4924ba",
+              "leftValue": "={{$json[\"Follow-up Emails Count\"] ? $json[\"Follow-up Emails Count\"]: 0 }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1664,
+        640
+      ],
+      "id": "27e139ed-14e2-4f01-8187-32f8e90e15f4",
+      "name": "Count > 5"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.fields[\"Follow-up Emails Count\"] }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "8c3e8b5f-8bbb-4750-b98d-1d8f1cf0f567"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a15de4bc-5f40-4427-88c0-01f4327e19db",
+                    "leftValue": "={{ $json.fields[\"Follow-up Emails Count\"] }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ea848c19-5d6d-4cd0-a653-efd9ed7cd6f7",
+                    "leftValue": "={{ $json.fields[\"Follow-up Emails Count\"] }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "98472f8c-5fdf-412a-8267-cf74dd1f1d6e",
+                    "leftValue": "={{ $json.fields[\"Follow-up Emails Count\"] }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8dc1159a-dc3e-4eab-9b1c-0501f062e7bb",
+                    "leftValue": "={{ $json.fields[\"Follow-up Emails Count\"] }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -1232,
+        576
+      ],
+      "id": "6ea6dd42-a955-4fe9-9b09-1e91d55819a1",
+      "name": "Follow Up"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Search count').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "= Hi {{ $('Search count').item.json[\"First Name\"] }}, just circling back in case you missed this! We’d still love to gift you our Mouth Tape. If you’d like one, simply share your shipping address and we’ll get it on the way.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -912,
+        304
+      ],
+      "id": "ef53a0af-681e-4433-b456-982be7d83d38",
+      "name": "Follow Up #1",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Search count').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "={{ $('Search count').item.json[\"First Name\"] }}, hope you're having a lovely week! We’d be so happy to send you a free 30-pack of our best-selling Mouth Tape.\n\nAll we need is your address and it’s on the way.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -912,
+        464
+      ],
+      "id": "77a45f46-b6ec-49a7-98b4-6a32e9d5b87f",
+      "name": "Follow Up #2",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Search count').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "=Hey {{ $('Search count').item.json[\"First Name\"] }}, just checking back in on this! If you’re still interested, we’d love to send you a month’s supply of our Mouth Tape.\n\nJust let us know your address!",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -912,
+        624
+      ],
+      "id": "15c5aa37-651e-46a5-9122-96f6f78c0257",
+      "name": "Follow Up #3",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Search count').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "=Hi {{ $('Search count').item.json[\"First Name\"] }}, stopping by with a gentle follow-up! If you’d still like to try our Mouth Tape, we can get a pack shipped to you today.\n\nShare your preferred address whenever you have a chance!",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -912,
+        784
+      ],
+      "id": "daba8036-0dbb-41a1-a0d1-eb1ed0546362",
+      "name": "Follow Up #4",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Search count').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "= Hi {{ $('Search count').item.json[\"First Name\"] }}, sending a final nudge your way! If it’s not something you want right now, that’s completely okay.\n\nBut if you’d still like a free 30-pack of our Mouth Tape, we’d love to send it. Just let us know your address!\n\nTeam Kalm",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -912,
+        944
+      ],
+      "id": "63454f14-91d5-4f08-9f1e-4fbbeaa978d7",
+      "name": "Follow Up #5",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        928
+      ],
+      "id": "543bf950-8a49-4f8f-914e-a6a2ba569003"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Google Sheets Trigger').item.json.Email }}",
+        "subject": "Kalm - Partnership!",
+        "emailType": "text",
+        "message": "=Hi {{ $('Extract First Name').item.json.firstName }}!\n\nI’m Kamila and I’m reaching out from Kalm! We’ve been following your content and genuinely love the energy you share because it aligns so naturally with the women we create for!\n\nWe’d love to gift you our best-selling  Mouth Tape! It has been helping thousands of women sleep deeper, reduce snoring, and wake up feeling hydrated and refreshed. There are absolutely no strings attached. We simply want to send you something we think you would enjoy and benefit from :) \n\nIf you’re open to it, just share your shipping address and we’ll send it out right away!  \n\nHere’s the product page if you want to take a look: https://clubkalm.com/collections/all/products/kalm-mouth-tape-refill\n\nTalk soon, \n\nTeam Kalm",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -2304,
+        -32
+      ],
+      "id": "201b296c-a00e-427b-bad2-d95049c9d8db",
+      "name": "Welcome",
+      "webhookId": "4ee75a0e-b815-44ac-bd2c-5b345779de7d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b089ee75-06af-4055-a4c7-1e3d66a08aa4",
+              "leftValue": "={{ $json.execution.mode }}",
+              "rightValue": "manual",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3312,
+        -352
+      ],
+      "id": "837bd8d9-8c5e-4a56-a9d9-0955b6730472",
+      "name": "PROD?"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error Workflow -  *{{ $json.workflow.name }}* - {{ $json.workflow.id }}\nId Execution: {{ $json.execution.id }}\nError: {{ $json.execution.error.message }}\nStack: {{ $json.execution.error.stack }}\nUrl: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -3088,
+        -368
+      ],
+      "id": "21495837-723b-428c-aa45-1def277c86ae",
+      "name": "Discord",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "WcIuEf9PFQJMBsKp",
+          "name": "ACRISTO"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3536,
+        -352
+      ],
+      "id": "320ab40b-1c04-4dca-ab00-4ed43384bb18",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 436993650,
+          "mode": "list",
+          "cachedResultName": "GHL",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=436993650"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3488,
+        -32
+      ],
+      "id": "89ede9c8-542d-404e-9935-cd3f0e5c2347",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "4nWQ8XLsvi0HZRtl",
+          "name": "Google Sheets Trigger account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const fullName = item.json.fields?.[\"Full Name\"] || item.json.Name || '';\n  \n  // Limpiar y extraer primer nombre\n  let firstName = fullName\n    // Reemplazar separadores comunes por espacio\n    .replace(/[|._\\-]/g, ' ')\n    // Eliminar caracteres especiales excepto letras y espacios\n    .replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\\s]/g, '')\n    // Eliminar espacios múltiples\n    .replace(/\\s+/g, ' ')\n    .trim()\n    // Tomar primera palabra\n    .split(' ')[0];\n  \n  // Convertir a Title Case (Primera letra mayúscula, resto minúscula)\n  firstName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();\n  \n  results.push({\n    json: {\n      ...item.json,\n      firstName: firstName\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2880,
+        -16
+      ],
+      "id": "15881f85-c48d-4bc8-bb8c-4d7412f543d6",
+      "name": "Extract First Name"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2768,
+        608
+      ],
+      "id": "a72afc7f-eab9-41bc-9a68-24dc6f2fc144",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -3408,
+        608
+      ],
+      "id": "a2b00ea6-9078-410b-bf1b-948d34f5ad1c",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "=AND({Username} = \"{{ $json.Username }}\", {Follow-up Date} = '')",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -2704,
+        -16
+      ],
+      "id": "5ab8cba7-a2dc-492d-b5e8-1f51cde48b2a",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "##  Welcome message \n\nUpdate Name & follow uo Date\n",
+        "height": 400,
+        "width": 1968
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3584,
+        -144
+      ],
+      "id": "99c31706-1b7f-4ac9-ab29-f2e96e722367",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 208,
+        "width": 704,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3584,
+        -400
+      ],
+      "id": "65d38aed-fe96-4732-8d55-2890b1a66e62",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $('Date & Email ?').item.json.Username || $('Date & Email ?').item.json.fields.Username || \"\" }}",
+            "First Name": "={{ $('Extract First Name').item.json.firstName }}",
+            "Follow-up Date": "={{ $now.toISO()}}",
+            "Post": 0,
+            "History": 0,
+            "Follow-up Emails Count": 0,
+            "First Follow Up Date": "={{ $now.toISO()}}",
+            "Response Count Address": 0
+          },
+          "matchingColumns": [
+            "Username"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Orden Shopify ID",
+              "displayName": "Orden Shopify ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Order Placed Date",
+              "displayName": "Order Placed Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivered Date",
+              "displayName": "Delivered Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post",
+              "displayName": "Post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "History",
+              "displayName": "History",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Shopify Order",
+              "displayName": "Shopify Order",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Reminder Date Mentions",
+              "displayName": "Reminder Date Mentions",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Outreach Sent",
+              "displayName": "Outreach Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Deliverability",
+              "displayName": "Deliverability",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Reply",
+              "displayName": "Reply",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Opt-ins",
+              "displayName": "Opt-ins",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Placed",
+              "displayName": "Orders Placed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Delivered",
+              "displayName": "Orders Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery Success",
+              "displayName": "Delivery Success",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Median Delivery Days",
+              "displayName": "Median Delivery Days",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Post Rate",
+              "displayName": "Post Rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "First Follow Up Date",
+              "displayName": "First Follow Up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -2096,
+        -32
+      ],
+      "id": "0ec1ce58-dc2d-4c30-9eda-c3c0e1a48237",
+      "name": "Update Data",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me1",
+      "typeVersion": 1,
+      "position": [
+        -2544,
+        624
+      ],
+      "id": "9ab5a48d-a2c9-4798-9d7e-19699989a9d8"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "={Username} = \"{{ $('Replace Me1').item.json.Username }}\" ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1888,
+        640
+      ],
+      "id": "46579f72-ee3f-483e-8fdf-74d704c52420",
+      "name": "Search count",
+      "alwaysOutputData": false,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "=AND(NOT({Follow-up Date} = ''), {Follow-up Emails Count} != 5)",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -3200,
+        608
+      ],
+      "id": "9ec5b97c-6201-421d-9db4-0d64dc1f20a7",
+      "name": "Search influencer",
+      "alwaysOutputData": false,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c732aaac-d41e-4b44-a173-9d3c1c4dbb6a",
+              "leftValue": "={{ $json[\"Follow-up Date\"] }}",
+              "rightValue": "={{ $now.minus(3, 'days').toISO() }}",
+              "operator": {
+                "type": "dateTime",
+                "operation": "before"
+              }
+            },
+            {
+              "id": "6453d100-4f69-4961-a45a-423856280679",
+              "leftValue": "={{ $json.Email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "10831933-4093-4ced-ada2-09d5191d19f8",
+              "leftValue": "={{ $json[\"Follow-up Emails Count\"] }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -2992,
+        608
+      ],
+      "id": "bd38cebb-fd8e-421d-bb35-bc75b8d9e50b",
+      "name": "3 days & Email & 5 Follow"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -16,
+        928
+      ],
+      "id": "38667e9d-82ee-4d3c-9175-6365f3a75d3e",
+      "name": "Wait 1 min",
+      "webhookId": "0a51ba72-964d-4c53-ae6c-dab763bd54e5"
+    },
+    {
+      "parameters": {
+        "content": "## Follow UP\n",
+        "height": 880,
+        "width": 3840,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -3584,
+        288
+      ],
+      "id": "1dad2904-3760-47b2-9902-479c7360dc0f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $json.Username || \"\" }}",
+            "Follow-up Emails Count": "={{ ($json[\"Follow-up Emails Count\"] ? $json[\"Follow-up Emails Count\"] : 0) + 1 }}",
+            "Follow-up Date": "={{ $now.toISO()}}"
+          },
+          "matchingColumns": [
+            "Username"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1424,
+        624
+      ],
+      "id": "4844d63e-9cad-48f1-8b78-41f4842161c6",
+      "name": "Update Date & Count Follow",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -2160,
+        880
+      ],
+      "id": "b3a5940a-ad83-47af-ada3-d07c8f829bd8",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -3280,
+        -32
+      ],
+      "id": "72db1c1e-98dc-4492-9889-76c4660c7e15",
+      "name": "Loop Over Items1"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me2",
+      "typeVersion": 1,
+      "position": [
+        -3072,
+        -16
+      ],
+      "id": "9c3340b2-38b5-4e62-a602-8227f544cb4b"
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -1904,
+        -32
+      ],
+      "id": "75589394-39be-48a7-a8af-e50427b56c44",
+      "name": "Wait 2 minutes",
+      "webhookId": "35b197f7-4cb5-41ee-8460-4a1b1fba349e"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a1aaffbc-44e2-4de5-ac5e-eb0a29e23a24",
+              "leftValue": "={{ $('Google Sheets Trigger').item.json.Email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "afe3ef68-d6dc-40c2-b3cc-64df75dce2ce",
+              "leftValue": "={{$json}}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2512,
+        -16
+      ],
+      "id": "a9c9922c-67b0-45ff-bae2-1b18ca10db2a",
+      "name": "Date & Email ?"
+    }
+  ],
+  "pinData": {
+    "Get many messages": [
+      {
+        "json": {
+          "id": "19bdc14c7dc709f9",
+          "threadId": "19b02f9af5550789",
+          "snippet": "hi my address 1911 morning drive orlando florida 32908",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 7578,
+          "historyId": "645624",
+          "internalDate": "1768923895000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@teamkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "id": "19bdbd39a0333ff4",
+          "threadId": "19b02f9af5550789",
+          "snippet": "hiiii On Wed, Jan 14, 2026 at 1:32 PM <creators@clubkalm.com> wrote: So glad to hear you're giving the Mouth Tape a try! Hope you love the extra calm it brings to your nights—it's a game",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 9097,
+          "historyId": "645526",
+          "internalDate": "1768919622000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@clubkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "id": "19b0308f7cc45777",
+          "threadId": "19b02f9af5550789",
+          "snippet": "my address is 1911 morning drive orlando florida 32809",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 6275,
+          "historyId": "628380",
+          "internalDate": "1765282462000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@clubkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "id": "19b030728a14c6aa",
+          "threadId": "19b02f9af5550789",
+          "snippet": "tell me more On Tue, Dec 9, 2025 at 8:10 AM <creators@clubkalm.com> wrote: Yes—happy to send you a complimentary kit, no strings attached. Kalm Mouth Tape is a soft, skin-friendly strip that",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 7762,
+          "historyId": "628380",
+          "internalDate": "1765282344000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@clubkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "id": "19b0305a0322c63c",
+          "threadId": "19b02f9af5550789",
+          "snippet": "Yes, I am interested. what is the mounth tape ? On Tue, Dec 9, 2025 at 8:10 AM <creators@clubkalm.com> wrote: Yes—happy to send you a complimentary kit, no strings attached. Kalm Mouth Tape is a",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 7803,
+          "historyId": "628380",
+          "internalDate": "1765282245000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@clubkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "id": "19b030308dbab6f6",
+          "threadId": "19b02f9af5550789",
+          "snippet": "Hi is free ? On Tue, Dec 9, 2025 at 7:57 AM <creators@clubkalm.com> wrote: Hi Manuel Marmol! I'm Kamila and I'm reaching out from Kalm! We've been following your content and genuinely",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 8308,
+          "historyId": "628380",
+          "internalDate": "1765282075000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Manuel Marmol <manuel@acristoengine.com>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@clubkalm.com"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-01-20T10:54:04.168-05:00",
+          "Readable date": "January 20th 2026, 10:54:04 am",
+          "Readable time": "10:54:04 am",
+          "Day of week": "Tuesday",
+          "Year": "2026",
+          "Month": "January",
+          "Day of month": "20",
+          "Hour": "10",
+          "Minute": "54",
+          "Second": "04",
+          "Timezone": "America/Toronto (UTC-05:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Replace Me1": [
+      {
+        "json": {
+          "id": "recUQoMuLyCPPnAVB",
+          "createdTime": "2026-01-20T14:46:58.000Z",
+          "Username": "Manuel",
+          "Approved": "Waiting Approval",
+          "Entry Date": "2026-01-20",
+          "Full Name": "Manuel Marmol",
+          "Email": "manuel@acristoengine.com",
+          "Business Address": "1911 morning drive orlando florida 32908",
+          "First Name": "Manuel",
+          "Follow-up Date": "2026-01-16",
+          "Follow-up Emails Count": 0,
+          "Response Count Address": 0
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "3 days & Email & 5 Follow": [
+      {
+        "json": {
+          "id": "recUQoMuLyCPPnAVB",
+          "createdTime": "2026-01-20T14:46:58.000Z",
+          "Username": "Manuel",
+          "Approved": "Waiting Approval",
+          "Entry Date": "2026-01-20",
+          "Full Name": "Manuel Marmol",
+          "Email": "manuel@acristoengine.com",
+          "Business Address": "1911 morning drive orlando florida 32908",
+          "First Name": "Manuel",
+          "Follow-up Date": "2026-01-16",
+          "Follow-up Emails Count": 0,
+          "Response Count Address": 0
+        },
+        "pairedItem": {
+          "item": 2
+        }
+      }
+    ],
+    "Google Sheets Trigger": [
+      {
+        "json": {
+          "Name": "Sue M",
+          "Email": "sue.silverowl@gmail.com",
+          "Username": "silverowl_64",
+          "Platform": "https://www.instagram.com/silverowl_64",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      },
+      {
+        "json": {
+          "Name": "Francesca",
+          "Email": "sitnb@kpnmail.nl",
+          "Username": "silver.isthenew.black",
+          "Platform": "https://www.instagram.com/silver.isthenew.black",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 1
+        }
+      },
+      {
+        "json": {
+          "Name": "Priscila Barros ✨",
+          "Email": "primeiramentepb@gmail.com",
+          "Username": "pri.meiramente",
+          "Platform": "https://www.instagram.com/pri.meiramente",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 2
+        }
+      },
+      {
+        "json": {
+          "Name": "Michele Baratta-Detwiler / Bella Branch DIY",
+          "Email": "hello@BellaBranchDIY.com",
+          "Username": "bellabranchdiy",
+          "Platform": "https://www.instagram.com/bellabranchdiy",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 3
+        }
+      },
+      {
+        "json": {
+          "Name": "SweaStyle",
+          "Email": "collab@sweastyle.com",
+          "Username": "sweastyle",
+          "Platform": "https://www.instagram.com/sweastyle",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 4
+        }
+      },
+      {
+        "json": {
+          "Name": "Miranda Wilson MSN-FNP",
+          "Email": "miranda@underscoretalent.com",
+          "Username": "np.miranda",
+          "Platform": "https://www.instagram.com/np.miranda",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 5
+        }
+      },
+      {
+        "json": {
+          "Name": "Tera O'Hara",
+          "Email": "nbutts@fordmodels.com",
+          "Username": "teraohara",
+          "Platform": "https://www.instagram.com/teraohara",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 6
+        }
+      },
+      {
+        "json": {
+          "Name": "Tanya Bardsley",
+          "Email": "leisa@hosttalentgroup.com",
+          "Username": "tanyabardsley7",
+          "Platform": "https://www.instagram.com/tanyabardsley7",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 7
+        }
+      },
+      {
+        "json": {
+          "Name": "Manuel Marmol",
+          "Email": "manuel@acristoengine.com",
+          "Username": "Manuel",
+          "Platform": "https://www.instagram.com/Manuel",
+          "Count": "",
+          "Follow up": "",
+          "Orden ID": "",
+          "Thread ID": "",
+          "Message ID": "",
+          "Delivered": "",
+          "Post": "",
+          "History": "",
+          "Delivered Date": "",
+          "Follow-up Date": ""
+        },
+        "pairedItem": {
+          "item": 8
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Get many messages": {
+      "main": [
+        [
+          {
+            "node": "Answer ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer ?": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count > 5": {
+      "main": [
+        [
+          {
+            "node": "Update Date & Count Follow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up": {
+      "main": [
+        [
+          {
+            "node": "Follow Up #1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow Up #2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow Up #3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow Up #4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow Up #5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up #1": {
+      "main": [
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up #2": {
+      "main": [
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up #3": {
+      "main": [
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up #4": {
+      "main": [
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow Up #5": {
+      "main": [
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Wait 1 min",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Welcome": {
+      "main": [
+        [
+          {
+            "node": "Update Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PROD?": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "PROD?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract First Name": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Replace Me1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Date & Email ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search influencer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Data": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me1": {
+      "main": [
+        [
+          {
+            "node": "Get many messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search count": {
+      "main": [
+        [
+          {
+            "node": "Count > 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search influencer": {
+      "main": [
+        [
+          {
+            "node": "3 days & Email & 5 Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "3 days & Email & 5 Follow": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 1 min": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Date & Count Follow": {
+      "main": [
+        [
+          {
+            "node": "Follow Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Replace Me2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me2": {
+      "main": [
+        [
+          {
+            "node": "Extract First Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 minutes": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Date & Email ?": {
+      "main": [
+        [
+          {
+            "node": "Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f0c70a91-a525-4d67-83fd-1a383481c53c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "gt1mI7ckbbQuKuew",
+  "tags": []
+}

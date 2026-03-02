@@ -1,0 +1,2330 @@
+{
+  "name": "[AC] Message System [Draft]",
+  "nodes": [
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "provider_id",
+              "value": "={{ $json.provider_id || $json.provider_messaging_id || $json.provider_internal_id || $json.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        336
+      ],
+      "id": "daaafbf2-9257-4bde-8bc7-47549f0aeb82",
+      "name": "Normalize Provider ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c69b6520-2e98-4def-8731-002fe9dab03f",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        144,
+        336
+      ],
+      "id": "246aac55-32b1-41bb-ab8b-65a487ffc247",
+      "name": "Attendee ?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "bac24659-66f1-44d7-a21d-448aa75e1ae4",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        976,
+        256
+      ],
+      "id": "43bc4e7e-0d1e-44f0-bd9f-b0df423fd44b",
+      "name": "Chat existente ?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api11.unipile.com:14124/api/v1/chats/{{ $json.id }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "multipart/form-data"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{ $vars.SendDMMessageEmailInstagram }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1216,
+        208
+      ],
+      "id": "6075ee84-1c8c-44f3-a636-3e424018094e",
+      "name": "Send Message in Existing Chat",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "O5r606CaqYoLOS0W",
+          "name": "Bearer Auth account"
+        },
+        "httpHeaderAuth": {
+          "id": "kLh2US8AwlRn3jSp",
+          "name": "UNIPILE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2528,
+        320
+      ],
+      "id": "8c09198d-47ff-419b-a3ee-3efa63a51f82",
+      "name": "Schedule Trigger",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "message-chat-instagram",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -2512,
+        752
+      ],
+      "id": "93b58a4a-cc39-44b1-b7b7-ddd48a97da41",
+      "name": "Webhook",
+      "webhookId": "7e8b6602-645f-4dd7-ac27-363efc13f004"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api11.unipile.com:14124/api/v1/chats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{$vars.ChatInstagramAttendee_id}}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $vars.SendDMMessageEmailInstagram }}"
+            },
+            {
+              "name": "attendees_ids",
+              "value": "={{ $('Normalize Provider ID').item.json.provider_messaging_id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 100000000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1216,
+        432
+      ],
+      "id": "bdffa937-c459-4df4-b853-5c3b25337693",
+      "name": "Start New Chat",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "O5r606CaqYoLOS0W",
+          "name": "Bearer Auth account"
+        },
+        "httpHeaderAuth": {
+          "id": "kLh2US8AwlRn3jSp",
+          "name": "UNIPILE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=https://api11.unipile.com:14124/api/v1/users/{{$json.username}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "account_id",
+              "value": "={{$vars.ChatInstagramAttendee_id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -592,
+        336
+      ],
+      "id": "06a7c092-cdd5-44ff-9e20-92ed7311659a",
+      "name": "Get Provider ID",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "O5r606CaqYoLOS0W",
+          "name": "Bearer Auth account"
+        },
+        "httpHeaderAuth": {
+          "id": "kLh2US8AwlRn3jSp",
+          "name": "UNIPILE"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 320906009,
+          "mode": "list",
+          "cachedResultName": "Send Message Approved",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=320906009"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1696,
+        304
+      ],
+      "id": "99d423ae-a265-4329-8b78-d42265443767",
+      "name": "Get Data Send Email Username",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 320906009,
+          "mode": "list",
+          "cachedResultName": "Send Message Approved",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=320906009"
+        },
+        "startIndex": "={{ $('Replace Me').item.json.row_number }}",
+        "numberToDelete": "={{ $('Replace Me').item.json.row_number }}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1808,
+        432
+      ],
+      "id": "c4b774ee-0c37-4856-bd11-b7c5684317a0",
+      "name": "Clean User",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1152,
+        320
+      ],
+      "id": "139e58be-81da-49f1-8330-f8ecd492c495",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        -816,
+        336
+      ],
+      "id": "1d0d7c41-fda4-4f05-ae81-27839b57743b"
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2416,
+        528
+      ],
+      "id": "0a177ab2-cf5e-425b-a9ba-e6fe555146d7",
+      "name": "Wait",
+      "webhookId": "3f20eba7-c966-4e8a-adcb-e8b504999c0b"
+    },
+    {
+      "parameters": {
+        "content": "Ask for email DM instagram\nUNIPILE\n",
+        "height": 80,
+        "width": 160,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2528,
+        176
+      ],
+      "id": "5a8f0495-27a7-44f9-9ad4-cd9329e6e4f4",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0978d3fb-11a0-4743-8d76-a09c041bdf03",
+              "leftValue": "={{ $json.Locked }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2096,
+        320
+      ],
+      "id": "b535d82b-7da8-4458-998c-46c8c943384a",
+      "name": "Active Workflow ?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Workflow",
+              "lookupValue": "MyFlow"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2304,
+        320
+      ],
+      "id": "726bf1ce-f895-40d9-8cfa-b84d0c60593c",
+      "name": "Read Active Workflow",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -3600,
+        224
+      ],
+      "id": "b7f84a7c-fd89-4042-a9f3-ae2c53587bed",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error Workflow -  *{{ $json.workflow.name }}* - {{ $json.workflow.id }}\nId Execution: {{ $json.execution.id }}\nError: {{ $json.execution.error.message }}\nStack: {{ $json.execution.error.stack }}\nUrl: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -3136,
+        208
+      ],
+      "id": "892e33cc-cd94-48de-9c4f-901829b5b930",
+      "name": "Discord",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "i0AdU91u5MiaI6jy",
+          "name": "Discord Webhook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b089ee75-06af-4055-a4c7-1e3d66a08aa4",
+              "leftValue": "={{ $json.execution.mode }}",
+              "rightValue": "manual",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -3392,
+        224
+      ],
+      "id": "af794dc8-d17d-477d-b94d-db341075f79c",
+      "name": "PROD?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "1"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1872,
+        304
+      ],
+      "id": "992e0ae9-3a28-4510-9602-24f8162087d5",
+      "name": "Update True",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Number Day": "={{ $json[\"Number Day\"] + 1 }} "
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1648,
+        432
+      ],
+      "id": "7d988f56-11ba-49b4-83eb-6b14f498b982",
+      "name": "Update Count",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1456,
+        432
+      ],
+      "id": "4806c017-a970-48a4-857d-e63b02dd59ac",
+      "name": "Get Count",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "0"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -816,
+        176
+      ],
+      "id": "f8dfcaf4-400f-4d58-98ed-0c28a398d533",
+      "name": "Update False",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1dee6222-e724-4d5b-a8f2-afce26c74478",
+              "leftValue": "={{$('Update Count').item.json.Locked }}",
+              "rightValue": "20",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        432
+      ],
+      "id": "7d5e643b-3388-48a5-9b47-6396b4c0256e",
+      "name": "20 message for day"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3600,
+        448
+      ],
+      "id": "047ae6e8-d6d1-44c6-9ad7-1f71b80c2533",
+      "name": "Schedule Trigger1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "3"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2944,
+        208
+      ],
+      "id": "90d5d0d7-dc3f-4754-8dd8-815bc5c464f7",
+      "name": "Update False2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "0"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -3136,
+        448
+      ],
+      "id": "e2c7bd28-faa2-419d-90ce-4423a88aec76",
+      "name": "Update False3",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Number Day": "=0"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number Day",
+              "displayName": "Number Day",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -2944,
+        448
+      ],
+      "id": "ce7c34b0-db5d-421b-8f37-c873c5e7fc67",
+      "name": "Update Count2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "Get DM Email Instagram ManyChat\n",
+        "height": 80,
+        "width": 150
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -2528,
+        640
+      ],
+      "id": "c39a7603-4123-4000-8424-6694da0580a7",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener el email del campo directo\nlet email = $input.first().json.body.data.email;\n\n// Si el email es null o vacío, buscar en last_input_text\nif (!email) {\n  const lastInputText = $input.first().json.body.data.last_input_text;\n  \n  if (lastInputText) {\n    // Regex para extraer email\n    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/;\n    const match = lastInputText.match(emailRegex);\n    \n    if (match) {\n      email = match[0];\n    }\n  }\n}\n\n// Retornar el resultado\nreturn {\n  json: {\n    email: email || null,\n    email_found: !!email,\n    source: email ? ($input.first().json.body.data.email ? 'email_field' : 'last_input_text') : 'not_found'\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2304,
+        752
+      ],
+      "id": "e0c7b533-936f-4b7d-9b2d-901005eb2015",
+      "name": "Get Email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4d1ea022-7ff2-45e5-ab8e-72366bf8ea19",
+              "leftValue": "={{ $json.email_found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        -2096,
+        752
+      ],
+      "id": "0a067268-5a9c-4bff-8369-53f0a27414ab",
+      "name": "Email ?"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "={Username} = \"{{ $('Webhook').item.json.body.data.ig_username }}\" ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1888,
+        752
+      ],
+      "id": "7b1e316d-0994-4827-b2d4-3d054c1f6b4e",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "892f74fa-8bff-491a-9ea1-3909681319b8",
+              "leftValue": "={{ $json.Username }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1664,
+        752
+      ],
+      "id": "7f3a718b-4979-4ecb-8c2e-27f9b8aa9f3a",
+      "name": "Exist ?1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $json.Username }}",
+            "Email": "={{ $('Email ?').item.json.email }}"
+          },
+          "matchingColumns": [
+            "Username"
+          ],
+          "schema": [
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -1408,
+        736
+      ],
+      "id": "7aaf491a-3848-41ff-8e50-fd49c8e56d3d",
+      "name": "Update Email Sheet",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $json.fields.Username }}",
+            "Email": "={{ $json.fields.Email }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Email Link",
+              "displayName": "Email Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Approved?",
+              "displayName": "Approved?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Street",
+              "displayName": "Street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Zip",
+              "displayName": "Zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tracking #",
+              "displayName": "Tracking #",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tracking Link",
+              "displayName": "Tracking Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shipped Date",
+              "displayName": "Shipped Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Current Status",
+              "displayName": "Current Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order Created?",
+              "displayName": "Shopify Order Created?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 1",
+              "displayName": "Column 1",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 2",
+              "displayName": "Column 2",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 3",
+              "displayName": "Column 3",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 4",
+              "displayName": "Column 4",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 5",
+              "displayName": "Column 5",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 6",
+              "displayName": "Column 6",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Column 7",
+              "displayName": "Column 7",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1200,
+        736
+      ],
+      "id": "1f7f2eea-6181-4dfd-8aa3-d00d4be7ebad",
+      "name": "Update Email Master Seeding",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7b0ada25-25b6-4e3f-9508-b5ffa27f23e4",
+              "leftValue": "={{ $json.username }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1520,
+        304
+      ],
+      "id": "9c2942a7-c4f1-44c5-b14a-8bc8e1ba845e",
+      "name": "Username ?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// VERSIÓN CON CURSOR-BASED PAGINATION\n// (Si el offset no funciona, Unipile probablemente usa cursor)\n\nconst accountId = $vars.ChatInstagramAttendee_id;\nconst providerIdToFind = $input.first().json.provider_messaging_id;\nconst baseUrl = 'https://api11.unipile.com:14124/api/v1/chats';\nconst limit = 250;\nconst maxPages = 50;\n\nlet found = null;\nlet totalSearched = 0;\nlet cursor = null;\nlet hasMore = true;\nlet page = 0;\n\nconsole.log(`🔍 Iniciando búsqueda de provider_id: ${providerIdToFind}`);\nconsole.log(`📌 Usando CURSOR-BASED PAGINATION`);\n\nwhile (hasMore && page < maxPages) {\n  page++;\n  \n  console.log(`📄 Página ${page}${cursor ? ` - Cursor: ${cursor.substring(0, 20)}...` : ' - Primera página'}`);\n  \n  try {\n    // Construir URL con cursor o sin cursor (primera página)\n    let url = `${baseUrl}?account_id=${accountId}&limit=${limit}`;\n    if (cursor) {\n      url += `&cursor=${cursor}`;\n    }\n    \n    console.log(`🌐 URL: ${url.substring(0, 100)}...`);\n    \n    const response = await this.helpers.httpRequest({\n      method: 'GET',\n      url: url,\n      headers: {\n        'X-API-KEY': 'nfNKWtuX.gIIVDcXhVxriEekH6epOkRKGCkVI8HPnZGOMxUe18rU='\n      },\n      json: true\n    });\n    \n    // Log completo de la respuesta en la primera página\n    if (page === 1) {\n      console.log(`📋 Estructura de respuesta:`, Object.keys(response));\n      console.log(`📋 Campos disponibles:`, JSON.stringify(Object.keys(response), null, 2));\n    }\n    \n    if (!response.items || response.items.length === 0) {\n      console.log(`⚠️ No hay más items en página ${page}`);\n      hasMore = false;\n      break;\n    }\n    \n    totalSearched += response.items.length;\n    console.log(`   ✓ ${response.items.length} items en esta página. Total: ${totalSearched}`);\n    console.log(response.items)\n    // Log de IDs para debug\n    if (response.items.length > 0) {\n      console.log(`   🔢 Primer provider_id: ${response.items[0].provider_id}`);\n      console.log(`   🔢 Último provider_id: ${response.items[response.items.length - 1].provider_id}`);\n    }\n    \n    // Buscar en esta página\n    const match = response.items.find(item => \n      String(item.provider_id) === String(providerIdToFind)\n    );\n    \n    if (match) {\n      found = match;\n      console.log(`🎉 ¡ENCONTRADO en página ${page}!`);\n      console.log(`   Nombre: ${match.name || 'N/A'}`);\n      console.log(`   Provider ID: ${match.provider_id}`);\n      break;\n    }\n    \n    // Buscar el campo de cursor (puede llamarse: cursor, next_cursor, next, continuation_token, etc)\n    cursor = response.cursor || response.next_cursor || response.next || response.continuation_token || response.nextCursor;\n    \n    if (page === 1) {\n      console.log(`🔍 Campo de cursor encontrado: ${cursor ? 'SÍ' : 'NO'}`);\n      if (cursor) {\n        console.log(`   Cursor value: ${cursor.substring(0, 50)}...`);\n      }\n    }\n    \n    // Si no hay cursor y ya procesamos items, verificar otros indicadores\n    if (!cursor) {\n      // Verificar si hay un campo \"has_more\" o similar\n      const hasMoreField = response.has_more || response.hasMore || response.more;\n      console.log(`🔍 Campo has_more: ${hasMoreField}`);\n      \n      if (hasMoreField === false) {\n        console.log(`✓ API indica que no hay más páginas`);\n        hasMore = false;\n        break;\n      }\n      \n      // Si obtuvimos menos items que el límite, es la última página\n      if (response.items.length < limit) {\n        console.log(`✓ Última página alcanzada (${response.items.length} < ${limit})`);\n        hasMore = false;\n        break;\n      }\n      \n      // Si no hay cursor y seguimos teniendo items = usar offset como fallback\n      console.log(`⚠️ No se encontró cursor, intentando offset como fallback`);\n      cursor = `offset_${page * limit}`;\n    }\n    \n  } catch (error) {\n    console.error(`❌ Error en página ${page}:`, error.message);\n    console.error(`Full error:`, JSON.stringify(error, null, 2));\n    hasMore = false;\n    break;\n  }\n}\n\nif (found) {\n  return {\n    json: {\n      ...found,\n        found: true,\n        total_chats_searched: totalSearched,\n        pages_searched: page\n    }\n  };\n} else {\n  console.log(`❌ NO ENCONTRADO después de buscar en ${totalSearched} chats (${page} páginas)`);\n  return {\n    json: {\n      found: false,\n      provider_id_searched: providerIdToFind,\n      total_chats_searched: totalSearched,\n      pages_searched: page,\n      message: 'Provider ID no encontrado. Revisa los logs para ver cómo funciona la paginación.'\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        336
+      ],
+      "id": "bd93f5c6-fc38-428e-9873-50390f6ee2e7",
+      "name": "Search (Cursor Pagination)"
+    },
+    {
+      "parameters": {
+        "jsCode": "// PAGINACIÓN CON CURSOR para buscar chat por provider_id\nconst accountId = $input.first().json.account_id;\nconst providerIdToFind = $('Normalize Provider ID').first().json.provider_messaging_id\nconst baseUrl = 'https://api11.unipile.com:14124/api/v1/chats';\nconst limit = 250;\nconst maxPages = 50;\n\nlet found = null;\nlet totalSearched = 0;\nlet cursor = null;\nlet hasMore = true;\nlet page = 0;\n\nconsole.log(`🔍 Buscando provider_id: ${providerIdToFind}`);\nconsole.log(`📱 Account ID: ${accountId}`);\n\nwhile (hasMore && page < maxPages) {\n  page++;\n  console.log(`\\n📄 Página ${page}${cursor ? ` - Cursor: ${cursor.substring(0, 20)}...` : ' - Primera página'}`);\n  \n  try {\n    // Construir URL\n    let url = `${baseUrl}?account_type=INSTAGRAM&account_id=${accountId}&limit=${limit}`;\n    if (cursor) {\n      url += `&cursor=${cursor}`;\n    }\n    \n    const response = await this.helpers.httpRequest({\n      method: 'GET',\n      url: url,\n      headers: {\n        'X-API-KEY': 'nfNKWtuX.gIIVDcXhVxriEekH6epOkRKGCkVI8HPnZGOMxUe18rU='\n      },\n      json: true\n    });\n    \n    // Log estructura en primera página\n    if (page === 1) {\n      console.log(`📋 Campos en respuesta:`, Object.keys(response));\n    }\n    \n    if (!response.items || response.items.length === 0) {\n      console.log(`⚠️ No hay más chats`);\n      break;\n    }\n    \n    totalSearched += response.items.length;\n    console.log(`   ✓ ${response.items.length} chats. Total: ${totalSearched}`);\n    \n    if (response.items.length > 0) {\n      console.log(`   🔢 Primer provider_id: ${response.items[0].provider_id}`);\n    }\n    \n    // BUSCAR en esta página\n    const match = response.items.find(item => \n      String(item.provider_id) === String(providerIdToFind)\n    );\n    \n    if (match) {\n      found = match;\n      console.log(`\\n🎉 ¡ENCONTRADO en página ${page}!`);\n      console.log(`   Nombre: ${match.name || 'N/A'}`);\n      console.log(`   Provider ID: ${match.provider_id}`);\n      console.log(`   ID: ${match.id}`);\n      break;\n    }\n    \n    // Obtener cursor para siguiente página\n    cursor = response.cursor || response.next_cursor || response.next || response.continuation_token || response.nextCursor;\n    \n    if (page === 1) {\n      console.log(`🔍 Cursor encontrado: ${cursor ? 'SÍ' : 'NO'}`);\n    }\n    \n    if (!cursor) {\n      const hasMoreField = response.has_more || response.hasMore || response.more;\n      \n      if (hasMoreField === false) {\n        console.log(`✓ No hay más páginas (has_more=false)`);\n        break;\n      }\n      \n      if (response.items.length < limit) {\n        console.log(`✓ Última página (${response.items.length} < ${limit})`);\n        break;\n      }\n      \n      console.log(`⚠️ Sin cursor, usando offset fallback`);\n      cursor = `offset_${page * limit}`;\n    }\n    \n  } catch (error) {\n    console.error(`❌ Error en página ${page}:`, error.message);\n    break;\n  }\n}\n\nif (found) {\n  return {\n    json: {\n      ...found,\n      _search_info: {\n        found: true,\n        total_chats_searched: totalSearched,\n        pages_searched: page\n      }\n    }\n  };\n} else {\n  console.log(`\\n❌ NO ENCONTRADO en ${totalSearched} chats (${page} páginas)`);\n  return {\n    json: {\n      found: false,\n      provider_id_searched: providerIdToFind,\n      account_id: accountId,\n      total_chats_searched: totalSearched,\n      pages_searched: page,\n      message: 'Chat no encontrado'\n    }\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        240
+      ],
+      "id": "2f867519-0853-4517-a6a8-ba189c718a72",
+      "name": "List & Search Chat (Paginado)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Normalize Provider ID": {
+      "main": [
+        [
+          {
+            "node": "Search (Cursor Pagination)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attendee ?": {
+      "main": [
+        [
+          {
+            "node": "List & Search Chat (Paginado)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start New Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat existente ?": {
+      "main": [
+        [
+          {
+            "node": "Send Message in Existing Chat",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start New Chat",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Active Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Message in Existing Chat": {
+      "main": [
+        [
+          {
+            "node": "Get Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start New Chat": {
+      "main": [
+        [
+          {
+            "node": "Get Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Provider ID": {
+      "main": [
+        [
+          {
+            "node": "Normalize Provider ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data Send Email Username": {
+      "main": [
+        [
+          {
+            "node": "Username ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Update False",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "Get Provider ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Active Workflow": {
+      "main": [
+        [
+          {
+            "node": "Active Workflow ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Workflow ?": {
+      "main": [
+        [
+          {
+            "node": "Update True",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PROD?": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update False3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "PROD?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update True": {
+      "main": [
+        [
+          {
+            "node": "Get Data Send Email Username",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Count": {
+      "main": [
+        [
+          {
+            "node": "Clean User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Count": {
+      "main": [
+        [
+          {
+            "node": "Update Count",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean User": {
+      "main": [
+        [
+          {
+            "node": "20 message for day",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "20 message for day": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Update False3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord": {
+      "main": [
+        [
+          {
+            "node": "Update False2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update False3": {
+      "main": [
+        [
+          {
+            "node": "Update Count2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Email": {
+      "main": [
+        [
+          {
+            "node": "Email ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Exist ?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exist ?1": {
+      "main": [
+        [
+          {
+            "node": "Update Email Sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email ?": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Email Sheet": {
+      "main": [
+        [
+          {
+            "node": "Update Email Master Seeding",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Username ?": {
+      "main": [
+        [
+          {
+            "node": "Update False",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search (Cursor Pagination)": {
+      "main": [
+        [
+          {
+            "node": "Attendee ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List & Search Chat (Paginado)": {
+      "main": [
+        [
+          {
+            "node": "Chat existente ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4ba35ec6-ffdd-4802-9bb3-2a843ddb46ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "zCAQ4IjyvVc1cY1k",
+  "tags": []
+}

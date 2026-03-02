@@ -1,0 +1,3346 @@
+{
+  "name": "[AC] (1) Instagram Following [PROD]",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Extractor robusto que busca en múltiples campos\n\nfunction extractCsvUrl(data) {\n  // Campos posibles donde puede estar el log\n  const possibleFields = ['output', 'log', 'message', 'text', 'body', 'response', 'data'];\n  \n  // Buscar en cada campo posible\n  for (const field of possibleFields) {\n    const content = data[field];\n    if (content && typeof content === 'string') {\n      const match = content.match(/CSV saved at\\s+(https?:\\/\\/[^\\s]+\\.csv)/i);\n      if (match) {\n        return match[1];\n      }\n    }\n  }\n  \n  // Si no encuentra, buscar en todo el objeto convertido a string\n  const fullText = JSON.stringify(data);\n  const match = fullText.match(/CSV saved at\\s+(https?:\\/\\/[^\\s]+\\.csv)/i);\n  \n  return match ? match[1] : null;\n}\n\n// Procesar todos los items\nreturn $input.all().map((item, index) => {\n  const csvUrl = extractCsvUrl($input.first().json.output);\n  \n  return {\n    json: {\n      itemIndex: index,\n      csvUrl: csvUrl,\n      found: csvUrl !== null,\n      originalData: item.json // Mantener datos originales\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        272,
+        48
+      ],
+      "id": "1e211920-d05d-4c77-b44b-6ef8435c642f",
+      "name": "Extract Link CSV"
+    },
+    {
+      "parameters": {
+        "operation": "getOutput",
+        "agentId": "4649961938723340",
+        "resolveData": false,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.phantombuster",
+      "typeVersion": 1,
+      "position": [
+        -160,
+        80
+      ],
+      "id": "5ade894e-11e7-4582-b49d-01800d4758be",
+      "name": "Get Link CVS",
+      "credentials": {
+        "phantombusterApi": {
+          "id": "98T0mxgNNEcuqLw2",
+          "name": "Kalm Scraping"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.csvUrl }}",
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        704,
+        32
+      ],
+      "id": "ba8f8d8a-afcb-42bc-ac16-4ca46d49aae4",
+      "name": "Get the file"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        880,
+        32
+      ],
+      "id": "00807e73-2dfa-407e-9ab6-b3e6e65cce57",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        352
+      ],
+      "id": "67558bb8-a17a-468f-96ec-3c9a9a336c3b",
+      "name": "Wait",
+      "webhookId": "4b2d934c-83ee-4712-95e3-4a453e2dc60e"
+    },
+    {
+      "parameters": {
+        "resource": "Actor tasks",
+        "operation": "Run task and get dataset",
+        "actorTaskId": {
+          "__rl": true,
+          "value": "RG0WtfH5V3Cpx8X9o",
+          "mode": "list",
+          "cachedResultName": "Instagram Profile Scraper (Task) KALM",
+          "cachedResultUrl": "https://console.apify.com/actors/tasks/RG0WtfH5V3Cpx8X9o/input"
+        },
+        "useCustomBody": true,
+        "customBody": "={\n    \"usernames\": [\n        \"{{ $('Replace Me').item.json.username }}\"\n    ]\n} "
+      },
+      "type": "@apify/n8n-nodes-apify.apify",
+      "typeVersion": 1,
+      "position": [
+        2656,
+        32
+      ],
+      "id": "2bf58615-d1f4-41ef-a438-28d6c82d6c29",
+      "name": "Profile Scraper",
+      "alwaysOutputData": true,
+      "credentials": {
+        "apifyApi": {
+          "id": "QRWBHJcm4dVznWVV",
+          "name": "Club Kalm"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fe23bc6e-106f-471d-b5bb-d24d7b6adbda",
+              "leftValue": "={{ $json.followersCount }}",
+              "rightValue": "={{ $vars.InstagramFollowers.toNumber() }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "ce4cacba-fdf9-482c-a8a9-a1121f3626b2",
+              "leftValue": "={{ $json.followersCount }}",
+              "rightValue": 500000,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        2864,
+        32
+      ],
+      "id": "ad592f4e-29b1-47e1-bf9b-f0c8b7c09d68",
+      "name": "Followers",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// ========== INITIAL DEBUGGING ==========\nconsole.log('=== ANALYSIS START ===');\nconsole.log('Items received:', $input.all().length);\n\nconst results = [];\nconst profileStats = {}; // Stats por usuario\n\n// ========== PROCESS EACH ITEM ==========\nfor (const item of $input.all()) {\n  const data = item.json;\n  \n  console.log('Processing profile:', data.username);\n  \n  // Initialize stats for this profile if not exists\n  if (!profileStats[data.username]) {\n    profileStats[data.username] = {\n      // ===== PERSONAL INFORMATION =====\n      username: data.username,\n      fullName: data.fullName,\n      biography: data.biography || 'No biography',\n      profilePicUrl: data.profilePicUrl,\n      profilePicUrlHD: data.profilePicUrlHD,\n      externalUrl: data.externalUrl || 'No external URL',\n      externalUrls: data.externalUrls || [],\n      \n      // ===== ACCOUNT INFO =====\n      followers: data.followersCount,\n      following: data.followsCount,\n      isBusinessAccount: data.isBusinessAccount,\n      businessCategoryName: data.businessCategoryName || 'N/A',\n      verified: data.verified,\n      private: data.private,\n      \n      // ===== CONTENT STATS =====\n      totalPostsCount: data.postsCount,\n      highlightReelCount: data.highlightReelCount,\n      igtvVideoCount: data.igtvVideoCount,\n      \n      // ===== VIDEO STATS (CALCULATED) =====\n      totalPosts: 0,\n      videos: 0,\n      images: 0,\n      carousels: 0,\n      igtvVideos: 0,\n      totalViews: 0,\n      totalLikes: 0,\n      videosWithViews: 0,\n      videosList: []\n    };\n  }\n  \n  const currentProfile = profileStats[data.username];\n  \n  // ========== 1. PROCESS LATEST POSTS ==========\n  if (data.latestPosts && Array.isArray(data.latestPosts)) {\n    console.log(`📋 latestPosts found: ${data.latestPosts.length}`);\n    \n    for (const post of data.latestPosts) {\n      currentProfile.totalPosts++;\n      \n      // Count by type\n      if (post.type === 'Video') currentProfile.videos++;\n      else if (post.type === 'Image') currentProfile.images++;\n      else if (post.type === 'Sidecar') currentProfile.carousels++;\n      \n      // 🎥 FILTER ONLY VIDEOS\n      if (post.type === 'Video') {\n        const views = post.videoViewCount || 0;\n        const likes = post.likesCount || 0;\n        \n        // Accumulate stats for this profile\n        if (views > 0) {\n          currentProfile.totalViews += views;\n          currentProfile.videosWithViews++;\n        }\n        currentProfile.totalLikes += likes;\n        \n        const videoData = {\n          source: 'latestPosts',\n          type: post.type,\n          id: post.id,\n          shortCode: post.shortCode,\n          url: post.url,\n          caption: post.caption || 'No description',\n          likes: post.likesCount !== null ? post.likesCount : 'Not available',\n          comments: post.commentsCount || 0,\n          views: post.videoViewCount || 'Not available',\n          hashtags: post.hashtags || [],\n          mentions: post.mentions || [],\n          timestamp: post.timestamp || 'Not available',\n          username: post.ownerUsername,\n          location: post.locationName || 'No location',\n          dimensions: {\n            height: post.dimensionsHeight,\n            width: post.dimensionsWidth\n          },\n          videoUrl: post.videoUrl || 'Not available',\n          displayUrl: post.displayUrl\n        };\n        \n        results.push(videoData);\n        currentProfile.videosList.push(videoData);\n      }\n    }\n  }\n  \n  // ========== 2. PROCESS IGTV VIDEOS ==========\n  if (data.latestIgtvVideos && Array.isArray(data.latestIgtvVideos)) {\n    console.log(`📺 IGTV Videos found: ${data.latestIgtvVideos.length}`);\n    \n    for (const video of data.latestIgtvVideos) {\n      currentProfile.igtvVideos++;\n      \n      const views = video.videoViewCount || 0;\n      const likes = video.likesCount || 0;\n      \n      // Accumulate stats for this profile\n      if (views > 0) {\n        currentProfile.totalViews += views;\n        currentProfile.videosWithViews++;\n      }\n      currentProfile.totalLikes += likes;\n      \n      const videoData = {\n        source: 'IGTV',\n        type: video.type,\n        id: video.id,\n        shortCode: video.shortCode,\n        url: video.url,\n        title: video.title || 'No title',\n        caption: video.caption || 'No description',\n        likes: video.likesCount !== null ? video.likesCount : 'Not available',\n        comments: video.commentsCount || 0,\n        views: video.videoViewCount || 'Not available',\n        duration: video.videoDuration ? `${video.videoDuration}s` : 'Not available',\n        hashtags: video.hashtags || [],\n        mentions: video.mentions || [],\n        timestamp: video.timestamp || 'Not available',\n        username: video.ownerUsername,\n        dimensions: {\n          height: video.dimensionsHeight,\n          width: video.dimensionsWidth\n        },\n        videoUrl: video.videoUrl || 'Not available',\n        displayUrl: video.displayUrl\n      };\n      \n      results.push(videoData);\n      currentProfile.videosList.push(videoData);\n    }\n  }\n}\n\n// ========== CALCULATE AVERAGES PER PROFILE ==========\nconst profileSummaries = [];\n\nfor (const username in profileStats) {\n  const profile = profileStats[username];\n  const totalVideos = profile.videos + profile.igtvVideos;\n  \n  const averageViews = profile.videosWithViews > 0 \n    ? Math.round(profile.totalViews / profile.videosWithViews) \n    : 0;\n    \n  const averageLikes = totalVideos > 0 \n    ? Math.round(profile.totalLikes / totalVideos) \n    : 0;\n  \n  const summary = {\n    profileSummary: true,\n    \n    // ===== PERSONAL INFORMATION =====\n    personalInfo: {\n      username: profile.username,\n      fullName: profile.fullName,\n      biography: profile.biography,\n      profilePicUrl: profile.profilePicUrl,\n      profilePicUrlHD: profile.profilePicUrlHD,\n      externalUrl: profile.externalUrl,\n      externalUrls: profile.externalUrls\n    },\n    \n    // ===== ACCOUNT STATISTICS =====\n    accountStats: {\n      followers: profile.followers,\n      following: profile.following,\n      isBusinessAccount: profile.isBusinessAccount,\n      businessCategory: profile.businessCategoryName,\n      verified: profile.verified,\n      private: profile.private,\n      totalPostsInProfile: profile.totalPostsCount,\n      highlightReels: profile.highlightReelCount,\n      igtvCount: profile.igtvVideoCount\n    },\n    \n    // ===== VIDEO PERFORMANCE =====\n    videoPerformance: {\n      totalVideosAnalyzed: totalVideos,\n      averageViews: averageViews,\n      averageLikes: averageLikes,\n      totalViews: profile.totalViews,\n      totalLikes: profile.totalLikes,\n      engagementRate: profile.followers > 0 \n        ? ((averageLikes / profile.followers) * 100).toFixed(2) + '%'\n        : '0%'\n    },\n    \n    // ===== CONTENT BREAKDOWN =====\n    contentBreakdown: {\n      reelVideos: profile.videos,\n      igtvVideos: profile.igtvVideos,\n      images: profile.images,\n      carousels: profile.carousels,\n      totalPostsAnalyzed: profile.totalPosts\n    }\n  };\n  \n  profileSummaries.push(summary);\n  \n  // Console log per profile\n  console.log('\\n========== 📊 PROFILE SUMMARY ==========');\n  console.log('👤 Username:', profile.username);\n  console.log('📝 Full Name:', profile.fullName);\n  console.log('👥 Followers:', profile.followers.toLocaleString());\n  console.log('🔗 External URL:', profile.externalUrl);\n  console.log('✅ Verified:', profile.verified);\n  console.log('💼 Business Account:', profile.isBusinessAccount);\n  console.log('🎬 Total Videos:', totalVideos);\n  console.log('📈 AVERAGE VIEWS:', averageViews.toLocaleString());\n  console.log('❤️ Average Likes:', averageLikes.toLocaleString());\n  console.log('👁️ Total Views:', profile.totalViews.toLocaleString());\n  console.log('📊 Engagement Rate:', ((averageLikes / profile.followers) * 100).toFixed(2) + '%');\n  console.log('  - Reel Videos:', profile.videos);\n  console.log('  - IGTV Videos:', profile.igtvVideos);\n  console.log('=====================================\\n');\n}\n\n// ========== GLOBAL SUMMARY ==========\nconst totalProfiles = Object.keys(profileStats).length;\nconst totalVideosAll = results.length;\nconst totalViewsAll = Object.values(profileStats).reduce((sum, p) => sum + p.totalViews, 0);\nconst totalLikesAll = Object.values(profileStats).reduce((sum, p) => sum + p.totalLikes, 0);\nconst totalFollowersAll = Object.values(profileStats).reduce((sum, p) => sum + p.followers, 0);\n\nconsole.log('\\n========== 🌍 GLOBAL SUMMARY ==========');\nconsole.log('Total Profiles Analyzed:', totalProfiles);\nconsole.log('Total Videos Found:', totalVideosAll);\nconsole.log('Total Followers (Combined):', totalFollowersAll.toLocaleString());\nconsole.log('Total Views (All Profiles):', totalViewsAll.toLocaleString());\nconsole.log('Total Likes (All Profiles):', totalLikesAll.toLocaleString());\nconsole.log('====================================\\n');\n\n// ========== RETURN RESULTS ==========\nif (results.length === 0) {\n  return [{\n    json: {\n      message: '⚠️ No videos found',\n      help: 'Verify that the profiles have published videos'\n    }\n  }];\n}\n\n// Return: Profile summaries with personal info\nreturn [\n  ...profileSummaries.map(summary => ({ json: summary }))\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3088,
+        224
+      ],
+      "id": "5fe49fb4-a316-4f11-b4a9-4e4ef1c29abb",
+      "name": "(Video) Average Views"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1d27b29-cc7d-42c1-8d76-5e6c8e7eb043",
+              "leftValue": "={{ $json.videoPerformance.averageViews }}",
+              "rightValue": "={{$vars.InstagramAverageViews.toNumber()}}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        3296,
+        224
+      ],
+      "id": "82c41895-6940-485f-8d68-d462f1af85be",
+      "name": "Average Views",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "finished",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "73cbf769-0805-48f2-977d-0ccede9f8224"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6cbdb817-6a4a-4fa6-b7b7-b07151a59b80",
+                    "leftValue": "={{ $json.status }}",
+                    "rightValue": "running",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        64,
+        64
+      ],
+      "id": "497c5cf2-1e29-4615-888d-b755250d0d02",
+      "name": "Status"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chatgpt-4o-latest",
+          "mode": "list",
+          "cachedResultName": "CHATGPT-4O-LATEST"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Role: You are a social-bio evaluator that classifies profiles into Brand Categories.\n\nGoal: Given a username and bio, decide the single best-fit category among: Beauty, Fitness & Workout, Food & Drink, Home & Garden, Fashion. If none fits, return exactly \"N/A\".\n\nProcedure:\nA. Detection & parsing\n- Normalize text (lowercase; keep hashtags, emojis, roles).\n- Extract key n-grams, roles, and entities (e.g., \"MUA\", \"chef\", \"trainer\", \"stylist\", \"interior design\", \"OOTD\", \"skincare\", \"recipes\", \"DIY\", \"gardening\", \"streetwear\", \"gym\").\n\nB. Signal dictionary (non-exhaustive; English-only examples):\n- Beauty: makeup, MUA, cosmetology, skincare, haircare, barber, nails, nail tech, esthetician, stylist, derm*, brushes, foundation, serum, palettes.\n- Fitness & Workout: fitness, gym, workout, trainer, coach, CrossFit, calisthenics, yoga, pilates, running, marathon, weights, weightlifting, HIIT, squats, presses, deadlift.\n- Food & Drink: chef, cook, recipes, foodie, restaurant, barista, sommelier, wine, coffee, espresso, bakery, vegan, mixology, cocktails, sourdough.\n- Home & Garden: home, decor, interior design, DIY, organization, renovation, architecture, garden, gardening, plants, houseplants, planters, compost, vegetable garden.\n- Fashion: fashion, stylist, outfit, OOTD, lookbook, streetwear, designer, boutique, runway, trends, capsule wardrobe, tailoring, couture, menswear, womenswear.\n\nC. Negative/distractor signals (if they dominate, do not classify): trading/crypto, betting, politics, NSFW, generic giveaways, broad “lifestyle” with no niche, motivational quotes without niche context.\n\nD. Decision rules (no numeric scoring)\n- Output exactly ONE primary category (no multi-label). If unsure, output \"N/A\".\n- Evidence threshold to assign a category (any ONE is sufficient):\n  1) An explicit niche role tied to that category (e.g., MUA, chef, trainer, stylist, interior designer).\n  2) Two or more strong terms from the same category.\n  3) One strong term from the category PLUS a category-specific hashtag/emoji or product/tool mention.\n- If evidence is weak, generic, contradictory, or evenly split across categories, return \"N/A\".\n- Tie-breakers: prefer the category indicated by an explicit role; if none, the more specific niche; otherwise \"N/A\".\n\nE. Output (JSON only; no extra text):\n{\n  \"primary_category\": \"Beauty|Fitness & Workout|Food & Drink|Home & Garden|Fashion|N/A\",\n\"username\":{{ $json.personalInfo.username }},\n  bio: \"{{ $json.personalInfo.biography }}\"\n}\n\nInput:\nusername: \"{{ $json.personalInfo.username }}\"\nbio: \"{{ $json.personalInfo.biography }}\"\n\nValidation:\n- ALWAYS respond with a single JSON object exactly as in the Output schema above.\n- \"primary_category\" MUST be one of: Beauty, Fitness & Workout, Food & Drink, Home & Garden, Fashion, N/A (case-sensitive, include ampersands).\n- Do not include scores, confidences, or additional fields.\n- No comments or text outside the JSON.\n",
+              "role": "system"
+            },
+            {
+              "content": "=username:{{ $json.personalInfo.username }}\nbiography:{{ $json.personalInfo.biography }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        3520,
+        416
+      ],
+      "id": "f46db5a6-b899-4a17-8985-4dd1d29db2bc",
+      "name": "Analyze Bio",
+      "credentials": {
+        "openAiApi": {
+          "id": "PsZQ0hIV30oqaFAI",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener todos los datos del nodo 'Average Views'\nconst averageViewsData = $('Average Views').all();\nconst profileScraperData = $('Profile Scraper').all();\nconst extractScraper = $(\"Get Data\").all();\n// Recorrer cada item del input actual\nfor (const item of $input.all()) {\n  // Verificar si el item tiene la propiedad extractedData.username\n  if (item.json.username) {\n    const username = item.json.username;\n    \n    // Buscar el usuario correspondiente en Average Views\n    const userInfo = averageViewsData.find(avItem => \n      avItem.json.personalInfo && \n      avItem.json.personalInfo.username === username\n    );\n\n    const userScraper = profileScraperData.find(avItem => \n      avItem.json.username === username);\n\n    const userSources = extractScraper.find(avItem =>\n      avItem.json.username === username);\n    \n    \n    // Si se encuentra información del usuario, añadir SOLO los datos de videoPerformance\n    if (userInfo && userScraper && userSources) {\n      // Agregar únicamente los datos de videoPerformance\n      item.json.personalInfo = {\n       username: userScraper.json.username,\n       url: userScraper.json.url,\n       fullName: userScraper.json.fullName \n    }\n      item.json.accountStats = userInfo.json.accountStats \n      item.json.videoPerformance = userInfo.json.videoPerformance\n      item.json.businessAddress = userScraper.json.businessAddress\n      item.json.sources =  userSources.json.query\n      item.json.date = DateTime.now()\n    } else {\n      // Si no se encuentra el usuario o no tiene datos de videoPerformance\n      item.json.videoPerformance = {\n        found: false,\n        message: `No se encontraron datos de videoPerformance para ${username}`\n      };\n    }\n  }\n}\n\n// Devolver todos los items modificados\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4256,
+        640
+      ],
+      "id": "d01c6d2c-d808-423c-a9a2-4bcae29222ef",
+      "name": "Extracted Data"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $('Extracted Data').item.json.personalInfo.username || \"\" }}",
+            "Approved": "Waiting Approval",
+            "Entry Date": "={{ $('Extracted Data').item.json.date }}",
+            "Platform": "={{$('Extracted Data').item.json.personalInfo.url || \"\" }}",
+            "Full Name": "={{ $('Extracted Data').item.json.personalInfo.fullName || \"\" }}",
+            "Followers": "={{$('Extracted Data').item.json.accountStats.followers || 0}}",
+            "Average Views": "={{ $('Extracted Data').item.json.videoPerformance.averageViews  || 0 }}",
+            "Business Category": "={{ $('Extracted Data').item.json.accountStats.businessCategory }}",
+            "Business Address": "={{$json.businessAddress ? \n  (($json.businessAddress.street_address || \"\") + \n   ($json.businessAddress.street_address && $json.businessAddress.city_name ? \", \" : \"\") + \n   ($json.businessAddress.city_name || \"\") +\n   (($json.businessAddress.city_name && $json.businessAddress.zip_code) ? \", \" : \"\") +\n   ($json.businessAddress.zip_code || \"\")) \n  : \"\"}}",
+            "Notes": "=",
+            "Category": "={{ $('Extracted Data').item.json.category }}",
+            "Sources": "={{ $('Extracted Data').item.json.sources }}",
+            "Email": "={{ $('Extract Email').item.json.email.toLowerCase() || \"\" }}",
+            "History": 0,
+            "Post": 0,
+            "Response Count Address": 0,
+            "Follow-up Emails Count": 0
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Orden Shopify ID",
+              "displayName": "Orden Shopify ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivered Date",
+              "displayName": "Delivered Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post",
+              "displayName": "Post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "History",
+              "displayName": "History",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Shopify Order",
+              "displayName": "Shopify Order",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Opt-in Rate",
+              "displayName": "Opt-in Rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        5024,
+        1056
+      ],
+      "id": "726287e9-f12b-4709-928b-bb7354be9975",
+      "name": "Save Data",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a8290d43-aecb-49be-9dfc-dc2e98c810ab",
+              "leftValue": "={{$input.item.json}}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2864,
+        240
+      ],
+      "id": "e5e994bd-9610-4059-b2b8-b04ddda1f518",
+      "name": "Followers ?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7174b0dd-3637-45e1-a051-45f8e5c18898",
+              "leftValue": "={{$input.item.json}}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3280,
+        432
+      ],
+      "id": "d80ef932-15dd-4aea-af58-b95eeb9d8781",
+      "name": "Average Views ?"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09H4HPLM5M",
+          "mode": "list",
+          "cachedResultName": "automations-adan"
+        },
+        "text": "={{ $json.content }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        2672,
+        -336
+      ],
+      "id": "c8637784-78ae-4309-ac32-a478b0e4098a",
+      "name": "Notify Completed Data",
+      "webhookId": "33b2c7c7-0b42-4271-bdff-9c6d2ed0d9df",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "I8tooTxrc3XpO9c2",
+          "name": "Slack Moahid"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "={{ $('Join Up').item.json.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -336
+      ],
+      "id": "29383b9a-2cc1-42ca-9039-58b7ca13ea1b",
+      "name": "Notify Completed Data1",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "WcIuEf9PFQJMBsKp",
+          "name": "ACRISTO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const usernames = [];\n//const sources = new Set();\n\nfor (const item of $input.all()) {\n   usernames.push(item.json.Username);\n  // sources.add(item.json.fields.Sources);\n}\n\nconst total = usernames.length;\nconst mensaje = `✅ **Success: ${total} client${total > 1 ? 's have' : ' has'} been successfully updated in Airtable.**\n✔️ All records are now synced and up to date in Airtable.`;\n// ${[...sources].map(s => `• ${s}`).join('\\n')}\nreturn [{\n   json: {\n      content: mensaje,\n      username: \"Airtable Sync Bot\"\n   }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        -336
+      ],
+      "id": "3f4cb9c6-ed3a-40a5-ae65-adeb705140e0",
+      "name": "Join Up"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a28e4f94-3fb7-47a3-b37e-9f5f53034358",
+              "leftValue": "={{ $json.personalInfo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "c5d42536-9c5a-48a3-8069-647e13165edf",
+              "leftValue": "={{ $json.personalInfo }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4256,
+        864
+      ],
+      "id": "9fe9800c-da5e-4681-acd8-b439f6adc157",
+      "name": "Personal Info ?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "26aef2df-e84a-4f94-a1d9-a5bf44f6a31e",
+              "leftValue": "={{ $json.category }}",
+              "rightValue": "N/A",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [
+        4032,
+        416
+      ],
+      "id": "1460b25c-7b38-45e7-a7fa-02d76899a5b7",
+      "name": "Category Bio",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all().map(item => {\n  try {\n    let content = item.json.message.content;\n    \n    // Remover bloques de código markdown si existen\n    if (content.includes('```')) {\n      content = content\n        .replace(/```json\\s*/gi, '')\n        .replace(/```\\s*/g, '')\n        .trim();\n    }\n    \n    // Limpiar saltos de línea literales\n    content = content.replace(/\\\\n/g, ' ');\n    \n    // Intentar parsear directamente primero\n    try {\n      const data = JSON.parse(content);\n      return {\n        category: data.primary_category || null,\n        username: data.username || null,\n        bio: data.bio || null\n      };\n    } catch (e) {\n      // Si falla, intentar arreglar comillas problemáticas en los valores\n      // Reemplaza comillas dobles dentro de los valores por comillas simples\n      content = content.replace(/\"([^\"]*)\":\\s*\"([^\"]*)\"/g, (match, key, value) => {\n        // Reemplazar comillas dobles internas por comillas simples\n        const cleanValue = value.replace(/\"/g, \"'\");\n        return `\"${key}\": \"${cleanValue}\"`;\n      });\n      \n      const data = JSON.parse(content);\n      return {\n        category: data.primary_category || null,\n        username: data.username || null,\n        bio: data.bio || null\n      };\n    }\n  } catch (error) {\n    // Fallback: extraer con regex si todo falla\n    const content = item.json.message.content;\n    \n    const categoryMatch = content.match(/\"primary_category\":\\s*\"([^\"]+)\"/);\n    const usernameMatch = content.match(/\"username\":\\s*\"([^\"]+)\"/);\n    const bioMatch = content.match(/\"bio\":\\s*\"([\\s\\S]*?)\"\\s*\\n?\\}/);\n    \n    return {\n      category: categoryMatch ? categoryMatch[1] : null,\n      username: usernameMatch ? usernameMatch[1] : null,\n      bio: bioMatch ? bioMatch[1].replace(/\\\\n/g, ' ').replace(/\"/g, \"'\") : null,\n      _extracted_via: 'regex_fallback'\n    };\n  }\n});\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3840,
+        416
+      ],
+      "id": "08a0d6a1-5b21-408e-b244-d6169d6fb6bd",
+      "name": "Parse Category "
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7174b0dd-3637-45e1-a051-45f8e5c18898",
+              "leftValue": "={{$input.item.json}}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4016,
+        656
+      ],
+      "id": "b329a4ee-7b03-48fc-bec1-aa5c2a250e38",
+      "name": "Category Bio ?"
+    },
+    {
+      "parameters": {
+        "agentId": "4649961938723340",
+        "resolveData": false,
+        "jsonParameters": true,
+        "additionalFields": {
+          "argumentsJson": "{\n\t\"numberofProfilesperLaunch\": 10,\n\t\"sessionCookie\": \"64593120878%3ARSh0QYIwOyJQvV%3A11%3AAYgPLsBDohl9aVciDJTq6fZgAsSziiEg8N1D3YJL0A\",\n\t\"userAgent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36\",\n\t\"spreadsheetUrl\": \"https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?usp=sharing\",\n\t\"watcherMode\": false,\n\t\"splitFiles\": true,\n\t\"numberMaxOfFollowing\": 2000\n}"
+        }
+      },
+      "type": "n8n-nodes-base.phantombuster",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        80
+      ],
+      "id": "a043d761-3f93-4c5c-ae3e-fbb140c5c93c",
+      "name": "Instagram Following",
+      "credentials": {
+        "phantombusterApi": {
+          "id": "98T0mxgNNEcuqLw2",
+          "name": "Kalm Scraping"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "={Username} = \"{{ $json.personalInfo.username }}\" ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        4560,
+        848
+      ],
+      "id": "930a986b-cd7e-4b57-bcc3-988800590105",
+      "name": "Search records",
+      "alwaysOutputData": true,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1920,
+        32
+      ],
+      "id": "fb86d1bf-f297-45da-aeb5-98e6d78d7126",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        48
+      ],
+      "id": "561d60e9-95fa-4d3a-99e2-61f7e78b31a2"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $('Extracted Data').item.json.personalInfo.username }}"
+          },
+          "matchingColumns": [
+            "Username"
+          ],
+          "schema": [
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5024,
+        1296
+      ],
+      "id": "7e134064-7e53-4245-886c-243cb5f37fab",
+      "name": "Save Username",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "OCFbjCyoVyGk03Oo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        -336
+      ],
+      "id": "d3d56b6c-3a3f-4504-b4ce-dc6f2eb49443",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "numberToDelete": "={{ Number($('Get row(s) in sheet').all().length + 1)}}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3424,
+        -336
+      ],
+      "id": "714c3ecb-8cf6-4415-80f5-539b0ad3e2b9",
+      "name": "Delete Temp Scraping",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2288,
+        -336
+      ],
+      "id": "76394629-cef5-4653-a95f-b60d6b37d182",
+      "name": "Get Data ",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "46200b05-d9d0-450c-8577-bb8ada7ba104",
+              "leftValue": "={{ $json.username }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2416,
+        176
+      ],
+      "id": "f109c2b1-0728-4c60-81db-803b19552a42",
+      "name": "user?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ab939d8d-7667-49ce-8d4f-95638fb32a91",
+              "leftValue": "={{ $json.csvUrl }}",
+              "rightValue": "null",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        48
+      ],
+      "id": "d71bd4b8-bc96-4924-87c3-f2d1bda56c71",
+      "name": "url ??"
+    },
+    {
+      "parameters": {
+        "errorMessage": "No url !"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        704,
+        192
+      ],
+      "id": "67b59b53-7aa0-4e4d-845e-d85be07752b1",
+      "name": "Not Url"
+    },
+    {
+      "parameters": {
+        "errorMessage": "Check the status phathom"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        96,
+        352
+      ],
+      "id": "eb0cb6c9-e9e3-45b5-a738-500cad627674",
+      "name": "Check the status phathom"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        3056,
+        -336
+      ],
+      "id": "0048d67e-4b5b-41fe-93fa-30ea280706d9",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        3232,
+        -336
+      ],
+      "id": "6bfd056e-4e34-4509-8dde-130f926299a0",
+      "name": "Aggregate1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Función para extraer email de un texto\nfunction extractEmail(text) {\n  if (!text) return \"\";\n  \n  // Regex robusto para detectar emails en cualquier parte del texto\n  const emailRegex = /([a-zA-Z0-9._+-]+@[a-zA-Z0-9._-]+\\.[a-zA-Z0-9._-]+)/gi;\n  \n  // Buscar todos los emails en el texto\n  const matches = text.match(emailRegex);\n  \n  // Si encuentra email(s), retornar el primero, sino retornar \"\"\n  return matches && matches.length > 0 ? matches[0] : \"\";\n}\n\n// Obtener la biografía del nodo específico\nconst bio =$('Extracted Data').first().json.bio\n\n// Extraer email de la biografía\nconst email = extractEmail(bio);\n\n// Retornar el resultado\nreturn [{\n  json: {\n    bio: bio,\n    email: email,\n    hasEmail: email !== \"\"\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4800,
+        1056
+      ],
+      "id": "4bb36328-18f1-4a92-8939-ae70fabadc17",
+      "name": "Extract Email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "892f74fa-8bff-491a-9ea1-3909681319b8",
+              "leftValue": "={{ $json.Username }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notExists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4544,
+        1072
+      ],
+      "id": "7b29c57e-90bb-4b3c-bd5a-584d44a5e6ca",
+      "name": "Exist ?1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1728,
+        80
+      ],
+      "id": "b7ef939d-441e-4c89-add4-27734ba09290",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b089ee75-06af-4055-a4c7-1e3d66a08aa4",
+              "leftValue": "={{ $json.execution.mode }}",
+              "rightValue": "manual",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1392,
+        720
+      ],
+      "id": "f67a300e-fe83-490e-be1e-e53418cce4bf",
+      "name": "PROD?"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error Workflow -  *{{ $json.workflow.name }}* - {{ $json.workflow.id }}\nId Execution: {{ $json.execution.id }}\nError: {{ $json.execution.error.message }}\nUrl: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        704
+      ],
+      "id": "4dc59296-ee04-4e6e-9a44-a0dd21b62165",
+      "name": "Discord",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "i0AdU91u5MiaI6jy",
+          "name": "Discord Webhook account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1616,
+        720
+      ],
+      "id": "b481da7d-9d98-47d5-a9c6-106009e56dd3",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "content": "## ANALYZE SEEDS INFORMATION: FOLLOWERS COUNT, BIO, AVG VIEW",
+        "height": 1120,
+        "width": 1824,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2400,
+        -48
+      ],
+      "typeVersion": 1,
+      "id": "55ad0dd6-3cf3-4736-8a31-365672e2359b",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## CREATE VALID SEEDS AND DISCARD UNVALID SEEDS",
+        "height": 928,
+        "width": 1168
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        4240,
+        592
+      ],
+      "typeVersion": 1,
+      "id": "98efd6f6-d8a2-4c2d-ac3a-b5bbfb100d40",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 177861758,
+          "mode": "list",
+          "cachedResultName": "Scraping",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=177861758"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "profileUrl": "={{ $json.profileUrl }}",
+            "username": "={{ $json.username }}",
+            "fullName": "={{ $json.fullName }}",
+            "imgUrl": "={{ $json.imgUrl }}",
+            "id": "={{ $json.id }}",
+            "isPrivate": "={{ $json.isPrivate }}",
+            "isVerified": "={{ $json.isVerified }}",
+            "query": "={{ $json.query }}",
+            "timestamp": "={{ $json.timestamp }}"
+          },
+          "matchingColumns": [
+            "username"
+          ],
+          "schema": [
+            {
+              "id": "profileUrl",
+              "displayName": "profileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "fullName",
+              "displayName": "fullName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "imgUrl",
+              "displayName": "imgUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "isPrivate",
+              "displayName": "isPrivate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "isVerified",
+              "displayName": "isVerified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1232,
+        32
+      ],
+      "id": "40b0689b-ffa2-4a2c-8033-221028d1837c",
+      "name": "Save Data1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "OCFbjCyoVyGk03Oo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        1392,
+        -64
+      ],
+      "id": "f5c2e7a7-65e1-4ce8-b681-835dfd563e36",
+      "name": "Aggregate2"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 177861758,
+          "mode": "list",
+          "cachedResultName": "Scraping",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=177861758"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Scraping",
+              "lookupValue": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1648,
+        32
+      ],
+      "id": "90340740-ed19-4337-a10f-3a5883b88666",
+      "name": "Get Data",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## NOTIFICATION & CLEAN",
+        "height": 224,
+        "width": 1920,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1872,
+        -384
+      ],
+      "id": "5513f5e0-f503-462b-bf1f-1cdcf0805cc7",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?pli=1&gid=361742329#gid=361742329",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "1"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1152,
+        64
+      ],
+      "id": "56f92175-87a5-4b93-aaef-66be4b3bd9f2",
+      "name": "Update True",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "0978d3fb-11a0-4743-8d76-a09c041bdf03",
+              "leftValue": "={{ $json.Locked }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1344,
+        80
+      ],
+      "id": "8720ff23-e65a-4770-970a-6d1286ddbb67",
+      "name": "Active Workflow ?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Workflow",
+              "lookupValue": "MyFlow"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1520,
+        80
+      ],
+      "id": "f36274f1-9a57-4b83-a5c8-5c3278371d9d",
+      "name": "Read Active Workflow",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?pli=1&gid=361742329#gid=361742329",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "0"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        3600,
+        -336
+      ],
+      "id": "52e4b985-04b9-48af-8b1f-2a568ce219cc",
+      "name": "Update False",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?pli=1&gid=361742329#gid=361742329",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "3"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -976,
+        704
+      ],
+      "id": "c252c350-ccc0-41b1-a900-b94f3abcffa5",
+      "name": "Update Error",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?pli=1&gid=361742329#gid=361742329",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 361742329,
+          "mode": "list",
+          "cachedResultName": "Controller",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=361742329"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Workflow": "MyFlow",
+            "Locked": "0"
+          },
+          "matchingColumns": [
+            "Workflow"
+          ],
+          "schema": [
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Locked",
+              "displayName": "Locked",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        -1168,
+        896
+      ],
+      "id": "bc556bb6-7b18-4052-9580-2c8892d804c5",
+      "name": "Update Error1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## ERROR\n",
+        "height": 384,
+        "width": 2384,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1808,
+        672
+      ],
+      "id": "9f210ae7-0eb8-4c3f-85ed-171d18b2d79d",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 177861758,
+          "mode": "list",
+          "cachedResultName": "Scraping",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=177861758"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Scraping",
+              "lookupValue": "="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -944,
+        64
+      ],
+      "id": "6963a92a-ba25-4ac9-8931-46e9b6be4fbb",
+      "name": "Get Data1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2a5e5c70-8bef-4810-8f25-ac3633486714",
+              "leftValue": "={{$input.item.json }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -672,
+        -48
+      ],
+      "id": "2671139b-a6b5-400a-9c84-25abdd57909c",
+      "name": "FIles on Sheet ?"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1456,
+        208
+      ],
+      "id": "e11ad7b6-22af-4c79-8e6f-ca9e8d41bdc4",
+      "name": "Wait1",
+      "webhookId": "e063c408-a872-4bed-a7ca-58dd63bc981e"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C09H4HPLM5M",
+          "mode": "list",
+          "cachedResultName": "automations-adan"
+        },
+        "text": "={{ $json.content }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        -400,
+        704
+      ],
+      "id": "8ee014b4-9fc6-47e2-8c2f-efab68918b61",
+      "name": "Notify Completed Data2",
+      "webhookId": "33b2c7c7-0b42-4271-bdff-9c6d2ed0d9df",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "I8tooTxrc3XpO9c2",
+          "name": "Slack Moahid"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "={{ $('Join Up1').item.json.content }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -192,
+        704
+      ],
+      "id": "b732c621-1238-47dd-84f2-1357173c2c53",
+      "name": "Notify Completed Data3",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "WcIuEf9PFQJMBsKp",
+          "name": "ACRISTO"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const usernames = [];\n//const sources = new Set();\n\nfor (const item of $input.all()) {\n   usernames.push(item.json.Username);\n  // sources.add(item.json.fields.Sources);\n}\n\nconst total = usernames.length;\nconst mensaje = `✅ **Success: ${total} client${total > 1 ? 's have' : ' has'} been successfully updated in Airtable.**\n\n📊 **Updated accounts:**\n${usernames.map(u => `• ${u}`).join('\\n')}\n\n🔗 **Sources:**\n\n\n✔️ All records are now synced and up to date in Airtable.`;\n// ${[...sources].map(s => `• ${s}`).join('\\n')}\nreturn [{\n   json: {\n      content: mensaje,\n      username: \"Airtable Sync Bot\"\n   }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        704
+      ],
+      "id": "56883111-fa63-4681-ba6a-ddfeb5934ccc",
+      "name": "Join Up1"
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "numberToDelete": "={{ Number($('Get row(s) in sheet1').all().length + 1)}}"
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        352,
+        704
+      ],
+      "id": "263ad843-d10e-46df-9372-61aa57df5a69",
+      "name": "Delete Temp Scraping1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -784,
+        704
+      ],
+      "id": "62e4d708-51aa-4ffd-980e-e5dad61b3e9c",
+      "name": "Get Data 1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 239191933,
+          "mode": "list",
+          "cachedResultName": "Scraping [Temp]",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=239191933"
+        },
+        "options": {
+          "dataLocationOnSheet": {
+            "values": {
+              "rangeDefinition": "detectAutomatically"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -16,
+        704
+      ],
+      "id": "37a22e3f-6dcc-43b3-8bba-097c3954b0b8",
+      "name": "Get row(s) in sheet1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        160,
+        704
+      ],
+      "id": "bcb9b081-4a76-4d1e-ad18-99977a49b2ed",
+      "name": "Aggregate3"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit?gid=239191933#gid=239191933",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 177861758,
+          "mode": "list",
+          "cachedResultName": "Scraping",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1yjoiKi91cfNAT-1FujXCPiI3GBKJhoNn3LmPMMbXNmk/edit#gid=177861758"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": "={{ $('Replace Me').item.json.row_number }}",
+            "Scraping": "1"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "profileUrl",
+              "displayName": "profileUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "username",
+              "displayName": "username",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "fullName",
+              "displayName": "fullName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "imgUrl",
+              "displayName": "imgUrl",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "isPrivate",
+              "displayName": "isPrivate",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "isVerified",
+              "displayName": "isVerified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "query",
+              "displayName": "query",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Scraping",
+              "displayName": "Scraping",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1696,
+        208
+      ],
+      "id": "335363a0-322b-438a-a18e-cdac27124edc",
+      "name": "Update",
+      "retryOnFail": true,
+      "waitBetweenTries": 3000,
+      "maxTries": 5,
+      "executeOnce": false,
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "OCFbjCyoVyGk03Oo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a6788f3e-6892-4544-a3c9-8d18443e4a9f",
+              "leftValue": "={{ $json.timestamp.toDateTime().toFormat('yy/MM/dd') }}",
+              "rightValue": "={{ $now.toFormat('yy/MM/dd') }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        32
+      ],
+      "id": "8c0466d3-c178-4f9c-8b20-5905e15e7b94",
+      "name": "Filter - Today"
+    },
+    {
+      "parameters": {
+        "amount": 10
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5232,
+        1296
+      ],
+      "id": "3b065a33-c39d-49c4-8da8-7d26a459c23a",
+      "name": "Wait2",
+      "webhookId": "e063c408-a872-4bed-a7ca-58dd63bc981e"
+    }
+  ],
+  "pinData": {
+    "Schedule Trigger": [
+      {
+        "json": {
+          "timestamp": "2026-01-29T00:00:17.008-05:00",
+          "Readable date": "January 29th 2026, 12:00:17 am",
+          "Readable time": "12:00:17 am",
+          "Day of week": "Thursday",
+          "Year": "2026",
+          "Month": "January",
+          "Day of month": "29",
+          "Hour": "00",
+          "Minute": "00",
+          "Second": "17",
+          "Timezone": "America/Toronto (UTC-05:00)"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Get Link CVS": {
+      "main": [
+        [
+          {
+            "node": "Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Link CSV": {
+      "main": [
+        [
+          {
+            "node": "url ??",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get the file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Filter - Today",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Link CVS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Scraper": {
+      "main": [
+        [
+          {
+            "node": "Followers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Followers": {
+      "main": [
+        [
+          {
+            "node": "Followers ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "(Video) Average Views": {
+      "main": [
+        [
+          {
+            "node": "Average Views",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status": {
+      "main": [
+        [
+          {
+            "node": "Extract Link CSV",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check the status phathom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Average Views": {
+      "main": [
+        [
+          {
+            "node": "Average Views ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Bio": {
+      "main": [
+        [
+          {
+            "node": "Parse Category ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extracted Data": {
+      "main": [
+        [
+          {
+            "node": "Personal Info ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Followers ?": {
+      "main": [
+        [
+          {
+            "node": "(Video) Average Views",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Average Views ?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Bio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Data": {
+      "main": [
+        [
+          {
+            "node": "Save Username",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Completed Data": {
+      "main": [
+        [
+          {
+            "node": "Notify Completed Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Up": {
+      "main": [
+        [
+          {
+            "node": "Notify Completed Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Personal Info ?": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Bio": {
+      "main": [
+        [
+          {
+            "node": "Category Bio ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Category ": {
+      "main": [
+        [
+          {
+            "node": "Category Bio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Bio ?": {
+      "main": [
+        [
+          {
+            "node": "Extracted Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Instagram Following": {
+      "main": [
+        [
+          {
+            "node": "Get Link CVS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Exist ?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Replace Me",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replace Me": {
+      "main": [
+        [
+          {
+            "node": "user?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Username": {
+      "main": [
+        [
+          {
+            "node": "Wait2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "Get Data ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Completed Data1": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data ": {
+      "main": [
+        [
+          {
+            "node": "Join Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "user?": {
+      "main": [
+        [
+          {
+            "node": "Profile Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "url ??": {
+      "main": [
+        [
+          {
+            "node": "Get the file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Url",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Aggregate1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate1": {
+      "main": [
+        [
+          {
+            "node": "Delete Temp Scraping",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Email": {
+      "main": [
+        [
+          {
+            "node": "Save Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exist ?1": {
+      "main": [
+        [
+          {
+            "node": "Extract Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PROD?": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Error1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "PROD?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Active Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Data1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate2": {
+      "main": [
+        [
+          {
+            "node": "Get Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Active Workflow ?": {
+      "main": [
+        [
+          {
+            "node": "Update True",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Active Workflow": {
+      "main": [
+        [
+          {
+            "node": "Active Workflow ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update True": {
+      "main": [
+        [
+          {
+            "node": "Get Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Temp Scraping": {
+      "main": [
+        [
+          {
+            "node": "Update False",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Discord": {
+      "main": [
+        [
+          {
+            "node": "Update Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data1": {
+      "main": [
+        [
+          {
+            "node": "FIles on Sheet ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FIles on Sheet ?": {
+      "main": [
+        [
+          {
+            "node": "Aggregate2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Instagram Following",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Completed Data2": {
+      "main": [
+        [
+          {
+            "node": "Notify Completed Data3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Completed Data3": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Join Up1": {
+      "main": [
+        [
+          {
+            "node": "Notify Completed Data2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Data 1": {
+      "main": [
+        [
+          {
+            "node": "Join Up1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet1": {
+      "main": [
+        [
+          {
+            "node": "Aggregate3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate3": {
+      "main": [
+        [
+          {
+            "node": "Delete Temp Scraping1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Error": {
+      "main": [
+        [
+          {
+            "node": "Get Data 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter - Today": {
+      "main": [
+        [
+          {
+            "node": "Save Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait2": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b7a12aba-0d8f-4d4a-9224-173925d572b5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "klEpcDpBNWMOliSX",
+  "tags": []
+}

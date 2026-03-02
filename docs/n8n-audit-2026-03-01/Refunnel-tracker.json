@@ -1,0 +1,1731 @@
+{
+  "name": "Refunnel tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "C08DBEBH9PW",
+          "mode": "list",
+          "cachedResultName": "refunnel"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "10963dd4-a8fd-4949-81bd-0aee735fffe2",
+      "name": "Slack Trigger",
+      "webhookId": "8607b678-710c-45d3-9fed-7275eb6510b4",
+      "credentials": {
+        "slackApi": {
+          "id": "PPcQsIXhm1pMwZSf",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * 1) Recursively collect every string in the Slack payload (including nested blocks/attachments).\n * 2) Join them into one line, strip Slack’s <url|text> formatting.\n * 3) Extract handle, platform, link, and other text fields from the message.\n */\n\nfunction collectStrings(obj, out = []) {\n  if (typeof obj === 'string') {\n    out.push(obj);\n  } else if (Array.isArray(obj)) {\n    obj.forEach(el => collectStrings(el, out));\n  } else if (obj && typeof obj === 'object') {\n    Object.values(obj).forEach(v => collectStrings(v, out));\n  }\n  return out;\n}\n\n// 1. Grab the raw message text if present (sometimes Slack puts it under event.text)\nconst plainText = $json.event && $json.event.text\n                  ? $json.event.text\n                  : ($json.text || '');\n\n// 2. Flatten every string (from blocks, attachments, etc.) into one line\nconst allStrings = collectStrings($json.event || $json);\nlet flat = allStrings.join(' ').replace(/\\s+/g, ' ');\n\n// 3. Strip Slack link formatting: <https://…|someText> → someText\nflat = flat.replace(/<[^|>]+\\|([^>]+)>/g, '$1');\n\n// 4. Extract the handle and platform\nconst handleMatch   = flat.match(/\\bby\\s+([^\\s]+)/i);\nconst handle        = handleMatch ? handleMatch[1].replace(/^\\*+|\\*+$/g, '') : '';\n\nconst platformMatch = flat.match(/\\bon\\s+(instagram|tiktok)\\b/i);\nlet platform        = platformMatch ? platformMatch[1].toUpperCase() : '';\n\n// 5. Extract \"Link to post\" (URLs typically)\nconst linkMatch = flat.match(/<https:\\/\\/[^\\s]+>/g);  // This captures any URLs starting with https://\nconst linkToPost = linkMatch ? linkMatch[0].replace(/[<>]/g, '') : '';  // Remove the angle brackets\n\n// 6. Extract followers count (if present)\nconst followersMatch = flat.match(/\\*Followers\\*: (\\d+)/);\nconst followers = followersMatch ? followersMatch[1] : '';\n\n// 7. Extract media type (if present)\nconst mediaTypeMatch = flat.match(/Media Type: (\\w+)/);\nconst mediaType = mediaTypeMatch ? mediaTypeMatch[1] : '';\n\n// 8. Extract post date (if present)\nconst postDateMatch = flat.match(/\\*Posted at\\*: ([\\d\\-]+)/);\nconst postDate = postDateMatch ? postDateMatch[1] : '';\n\n// 9. Extract any other relevant information (e.g., \"Powered by\" URL, etc.)\nconst poweredByMatch = flat.match(/Powered by:\\s*<([^>]+)>/);\nconst poweredBy = poweredByMatch ? poweredByMatch[1] : '';\n\n// 10. Return the structured result with all the extracted fields\nreturn [{\n  handle,\n  platform,\n  linkToPost,\n  followers,\n  mediaType,\n  postDate,\n  poweredBy,\n  rawText: flat // Including all the raw text for reference\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "d76e634a-c5ed-4f7c-8403-2fc560446944",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Code').item.json.handle }}",
+            "Link to Platform": "=https://instagram.com/{{ $('Code').item.json.handle }}"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email Link",
+              "displayName": "Email Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Approved?",
+              "displayName": "Approved?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Street",
+              "displayName": "Street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Zip",
+              "displayName": "Zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tracking #",
+              "displayName": "Tracking #",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tracking Link",
+              "displayName": "Tracking Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shipped Date",
+              "displayName": "Shipped Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Current Status",
+              "displayName": "Current Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order Created?",
+              "displayName": "Shopify Order Created?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1232,
+        -256
+      ],
+      "id": "20e93b79-874d-491a-8ff9-48fa2b06d7f9",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "KALM INFLUENCER TRACKER ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        672,
+        -224
+      ],
+      "id": "b19ddeaa-19d4-4f40-9586-56c3aa422a03",
+      "name": "Google Sheets4",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "343cc8fd-2d73-40e1-a7a1-ef6958967038",
+              "leftValue": "={{ $json.platform }}",
+              "rightValue": "=Instagram",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        0
+      ],
+      "id": "1d151310-85a4-469d-9ace-e4e0afdfd622",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $json.Handle }}",
+            "Platform": "={{ $json.Platform }}",
+            "Link to Platform": "=https://instagram.com/{{ $json.Handle }}",
+            "Number of Posts": "={{ $json['Number of Posts'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1232,
+        -48
+      ],
+      "id": "0bf5b0cd-c806-405a-aee8-ea81e157ad3e",
+      "name": "Google Sheets6",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Google Sheets6').item.json.Handle }}",
+            "Number of Posts": "={{ $json['Number of Posts'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1664,
+        -48
+      ],
+      "id": "fcc8c92a-0003-43f5-9e05-5a17d8c8b200",
+      "name": "Google Sheets7",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c5e20029-5fb4-475d-8cb4-bf01d061b867",
+              "name": "=Number of Posts",
+              "value": "={{ $json['Number of Posts'] +1 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1440,
+        -16
+      ],
+      "id": "31bd22d0-ce9a-4558-94c7-854704fa987e",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "KALM INFLUENCER TRACKER ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Handle",
+              "lookupValue": "={{ $('Code').item.json.handle }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        800,
+        -240
+      ],
+      "id": "64dc295c-ae0a-4271-8475-91e35c23025e",
+      "name": "Google Sheets10",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d9244e93-0995-44dc-8665-3f565d054573",
+              "leftValue": "={{ $json.isEmpty() }}",
+              "rightValue": "=",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        -208
+      ],
+      "id": "e602e904-0d2b-46a4-b440-ed175a1f571a",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Google Sheets1').item.json.Handle }}",
+            "Number of Posts": "={{ $json['0'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1760,
+        -384
+      ],
+      "id": "a5f1f326-d9c5-4a97-ae2a-24da07f60048",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c5e20029-5fb4-475d-8cb4-bf01d061b867",
+              "name": "={{ $json['Number of Posts'] }}",
+              "value": "=1",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1552,
+        -288
+      ],
+      "id": "c17e29b9-87da-498d-b592-4e708873efbe",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Code').item.json.handle }}",
+            "Platform": "={{ $('Code').item.json.platform }}",
+            "Link to Platform": "=https://tiktok.com/@{{ $('Code').item.json.handle }}",
+            "Number of Posts": "0"
+          },
+          "matchingColumns": [
+            "row_number"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1312,
+        304
+      ],
+      "id": "9f83822b-8849-4dc9-bd51-859810f47259",
+      "name": "Google Sheets2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "KALM INFLUENCER TRACKER ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        752,
+        352
+      ],
+      "id": "f5ed46c2-26e8-4018-8913-357d8df3d56b",
+      "name": "Google Sheets5",
+      "alwaysOutputData": false,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $json.Handle }}",
+            "Platform": "={{ $json.Platform }}",
+            "Link to Platform": "=https://tiktok.com/@{{ $json.Handle }}",
+            "Number of Posts": "={{ $json['Number of Posts'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1312,
+        528
+      ],
+      "id": "da684cd1-21d7-4431-b09d-8ba63e616e8d",
+      "name": "Google Sheets8",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Google Sheets8').item.json.Handle }}",
+            "Number of Posts": "={{ $json['Number of Posts'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1744,
+        528
+      ],
+      "id": "05adc372-a937-427f-9624-7a8de27a6f1b",
+      "name": "Google Sheets9",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c5e20029-5fb4-475d-8cb4-bf01d061b867",
+              "name": "=Number of Posts",
+              "value": "={{ $json['Number of Posts'] +1 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1520,
+        544
+      ],
+      "id": "13a64310-60c3-4cf7-a8de-a6cfbc046f70",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "KALM INFLUENCER TRACKER ",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "Handle",
+              "lookupValue": "={{ $('Code').item.json.handle }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        880,
+        320
+      ],
+      "id": "01da0386-aabb-4185-b158-9238a5796fb6",
+      "name": "Google Sheets11",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "OCFbjCyoVyGk03Oo",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d9244e93-0995-44dc-8665-3f565d054573",
+              "leftValue": "={{ $json.isEmpty() }}",
+              "rightValue": "=",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        368
+      ],
+      "id": "f580328d-9706-4131-9b72-1c803f1814f8",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M",
+          "mode": "list",
+          "cachedResultName": "Master Seeding Sheet June 2025",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 549594144,
+          "mode": "list",
+          "cachedResultName": "Content Pushers",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=549594144"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Handle": "={{ $('Google Sheets2').item.json.Handle }}",
+            "Number of Posts": "={{ $json['0'] }}"
+          },
+          "matchingColumns": [
+            "Handle"
+          ],
+          "schema": [
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        1840,
+        192
+      ],
+      "id": "35fb21be-b5f5-4681-8343-c38482abe2ad",
+      "name": "Google Sheets3",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "c5e20029-5fb4-475d-8cb4-bf01d061b867",
+              "name": "={{ $json['Number of Posts'] }}",
+              "value": "=1",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1632,
+        288
+      ],
+      "id": "1734fc5a-1049-4d86-b938-c1527580ed5e",
+      "name": "Edit Fields3"
+    }
+  ],
+  "pinData": {
+    "Slack Trigger": [
+      {
+        "json": {
+          "subtype": "bot_message",
+          "text": "New post by elysekmm on INSTAGRAM with 3527 followers",
+          "type": "message",
+          "ts": "1749236420.574549",
+          "bot_id": "B08DXP3CYNL",
+          "blocks": [
+            {
+              "type": "section",
+              "block_id": "n4mgl",
+              "text": {
+                "type": "mrkdwn",
+                "text": ":camera: *New post by *elysekmm* on *INSTAGRAM*",
+                "verbatim": false
+              },
+              "accessory": {
+                "type": "image",
+                "image_url": "https://ugc-refunnel.b-cdn.net/images/instagram/ig_54a510f7c54b49cea8a94689057c287c.jpg",
+                "alt_text": "Post image"
+              }
+            },
+            {
+              "type": "context",
+              "block_id": "TYx4C",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": "*Followers*: 3527",
+                  "verbatim": false
+                }
+              ]
+            },
+            {
+              "type": "context",
+              "block_id": "bgOLi",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": ":camera: *Media URL:* <https://collections.refunnel.com/public-media?shop_id=392101&amp;media_id=ig_54a510f7c54b49cea8a94689057c287c|View media>",
+                  "verbatim": false
+                }
+              ]
+            },
+            {
+              "type": "context",
+              "block_id": "45ys9",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": ":label: Media Type: IMAGE",
+                  "verbatim": false
+                }
+              ]
+            },
+            {
+              "type": "context",
+              "block_id": "CnwGR",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": ":calendar: *Posted at*: 2025-06-06",
+                  "verbatim": false
+                }
+              ]
+            },
+            {
+              "type": "actions",
+              "block_id": "k0O8e",
+              "elements": [
+                {
+                  "type": "button",
+                  "action_id": "kmZhI",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Click here to view post",
+                    "emoji": true
+                  },
+                  "url": "https://collections.refunnel.com/public-media?shop_id=392101&media_id=ig_54a510f7c54b49cea8a94689057c287c"
+                },
+                {
+                  "type": "button",
+                  "action_id": "GkAyR",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "Click here to open Refunnel",
+                    "emoji": true
+                  },
+                  "url": "https://app.refunnel.com"
+                }
+              ]
+            },
+            {
+              "type": "context",
+              "block_id": "UfjAW",
+              "elements": [
+                {
+                  "type": "mrkdwn",
+                  "text": ":Powered by: <https://refunnel.com|Refunnel>",
+                  "verbatim": false
+                }
+              ]
+            }
+          ],
+          "channel": "C08DBEBH9PW",
+          "event_ts": "1749236420.574549",
+          "channel_type": "channel"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets4": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets6": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets10": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets2": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets5": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets8": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets11": {
+      "main": [
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields3": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "961f2e1f-fc85-49fd-9d1e-0e328cde41da",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "VzY9hbxcFBOiuC3w",
+  "tags": []
+}

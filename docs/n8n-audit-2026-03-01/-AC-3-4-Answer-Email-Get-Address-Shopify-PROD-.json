@@ -1,0 +1,4021 @@
+{
+  "name": "[AC] (3) (4) Answer Email & Get Address & Shopify [PROD]",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "2ea18a96-456d-4e26-8b03-79c805366818",
+              "leftValue": "={{ $json.has_address }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        544,
+        -32
+      ],
+      "id": "34bd787e-70f2-4e70-807a-93f4403b489d",
+      "name": "Address ?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Versión defensiva con limpieza de markdown\nconst response = $input.first().json;\n\n// Manejar si viene como array o como objeto directo\nconst data = Array.isArray(response) ? response[0] : response;\nconst textContent = data?.output?.[0]?.content?.[0]?.text;\n\nif (!textContent) {\n  return { \n    has_address: false,\n    reason: \"No se encontró el contenido de texto\",\n    addresses: []\n  };\n}\n\n// Función para limpiar y extraer JSON del texto\nfunction extractJSON(text) {\n  let cleaned = text.trim();\n  \n  // Remover bloques de código markdown (```json ... ``` o ``` ... ```)\n  const codeBlockRegex = /```(?:json)?\\s*([\\s\\S]*?)```/;\n  const match = cleaned.match(codeBlockRegex);\n  \n  if (match) {\n    cleaned = match[1].trim();\n  }\n  \n  return cleaned;\n}\n\ntry {\n  const cleanedText = extractJSON(textContent);\n  const parsed = JSON.parse(cleanedText);\n  \n  return {\n    has_address: parsed.has_address ?? false,\n    reason: parsed.reason ?? \"Sin razón especificada\",\n    addresses: parsed.addresses ?? []\n  };\n} catch (error) {\n  // Si no es JSON válido, retornar valores por defecto\n  return {\n    has_address: false,\n    reason: `No se pudo parsear JSON: ${error.message}`,\n    addresses: [],\n    raw_content: textContent // Opcional: incluir el contenido original para debug\n  };\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        336,
+        -32
+      ],
+      "id": "63c975be-c85b-4aec-ad22-b87294e1dfed",
+      "name": "Extract Address"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Address": "={{ $('Extract Address').item.json.addresses[0].raw_text }}",
+            "Email": "={{ $('Search records1').item.json.Email }}",
+            "Response Count Address": "={{ ($('Search records1').item.json[\"Response Count Address\"] ? $('Search records1').item.json[\"Response Count Address\"] : 0) + 1 }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Orden Shopify ID",
+              "displayName": "Orden Shopify ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Order Placed Date",
+              "displayName": "Order Placed Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Delivered Date",
+              "displayName": "Delivered Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post",
+              "displayName": "Post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "History",
+              "displayName": "History",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order",
+              "displayName": "Shopify Order",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Reminder Date Mentions",
+              "displayName": "Reminder Date Mentions",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Outreach Sent",
+              "displayName": "Outreach Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Deliverability",
+              "displayName": "Deliverability",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Reply",
+              "displayName": "Reply",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Opt-ins",
+              "displayName": "Opt-ins",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Placed",
+              "displayName": "Orders Placed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Delivered",
+              "displayName": "Orders Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery Success",
+              "displayName": "Delivery Success",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Median Delivery Days",
+              "displayName": "Median Delivery Days",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Post Rate",
+              "displayName": "Post Rate",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "First Follow Up Date",
+              "displayName": "First Follow Up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post Date",
+              "displayName": "Post Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "History Date",
+              "displayName": "History Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Total post",
+              "displayName": "Total post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        -128
+      ],
+      "id": "94cc14ca-60a2-4577-b3bc-f87fdb0e9b80",
+      "name": "Save Data",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b089ee75-06af-4055-a4c7-1e3d66a08aa4",
+              "leftValue": "={{ $json.execution.mode }}",
+              "rightValue": "manual",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1120,
+        -560
+      ],
+      "id": "88d0481b-4f36-4676-a4c1-a390daa6c214",
+      "name": "PROD?"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=Error Workflow -  *{{ $json.workflow.name }}* - {{ $json.workflow.id }}\nId Execution: {{ $json.execution.id }}\nError: {{ $json.execution.error.message }}\nStack: {{ $json.execution.error.stack }}\nUrl: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        -896,
+        -576
+      ],
+      "id": "1eb9e09c-e8da-471b-b090-a55309027822",
+      "name": "Discord",
+      "webhookId": "b90458f5-90b7-4d88-9d32-8bdbe5121b04",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "i0AdU91u5MiaI6jy",
+          "name": "Discord Webhook account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1344,
+        -560
+      ],
+      "id": "53afe992-ca59-410f-9435-ce30479a8aa5",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get many messages1').item.json.threadId }}",
+        "messageId": "={{ $('Get many messages1').item.json.id }}",
+        "message": "={{ $json.output[0].content[0].text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1744,
+        80
+      ],
+      "id": "5b4a7612-9169-4a33-a62f-4c70b6064268",
+      "name": "Reply to a message",
+      "webhookId": "dfcd90ce-a93c-4cfa-a7d6-3ae8f82670bc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Get many messages1').item.json.threadId }}",
+        "messageId": "={{ $('Get many messages1').item.json.id }}",
+        "message": "=Got it! Thank you so much! Looking forward to seeing you try our Mouth Tape! Have a great day!",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        944,
+        -128
+      ],
+      "id": "d3d7ed26-3d4c-414f-a828-123a0ad454be",
+      "name": "Reply to a message1",
+      "webhookId": "dfcd90ce-a93c-4cfa-a7d6-3ae8f82670bc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "product",
+        "operation": "get",
+        "productId": "9739836227901",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.shopify",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        -128
+      ],
+      "id": "2c764c04-37cf-430d-a891-8d0af6264c9d",
+      "name": "Get a product",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "mpHF1jAD9gmWFsTA",
+          "name": "Shopify Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener el texto del webhook\nconst fullText = $('Extract Message Client').first().json.clientReply;\n\n// Función para extraer el mensaje del usuario (antes de la cita del email)\nfunction extractUserMessage(text) {\n  if (!text) return '';\n  \n  // Patrones comunes de inicio de citas de email en varios idiomas\n  const quotePatterns = [\n    // Español\n    /El\\s+\\w+,?\\s+\\d{1,2}\\s+\\w+\\.?\\s+\\d{4}\\s+a\\s+la\\(?s?\\)?\\s+\\d{1,2}:\\d{2}/i,\n    /El\\s+día\\s+\\d{1,2}/i,\n    \n    // Inglés\n    /On\\s+\\w+,?\\s+\\w+\\s+\\d{1,2},?\\s+\\d{4}\\s+at\\s+\\d{1,2}:\\d{2}/i,\n    /On\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}/i,\n    \n    // Gmail forwarded\n    /---------- Forwarded message/i,\n    /---------- Mensaje reenviado/i,\n    \n    // Outlook style\n    /From:\\s*.*\\nSent:\\s*/i,\n    /De:\\s*.*\\nEnviado:\\s*/i,\n    \n    // Generic email pattern\n    /<[\\w.-]+@[\\w.-]+>\\s*(escribió|wrote|escreveu|a écrit|schrieb):/i,\n    \n    // Líneas de separación comunes\n    /_{5,}/,\n    /-{5,}/\n  ];\n  \n  let messageEnd = text.length;\n  \n  // Buscar el primer patrón que aparezca\n  for (const pattern of quotePatterns) {\n    const match = text.search(pattern);\n    if (match !== -1 && match < messageEnd) {\n      messageEnd = match;\n    }\n  }\n  \n  // Extraer y limpiar el mensaje\n  let userMessage = text.substring(0, messageEnd).trim();\n  \n  // Remover saltos de línea excesivos\n  userMessage = userMessage.replace(/\\n{3,}/g, '\\n\\n');\n  \n  return userMessage;\n}\n\n// Procesar cada item\nfor (const item of $input.all()) {\n  const originalText = item.json.body?.text || fullText;\n  item.json.userMessage = extractUserMessage(originalText);\n  item.json.originalText = originalText; // Guardar original por si acaso\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        80
+      ],
+      "id": "53d83aec-af65-4193-b805-837b69fab8ca",
+      "name": "Formatted Answer"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e1f787a6-d42b-4024-a49b-8395cb4924ba",
+              "leftValue": "={{ $('Search records1').item.json[\"Response Count Address\"] ?  $('Search records1').item.json[\"Response Count Address\"]  : 0 }}",
+              "rightValue": 5,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        96
+      ],
+      "id": "c2a55021-9ea5-4115-834c-e2c9bb8c57a3",
+      "name": "Count > 5"
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "additionalFields": {
+          "email": "={{ $('Search records1').item.json.Email }}",
+          "sendReceipt": true,
+          "shippingAddressUi": {
+            "shippingAddressValues": {
+              "firstName": "={{ $('Final Output').item.json.first_name }}",
+              "lastName": "={{ $('Final Output').item.json.last_name }}",
+              "company": "=",
+              "country": "={{ $('Extract Address').item.json.addresses[0].country }}",
+              "address1": "={{ $('Extract Address').item.json.addresses[0].street_line }}",
+              "city": "={{ $('Extract Address').item.json.addresses[0].city }}",
+              "province": "={{ $('Extract Address').item.json.addresses[0].state_province_region }}",
+              "zip": "={{ $('Extract Address').item.json.addresses[0].postal_code }}"
+            }
+          },
+          "sourceName": "Instagram",
+          "tags": "Seeding",
+          "test": false
+        },
+        "limeItemsUi": {
+          "lineItemValues": [
+            {
+              "productId": 10049761640765,
+              "variantId": "={{ $json.variants[0].id }}",
+              "title": "={{ $json.variants[0].title }}",
+              "grams": "={{ $json.variants[0].grams }}",
+              "price": "=0"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.shopify",
+      "typeVersion": 1,
+      "position": [
+        2576,
+        -128
+      ],
+      "id": "f4afa0ca-57c2-413e-acf8-8b787f5b0675",
+      "name": "Create an order",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "mpHF1jAD9gmWFsTA",
+          "name": "Shopify Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -1440,
+        -16
+      ],
+      "id": "f450656e-ad8a-47b9-aeef-c089be9d0190",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 1,
+        "filters": {
+          "q": "=from:{{ $json.email }} subject: Kalm - Partnership!"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -1056,
+        -16
+      ],
+      "id": "e382bcf9-23c3-45dd-b6ea-694b343fbd6d",
+      "name": "Get many messages1",
+      "webhookId": "cd2d2bf1-188b-400c-886a-4a863f6de69c",
+      "alwaysOutputData": true,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Obtener el campo From\nconst fromField = $input.first().json.From;\n\n// Extraer solo el email usando regex\nconst emailMatch = fromField.match(/<(.+?)>/);\nconst email = emailMatch ? emailMatch[1] : fromField;\n\n// Retornar el resultado\nreturn [{\n  json: {\n    email: email\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1264,
+        -16
+      ],
+      "id": "98297f6b-f0d3-4561-bd2c-213f2004395e",
+      "name": "get email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "a564a374-c452-4cf3-88da-6104916ee390",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "={{ undefined }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "f246f2bf-b291-4d8e-b30c-87b66845b6b2",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "\"\"",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -848,
+        -16
+      ],
+      "id": "41939d2b-b840-454a-9411-e49ff0243862",
+      "name": "Answer ?1"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "filterByFormula": "=AND({Email} = \"{{ $('get email').item.json.email }}\", {Orden Shopify ID} = \"\")",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -480,
+        -32
+      ],
+      "id": "e7081ed5-ff04-4a4e-9052-2749b99beabf",
+      "name": "Search records1",
+      "alwaysOutputData": false,
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Username": "={{ $json.Username || \"\" }}",
+            "Follow-up Emails Count": "=5"
+          },
+          "matchingColumns": [
+            "Username"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -272,
+        -32
+      ],
+      "id": "e8808bc7-1b3a-4533-b13e-9a205dab601b",
+      "name": "Update Count Follow",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "=chatgpt-4o-latest",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are an AI that performs one single task:\nGiven an input text (usually an email body), you must detect whether it contains a postal address and return the result only as JSON.\n\nYou are not a chatbot.\nYou must never ask for clarification, never explain anything to the user, and never output natural language like\n“I'm here to help”,\n“It looks like your message is unclear”,\nor any similar sentence.\n\nYour output must always be a single JSON object with the following structure and nothing else:\n{\n  \"has_address\": true or false,\n  \"reason\": \"Short explanation of why you decided there is or is not a full postal address.\",\n  \"addresses\": [\n    {\n      \"raw_text\": \"The exact address text as it appears in the email\",\n      \"name_or_label\": \"Name or label if present (e.g., 'John Doe', 'Office', 'Shipping address'), or null if not clear\",\n      \"street_line\": \"Street and number (and apartment/suite if present), or null if not clearly separable\",\n      \"city\": \"City or locality, or null\",\n      \"state_province_region\": \"State, province, region, or department, or null\",\n      \"postal_code\": \"Postal code / ZIP if present, else null\",\n      \"country\": \"Country if present or obvious, else null\"\n    }\n  ]\n}\n"
+            },
+            {
+              "content": "={{ $json.clientReply }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2,
+      "position": [
+        112,
+        -32
+      ],
+      "id": "ab05abe9-f2f6-44f9-bad7-1408d2e23570",
+      "name": "Extract Address ",
+      "credentials": {
+        "openAiApi": {
+          "id": "PsZQ0hIV30oqaFAI",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Response Count Address": "={{ ($('Search records1').item.json[\"Response Count Address\"] ? $('Search records1').item.json[\"Response Count Address\"] : 0) + 1 }}",
+            "Email": "={{ $('Search records1').item.json.Email }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1008,
+        80
+      ],
+      "id": "dacaadb9-a88d-43fb-94e1-4978d1508e7c",
+      "name": "Update Count",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "chatgpt-4o-latest",
+          "mode": "list",
+          "cachedResultName": "CHATGPT-4O-LATEST"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "=You are writing a short, natural email reply that sounds like it was written by a real person on the Kalm team.\n\nWrite like a calm, confident human not like an assistant, marketer, or explainer.\nAvoid any AI style phrases, transitions, or filler (e.g. “happy to help,” “here’s a quick overview,” “in summary,” “to clarify,” “let me explain,” “this product is designed to,” etc.).\n\nThe creator has already received an initial email explaining Kalm and the product.\nDo NOT restate what Kalm is or describe the product unless the inbound message explicitly asks for it.\nIf they ask a question, answer it directly and plainly.\n\nCONTEXT (for the model only, NOT to be repeated unless asked)\n  Kalm is a sleep & recovery brand.\n  Mouth tape encourages nasal breathing during sleep.\n  Product page: https://clubkalm.com/collections/all/products/kalm-mouth-tape-refill\n\nWRITING RULES (STRICT)\n  4–6 sentences total.\n  Plain, conversational language read it out loud; it should sound normal.\n  No hype, no marketing language, no medical claims.\n  Do not use em dashes (—) or en dashes (–) anywhere in the response.\n  Use only standard punctuation (periods, commas).\n  Never use — or – characters. Replace any dash-like punctuation with a period or comma.\n  No greetings (“Hi,” “Hey”) and no sign offs other than the closing line.\n  If the product is mentioned, include the product page URL exactly once.\n  End by asking for their shipping address so you can send a complimentary kit.\n  One paragraph only (line breaks allowed for readability).\n  Never explain what you’re doing. Never reference prompts, context, or instructions.\n\nEnd with exactly:\nTeam Kalm\n\n##FINAL OUTPUT ##\nEmail body only; no subject; no greeting; one paragraph; no extra commentary."
+            },
+            {
+              "content": "={{ $json.userMessage }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        80
+      ],
+      "id": "0fe6ca96-137a-4ca9-abfe-9ad82a3c4bb3",
+      "name": "Answer Email",
+      "credentials": {
+        "openAiApi": {
+          "id": "PsZQ0hIV30oqaFAI",
+          "name": "OpenAi account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Get Address\n",
+        "height": 720,
+        "width": 4480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1504,
+        -288
+      ],
+      "id": "e432bb23-77f4-4bc0-b0c4-ea6f4aafc978",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 256,
+        "width": 848,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1488,
+        -608
+      ],
+      "id": "011a9824-c0a1-40d1-99bd-1607d71a2f1f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('Search records1').item.json.Email }}",
+            "Orden Shopify ID": "={{ $json.id }}",
+            "Thread ID": "={{ $('Get many messages1').item.json.threadId }}",
+            "Message ID": "={{ $('Get many messages1').item.json.id }}",
+            "Shopify Order": "=https://admin.shopify.com/store/kalmwellness/orders/{{ $json.id }}",
+            "Order Placed Date": "={{ $now.toISO()}}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Orden Shopify ID",
+              "displayName": "Orden Shopify ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order Placed Date",
+              "displayName": "Order Placed Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Delivered Date",
+              "displayName": "Delivered Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post",
+              "displayName": "Post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "History",
+              "displayName": "History",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order",
+              "displayName": "Shopify Order",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Outreach Sent",
+              "displayName": "Outreach Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Deliverability",
+              "displayName": "Deliverability",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Reply",
+              "displayName": "Reply",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Opt-ins",
+              "displayName": "Opt-ins",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Placed",
+              "displayName": "Orders Placed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Delivered",
+              "displayName": "Orders Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery Success",
+              "displayName": "Delivery Success",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        2752,
+        -128
+      ],
+      "id": "a7f7367e-7275-4589-bc7b-1fc94dc7d77f",
+      "name": "Update Shopify ID & Thread",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar cada item\nconst results = [];\n\nfor (const item of $input.all()) {\n  const fullName = $('Search records1').first().json[\"Full Name\"] || item.json.full_name || item.json.fullName || item.json.name || '';\n  \n  // Limpiar emojis y caracteres especiales\n  let cleaned = fullName\n    .replace(/[\\u{1F300}-\\u{1F9FF}\\u{2600}-\\u{26FF}\\u{2700}-\\u{27BF}\\u{1F600}-\\u{1F64F}\\u{1F680}-\\u{1F6FF}]/gu, '') // emojis\n    .replace(/[★⚡️✨💫🌟⭐️❤️💪🔥✅❌🎯🚀💡🎨📸🎬🎤🎵🎶💃🏃‍♀️🧘‍♀️]/g, '') // emojis comunes\n    .replace(/[\\u{1D400}-\\u{1D7FF}]/gu, '') // letras estilizadas unicode\n    .replace(/\\|.*$/g, '') // todo después de pipe\n    .replace(/@\\w+/g, '') // handles de social media\n    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s'-]/g, '') // solo letras y espacios\n    .replace(/\\s+/g, ' ') // múltiples espacios a uno\n    .trim();\n  \n  const parts = cleaned.split(' ').filter(p => p.length > 1);\n  \n  // Validar que tengamos partes válidas (solo letras)\n  const validParts = parts.filter(p => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ'-]+$/i.test(p));\n  \n  if (validParts.length >= 2) {\n    // Caso exitoso - tenemos nombre y apellido\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: validParts[0],\n        last_name: validParts.slice(1).join(' '),\n        confidence: 'high',\n        needs_llm: false\n      }\n    });\n  } else if (validParts.length === 1) {\n    // Solo un nombre - necesita LLM o marcar como incompleto\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: validParts[0],\n        last_name: null,\n        confidence: 'medium',\n        needs_llm: true\n      }\n    });\n  } else {\n    // No pudimos extraer nada útil\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: null,\n        last_name: null,\n        confidence: 'low',\n        needs_llm: true\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "c4916362-293c-4e62-ba01-4ef40abfe17a",
+      "name": "Extract Name (JS)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "needs-llm-check",
+              "leftValue": "={{ $json.needs_llm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ffcca669-6cd4-4ff8-b63b-ec955c63ea6c",
+      "name": "Needs LLM?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1312,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Extract first name and last name from the given text. Return ONLY valid JSON with keys: first_name, last_name. If you cannot determine a real name (e.g., only emojis, symbols, or usernames), return null for both fields. Do not guess or make up names.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.original_name }}\"\n    }\n  ],\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "id": "bbe959dd-2da3-4365-8b6a-cc38982542b7",
+      "name": "OpenAI Extract Name",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1536,
+        -240
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "V7TIGqNHqx5QPGMv",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de OpenAI y combinar con data original\nconst results = [];\n\nfor (const item of $input.all()) {\n  const original = item.json;\n  let parsed = { first_name: null, last_name: null };\n  \n  try {\n    const content = original.choices[0].message.content;\n    parsed = JSON.parse(content);\n  } catch (e) {\n    // Si falla el parse, mantener nulls\n  }\n  \n  results.push({\n    json: {\n      // Traer campos originales del item anterior en el workflow\n      // Ajusta según tu estructura de datos\n      original_name: original.original_name || $('Needs LLM?').item.json.original_name,\n      first_name: parsed.first_name,\n      last_name: parsed.last_name,\n      confidence: parsed.first_name ? 'llm-extracted' : 'unresolvable',\n      source: 'openai'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "865f510b-ceac-4f27-914e-cf77f944b771",
+      "name": "Parse OpenAI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        -240
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "9db67174-7291-4119-ac9a-26848832da50",
+      "name": "Merge Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        1984,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "final-first",
+              "name": "first_name",
+              "value": "={{ $json.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-last",
+              "name": "last_name",
+              "value": "={{ $json.last_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-original",
+              "name": "original_name",
+              "value": "={{ $json.original_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-confidence",
+              "name": "confidence",
+              "value": "={{ $json.confidence }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "050ca6ad-5907-49f1-9cd9-8b21833b7e2a",
+      "name": "Final Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2192,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "content": "",
+        "height": 608,
+        "width": 2976,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1520,
+        544
+      ],
+      "id": "85609101-f2f7-40aa-abc7-f74b2e0db38c",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Business Address": "={{ $json.business_address }}",
+            "Email": "={{ $json.email }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        -944,
+        816
+      ],
+      "id": "5f1aa9d5-b932-4d09-b324-6a96c32bcf55",
+      "name": "Save Data1",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "threadId": "={{ $('Set Test Data').item.json['Thread ID'] }}",
+        "messageId": "={{ $('Set Test Data').item.json['Message Snippet or ID'] }}",
+        "message": "=Got it! Thank you so much! Looking forward to seeing you try our Mouth Tape! Have a great day!",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -736,
+        816
+      ],
+      "id": "b04c965f-530d-4512-9fb9-05af92a6808a",
+      "name": "Reply to a message2",
+      "webhookId": "dfcd90ce-a93c-4cfa-a7d6-3ae8f82670bc",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "resource": "product",
+        "operation": "get",
+        "productId": "9739836227901",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.shopify",
+      "typeVersion": 1,
+      "position": [
+        928,
+        816
+      ],
+      "id": "3060a8dd-f8ea-412e-8695-89024baaf538",
+      "name": "Get a product1",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "mpHF1jAD9gmWFsTA",
+          "name": "Shopify Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "accessToken",
+        "additionalFields": {
+          "email": "={{ $('Set Test Data').item.json.email }}",
+          "sendReceipt": true,
+          "shippingAddressUi": {
+            "shippingAddressValues": {
+              "firstName": "={{ $('Final Output1').item.json.first_name }}",
+              "lastName": "={{ $('Final Output1').item.json.last_name }}",
+              "company": "=",
+              "country": "={{ $('Extract Address1').item.json.parsed.country }}",
+              "address1": "={{ $('Extract Address1').item.json.parsed.street }}",
+              "address2": "=",
+              "city": "={{ $('Extract Address1').item.json.parsed.city }}",
+              "province": "={{ $('Extract Address1').item.json.parsed.state }}",
+              "zip": "={{ $('Extract Address1').item.json.parsed.zip }}"
+            }
+          },
+          "sourceName": "Instagram",
+          "tags": "Seeding",
+          "test": false
+        },
+        "limeItemsUi": {
+          "lineItemValues": [
+            {
+              "productId": 10049761640765,
+              "variantId": "={{ $json.variants[0].id }}",
+              "title": "={{ $json.variants[0].title }}",
+              "grams": "={{ $json.variants[0].grams }}",
+              "price": "=0"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.shopify",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        816
+      ],
+      "id": "1e4f93f2-67a9-429a-bd37-2c5d06d39f89",
+      "name": "Create an order1",
+      "credentials": {
+        "shopifyAccessTokenApi": {
+          "id": "mpHF1jAD9gmWFsTA",
+          "name": "Shopify Access Token account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appSt3GpYPstPjpl2",
+          "mode": "list",
+          "cachedResultName": "[People]- Instagram Followers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblR6Il1syV9muGlZ",
+          "mode": "list",
+          "cachedResultName": "Instagram Influencers",
+          "cachedResultUrl": "https://airtable.com/appSt3GpYPstPjpl2/tblR6Il1syV9muGlZ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('Set Test Data').item.json.email }}",
+            "Orden Shopify ID": "={{ $json.id }}",
+            "Thread ID": "={{ $('Set Test Data').item.json['Thread ID'] }}",
+            "Message ID": "={{ $('Set Test Data').item.json['Message Snippet or ID'] }}",
+            "Shopify Order": "=https://admin.shopify.com/store/kalmwellness/orders/{{ $json.id }}",
+            "Order Placed Date": "={{ $now.toISO()}}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Username",
+              "displayName": "Username",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Approved",
+              "displayName": "Approved",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Waiting Approval",
+                  "value": "Waiting Approval"
+                },
+                {
+                  "name": "Approved",
+                  "value": "Approved"
+                },
+                {
+                  "name": "Declined",
+                  "value": "Declined"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Platform",
+              "displayName": "Platform",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Full Name",
+              "displayName": "Full Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Followers",
+              "displayName": "Followers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Average Views",
+              "displayName": "Average Views",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Address",
+              "displayName": "Business Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Business Category",
+              "displayName": "Business Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sources",
+              "displayName": "Sources",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Date",
+              "displayName": "Follow-up Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Follow-up Emails Count",
+              "displayName": "Follow-up Emails Count",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Response Count Address",
+              "displayName": "Response Count Address",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Orden Shopify ID",
+              "displayName": "Orden Shopify ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Order Placed Date",
+              "displayName": "Order Placed Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Delivered Date",
+              "displayName": "Delivered Date",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Post",
+              "displayName": "Post",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "History",
+              "displayName": "History",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order",
+              "displayName": "Shopify Order",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Outreach Sent",
+              "displayName": "Outreach Sent",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Deliverability",
+              "displayName": "Deliverability",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Reply",
+              "displayName": "Reply",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Opt-ins",
+              "displayName": "Opt-ins",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Placed",
+              "displayName": "Orders Placed",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Orders Delivered",
+              "displayName": "Orders Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Delivery Success",
+              "displayName": "Delivery Success",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        816
+      ],
+      "id": "7515bc14-ffc0-428c-bb94-95b995a6a0fd",
+      "name": "Update Shopify ID & Thread1",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "ircRYQSrjF8arreu",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Procesar cada item\nconst results = [];\n\nfor (const item of $input.all()) {\n  const fullName = $('Set Test Data').first().json['Full Name'] || item.json.full_name || item.json.fullName || item.json.name || '';\n  \n  // Limpiar emojis y caracteres especiales\n  let cleaned = fullName\n    .replace(/[\\u{1F300}-\\u{1F9FF}\\u{2600}-\\u{26FF}\\u{2700}-\\u{27BF}\\u{1F600}-\\u{1F64F}\\u{1F680}-\\u{1F6FF}]/gu, '') // emojis\n    .replace(/[★⚡️✨💫🌟⭐️❤️💪🔥✅❌🎯🚀💡🎨📸🎬🎤🎵🎶💃🏃‍♀️🧘‍♀️]/g, '') // emojis comunes\n    .replace(/[\\u{1D400}-\\u{1D7FF}]/gu, '') // letras estilizadas unicode\n    .replace(/\\|.*$/g, '') // todo después de pipe\n    .replace(/@\\w+/g, '') // handles de social media\n    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s'-]/g, '') // solo letras y espacios\n    .replace(/\\s+/g, ' ') // múltiples espacios a uno\n    .trim();\n  \n  const parts = cleaned.split(' ').filter(p => p.length > 1);\n  \n  // Validar que tengamos partes válidas (solo letras)\n  const validParts = parts.filter(p => /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ'-]+$/i.test(p));\n  \n  if (validParts.length >= 2) {\n    // Caso exitoso - tenemos nombre y apellido\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: validParts[0],\n        last_name: validParts.slice(1).join(' '),\n        confidence: 'high',\n        needs_llm: false\n      }\n    });\n  } else if (validParts.length === 1) {\n    // Solo un nombre - necesita LLM o marcar como incompleto\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: validParts[0],\n        last_name: null,\n        confidence: 'medium',\n        needs_llm: true\n      }\n    });\n  } else {\n    // No pudimos extraer nada útil\n    results.push({\n      json: {\n        ...item.json,\n        original_name: fullName,\n        first_name: null,\n        last_name: null,\n        confidence: 'low',\n        needs_llm: true\n      }\n    });\n  }\n}\n\nreturn results;"
+      },
+      "id": "cd7d1062-247b-4764-9a50-540491dd0135",
+      "name": "Extract Name (JS)1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "needs-llm-check",
+              "leftValue": "={{ $json.needs_llm }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2b140efb-c338-40b6-a28c-25b19b300b13",
+      "name": "Needs LLM?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"gpt-4o-mini\",\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Extract first name and last name from the given text. Return ONLY valid JSON with keys: first_name, last_name. If you cannot determine a real name (e.g., only emojis, symbols, or usernames), return null for both fields. Do not guess or make up names.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"{{ $json.original_name }}\"\n    }\n  ],\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" }\n}",
+        "options": {}
+      },
+      "id": "e677f22b-4e78-46c1-879b-60ffc16a307f",
+      "name": "OpenAI Extract Name1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -64,
+        704
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "V7TIGqNHqx5QPGMv",
+          "name": "OpenAi account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de OpenAI y combinar con data original\nconst results = [];\n\nfor (const item of $input.all()) {\n  const original = item.json;\n  let parsed = { first_name: null, last_name: null };\n  \n  try {\n    const content = original.choices[0].message.content;\n    parsed = JSON.parse(content);\n  } catch (e) {\n    // Si falla el parse, mantener nulls\n  }\n  \n  results.push({\n    json: {\n      // Traer campos originales del item anterior en el workflow\n      // Ajusta según tu estructura de datos\n      original_name: original.original_name || $('Needs LLM?1').item.json.original_name,\n      first_name: parsed.first_name,\n      last_name: parsed.last_name,\n      confidence: parsed.first_name ? 'llm-extracted' : 'unresolvable',\n      source: 'openai'\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "ddce2510-55bb-44fb-8942-6e094377d584",
+      "name": "Parse OpenAI Response1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        160,
+        704
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c0730dca-c12a-4773-a9c8-82f200dc79b6",
+      "name": "Merge Results1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        384,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "final-first",
+              "name": "first_name",
+              "value": "={{ $json.first_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-last",
+              "name": "last_name",
+              "value": "={{ $json.last_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-original",
+              "name": "original_name",
+              "value": "={{ $json.original_name }}",
+              "type": "string"
+            },
+            {
+              "id": "final-confidence",
+              "name": "confidence",
+              "value": "={{ $json.confidence }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf79c641-afc6-4bb3-9414-50debd7fe8d9",
+      "name": "Final Output1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        592,
+        816
+      ]
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1472,
+        816
+      ],
+      "id": "eede903f-7299-4ada-a95a-57fd06de1277",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "1",
+              "name": "email",
+              "value": "daniladavidson@gmail.com",
+              "type": "string"
+            },
+            {
+              "id": "2",
+              "name": "business_address",
+              "value": "2 Peter Cooper Rd, Apt 12AB New York, NY 10010 USA",
+              "type": "string"
+            },
+            {
+              "id": "7be965d7-4c30-4831-9a4d-e3858b322067",
+              "name": "Thread ID",
+              "value": "19bec060f48ecaf9",
+              "type": "string"
+            },
+            {
+              "id": "b7181eda-34e2-4993-a9a1-7e3703eb3ef9",
+              "name": "Message Snippet or ID",
+              "value": "19bf2d284ee17709",
+              "type": "string"
+            },
+            {
+              "id": "17f1c906-df3d-4023-ba47-e6e35e0ea525",
+              "name": "Full Name",
+              "value": "Danila Davidson",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -1200,
+        816
+      ],
+      "id": "812aeba6-684d-4cb8-a021-e509845495f6",
+      "name": "Set Test Data"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Leer la dirección del nodo Set Test Data\nconst fullAddress = $('Set Test Data').first().json.business_address;\n\nif (!fullAddress) {\n  return { \n    has_address: false,\n    reason: \"No se encontró business_address\",\n    parsed: null\n  };\n}\n\n// Lista de países comunes (puedes expandir)\nconst countries = ['USA', 'US', 'United States', 'Canada', 'Mexico', 'UK', 'United Kingdom'];\n\n// Función para detectar y remover país del final\nfunction extractCountry(address) {\n  let country = 'USA'; // Default\n  let cleanAddress = address.trim();\n  \n  for (const c of countries) {\n    const regex = new RegExp(',?\\\\s*' + c + '\\\\s*$', 'i');\n    if (regex.test(cleanAddress)) {\n      country = c.toUpperCase() === 'UNITED STATES' ? 'USA' : c.toUpperCase();\n      cleanAddress = cleanAddress.replace(regex, '').trim();\n      break;\n    }\n  }\n  \n  return { country, cleanAddress };\n}\n\nconst { country, cleanAddress } = extractCountry(fullAddress);\n\n// Regex para parsear direcciones de EE.UU.\n// Formato esperado: \"Street Address City, ST ZIP\"\nconst addressRegex = /^(.+?)\\s+([A-Za-z\\s]+),\\s*([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)$/;\nconst match = cleanAddress.match(addressRegex);\n\nif (match) {\n  return {\n    has_address: true,\n    full_address: fullAddress,\n    parsed: {\n      street: match[1].trim(),\n      city: match[2].trim(),\n      state: match[3].trim(),\n      zip: match[4].trim(),\n      country: country\n    }\n  };\n}\n\n// Si no matchea el regex, intentar split por comas\nconst parts = cleanAddress.split(',').map(p => p.trim());\n\nif (parts.length >= 2) {\n  const lastPart = parts[parts.length - 1];\n  const stateZipMatch = lastPart.match(/([A-Z]{2})\\s+(\\d{5}(?:-\\d{4})?)/);\n  \n  return {\n    has_address: true,\n    full_address: fullAddress,\n    parsed: {\n      street: parts[0],\n      city: parts.length > 2 ? parts[1] : null,\n      state: stateZipMatch ? stateZipMatch[1] : null,\n      zip: stateZipMatch ? stateZipMatch[2] : null,\n      country: country\n    }\n  };\n}\n\nreturn {\n  has_address: true,\n  full_address: fullAddress,\n  parsed: null,\n  reason: \"No se pudo parsear el formato de dirección\"\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        816
+      ],
+      "id": "e87db91d-9d5e-4966-8e75-74a367957941",
+      "name": "Extract Address1"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        -32
+      ],
+      "id": "1cda6c4f-3935-4a6e-ae39-73418671ce96",
+      "name": "Get Full Email",
+      "webhookId": "18c7c749-218b-4caa-bf4a-76a96411f986",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "vSqoV4eP6KtwrX8C",
+          "name": "Club Kalm Creators"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = [];\n\nfor (const item of $input.all()) {\n  const html = $('Get Full Email').first().json.html || '';\n  \n  // Convertir HTML a texto con saltos de línea\n  let text = html\n    .replace(/<style[^>]*>.*?<\\/style>/gis, '')\n    .replace(/<blockquote[^>]*>.*?<\\/blockquote>/gis, '')\n    .replace(/<br\\s*\\/?>/gi, '\\n')\n    .replace(/<\\/p>/gi, '\\n\\n')\n    .replace(/<\\/div>/gi, '\\n')\n    .replace(/<[^>]*>/g, '')\n    .replace(/&nbsp;/g, ' ')\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&quot;/g, '\"')\n    .replace(/[ \\t]+/g, ' ')\n    .replace(/\\n /g, '\\n')\n    .replace(/ \\n/g, '\\n')\n    .replace(/\\n{3,}/g, '\\n\\n')\n    .trim();\n  \n  const patterns = [\n    /On\\s+\\w{3},\\s+\\w{3}\\s+\\d{1,2},\\s+\\d{4}\\s+at\\s+\\d{1,2}:\\d{2}/i,\n    /On\\s+\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}/i,\n    /El\\s+\\d{1,2}\\s+de\\s+\\w+\\s+de\\s+\\d{4}/i,\n    /-{3,}\\s*Original Message/i,\n    /_{3,}\\s*From:/i,\n    /Sent from my iPhone/i,\n    /Get Outlook for/i\n  ];\n  \n  for (const pattern of patterns) {\n    const match = text.match(pattern);\n    if (match) {\n      text = text.substring(0, match.index).trim();\n    }\n  }\n  \n  results.push({\n    json: {\n      ...item.json,\n      clientReply: text\n    }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -80,
+        -32
+      ],
+      "id": "c6390043-bc62-4590-aa3f-6a20fe998025",
+      "name": "Extract Message Client"
+    }
+  ],
+  "pinData": {
+    "Gmail Trigger": [
+      {
+        "json": {
+          "id": "19c1a7617de7b7d1",
+          "threadId": "19c1a41c0d9252e7",
+          "snippet": "Hi! Thanks for reaching out! Could you please let me know what is the budget and deliverables for the collab? Thanks, Helene STEVENS Project Manager at KATIE.ONE www.katieone.com Instagram: @katie.one",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 9137,
+          "historyId": "660805",
+          "internalDate": "1769970460000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Contact Katie Degas <contact@katie.one>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@teamkalm.com"
+        }
+      }
+    ],
+    "Extract Address": [
+      {
+        "json": {
+          "has_address": false,
+          "reason": "The message contains no text resembling a full postal address or any part of a standard mailing format.",
+          "addresses": []
+        }
+      }
+    ],
+    "Get many messages1": [
+      {
+        "json": {
+          "id": "19c1a7617de7b7d1",
+          "threadId": "19c1a41c0d9252e7",
+          "snippet": "Hi! Thanks for reaching out! Could you please let me know what is the budget and deliverables for the collab? Thanks, Helene STEVENS Project Manager at KATIE.ONE www.katieone.com Instagram: @katie.one",
+          "payload": {
+            "mimeType": "multipart/alternative"
+          },
+          "sizeEstimate": 9137,
+          "historyId": "660805",
+          "internalDate": "1769970460000",
+          "labels": [
+            {
+              "id": "INBOX",
+              "name": "INBOX"
+            },
+            {
+              "id": "IMPORTANT",
+              "name": "IMPORTANT"
+            },
+            {
+              "id": "CATEGORY_PERSONAL",
+              "name": "CATEGORY_PERSONAL"
+            },
+            {
+              "id": "UNREAD",
+              "name": "UNREAD"
+            }
+          ],
+          "From": "Contact Katie Degas <contact@katie.one>",
+          "Subject": "Re: Kalm - Partnership!",
+          "To": "creators@teamkalm.com"
+        }
+      }
+    ],
+    "get email": [
+      {
+        "json": {
+          "email": "contact@katie.one"
+        }
+      }
+    ],
+    "Search records1": [
+      {
+        "json": {
+          "id": "rec18puc00gUaS9DZ",
+          "createdTime": "2025-12-10T13:28:42.000Z",
+          "Username": "katie.one",
+          "Approved": "Approved",
+          "Entry Date": "2025-12-10",
+          "Platform": "https://www.instagram.com/katie.one",
+          "Full Name": "Katie Degas",
+          "Email": "contact@katie.one",
+          "Followers": 1166975,
+          "Average Views": 41114,
+          "Business Category": "N/A",
+          "Sources": "https://www.instagram.com/silvertxlady",
+          "Category": "Fashion",
+          "First Name": "Katie",
+          "Follow-up Date": "2026-02-01",
+          "Follow-up Emails Count": 4,
+          "Response Count Address": 0,
+          "Post": 0,
+          "History": 0,
+          "Outreach Sent": 1,
+          "Delivered": 1,
+          "Deliverability": 1,
+          "Orders Placed": 0,
+          "Orders Delivered": 0,
+          "First Follow Up Date": "2026-01-26"
+        }
+      }
+    ],
+    "Update Count Follow": [
+      {
+        "json": {
+          "id": "rec18puc00gUaS9DZ",
+          "createdTime": "2025-12-10T13:28:42.000Z",
+          "fields": {
+            "Username": "katie.one",
+            "Approved": "Approved",
+            "Entry Date": "2025-12-10",
+            "Platform": "https://www.instagram.com/katie.one",
+            "Full Name": "Katie Degas",
+            "Email": "contact@katie.one",
+            "Followers": 1166975,
+            "Average Views": 41114,
+            "Business Category": "N/A",
+            "Sources": "https://www.instagram.com/silvertxlady",
+            "Category": "Fashion",
+            "First Name": "Katie",
+            "Follow-up Date": "2026-02-01",
+            "Follow-up Emails Count": 5,
+            "Response Count Address": 0,
+            "Post": 0,
+            "History": 0,
+            "Outreach Sent": 1,
+            "Delivered": 1,
+            "Deliverability": 1,
+            "Orders Placed": 0,
+            "Orders Delivered": 0,
+            "First Follow Up Date": "2026-01-26"
+          }
+        }
+      }
+    ],
+    "Extract Address ": [
+      {
+        "json": {
+          "output": [
+            {
+              "id": "msg_06e82e562a0261bf00697f9b4db9f4819c9c525c36b5d273d0",
+              "type": "message",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "output_text",
+                  "annotations": [],
+                  "logprobs": [],
+                  "text": "{\n  \"has_address\": false,\n  \"reason\": \"The message contains no text resembling a full postal address or any part of a standard mailing format.\",\n  \"addresses\": []\n}"
+                }
+              ],
+              "role": "assistant"
+            }
+          ]
+        }
+      }
+    ],
+    "Update Count": [
+      {
+        "json": {
+          "id": "rec18puc00gUaS9DZ",
+          "createdTime": "2025-12-10T13:28:42.000Z",
+          "fields": {
+            "Username": "katie.one",
+            "Approved": "Approved",
+            "Entry Date": "2025-12-10",
+            "Platform": "https://www.instagram.com/katie.one",
+            "Full Name": "Katie Degas",
+            "Email": "contact@katie.one",
+            "Followers": 1166975,
+            "Average Views": 41114,
+            "Business Category": "N/A",
+            "Sources": "https://www.instagram.com/silvertxlady",
+            "Category": "Fashion",
+            "First Name": "Katie",
+            "Follow-up Date": "2026-02-01",
+            "Follow-up Emails Count": 5,
+            "Response Count Address": 1,
+            "Post": 0,
+            "History": 0,
+            "Outreach Sent": 1,
+            "Delivered": 1,
+            "Deliverability": 1,
+            "Reply": 1,
+            "Orders Placed": 0,
+            "Orders Delivered": 0,
+            "First Follow Up Date": "2026-01-26"
+          }
+        }
+      }
+    ],
+    "Get Full Email": [
+      {
+        "json": {
+          "id": "19c1a7617de7b7d1",
+          "threadId": "19c1a41c0d9252e7",
+          "labelIds": [
+            "UNREAD",
+            "IMPORTANT",
+            "CATEGORY_PERSONAL",
+            "INBOX"
+          ],
+          "sizeEstimate": 9137,
+          "headers": {
+            "delivered-to": "Delivered-To: creators@teamkalm.com",
+            "received": "Received: from mail-sor-f41.google.com (mail-sor-f41.google.com. [209.85.220.41])\r\n        by mx.google.com with SMTPS id a640c23a62f3a-b8dbf1a8104sor295648466b.23.2026.02.01.10.27.52\r\n        for <creators@teamkalm.com>\r\n        (Google Transport Security);\r\n        Sun, 01 Feb 2026 10:27:52 -0800 (PST)",
+            "x-received": "X-Received: by 2002:a17:907:9449:b0:b87:7042:9aea with SMTP id\r\n a640c23a62f3a-b8dff620c36mr554035266b.18.1769970471982; Sun, 01 Feb 2026\r\n 10:27:51 -0800 (PST)",
+            "arc-seal": "ARC-Seal: i=1; a=rsa-sha256; t=1769970472; cv=none;\r\n        d=google.com; s=arc-20240605;\r\n        b=RKFj0dqPu/X4zYr6Q+OdvfeaSR9Txsx0yI5rDqicuY0fQKBqyoxzNNUmYGiLfjGI1J\r\n         e/hUp6G+b8lqC6NIuX9EX9c9eGX95OsL+UGPQaZh5iWjBoIAgfkTxhwHZHrittDJ8REM\r\n         Sd260r+Jjz3VSqG8bYrFjh+A6R1U2oSVZGaM6NEn3KGTPerAXY6tTUCGaUiIUbbnFJYr\r\n         Q7+6A923CX5rRs3JsIxochxTcZ/DyaQuyrzV6TldCQWlskhHy6Qm2hCTM0KAbTgcZRJ+\r\n         zSx8plTNr+c5gPNWtx1NL/W4Dce8VjZ7VOpkMEthu68s/7xVdopp2mxv2IZhBq6IV66l\r\n         UH0w==",
+            "arc-message-signature": "ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :dkim-signature;\r\n        bh=HdSp+j9gqrHFQlwcpr3si+aZMNzHqtclf0jvV5V1P04=;\r\n        fh=rzKe3grc0JyPdmmJ87YU/gmX57fcCqRh15vWURtq+FE=;\r\n        b=FHCvVk1VictPXkLNHQpsQL+yAEcGUpIQK/crOOBVBMDnQvos5sKpII7UQ3uDWCe5bD\r\n         9NZkdZMZd/E7OlR//L5GSGWrN7y2IhyWdhg/QSmiPHbL5h4MUKTbEmvQlziXEtJZVlsl\r\n         KBqXYlfbDH+Jl62pnnrqVfV8mYwFdhsXKJ7/Xy719xVArGg/TE8+dF2uIDYYIVbdKDsz\r\n         QrfEpbo9r/D5OMJPH/6dL//VI/AEHE254+pF6hfNfIkhh0S9druf1kSW/EnngYQIwaMi\r\n         TYb+p3ypC4hpKTenhKrEcfumFqcCl9QzP6X1fiF5vR7vL4FWGKye7L7dg3T6kH+HLptc\r\n         GR0g==;\r\n        darn=teamkalm.com",
+            "arc-authentication-results": "ARC-Authentication-Results: i=1; mx.google.com; arc=none",
+            "return-path": "Return-Path: <contact@katie.one>",
+            "received-spf": "Received-SPF: softfail (google.com: domain of transitioning contact@katie.one does not designate 209.85.220.41 as permitted sender) client-ip=209.85.220.41;",
+            "authentication-results": "Authentication-Results: mx.google.com;\r\n       dkim=pass header.i=@katie-one.20230601.gappssmtp.com header.s=20230601 header.b=bCKqGbIJ;\r\n       arc=pass (i=1);\r\n       spf=softfail (google.com: domain of transitioning contact@katie.one does not designate 209.85.220.41 as permitted sender) smtp.mailfrom=contact@katie.one;\r\n       dmarc=fail (p=NONE sp=NONE dis=NONE) header.from=katie.one;\r\n       dara=neutral header.i=@teamkalm.com",
+            "dkim-signature": "DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=katie-one.20230601.gappssmtp.com; s=20230601; t=1769970472; x=1770575272; darn=teamkalm.com;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :from:to:cc:subject:date:message-id:reply-to;\r\n        bh=HdSp+j9gqrHFQlwcpr3si+aZMNzHqtclf0jvV5V1P04=;\r\n        b=bCKqGbIJuQnxDUYaVi78X5fK69Sd0WDGxujUzWNwTjE3rQb59BNXtLxv3yFbUYeAyo\r\n         1hL+9xh5rlwkqPzO8GsKhS5vONJ18I4ZmLin7K+spt/7Dlx0LW/WBdQPUSA3tKlqbe/9\r\n         vDB1bsF4MZ2oHAwyegjadKIr6CJkX/oA3mqHOkQeRhlPAVaJltHCCxO+d/eH38SrIltI\r\n         /phVH/A462eIGJA9ZV5stcU6/5zz/Tw4KJqyGgw+zV5QERgbHC1mulME38KUwx3iQ23L\r\n         SdU3RTR5a5fTI1XULw5r247Y1MNsHjFTMlP2XoG0x6qQyQ/fwxgc0Jq+f6hLcnUh1tO0\r\n         MGzw==",
+            "x-google-dkim-signature": "X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n        d=1e100.net; s=20230601; t=1769970472; x=1770575272;\r\n        h=to:subject:message-id:date:from:in-reply-to:references:mime-version\r\n         :x-gm-gg:x-gm-message-state:from:to:cc:subject:date:message-id\r\n         :reply-to;\r\n        bh=HdSp+j9gqrHFQlwcpr3si+aZMNzHqtclf0jvV5V1P04=;\r\n        b=rU+WCm8fPtKWT3DqXdJtfKzfuESztBLCkiqmpKHE38Tab9U7fOpCw38vkO4bZbpYvu\r\n         WRzHUFyZfA6lxqHK2f1QaZ5dWbDaieo6R1nBTCQLEee83QqIUl5EX9LMfphIanxrHDad\r\n         2pJnN5azO6pfhpwb/7mNVC1vt6WdLYEfv4HjDZJxhaH3wUU8C8MFf25N7lRwGQl5pALK\r\n         mcPoaFctSUYCh0gR/YozNhDizFwBx7s07zDWvyVBxdgrnlOCyMWZG4ttMCPcW3qf4+HF\r\n         WywFehatfGIQvjh+Q+FS6JkbknQGkfK14bv0tr1/6aRRi8e1hvZZ0sTUFfzA3LgUCLhD\r\n         1OrA==",
+            "x-gm-message-state": "X-Gm-Message-State: AOJu0Yw1xc3ed6xGv2RFuUWoh2kCM2Y722LeQVWtHOAlrRkPEIszxeBq\r\n\tZ6DKDA/CuV4Csh6VIiTQjPdPyHj0xEWaurL5ZjbcxeQo8+UwSFzQbIn3McxdTGnlgMjK2FnMtz+\r\n\tSRtlPy6qISgteNJ+oOGqYh7hcqbqRqs+65QueKES7iRmMYrNmVz68xaGChA==",
+            "x-gm-gg": "X-Gm-Gg: AZuq6aIOo9c29BYYGBvm2nR4KNykRpl372rvN1mT3NP0giNwA9RZYeFdnZEGFiT+woD\r\n\tdL5cy8W42hREIZhtAf6Am2eX12wgD5Rc+iBn9RGU8G+fhkGE8iSkc2BkNeQrRXhGw2TXsOqnXLM\r\n\tdczDaxrFEIlh3LQ13VRhFvVkFCrH9ycIwAC6oo//ONOYdpqiUV/XMG3/oJK5X+395c7a9bFfc4e\r\n\tM4AkvObVSsl0HIFUNHspIz7fkUiLYJKZoMTGdZyiep97sM1AB0OT/T8s7+vSGPq56mkGjtae8rw\r\n\t+ZnzKVy4k8Bz1PewQ0uVaDhiBzJeNvUMRL8lT5g1moaOk4+uJZ0PFL3+C09ddYbzoEnJuQmh58/\r\n\t6QVRF",
+            "mime-version": "MIME-Version: 1.0",
+            "references": "References: <CAH_a0ChyjPNmzRyg92Xf=gxZXEkCeV1P=QNmJpimss=T03xxmg@mail.gmail.com>",
+            "in-reply-to": "In-Reply-To: <CAH_a0ChyjPNmzRyg92Xf=gxZXEkCeV1P=QNmJpimss=T03xxmg@mail.gmail.com>",
+            "from": "From: Contact Katie Degas <contact@katie.one>",
+            "date": "Date: Sun, 1 Feb 2026 19:27:40 +0100",
+            "x-gm-features": "X-Gm-Features: AZwV_Qi0V5NrcIMD3t0bxbK_xXwkm_61i3zh9uThsOqkuJBoRU8LRnZXQY8oFfI",
+            "message-id": "Message-ID: <CAP25ZB0=wabbLQ2jHh=SRaOB7orytkWGMhaueF7=CYuG88BsbQ@mail.gmail.com>",
+            "subject": "Subject: Re: Kalm - Partnership!",
+            "to": "To: creators@teamkalm.com",
+            "content-type": "Content-Type: multipart/alternative; boundary=\"0000000000003ee7db0649c75d83\""
+          },
+          "html": "<div dir=\"auto\">Hi! </div><div dir=\"auto\">Thanks for reaching out! </div><div dir=\"auto\">Could you please let me know what is the budget and deliverables for the collab?</div><div dir=\"auto\">Thanks,</div><div dir=\"auto\"><br clear=\"all\"><br clear=\"all\"><div dir=\"auto\"><div dir=\"ltr\" class=\"gmail_signature\" data-smartmail=\"gmail_signature\">Helene STEVENS<br>Project Manager at KATIE.ONE<br><a href=\"http://www.katieone.com\">www.katieone.com</a><br>Instagram: @katie.one<br>TikTok: @katie.one</div></div></div><div><br></div><div><br><div class=\"gmail_quote gmail_quote_container\"><div dir=\"ltr\" class=\"gmail_attr\">On Sun, Feb 1, 2026 at 6:30 PM &lt;<a href=\"mailto:creators@teamkalm.com\">creators@teamkalm.com</a>&gt; wrote:<br></div><blockquote class=\"gmail_quote\" style=\"margin:0 0 0 .8ex;border-left:1px #ccc solid;padding-left:1ex\">Hi Katie, stopping by with a gentle follow-up! If you’d still like to<br>\ntry our Mouth Tape, we can get a pack shipped to you today.<br>\n<br>\nShare your preferred address whenever you have a chance!<br>\n</blockquote></div></div>\n",
+          "text": "Hi!\nThanks for reaching out!\nCould you please let me know what is the budget and deliverables for the\ncollab?\nThanks,\n\n\nHelene STEVENS\nProject Manager at KATIE.ONE\nwww.katieone.com\nInstagram: @katie.one\nTikTok: @katie.one\n\n\nOn Sun, Feb 1, 2026 at 6:30 PM <creators@teamkalm.com> wrote:\n\n> Hi Katie, stopping by with a gentle follow-up! If you’d still like to\n> try our Mouth Tape, we can get a pack shipped to you today.\n>\n> Share your preferred address whenever you have a chance!\n>\n",
+          "textAsHtml": "<p>Hi!<br/>Thanks for reaching out!<br/>Could you please let me know what is the budget and deliverables for the<br/>collab?<br/>Thanks,</p><p>Helene STEVENS<br/>Project Manager at <a href=\"http://KATIE.ONE\">KATIE.ONE</a><br/><a href=\"http://www.katieone.com\">www.katieone.com</a><br/>Instagram: <a href=\"https://twitter.com/katie\">@katie</a>.one<br/>TikTok: <a href=\"https://twitter.com/katie\">@katie</a>.one</p><p>On Sun, Feb 1, 2026 at 6:30&#x202F;PM &lt;<a href=\"mailto:creators@teamkalm.com\">creators@teamkalm.com</a>&gt; wrote:</p><p>&gt; Hi Katie, stopping by with a gentle follow-up! If you&rsquo;d still like to<br/>&gt; try our Mouth Tape, we can get a pack shipped to you today.<br/>&gt;<br/>&gt; Share your preferred address whenever you have a chance!<br/>&gt;</p>",
+          "subject": "Re: Kalm - Partnership!",
+          "references": "<CAH_a0ChyjPNmzRyg92Xf=gxZXEkCeV1P=QNmJpimss=T03xxmg@mail.gmail.com>",
+          "date": "2026-02-01T18:27:40.000Z",
+          "to": {
+            "value": [
+              {
+                "address": "creators@teamkalm.com",
+                "name": ""
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><a href=\"mailto:creators@teamkalm.com\" class=\"mp_address_email\">creators@teamkalm.com</a></span>",
+            "text": "creators@teamkalm.com"
+          },
+          "from": {
+            "value": [
+              {
+                "address": "contact@katie.one",
+                "name": "Contact Katie Degas"
+              }
+            ],
+            "html": "<span class=\"mp_address_group\"><span class=\"mp_address_name\">Contact Katie Degas</span> &lt;<a href=\"mailto:contact@katie.one\" class=\"mp_address_email\">contact@katie.one</a>&gt;</span>",
+            "text": "\"Contact Katie Degas\" <contact@katie.one>"
+          },
+          "messageId": "<CAP25ZB0=wabbLQ2jHh=SRaOB7orytkWGMhaueF7=CYuG88BsbQ@mail.gmail.com>",
+          "inReplyTo": "<CAH_a0ChyjPNmzRyg92Xf=gxZXEkCeV1P=QNmJpimss=T03xxmg@mail.gmail.com>"
+        }
+      }
+    ],
+    "Extract Message Client": [
+      {
+        "json": {
+          "id": "rec18puc00gUaS9DZ",
+          "createdTime": "2025-12-10T13:28:42.000Z",
+          "fields": {
+            "Username": "katie.one",
+            "Approved": "Approved",
+            "Entry Date": "2025-12-10",
+            "Platform": "https://www.instagram.com/katie.one",
+            "Full Name": "Katie Degas",
+            "Email": "contact@katie.one",
+            "Followers": 1166975,
+            "Average Views": 41114,
+            "Business Category": "N/A",
+            "Sources": "https://www.instagram.com/silvertxlady",
+            "Category": "Fashion",
+            "First Name": "Katie",
+            "Follow-up Date": "2026-02-01",
+            "Follow-up Emails Count": 5,
+            "Response Count Address": 0,
+            "Post": 0,
+            "History": 0,
+            "Outreach Sent": 1,
+            "Delivered": 1,
+            "Deliverability": 1,
+            "Orders Placed": 0,
+            "Orders Delivered": 0,
+            "First Follow Up Date": "2026-01-26"
+          },
+          "clientReply": "Hi! \nThanks for reaching out! \nCould you please let me know what is the budget and deliverables for the collab?\nThanks,\nHelene STEVENS\nProject Manager at KATIE.ONE\nwww.katieone.com\nInstagram: @katie.one\nTikTok: @katie.one"
+        }
+      }
+    ],
+    "Reply to a message": [
+      {
+        "json": {
+          "id": "19c1a76ca02e531e",
+          "threadId": "19c1a41c0d9252e7",
+          "labelIds": [
+            "SENT"
+          ]
+        }
+      }
+    ],
+    "Formatted Answer": [
+      {
+        "json": {
+          "id": "rec18puc00gUaS9DZ",
+          "createdTime": "2025-12-10T13:28:42.000Z",
+          "fields": {
+            "Username": "katie.one",
+            "Approved": "Approved",
+            "Entry Date": "2025-12-10",
+            "Platform": "https://www.instagram.com/katie.one",
+            "Full Name": "Katie Degas",
+            "Email": "contact@katie.one",
+            "Followers": 1166975,
+            "Average Views": 41114,
+            "Business Category": "N/A",
+            "Sources": "https://www.instagram.com/silvertxlady",
+            "Category": "Fashion",
+            "First Name": "Katie",
+            "Follow-up Date": "2026-02-01",
+            "Follow-up Emails Count": 5,
+            "Response Count Address": 1,
+            "Post": 0,
+            "History": 0,
+            "Outreach Sent": 1,
+            "Delivered": 1,
+            "Deliverability": 1,
+            "Reply": 1,
+            "Orders Placed": 0,
+            "Orders Delivered": 0,
+            "First Follow Up Date": "2026-01-26"
+          },
+          "userMessage": "Hi! \nThanks for reaching out! \nCould you please let me know what is the budget and deliverables for the collab?\nThanks,\nHelene STEVENS\nProject Manager at KATIE.ONE\nwww.katieone.com\nInstagram: @katie.one\nTikTok: @katie.one",
+          "originalText": "Hi! \nThanks for reaching out! \nCould you please let me know what is the budget and deliverables for the collab?\nThanks,\nHelene STEVENS\nProject Manager at KATIE.ONE\nwww.katieone.com\nInstagram: @katie.one\nTikTok: @katie.one"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Answer Email": [
+      {
+        "json": {
+          "output": [
+            {
+              "id": "msg_08507b82a5ec6ab70069835473b8348195972d95e94ca2b934",
+              "type": "message",
+              "status": "completed",
+              "content": [
+                {
+                  "type": "output_text",
+                  "annotations": [],
+                  "logprobs": [],
+                  "text": "Thanks for getting back to us. For this first round, we're keeping it simple and gifting the product with no paid budget or fixed deliverables. We just ask that you try it and share if it feels like a natural fit. If it goes well on both sides, we can talk about something more formal down the line. Here's the product we're sending: https://clubkalm.com/collections/all/products/kalm-mouth-tape-refill. Could you send over your preferred shipping address?  \n\nTeam Kalm"
+                }
+              ],
+              "role": "assistant"
+            }
+          ]
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Address ?": {
+      "main": [
+        [
+          {
+            "node": "Save Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Count > 5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Address": {
+      "main": [
+        [
+          {
+            "node": "Address ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Data": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PROD?": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "PROD?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a product": {
+      "main": [
+        [
+          {
+            "node": "Create an order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatted Answer": {
+      "main": [
+        [
+          {
+            "node": "Answer Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply to a message1": {
+      "main": [
+        [
+          {
+            "node": "Extract Name (JS)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Count > 5": {
+      "main": [
+        [
+          {
+            "node": "Update Count",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create an order": {
+      "main": [
+        [
+          {
+            "node": "Update Shopify ID & Thread",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "get email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many messages1": {
+      "main": [
+        [
+          {
+            "node": "Answer ?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get email": {
+      "main": [
+        [
+          {
+            "node": "Get many messages1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer ?1": {
+      "main": [
+        [
+          {
+            "node": "Get Full Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records1": {
+      "main": [
+        [
+          {
+            "node": "Update Count Follow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Count Follow": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Address ": {
+      "main": [
+        [
+          {
+            "node": "Extract Address",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Count": {
+      "main": [
+        [
+          {
+            "node": "Formatted Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Email": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Name (JS)": {
+      "main": [
+        [
+          {
+            "node": "Needs LLM?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs LLM?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Extract Name",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Extract Name": {
+      "main": [
+        [
+          {
+            "node": "Parse OpenAI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OpenAI Response": {
+      "main": [
+        [
+          {
+            "node": "Merge Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results": {
+      "main": [
+        [
+          {
+            "node": "Final Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Output": {
+      "main": [
+        [
+          {
+            "node": "Get a product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Data1": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply to a message2": {
+      "main": [
+        [
+          {
+            "node": "Extract Name (JS)1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a product1": {
+      "main": [
+        [
+          {
+            "node": "Create an order1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create an order1": {
+      "main": [
+        [
+          {
+            "node": "Update Shopify ID & Thread1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Name (JS)1": {
+      "main": [
+        [
+          {
+            "node": "Needs LLM?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs LLM?1": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Extract Name1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Results1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "OpenAI Extract Name1": {
+      "main": [
+        [
+          {
+            "node": "Parse OpenAI Response1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse OpenAI Response1": {
+      "main": [
+        [
+          {
+            "node": "Merge Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Results1": {
+      "main": [
+        [
+          {
+            "node": "Final Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Final Output1": {
+      "main": [
+        [
+          {
+            "node": "Extract Address1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Set Test Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Test Data": {
+      "main": [
+        [
+          {
+            "node": "Save Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Address1": {
+      "main": [
+        [
+          {
+            "node": "Get a product1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Full Email": {
+      "main": [
+        [
+          {
+            "node": "Search records1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Client": {
+      "main": [
+        [
+          {
+            "node": "Extract Address ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "440020dd-7eb0-47c5-8504-80edf353ec55",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "xQu2HGg7lMhuqOsi",
+  "tags": []
+}

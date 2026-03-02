@@ -1,0 +1,341 @@
+﻿Kalm AirTable Database Guide
+How Your Database Works
+This document explains your AirTable database — where all influencer data lives and how to navigate it.
+________________
+
+
+Database Overview
+Your database has two main tables:
+Table
+	Purpose
+	People
+	Stores all Instagram influencers (approved, pending, and declined)
+	Mentions
+	Tracks every post and story where influencers mention your brand
+	________________
+
+
+Table 1: People (Instagram Influencers)
+This is your main table. It stores every influencer who has been evaluated for your gifting program.
+Available Views
+Think of views as different "lenses" to look at the same data. Each view filters and shows only what's relevant for that task.
+View
+	What It Shows
+	People
+	All influencers (main view)
+	Waiting Approval
+	Influencers pending your review
+	Approved
+	Influencers you've approved
+	Shopify
+	Influencers with product orders
+	Mentions
+	General brand mentions
+	Intervention Flag
+	Influencers needing manual attention
+	Declined
+	Rejected influencers
+	________________
+
+
+View: Waiting Approval
+Purpose: Review new influencers and decide whether to approve or decline them.
+Fields You'll See
+Field
+	What It Means
+	Username
+	Their Instagram handle (@username)
+	Approved
+	Current status: "Waiting Approval", "Approved", or "Declined"
+	Entry Date
+	When they were added to the database
+	Platform
+	Direct link to their Instagram profile
+	Full Name
+	Their full name
+	First Name
+	First name (used to personalize emails)
+	Email
+	Their email address
+	Followers
+	Total Instagram followers
+	Average Views
+	Average views per post (shows real engagement)
+	Business Address
+	Their listed business location (if available)
+	Business Category
+	Their Instagram category (Digital Creator, Fashion Model, etc.)
+	Category
+	Content category for your campaigns (Food & Drink, Fashion, Beauty, etc.)
+	Sources
+	Where you found them
+	Notes
+	Internal notes about the influencer
+	How to Use This View
+1. Review each influencer's profile and metrics
+2. Check if they match your brand aesthetic and criteria
+3. Change Approved to "Approved" or "Declined"
+4. Add notes explaining your decision (especially for declines)
+________________
+
+
+View: Approved
+Purpose: Manage follow-ups and communication with approved influencers.
+Fields You'll See
+
+
+Field
+	What It Means
+	Username
+	Their Instagram handle
+	Approved
+	Shows "Approved" for all records in this view
+	Full Name
+	Their full name
+	First Name
+	First name for personalized messages
+	Email
+	Email address for outreach
+	First Follow Up Date
+	When the first email was sent
+	Follow-up Date
+	When the last follow-up was sent
+	Follow-up Emails Count
+	Total follow-ups sent (0, 1, 5, etc.)
+	Response Count Address
+	How many times they've responded (0 = no response)
+	How to Use This View
+* Monitor who has responded vs. who hasn't
+* Track how many follow-ups each influencer has received
+* Identify influencers who need attention
+________________
+
+
+View: Shopify (Trial Products / Gifting)
+Purpose: Track product shipments and deliveries to approved influencers.
+Fields You'll See
+Field
+	What It Means
+	Username
+	Their Instagram handle
+	Approved
+	Shows "Approved"
+	Full Name
+	Full name for shipping
+	Email
+	Email for shipping confirmations
+	Order Shopify ID
+	Unique order number in Shopify
+	Order Placed Date
+	When the order was created
+	Shopify Order
+	Direct link to the order in Shopify admin
+	Delivered Date
+	When the package was delivered
+	Reminder Date Mentions
+	When they should post about the product
+	Key Timeline
+This view lets you track the complete gifting timeline:
+Order Placed Date → Delivered Date → Reminder Date Mentions
+    (sent)            (received)        (should post)
+
+________________
+View: Mentions
+Purpose: Monitor all organic brand mentions on Instagram — from both influencers and regular users.
+Fields You'll See
+Field
+	What It Means
+	Username
+	Who mentioned your brand
+	Approved
+	Whether they're an approved influencer
+	Full Name
+	Their name (if available)
+	Email
+	Their email (if known)
+	Post
+	Number of feed posts mentioning your brand
+	History
+	Total history of interactions with your brand
+	Why This View Matters
+* Spot organic brand advocates
+* Identify potential new influencers
+* Measure word-of-mouth reach
+* Distinguish program influencers from regular fans
+________________
+
+
+View: Intervention Flag
+Purpose: Identify influencers who need manual attention.
+When Influencers Get Flagged
+* They haven't responded after multiple follow-ups
+* They asked a question the AI couldn't answer
+* Something requires human judgment
+Fields You'll See
+Same as the Approved view — Username, Email, Follow-up counts, Response counts, etc.
+How to Use This View
+1. Check this view regularly
+2. Reach out manually via Instagram DM or personal email
+3. Once you get the needed information, enter it in AirTable
+4. The automation resumes automatically
+________________
+
+
+View: Declined
+Purpose: Record rejected influencers and document why.
+Fields You'll See
+Field
+	What It Means
+	Username
+	Their Instagram handle
+	Approved
+	Shows "Declined"
+	Notes
+	Reason for rejection
+	Why This View Matters
+* Avoid re-evaluating the same influencer twice
+* Maintain clear records of your selection criteria
+* Reference past decisions
+________________
+
+
+Table 2: Mentions (Program Influencer Mentions)
+This table tracks individual pieces of content created by your program influencers.
+Available Views
+View
+	What It Shows
+	Mentions
+	List of all mentions with details
+	Gallery
+	Visual card view of content
+	________________
+
+
+View: Mentions (Main View)
+Purpose: Track every post and story your influencers create.
+Fields You'll See
+Field
+	What It Means
+	Username
+	Who created the content
+	URL
+	Direct link to the content (Instagram post or saved image)
+	ContentType
+	Type of content: "image" or "video"
+	Source
+	Where it appeared: "Post" (feed) or "History" (story)
+	Notes
+	Additional notes about the content
+	________________
+
+
+View: Gallery
+Purpose: Visual review of influencer-generated content.
+What You'll See
+Each mention appears as a visual card showing:
+* Username (header)
+* Link to the content
+* Content type
+* Source (post or story)
+Why Use This View
+* Quick visual scan of all UGC (user-generated content)
+* Great for presentations or team reviews
+* Easy portfolio review of program results
+________________
+
+
+Quick Reference: All Fields
+Profile Information
+Field
+	Type
+	Description
+	Username
+	Text
+	Instagram @handle
+	Full Name
+	Text
+	Complete name
+	First Name
+	Text
+	For personalization
+	Email
+	Email
+	Contact email
+	Platform
+	URL
+	Link to Instagram profile
+	Evaluation Metrics
+Field
+	Type
+	Description
+	Followers
+	Number
+	Total Instagram followers
+	Average Views
+	Number
+	Average post views
+	Business Category
+	Select
+	Instagram category
+	Category
+	Select
+	Campaign category (Food, Fashion, etc.)
+	Status & Tracking
+Field
+	Type
+	Description
+	Approved
+	Select
+	Approved / Declined / Waiting Approval
+	Entry Date
+	Date
+	When added to database
+	Notes
+	Long Text
+	Internal notes
+	Communication Tracking
+Field
+	Type
+	Description
+	First Follow Up Date
+	Date
+	First email sent
+	Follow-up Date
+	Date
+	Last follow-up sent
+	Follow-up Emails Count
+	Number
+	Total follow-ups sent
+	Response Count Address
+	Number
+	Responses received
+	Order & Delivery
+Field
+	Type
+	Description
+	Order Shopify ID
+	Text
+	Shopify order number
+	Order Placed Date
+	Date
+	When order was created
+	Shopify Order
+	URL
+	Link to Shopify order
+	Delivered Date
+	Date
+	When package arrived
+	Reminder Date Mentions
+	Date
+	When they should post
+	Mention Tracking
+Field
+	Type
+	Description
+	Post
+	Number
+	Feed post mention count
+	History
+	Number
+	Story mention count
+	________________

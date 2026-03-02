@@ -1,0 +1,2009 @@
+{
+  "name": "Delivery Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shopify/fulfillment-created",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        -208
+      ],
+      "id": "2c8402d0-22a4-4b4d-8044-db0fcac83363",
+      "name": "Webhook",
+      "webhookId": "e194214b-51a3-446d-bc71-87df1bbe16a8"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?gid=1922746286#gid=1922746286",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.body.email }}",
+            "Current Status": "={{ $json.body.status }}",
+            "Shipped Date": "={{ $json.body.created_at }}",
+            "Tracking #": "={{ $json.body.tracking_number }}",
+            "Tracking Link": "={{ $json.body.tracking_url }}",
+            "Order ID": "={{ $json.body.order_id }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email Link",
+              "displayName": "Email Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Approved?",
+              "displayName": "Approved?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Street",
+              "displayName": "Street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Zip",
+              "displayName": "Zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tracking #",
+              "displayName": "Tracking #",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tracking Link",
+              "displayName": "Tracking Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Shipped Date",
+              "displayName": "Shipped Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Current Status",
+              "displayName": "Current Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order Created?",
+              "displayName": "Shopify Order Created?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        464,
+        -64
+      ],
+      "id": "58823e5e-156b-43f0-86a6-5005eb0be7d7",
+      "name": "Google Sheets",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.body.email }}",
+            "Current Status": "={{ $json.body.status }}",
+            "Shipped Date": "={{ $json.body.created_at }}",
+            "Tracking #": "={{ $json.body.tracking_number }}",
+            "Tracking Link": "={{ $json.body.tracking_url }}",
+            "Order ID": "={{ $json.body.order_id }}",
+            "Delivered": "={{ $json.body.shipment_status }}"
+          },
+          "matchingColumns": [
+            "Email"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Email Link",
+              "displayName": "Email Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Approved?",
+              "displayName": "Approved?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Street",
+              "displayName": "Street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Zip",
+              "displayName": "Zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tracking #",
+              "displayName": "Tracking #",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Tracking Link",
+              "displayName": "Tracking Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Shipped Date",
+              "displayName": "Shipped Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Current Status",
+              "displayName": "Current Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order Created?",
+              "displayName": "Shopify Order Created?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        464,
+        -256
+      ],
+      "id": "87be3b67-6a78-493e-bce2-250ff9c17437",
+      "name": "Google Sheets1",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "66d92b1f-5068-4607-a4a4-94ccb01b7a41",
+              "leftValue": "={{ $json.body.shipment_status }}",
+              "rightValue": "delivered",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        -208
+      ],
+      "id": "45d739d1-962c-492c-ae15-ced675e69e5c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "options": {
+          "columnsToWatch": [
+            "Tracking #"
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -320,
+        128
+      ],
+      "id": "06b3d15a-e714-4755-ba30-97212683a405",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "J1wj7PkK64UZEV4z",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.17track.net/track/v2/register",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "17token",
+              "value": "A307090AC73157BE7E5CD90DD2E3F4CF"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=[\n  {\n    \"number\": \" {{ $json['Tracking #'] }}\",\n    \"callback_url\": \"https://clubkalm.app.n8n.cloud/webhook/17track/update\"   }\n]",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        80
+      ],
+      "id": "5700526c-35cd-4348-bbed-843733dbf3b7",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "17track/update",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        80,
+        368
+      ],
+      "id": "8db9d644-e9d1-4312-90f7-94c8c84ec6c9",
+      "name": "Webhook1",
+      "webhookId": "faa79ba6-a3a4-4797-90bf-d7cc8874bf3b"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit?usp=sharing",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1922746286,
+          "mode": "list",
+          "cachedResultName": "Influencer PR",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1pgnO3ooeoqAbrrOkNQ5JSRRGH__oNSjp9-pRIZS229M/edit#gid=1922746286"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Delivered": "={{ $json.body.data.track_info.latest_status.status }}",
+            "Current Status": "={{ $json.body.data.track_info.latest_event.description }}",
+            "Tracking #": "={{ $json.body.data.number }}"
+          },
+          "matchingColumns": [
+            "Tracking #"
+          ],
+          "schema": [
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Stage",
+              "displayName": "Stage",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Entry Date",
+              "displayName": "Entry Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Link to Platform",
+              "displayName": "Link to Platform",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Handle",
+              "displayName": "Handle",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "First Name",
+              "displayName": "First Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Last Name",
+              "displayName": "Last Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Email Link",
+              "displayName": "Email Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Approved?",
+              "displayName": "Approved?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Street",
+              "displayName": "Street",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "City",
+              "displayName": "City",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "State",
+              "displayName": "State",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Zip",
+              "displayName": "Zip",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Country",
+              "displayName": "Country",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Order ID",
+              "displayName": "Order ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Tracking #",
+              "displayName": "Tracking #",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Tracking Link",
+              "displayName": "Tracking Link",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shipped Date",
+              "displayName": "Shipped Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Delivered",
+              "displayName": "Delivered",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Current Status",
+              "displayName": "Current Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Number of Posts",
+              "displayName": "Number of Posts",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Shopify Order Created?",
+              "displayName": "Shopify Order Created?",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.6,
+      "position": [
+        512,
+        272
+      ],
+      "id": "305375cb-3b27-4aab-94e7-00a36432cf36",
+      "name": "Google Sheets2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "z59l81lNaCfGAiH8",
+          "name": "Google Sheets account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "35ad3258-3212-42e3-b079-840fe4656ab8",
+              "leftValue": "={{ $json.body.data.track_info.latest_status.status }}",
+              "rightValue": "delivered",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "ignoreCase": true
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        368
+      ],
+      "id": "f9a8c7f5-57eb-4ef4-834b-09736d68ffcf",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "days"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        720,
+        272
+      ],
+      "id": "6c859e1a-04fc-4652-b804-f4cbf0e40419",
+      "name": "Wait",
+      "webhookId": "f702cf55-61be-421b-b8ed-35379deefcb5"
+    },
+    {
+      "parameters": {
+        "resource": "thread",
+        "operation": "reply",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        944,
+        272
+      ],
+      "id": "f1057443-8b4b-4223-b2fb-8cf0b4e5b26c",
+      "name": "Gmail",
+      "webhookId": "c7ed8ffc-2651-48f4-bc89-f96e4c19fba9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "FrdYKZullMO1LkQA",
+          "name": "Gmail account 5"
+        }
+      },
+      "disabled": true
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "host": "clubkalm.app.n8n.cloud",
+            "user-agent": "Shopify-Captain-Hook",
+            "content-length": "2290",
+            "accept": "*/*",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "35.227.97.89",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "US",
+            "cf-ray": "94b1aa27456c418f-LHR",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "x-forwarded-for": "35.227.97.89, 172.71.26.131",
+            "x-forwarded-host": "clubkalm.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-1-8749c5b8f-fgf4w",
+            "x-is-trusted": "yes",
+            "x-real-ip": "35.227.97.89",
+            "x-shopify-api-version": "2025-04",
+            "x-shopify-event-id": "c6a07626-d090-4b62-ae1e-90566d8908e0",
+            "x-shopify-fulfillment-id": "5753382601021",
+            "x-shopify-hmac-sha256": "CeLrfPB9C25Xvv8IiecA2KE1+ZuaT3ksH+GW4pm3bkE=",
+            "x-shopify-shop-domain": "e96ff9-0f.myshopify.com",
+            "x-shopify-topic": "fulfillments/update",
+            "x-shopify-triggered-at": "2025-06-05T18:17:02.419998695Z",
+            "x-shopify-webhook-id": "be9ba056-b9d0-4b0d-895e-cca6c78ebb2a"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "id": 5753382601021,
+            "order_id": 6521215189309,
+            "status": "success",
+            "created_at": "2025-06-05T14:16:54-04:00",
+            "service": "manual",
+            "updated_at": "2025-06-05T14:17:02-04:00",
+            "tracking_company": "USPS",
+            "shipment_status": "delivered",
+            "location_id": 101501567293,
+            "origin_address": null,
+            "email": "abdursajid05@gmail.com",
+            "destination": {
+              "first_name": "AR",
+              "address1": "150 appleby line ",
+              "phone": "+1 123 455 3533",
+              "city": "burlington",
+              "zip": "L7L 2x1",
+              "province": "Ontario",
+              "country": "Canada",
+              "last_name": "sajid",
+              "address2": "N/A",
+              "company": "Kalm",
+              "latitude": 43.3611383,
+              "longitude": -79.74546579999999,
+              "name": "AR sajid",
+              "country_code": "CA",
+              "province_code": "ON"
+            },
+            "line_items": [
+              {
+                "id": 16140690850109,
+                "variant_id": null,
+                "title": "Kalm Mouth Tape",
+                "quantity": 1,
+                "sku": null,
+                "variant_title": null,
+                "vendor": null,
+                "fulfillment_service": "manual",
+                "product_id": null,
+                "requires_shipping": true,
+                "taxable": true,
+                "gift_card": false,
+                "name": "Kalm Mouth Tape",
+                "variant_inventory_management": null,
+                "properties": [],
+                "product_exists": false,
+                "fulfillable_quantity": 0,
+                "grams": 57,
+                "price": "20.00",
+                "total_discount": "0.00",
+                "fulfillment_status": "fulfilled",
+                "pre_tax_price": "20.00",
+                "price_set": {
+                  "shop_money": {
+                    "amount": "20.00",
+                    "currency_code": "USD"
+                  },
+                  "presentment_money": {
+                    "amount": "20.00",
+                    "currency_code": "USD"
+                  }
+                },
+                "pre_tax_price_set": {
+                  "shop_money": {
+                    "amount": "20.00",
+                    "currency_code": "USD"
+                  },
+                  "presentment_money": {
+                    "amount": "20.00",
+                    "currency_code": "USD"
+                  }
+                },
+                "total_discount_set": {
+                  "shop_money": {
+                    "amount": "0.00",
+                    "currency_code": "USD"
+                  },
+                  "presentment_money": {
+                    "amount": "0.00",
+                    "currency_code": "USD"
+                  }
+                },
+                "discount_allocations": [],
+                "duties": [],
+                "admin_graphql_api_id": "gid://shopify/LineItem/16140690850109",
+                "tax_lines": []
+              }
+            ],
+            "tracking_number": "420100039370110597204366738232",
+            "tracking_numbers": [
+              "420100039370110597204366738232"
+            ],
+            "tracking_url": "https://shopify.17track.net/app-api/tracking-page/proxy?data=uN76llwk5a%2B95zfvIDJtTvreVug6MMY7xWOQotD7ggCXZ00%2FQuDt4Z1tvvz3OISUDKu5gA2UYrcyi8a4Gd5N%2BRVvriL%2B87VYjBzTFEmkBuhUvXfpofi%2FGCe9bYyQpywQ",
+            "tracking_urls": [
+              "https://shopify.17track.net/app-api/tracking-page/proxy?data=uN76llwk5a%2B95zfvIDJtTvreVug6MMY7xWOQotD7ggCXZ00%2FQuDt4Z1tvvz3OISUDKu5gA2UYrcyi8a4Gd5N%2BRVvriL%2B87VYjBzTFEmkBuhUvXfpofi%2FGCe9bYyQpywQ"
+            ],
+            "receipt": {},
+            "name": "#1257.7",
+            "admin_graphql_api_id": "gid://shopify/Fulfillment/5753382601021"
+          },
+          "webhookUrl": "https://clubkalm.app.n8n.cloud/webhook/shopify/fulfillment-created",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "host": "clubkalm.app.n8n.cloud",
+            "user-agent": "forest/1.5.36",
+            "content-length": "9115",
+            "accept-encoding": "gzip, br",
+            "cdn-loop": "cloudflare; loops=1; subreqs=1",
+            "cf-connecting-ip": "175.178.167.241",
+            "cf-ew-via": "15",
+            "cf-ipcountry": "CN",
+            "cf-ray": "94c9a4a291abdbfb-FRA",
+            "cf-visitor": "{\"scheme\":\"https\"}",
+            "cf-worker": "n8n.cloud",
+            "content-type": "application/json",
+            "sign": "85e41f4ec6a25ad38c144cf0a06188d2cd984d2a6f6ddc7c222477117a463408",
+            "x-forwarded-for": "175.178.167.241, 172.71.144.63",
+            "x-forwarded-host": "clubkalm.app.n8n.cloud",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-forwarded-server": "traefik-prod-users-gwc-1-8749c5b8f-jxfsf",
+            "x-is-trusted": "yes",
+            "x-real-ip": "175.178.167.241"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "event": "TRACKING_UPDATED",
+            "data": {
+              "number": "420786339300110597204372066924",
+              "carrier": 21051,
+              "param": null,
+              "tag": "",
+              "track_info": {
+                "shipping_info": {
+                  "shipper_address": {
+                    "country": "US",
+                    "state": null,
+                    "city": null,
+                    "street": null,
+                    "postal_code": null,
+                    "coordinates": {
+                      "longitude": null,
+                      "latitude": null
+                    }
+                  },
+                  "recipient_address": {
+                    "country": "US",
+                    "state": null,
+                    "city": null,
+                    "street": null,
+                    "postal_code": null,
+                    "coordinates": {
+                      "longitude": null,
+                      "latitude": null
+                    }
+                  }
+                },
+                "latest_status": {
+                  "status": "Delivered",
+                  "sub_status": "Delivered_Other",
+                  "sub_status_descr": null
+                },
+                "latest_event": {
+                  "time_iso": "2025-06-07T15:26:00-05:00",
+                  "time_utc": "2025-06-07T20:26:00Z",
+                  "time_raw": {
+                    "date": "2025-06-07",
+                    "time": "15:26:00",
+                    "timezone": "-05:00"
+                  },
+                  "description": "Delivered, In/At Mailbox -> Your item was delivered in or at the mailbox at 3:26 pm on June 7, 2025 in GEORGETOWN, TX 78633.",
+                  "location": "GEORGETOWN, TX 78633",
+                  "stage": "Delivered",
+                  "sub_status": "Delivered_Other",
+                  "address": {
+                    "country": "US",
+                    "state": "TX",
+                    "city": "GEORGETOWN",
+                    "street": null,
+                    "postal_code": "78633",
+                    "coordinates": {
+                      "longitude": null,
+                      "latitude": null
+                    }
+                  }
+                },
+                "time_metrics": {
+                  "days_after_order": 3,
+                  "days_of_transit": 3,
+                  "days_of_transit_done": 3,
+                  "days_after_last_update": 0,
+                  "estimated_delivery_date": {
+                    "source": null,
+                    "from": null,
+                    "to": null
+                  }
+                },
+                "milestone": [
+                  {
+                    "key_stage": "InfoReceived",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  },
+                  {
+                    "key_stage": "PickedUp",
+                    "time_iso": "2025-06-04T19:25:00-04:00",
+                    "time_utc": "2025-06-04T23:25:00Z",
+                    "time_raw": {
+                      "date": "2025-06-04",
+                      "time": "19:25:00",
+                      "timezone": "-04:00"
+                    }
+                  },
+                  {
+                    "key_stage": "Departure",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  },
+                  {
+                    "key_stage": "Arrival",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  },
+                  {
+                    "key_stage": "AvailableForPickup",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  },
+                  {
+                    "key_stage": "OutForDelivery",
+                    "time_iso": "2025-06-07T06:10:00-05:00",
+                    "time_utc": "2025-06-07T11:10:00Z",
+                    "time_raw": {
+                      "date": "2025-06-07",
+                      "time": "06:10:00",
+                      "timezone": "-05:00"
+                    }
+                  },
+                  {
+                    "key_stage": "Delivered",
+                    "time_iso": "2025-06-07T15:26:00-05:00",
+                    "time_utc": "2025-06-07T20:26:00Z",
+                    "time_raw": {
+                      "date": "2025-06-07",
+                      "time": "15:26:00",
+                      "timezone": "-05:00"
+                    }
+                  },
+                  {
+                    "key_stage": "Returning",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  },
+                  {
+                    "key_stage": "Returned",
+                    "time_iso": null,
+                    "time_utc": null,
+                    "time_raw": {
+                      "date": null,
+                      "time": null,
+                      "timezone": null
+                    }
+                  }
+                ],
+                "misc_info": {
+                  "risk_factor": 0,
+                  "service_type": "USPS Ground Advantage ",
+                  "weight_raw": null,
+                  "weight_kg": null,
+                  "pieces": null,
+                  "dimensions": null,
+                  "customer_number": null,
+                  "reference_number": null,
+                  "local_number": null,
+                  "local_provider": null,
+                  "local_key": 0
+                },
+                "tracking": {
+                  "providers_hash": 749632220,
+                  "providers": [
+                    {
+                      "provider": {
+                        "key": 21051,
+                        "name": "USPS",
+                        "alias": "USPS",
+                        "tel": "+1 (800) 275-8777",
+                        "homepage": "https://www.usps.com/",
+                        "country": "US"
+                      },
+                      "provider_lang": null,
+                      "service_type": "USPS Ground Advantage ",
+                      "latest_sync_status": "Success",
+                      "latest_sync_time": "2025-06-08T16:07:33Z",
+                      "events_hash": -804515649,
+                      "events": [
+                        {
+                          "time_iso": "2025-06-07T15:26:00-05:00",
+                          "time_utc": "2025-06-07T20:26:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "15:26:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Delivered, In/At Mailbox -> Your item was delivered in or at the mailbox at 3:26 pm on June 7, 2025 in GEORGETOWN, TX 78633.",
+                          "location": "GEORGETOWN, TX 78633",
+                          "stage": "Delivered",
+                          "sub_status": "Delivered_Other",
+                          "address": {
+                            "country": "US",
+                            "state": "TX",
+                            "city": "GEORGETOWN",
+                            "street": null,
+                            "postal_code": "78633",
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-07T06:10:00-05:00",
+                          "time_utc": "2025-06-07T11:10:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "06:10:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Out for Delivery",
+                          "location": "GEORGETOWN, TX 78633",
+                          "stage": "OutForDelivery",
+                          "sub_status": "OutForDelivery_Other",
+                          "address": {
+                            "country": "US",
+                            "state": "TX",
+                            "city": "GEORGETOWN",
+                            "street": null,
+                            "postal_code": "78633",
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-07T05:22:00-05:00",
+                          "time_utc": "2025-06-07T10:22:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "05:22:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Arrived at Post Office",
+                          "location": "GEORGETOWN, TX 78626",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": "TX",
+                            "city": "GEORGETOWN",
+                            "street": null,
+                            "postal_code": "78626",
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-07T03:15:00-05:00",
+                          "time_utc": "2025-06-07T08:15:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "03:15:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Arrived at USPS Facility",
+                          "location": "GEORGETOWN, TX 78626",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": "TX",
+                            "city": "GEORGETOWN",
+                            "street": null,
+                            "postal_code": "78626",
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-07T02:25:00-05:00",
+                          "time_utc": "2025-06-07T07:25:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "02:25:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "In Transit to Next Facility",
+                          "location": null,
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": null,
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-07T02:15:00-05:00",
+                          "time_utc": "2025-06-07T07:15:00Z",
+                          "time_raw": {
+                            "date": "2025-06-07",
+                            "time": "02:15:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Departed USPS Regional Facility",
+                          "location": "AUSTIN TX DISTRIBUTION CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX DISTRIBUTION CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-06T17:05:00-05:00",
+                          "time_utc": "2025-06-06T22:05:00Z",
+                          "time_raw": {
+                            "date": "2025-06-06",
+                            "time": "17:05:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Arrived at USPS Regional Facility",
+                          "location": "AUSTIN TX DISTRIBUTION CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX DISTRIBUTION CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-06T13:41:00-05:00",
+                          "time_utc": "2025-06-06T18:41:00Z",
+                          "time_raw": {
+                            "date": "2025-06-06",
+                            "time": "13:41:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Departed USPS Regional Facility",
+                          "location": "AUSTIN TX PACKAGE SORTING CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX PACKAGE SORTING CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-06T11:52:00-05:00",
+                          "time_utc": "2025-06-06T16:52:00Z",
+                          "time_raw": {
+                            "date": "2025-06-06",
+                            "time": "11:52:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Arrived at USPS Regional Facility",
+                          "location": "AUSTIN TX PACKAGE SORTING CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX PACKAGE SORTING CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-06T08:00:00-05:00",
+                          "time_utc": "2025-06-06T13:00:00Z",
+                          "time_raw": {
+                            "date": "2025-06-06",
+                            "time": "08:00:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Departed USPS Regional Facility",
+                          "location": "AUSTIN TX DISTRIBUTION CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX DISTRIBUTION CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-06T07:57:00-05:00",
+                          "time_utc": "2025-06-06T12:57:00Z",
+                          "time_raw": {
+                            "date": "2025-06-06",
+                            "time": "07:57:00",
+                            "timezone": "-05:00"
+                          },
+                          "description": "Arrived at USPS Regional Facility",
+                          "location": "AUSTIN TX DISTRIBUTION CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "AUSTIN TX DISTRIBUTION CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-05T00:00:00-04:00",
+                          "time_utc": "2025-06-05T04:00:00Z",
+                          "time_raw": {
+                            "date": "2025-06-05",
+                            "time": "00:00:00",
+                            "timezone": null
+                          },
+                          "description": "In Transit to Next Facility",
+                          "location": null,
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": null,
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-04T20:40:00-04:00",
+                          "time_utc": "2025-06-05T00:40:00Z",
+                          "time_raw": {
+                            "date": "2025-06-04",
+                            "time": "20:40:00",
+                            "timezone": "-04:00"
+                          },
+                          "description": "Arrived at USPS Regional Origin Facility",
+                          "location": "SEMINOLE-ORLANDO FL DISTRIBUTION CENTER",
+                          "stage": null,
+                          "sub_status": "InTransit_Other",
+                          "address": {
+                            "country": "US",
+                            "state": null,
+                            "city": "SEMINOLE-ORLANDO FL DISTRIBUTION CENTER",
+                            "street": null,
+                            "postal_code": null,
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        },
+                        {
+                          "time_iso": "2025-06-04T19:25:00-04:00",
+                          "time_utc": "2025-06-04T23:25:00Z",
+                          "time_raw": {
+                            "date": "2025-06-04",
+                            "time": "19:25:00",
+                            "timezone": "-04:00"
+                          },
+                          "description": "Accepted at USPS Origin Facility",
+                          "location": "ORLANDO, FL 32809",
+                          "stage": "PickedUp",
+                          "sub_status": "InTransit_PickedUp",
+                          "address": {
+                            "country": "US",
+                            "state": "FL",
+                            "city": "ORLANDO",
+                            "street": null,
+                            "postal_code": "32809",
+                            "coordinates": {
+                              "longitude": null,
+                              "latitude": null
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "webhookUrl": "https://clubkalm.app.n8n.cloud/webhook/17track/update",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "Google Sheets Trigger": [
+      {
+        "json": {
+          "row_number": 19,
+          "change_type": "added",
+          "Status": "",
+          "IG Name": "",
+          "First Name": "",
+          "Last Name": "",
+          "Email": "instagram@gmail.com",
+          "Responded?": "",
+          "Reply Status": "",
+          "DM 1": "",
+          "DM  2": "",
+          "DM 3": "",
+          "Approved?": "",
+          "Street": "",
+          "City": "",
+          "State": "",
+          "Zip": "",
+          "Country": "",
+          "Order ID": "",
+          "Tracking #": "420786339300110597204372066924",
+          "Tracking Link": "",
+          "Shipped Date": "",
+          "Delivered": "",
+          "Current Status": "",
+          "Notes": ""
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Sheets2": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "9ed6d9ea-1412-4a26-b70f-5e6f6e8bd5e5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cdd9df9e2913e1bbd7987e1b7a0c821dc85cdfda09ac5cbd267e203568e9f950"
+  },
+  "id": "oeTBIo37i5J99IFH",
+  "tags": []
+}
