@@ -61,6 +61,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
         creator: {
           include: { profiles: true },
         },
+        shopifyOrder: {
+          include: {
+            fulfillmentEvents: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });

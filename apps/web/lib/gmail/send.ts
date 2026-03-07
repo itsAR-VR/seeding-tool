@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
+import {
+  isSuppressed,
+  SuppressedRecipientError,
+} from "@/lib/compliance/suppression";
 
 /**
  * Exchange a refresh token for a fresh access token via Google OAuth2.
@@ -89,6 +93,11 @@ type SendEmailParams = {
  * 4. Persist Message row with direction: "outbound"
  */
 export async function sendEmail(params: SendEmailParams) {
+  // INVARIANT: Suppressed recipients never receive email — checked before every send
+  if (await isSuppressed(params.to)) {
+    throw new SuppressedRecipientError(params.to);
+  }
+
   // 1. Look up alias and brand credential
   const alias = await prisma.emailAlias.findUnique({
     where: { id: params.aliasId },
