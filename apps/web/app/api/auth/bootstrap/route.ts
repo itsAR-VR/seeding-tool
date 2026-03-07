@@ -1,17 +1,30 @@
 import { NextResponse } from "next/server";
 import { addGoogleTestUser } from "@/lib/google/oauth-admin";
 import { bootstrapNewUser, getUserBySupabaseId } from "@/lib/tenancy";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/auth/bootstrap
  * Called after Supabase signup to create User + Organization + Membership.
  *
  * Body: { supabaseUserId: string, email: string, orgName: string }
+ *
+ * Security: we trust the *server-side* Supabase session over the client-
+ * supplied supabaseUserId. If a session cookie is present and valid, we
+ * use that user's ID (prevents ghost-user mismatch when Supabase returns
+ * a fake ID for duplicate-email signups with email confirmation on).
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { supabaseUserId, email, orgName } = body;
+    const { supabaseUserId: clientUserId, email: clientEmail, orgName } = body;
+
+    // Prefer the server-verified session user over the client-supplied ID
+    const supabase = await createClient();
+    const { data: { user: sessionUser } } = await supabase.auth.getUser();
+
+    const supabaseUserId = sessionUser?.id ?? clientUserId;
+    const email = sessionUser?.email ?? clientEmail;
 
     if (!supabaseUserId || !email) {
       return NextResponse.json(
