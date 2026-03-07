@@ -1,25 +1,95 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const supabase = createClient();
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setLoading(false);
+      return;
+    }
+
+    router.push("/dashboard");
+    router.refresh();
+  }
+
   return (
-    <section style={{ minHeight: "100vh", padding: "4rem 1.5rem" }}>
-      <div
-        style={{
-          maxWidth: "48rem",
-          margin: "0 auto",
-          padding: "2.5rem",
-          borderRadius: "2rem",
-          border: "1px solid rgba(27, 21, 37, 0.08)",
-          background: "rgba(255, 255, 255, 0.82)",
-          boxShadow: "0 18px 50px rgba(17, 13, 25, 0.08)",
-        }}
-      >
-        <p style={{ margin: 0, fontSize: "0.75rem", fontWeight: 700, letterSpacing: "0.24em", opacity: 0.62, textTransform: "uppercase" }}>
-          Platform
-        </p>
-        <h1 style={{ margin: "1rem 0 0", fontSize: "2.5rem", lineHeight: 1.05 }}>Log in</h1>
-        <p style={{ maxWidth: "40rem", margin: "0.75rem 0 0", fontSize: "1rem", lineHeight: 1.7, opacity: 0.72 }}>
-          Supabase auth, session recovery, and organization-aware redirects land in Phase 9c. This route is the permanent shell target.
-        </p>
-      </div>
-    </section>
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold">Log in to Seed Scale</CardTitle>
+          <CardDescription>
+            Enter your email and password to access your workspace
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="font-medium underline underline-offset-4 hover:text-primary">
+              Sign up
+            </Link>
+          </p>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

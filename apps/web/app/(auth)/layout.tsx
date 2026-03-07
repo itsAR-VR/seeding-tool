@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
-    <main style={{ minHeight: "100vh" }}>
+    <main className="min-h-screen bg-background">
       {children}
     </main>
   );
