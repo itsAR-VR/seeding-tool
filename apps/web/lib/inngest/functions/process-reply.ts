@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { classifyReply, extractAddress, generateDraft } from "@/lib/inbox/ai";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Inngest function: Process an inbound Gmail reply.
@@ -97,6 +98,23 @@ export const processReply = inngest.createFunction(
       classification.intent === "positive" ||
       classification.intent === "question"
     ) {
+      // Feature flag guard: if AI reply is disabled, create Intervention instead of draft
+      const flags = await getFeatureFlags(brandId);
+      if (!flags.aiReplyEnabled) {
+        await prisma.interventionCase.create({
+          data: {
+            type: "manual_review",
+            status: "open",
+            priority: "normal",
+            title: "AI reply disabled — manual draft required",
+            description: `AI reply feature flag is disabled. Manual reply needed for ${classification.intent} message.\n\nMessage: "${message.body.slice(0, 300)}..."`,
+            brandId,
+            campaignCreatorId,
+          },
+        });
+        return { status: "intervention", reason: "ai_reply_disabled" };
+      }
+
       const thread = await prisma.conversationThread.findUnique({
         where: { id: threadId },
         include: {

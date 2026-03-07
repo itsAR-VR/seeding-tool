@@ -214,6 +214,8 @@ model BrandSettings {
   reminderWindowDays  Int     @default(14)
   timezone            String  @default("America/New_York")
 
+  metadata            Json?   // feature flags and brand-specific config
+
   brandId String @unique
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)

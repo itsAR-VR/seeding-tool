@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { isSuppressed } from "@/lib/compliance/suppression";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Inngest function: Handle reminder/send events.
@@ -26,6 +27,12 @@ export const handleReminderSend = inngest.createFunction(
       reminderNumber: number;
       orderId: string;
     };
+
+    // Feature flag guard: reminder emails must be enabled
+    const flags = await getFeatureFlags(brandId);
+    if (!flags.reminderEmailEnabled) {
+      return { status: "skipped", reason: "reminder_email_disabled" };
+    }
 
     // Fetch campaign creator with details
     const campaignCreator = await prisma.campaignCreator.findUnique({

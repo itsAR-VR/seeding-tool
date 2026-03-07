@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { checkDailyLimit, getOrCreateChat, sendDm } from "@/lib/unipile/dms";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!membership) {
       return NextResponse.json({ error: "No brand found" }, { status: 404 });
+    }
+
+    // Feature flag guard: Unipile DM must be enabled
+    const flags = await getFeatureFlags(membership.brandId);
+    if (!flags.unipileDmEnabled) {
+      return NextResponse.json({ error: "Instagram DM sending is disabled for this brand" }, { status: 403 });
     }
 
     // Load thread

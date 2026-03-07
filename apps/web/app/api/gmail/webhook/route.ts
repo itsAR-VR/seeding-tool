@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
 import { getOrCreateThread } from "@/lib/inbox/threads";
 import { fetchNewMessages, resolveThreadByExternalId, resolveBrandByEmail } from "@/lib/gmail/ingest";
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
         status: "processing",
       },
     });
+
+    log("info", "gmail.ingest.received", { emailAddress, pubsubMessageId: body.message?.messageId });
 
     if (!emailAddress) {
       return NextResponse.json({ status: "ok", processed: 0 });
@@ -113,6 +116,8 @@ export async function POST(request: NextRequest) {
         // Inngest not configured — process inline
         // INVARIANT: OpenAI failures create Interventions, never propagate as 500s.
 
+        log("info", "gmail.ingest.classify_inline", { threadId: thread.id, messageId: persistedMessage.id, brandId: brand.id });
+
         const classification = await classifyReply(
           { body: persistedMessage.body, subject: persistedMessage.subject },
           brand.id,
@@ -129,7 +134,10 @@ export async function POST(request: NextRequest) {
         });
 
         // Handle based on classification (same logic as Inngest function)
+        log("info", "gmail.ingest.classified", { threadId: thread.id, intent: classification.intent, confidence: classification.confidence, brandId: brand.id });
+
         if (classification.confidence < 0.7) {
+          log("warn", "gmail.ingest.low_confidence", { threadId: thread.id, intent: classification.intent, confidence: classification.confidence, brandId: brand.id, campaignCreatorId });
           await prisma.interventionCase.create({
             data: {
               type: "unclear_reply",
@@ -165,6 +173,23 @@ export async function POST(request: NextRequest) {
           classification.intent === "positive" ||
           classification.intent === "question"
         ) {
+          // Feature flag guard: if AI reply is disabled, create Intervention instead
+          const { getFeatureFlags } = await import("@/lib/feature-flags");
+          const flags = await getFeatureFlags(brand.id);
+          if (!flags.aiReplyEnabled) {
+            await prisma.interventionCase.create({
+              data: {
+                type: "manual_review",
+                status: "open",
+                priority: "normal",
+                title: "AI reply disabled — manual draft required",
+                description: `AI reply feature flag is disabled. Manual reply needed for ${classification.intent} message.`,
+                brandId: brand.id,
+                campaignCreatorId,
+              },
+            });
+          } else {
+
           const fullThread = await prisma.conversationThread.findUnique({
             where: { id: thread.id },
             include: {
@@ -212,6 +237,8 @@ export async function POST(request: NextRequest) {
             }
           }
 
+          } // end: else (aiReplyEnabled)
+
           await prisma.campaignCreator.update({
             where: { id: campaignCreatorId },
             data: { lifecycleStatus: "replied", lastReplyAt: new Date() },
@@ -248,7 +275,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ status: "ok", processed });
   } catch (error) {
-    console.error("[gmail/webhook]", error);
+    log("error", "gmail.ingest.fatal", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Webhook processing failed" },
       { status: 500 }

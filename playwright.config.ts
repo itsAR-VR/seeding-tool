@@ -18,6 +18,17 @@ export default defineConfig({
       name: "mobile",
       use: { viewport: { width: 390, height: 844 } },
     },
+    // Phase 9h: E2E specs for platform flows
+    {
+      name: "e2e-platform",
+      testDir: "./apps/web/e2e",
+      use: {
+        baseURL: "http://localhost:3000",
+        viewport: { width: 1440, height: 900 },
+        headless: process.env.HEADED !== "true",
+        trace: "on-first-retry",
+      },
+    },
   ],
   webServer: {
     command: "npm run web:start",

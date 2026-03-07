@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 import OpenAI from "openai";
 
 type ClassificationResult = {
@@ -58,6 +59,7 @@ export async function classifyReply(
   const client = getOpenAIClient();
 
   if (!client) {
+    log("warn", "ai.classify.no_api_key", { brandId, campaignCreatorId });
     await createAIIntervention(
       brandId,
       "AI classification unavailable",
@@ -68,6 +70,7 @@ export async function classifyReply(
   }
 
   try {
+    log("info", "ai.classify.attempt", { brandId, campaignCreatorId });
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
@@ -115,6 +118,7 @@ Respond with JSON: { "intent": string, "confidence": number (0-1) }`,
     };
   } catch (error) {
     // INVARIANT: OpenAI failures create Interventions, never propagate as 500s.
+    log("error", "ai.classify.failed", { brandId, campaignCreatorId, error: error instanceof Error ? error.message : String(error) });
     await createAIIntervention(
       brandId,
       "AI classification failed",
@@ -274,6 +278,7 @@ Do NOT include subject lines. Only output the email body text.`,
     return draft;
   } catch (error) {
     // INVARIANT: OpenAI failures create Interventions, never propagate as 500s.
+    log("error", "ai.draft.failed", { brandId, campaignCreatorId, error: error instanceof Error ? error.message : String(error) });
     await createAIIntervention(
       brandId,
       "AI draft generation failed",

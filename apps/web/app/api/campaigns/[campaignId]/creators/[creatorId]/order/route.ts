@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { createDraftOrder } from "@/lib/shopify/orders";
+import { getFeatureFlags } from "@/lib/feature-flags";
 
 type RouteContext = {
   params: Promise<{ campaignId: string; creatorId: string }>;
@@ -39,6 +40,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!membership) {
       return NextResponse.json({ error: "No brand found" }, { status: 404 });
+    }
+
+    // Feature flag guard: Shopify order creation must be enabled
+    const flags = await getFeatureFlags(membership.brandId);
+    if (!flags.shopifyOrderEnabled) {
+      return NextResponse.json({ error: "Shopify order creation is disabled for this brand" }, { status: 403 });
     }
 
     // Verify campaign belongs to brand

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 
 /**
  * Shopify Webhook Handler
@@ -54,7 +55,10 @@ export async function POST(request: NextRequest) {
     where: { externalEventId: webhookId },
   });
 
+  log("info", "shopify.webhook.received", { topic, shopDomain, webhookId });
+
   if (existing && existing.status === "processed") {
+    log("info", "shopify.webhook.idempotency_hit", { topic, webhookId });
     return NextResponse.json({ status: "already_processed" });
   }
 
@@ -125,7 +129,7 @@ export async function POST(request: NextRequest) {
       data: { status: "failed", error: errMsg },
     });
 
-    console.error(`[shopify-webhook] ${topic} processing error:`, errMsg);
+    log("error", "shopify.webhook.processing_error", { topic, webhookId, error: errMsg });
   }
 
   // Always return 200 to Shopify to prevent retries
