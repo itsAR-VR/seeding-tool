@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { addGoogleTestUser } from "@/lib/google/oauth-admin";
 import { bootstrapNewUser, getUserBySupabaseId } from "@/lib/tenancy";
 
 /**
@@ -29,6 +30,10 @@ export async function POST(request: Request) {
       supabaseUserId,
       email,
       orgName || email.split("@")[0]
+    );
+
+    addGoogleTestUser(email).catch((error) =>
+      console.warn("Failed to add Google test user", error)
     );
 
     return NextResponse.json({ ok: true, userId: user.id, orgId: org.id });
