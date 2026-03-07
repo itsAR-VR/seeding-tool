@@ -45,7 +45,10 @@ export default function LeadForm({
         <div className="lead-form-grid">
           {fields.map((field) => (
             <label className="lead-field" key={field.name}>
-              <span>{field.label}</span>
+              <span className="lead-field-label">
+                {field.label}
+                {field.required ? <em className="field-required">(required)</em> : null}
+              </span>
               <input
                 name={field.name}
                 placeholder={field.placeholder}

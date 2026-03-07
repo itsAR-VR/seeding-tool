@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect } from "react";
 import CtaLink from "./CtaLink";
 import HeroScene from "./HeroScene";
@@ -183,15 +184,24 @@ export default function HomeContent() {
         <section className="proof-rail" aria-label="Proof rail" data-reveal>
           <div className="proof-rail-copy">
             <p className="eyebrow">Trusted by teams at</p>
-            <h2>One lane from shortlist to post.</h2>
+            <h2>Operators at these brands already know what spreadsheet seeding costs.</h2>
             <p className="proof-rail-note">
-              No address hunting, no screenshot archaeology, and far fewer missed follow-ups.
+              That is why the pitch lands fast: fewer handoffs, fewer screenshots, and a cleaner line from shortlist
+              to post.
             </p>
           </div>
           <div className="brand-band" aria-hidden="true">
             <div className="brand-band-track">
               {[...logoRail, ...logoRail].map((logo, index) => (
-                <img key={`${logo.name}-${index}`} src={logo.src} alt={logo.name} className="brand-mark" loading="lazy" />
+                <Image
+                  key={`${logo.name}-${index}`}
+                  alt={logo.name}
+                  className="brand-mark"
+                  height={28}
+                  sizes="124px"
+                  src={logo.src}
+                  width={124}
+                />
               ))}
             </div>
           </div>

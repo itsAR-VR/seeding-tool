@@ -1,3 +1,39 @@
+const creatorQueue = [
+  { name: "Mia Torres", meta: "94 fit", fill: "url(#creatorWarm)", selected: true, y: 182 },
+  { name: "Noah Chen", meta: "Address ready", fill: "url(#creatorCool)", selected: false, y: 240 },
+  { name: "Jules Carter", meta: "Label due", fill: "url(#creatorMint)", selected: false, y: 298 },
+] as const;
+
+const workflowRows = [
+  {
+    title: "Offer locked",
+    chipClass: "scene-chip scene-chip-warm",
+    chipLabel: "Queued",
+    signalClass: "scene-signal scene-signal-warm",
+    y: 256,
+  },
+  {
+    title: "Address stored",
+    chipClass: "scene-chip scene-chip-cool",
+    chipLabel: "Ready",
+    signalClass: "scene-signal scene-signal-cool",
+    y: 306,
+  },
+  {
+    title: "Post linked",
+    chipClass: "scene-chip scene-chip-mint",
+    chipLabel: "Live",
+    signalClass: "scene-signal scene-signal-good",
+    y: 356,
+  },
+] as const;
+
+const statCards = [
+  { label: "Approved", value: "24", accent: "#1a3f92", y: 186 },
+  { label: "Shipped", value: "17", accent: "#e05a2b", y: 252 },
+  { label: "Posts", value: "9", accent: "#16795f", y: 318 },
+] as const;
+
 export default function HeroScene() {
   return (
     <svg
@@ -6,7 +42,7 @@ export default function HeroScene() {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       role="img"
-      aria-label="Creator content, outreach, shipping, and posting states gathered into one seeding control surface"
+      aria-label="Campaign control surface with creator queue, outreach state, shipment status, and live posting metrics in one seeding operating view"
     >
       <defs>
         <linearGradient id="creatorWarm" x1="0" y1="0" x2="1" y2="1">
@@ -25,61 +61,96 @@ export default function HeroScene() {
 
       <rect x="48" y="54" width="524" height="432" rx="34" className="scene-frame" />
 
-      <g className="scene-card scene-card-a">
-        <rect x="86" y="108" width="124" height="154" rx="26" className="scene-card-frame" />
-        <rect x="100" y="124" width="96" height="84" rx="18" fill="url(#creatorWarm)" />
-        <circle cx="148" cy="165" r="26" fill="rgba(29, 18, 29, 0.12)" />
-        <path d="M112 226H168" className="scene-line" />
-        <path d="M112 242H184" className="scene-line scene-line-soft" />
-      </g>
+      <rect x="88" y="92" width="444" height="38" rx="19" className="scene-note" />
+      <rect x="104" y="102" width="104" height="18" rx="9" className="scene-toolbar-pill" />
+      <text x="121" y="114.5" className="scene-kicker">SPRING SEND</text>
+      <rect x="226" y="100" width="162" height="22" rx="11" className="scene-search-shell" />
+      <text x="244" y="114.5" className="scene-panel-copy-light">
+        Search creator, reply, SKU
+      </text>
+      <rect x="410" y="102" width="96" height="18" rx="9" className="scene-toolbar-pill scene-toolbar-pill-live" />
+      <text x="429" y="114.5" className="scene-kicker scene-kicker-live">
+        LIVE BOARD
+      </text>
 
-      <g className="scene-card scene-card-b">
-        <rect x="94" y="286" width="138" height="114" rx="28" className="scene-card-frame" />
-        <rect x="112" y="306" width="68" height="68" rx="18" fill="url(#creatorCool)" />
-        <path d="M192 316H216" className="scene-line" />
-        <path d="M192 334H220" className="scene-line" />
-        <rect x="188" y="352" width="46" height="22" rx="11" className="scene-chip scene-chip-cool" />
-        <text x="211" y="367" textAnchor="middle" className="scene-chip-text">Email</text>
-      </g>
+      <rect x="88" y="154" width="126" height="252" rx="24" className="scene-card-frame" />
+      <text x="106" y="178" className="scene-kicker">
+        CREATOR QUEUE
+      </text>
 
-      <g className="scene-card scene-card-c">
-        <rect x="434" y="106" width="100" height="146" rx="24" className="scene-card-frame" />
-        <rect x="448" y="122" width="72" height="84" rx="18" fill="url(#creatorMint)" />
-        <path d="M450 220H500" className="scene-line" />
-        <path d="M450 236H514" className="scene-line scene-line-soft" />
-      </g>
+      {creatorQueue.map((creator) => (
+        <g key={creator.name}>
+          <rect
+            x="102"
+            y={creator.y}
+            width="98"
+            height="44"
+            rx="16"
+            className={creator.selected ? "scene-queue-row scene-queue-row-selected" : "scene-queue-row"}
+          />
+          <circle cx="118" cy={creator.y + 22} r="12" fill={creator.fill} />
+          <text x="136" y={creator.y + 19} className="scene-panel-title-light">
+            {creator.name}
+          </text>
+          <text x="136" y={creator.y + 32} className="scene-panel-caption">
+            {creator.meta}
+          </text>
+        </g>
+      ))}
 
-      <g className="scene-board">
-        <rect x="210" y="120" width="218" height="262" rx="36" className="scene-board-shell" />
-        <rect x="234" y="146" width="92" height="14" rx="7" className="scene-board-title" />
-        <rect x="236" y="182" width="168" height="48" rx="22" className="scene-lane-shell" />
-        <rect x="236" y="244" width="168" height="48" rx="22" className="scene-lane-shell" />
-        <rect x="236" y="306" width="168" height="48" rx="22" className="scene-lane-shell" />
-        <rect x="252" y="196" width="64" height="18" rx="9" className="scene-chip scene-chip-warm" />
-        <rect x="252" y="258" width="74" height="18" rx="9" className="scene-chip scene-chip-cool" />
-        <rect x="252" y="320" width="68" height="18" rx="9" className="scene-chip scene-chip-mint" />
-        <text x="284" y="209" textAnchor="middle" className="scene-chip-text">Shortlist</text>
-        <text x="289" y="271" textAnchor="middle" className="scene-chip-text">Address</text>
-        <text x="286" y="333" textAnchor="middle" className="scene-chip-text">Posted</text>
-        <circle cx="382" cy="206" r="7" className="scene-signal scene-signal-warm" />
-        <circle cx="382" cy="268" r="7" className="scene-signal scene-signal-cool" />
-        <circle cx="382" cy="330" r="7" className="scene-signal scene-signal-good" />
-        <rect x="220" y="120" width="198" height="262" rx="34" className="scene-scan" />
-      </g>
+      <rect x="232" y="154" width="214" height="252" rx="28" className="scene-board-shell" />
+      <text x="254" y="178" className="scene-kicker scene-kicker-dark">
+        ACTIVE CREATOR
+      </text>
+      <rect x="248" y="192" width="182" height="56" rx="18" className="scene-lane-shell" />
+      <circle cx="274" cy="220" r="18" fill="url(#creatorWarm)" />
+      <text x="304" y="214" className="scene-panel-title-dark">
+        Mia Torres
+      </text>
+      <text x="304" y="229" className="scene-panel-copy-dark">
+        Serum bundle + rights
+      </text>
+      <rect x="372" y="202" width="42" height="18" rx="9" className="scene-chip scene-chip-warm" />
+      <text x="393" y="215" textAnchor="middle" className="scene-chip-text">
+        94 fit
+      </text>
+      <rect x="232" y="154" width="214" height="252" rx="28" className="scene-scan" />
 
-      <g className="scene-message scene-message-a">
-        <rect x="252" y="84" width="120" height="56" rx="18" className="scene-note" />
-        <text x="274" y="107" className="scene-note-label">Reply draft</text>
-        <path d="M274 121H338" className="scene-note-line" />
-      </g>
+      {workflowRows.map((row) => (
+        <g key={row.title}>
+          <rect x="248" y={row.y} width="182" height="38" rx="15" className="scene-lane-shell" />
+          <circle cx="264" cy={row.y + 19} r="5" className={row.signalClass} />
+          <text x="278" y={row.y + 23} className="scene-panel-title-dark">
+            {row.title}
+          </text>
+          <rect x="372" y={row.y + 10} width="42" height="18" rx="9" className={row.chipClass} />
+          <text x="393" y={row.y + 23} textAnchor="middle" className="scene-chip-text">
+            {row.chipLabel}
+          </text>
+        </g>
+      ))}
 
-      <g className="scene-ship">
-        <rect x="432" y="296" width="104" height="84" rx="24" className="scene-note scene-ship-shell" />
-        <rect x="454" y="318" width="42" height="26" rx="7" className="scene-box" />
-        <path d="M454 330H496" className="scene-box-line" />
-        <rect x="448" y="350" width="58" height="18" rx="9" className="scene-chip scene-chip-mint" />
-        <text x="477" y="363" textAnchor="middle" className="scene-chip-text">Posted</text>
-      </g>
+      <rect x="248" y="370" width="182" height="24" rx="12" className="scene-main-footer" />
+      <text x="264" y="386" className="scene-panel-copy-dark">
+        Reply draft ready
+      </text>
+
+      <rect x="464" y="154" width="78" height="252" rx="24" className="scene-card-frame" />
+      <text x="480" y="178" className="scene-kicker">
+        TODAY
+      </text>
+      {statCards.map((stat) => (
+        <g key={stat.label}>
+          <rect x="476" y={stat.y} width="54" height="50" rx="16" className="scene-stat-card" />
+          <rect x="486" y={stat.y + 10} width="16" height="4" rx="2" fill={stat.accent} />
+          <text x="486" y={stat.y + 27} className="scene-stat-value">
+            {stat.value}
+          </text>
+          <text x="486" y={stat.y + 37} className="scene-stat-label">
+            {stat.label}
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }
