@@ -249,3 +249,11 @@ This is distinct from the webhook-based story mention detection — it uses poll
 
 ### No action needed
 - **Shopify order type divergence** (Gap 4) — Platform's draft order pattern is superior; validate during pilot only
+
+## Decision Log
+
+### 2026-03-07 — AR decisions
+- **Instagram DMs (Unipile)**: IN SCOPE for 9g. AR confirmed DMs are ideal.
+- **Meta Creator Marketplace**: DEFERRED — post-pilot. Not blocking v1.
+- **PhantomBuster + Apify discovery**: n8n pipeline continues running externally during pilot. Platform accepts source-agnostic creator imports (CSV, API). Discovery pipeline replacement is post-pilot.
+- **discoverySource tagging**: All imported creators tagged with source field (`phantombuster | apify | csv_import | manual`). Creator Marketplace source tag reserved for future.

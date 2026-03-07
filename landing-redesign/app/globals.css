@@ -1,0 +1,267 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ─── */
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  --spacing: 0.25rem;
+
+  /* Background */
+  --color-bg: oklch(10% 0.03 260);
+  --color-bg-raised: oklch(14% 0.035 260);
+  --color-surface: oklch(18% 0.04 260);
+
+  /* Text */
+  --color-text: oklch(92% 0.01 260);
+  --color-text-muted: oklch(65% 0.02 260);
+  --color-text-faint: oklch(45% 0.02 260);
+
+  /* Accent */
+  --color-accent: oklch(65% 0.22 255);
+  --color-accent-dim: oklch(55% 0.18 255);
+  --color-accent-glow: oklch(65% 0.22 255 / 0.3);
+
+  /* Border */
+  --color-border: oklch(100% 0 0 / 0.08);
+  --color-border-strong: oklch(100% 0 0 / 0.14);
+
+  /* Motion */
+  --duration-fast: 0.2s;
+  --duration-default: 0.4s;
+  --duration-slow: 0.72s;
+  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+}
+
+/* ─── Base ─── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+html.lenis,
+html.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── Grain texture overlay ─── */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.018;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+/* ─── Glass panel ─── */
+.glass {
+  background: oklch(18% 0.04 260 / 0.55);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  border: 1px solid oklch(100% 0 0 / 0.08);
+  border-radius: 16px;
+}
+
+.glass-sm {
+  background: oklch(18% 0.04 260 / 0.45);
+  backdrop-filter: blur(12px) saturate(110%);
+  -webkit-backdrop-filter: blur(12px) saturate(110%);
+  border: 1px solid oklch(100% 0 0 / 0.07);
+  border-radius: 12px;
+}
+
+/* ─── Animated gradient mesh background ─── */
+.mesh-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.mesh-bg::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 70%;
+  height: 70%;
+  border-radius: 50%;
+  background: radial-gradient(circle, oklch(65% 0.22 255 / 0.08) 0%, transparent 70%);
+  animation: mesh-drift 18s ease-in-out infinite alternate;
+}
+
+.mesh-bg::after {
+  content: "";
+  position: absolute;
+  bottom: -10%;
+  right: -10%;
+  width: 60%;
+  height: 60%;
+  border-radius: 50%;
+  background: radial-gradient(circle, oklch(60% 0.18 280 / 0.06) 0%, transparent 70%);
+  animation: mesh-drift 24s ease-in-out infinite alternate-reverse;
+}
+
+@keyframes mesh-drift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(4%, 3%) scale(1.05); }
+  100% { transform: translate(-3%, 5%) scale(0.97); }
+}
+
+/* ─── Marquee scroll (logo reel) ─── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+
+.marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* ─── ScrollReveal initial state ─── */
+.reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.6s var(--ease-expo), transform 0.6s var(--ease-expo);
+}
+
+.reveal.in-view {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Navbar glass transition ─── */
+.nav-glass {
+  background: oklch(10% 0.03 260 / 0.82);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid oklch(100% 0 0 / 0.07);
+  box-shadow: 0 4px 24px oklch(0% 0 0 / 0.3);
+}
+
+/* ─── Feature card hover ─── */
+.feature-card {
+  transition: transform 0.2s var(--ease-quart), box-shadow 0.2s var(--ease-quart), border-color 0.2s var(--ease-quart);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: oklch(100% 0 0 / 0.16);
+  box-shadow: 0 16px 48px oklch(0% 0 0 / 0.3), 0 0 0 1px oklch(65% 0.22 255 / 0.1);
+}
+
+/* ─── Reduced motion ─── */
+@media (prefers-reduced-motion: reduce) {
+  .mesh-bg::before,
+  .mesh-bg::after {
+    animation: none;
+  }
+  .marquee-track {
+    animation: none;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .feature-card {
+    transition: none;
+  }
+  .feature-card:hover {
+    transform: none;
+  }
+}
+
+/* ─── Accent button ─── */
+.btn-accent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: var(--color-accent);
+  color: oklch(98% 0.01 260);
+  font-family: var(--font-display);
+  font-weight: 600;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.2s var(--ease-quart), transform 0.2s var(--ease-quart), box-shadow 0.2s var(--ease-quart);
+}
+
+.btn-accent:hover {
+  background: oklch(70% 0.22 255);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px oklch(65% 0.22 255 / 0.4);
+}
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-display);
+  font-weight: 600;
+  border-radius: 9999px;
+  border: 1px solid oklch(100% 0 0 / 0.14);
+  cursor: pointer;
+  transition: background 0.2s var(--ease-quart), border-color 0.2s var(--ease-quart), transform 0.2s var(--ease-quart);
+}
+
+.btn-ghost:hover {
+  background: oklch(100% 0 0 / 0.05);
+  border-color: oklch(100% 0 0 / 0.24);
+  transform: translateY(-2px);
+}
+
+/* ─── Section dividers ─── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, oklch(100% 0 0 / 0.07), transparent);
+  margin: 0;
+}
+
+/* ─── Stat counter ─── */
+.stat-counter {
+  font-family: var(--font-display);
+  font-weight: 800;
+  color: var(--color-text);
+  line-height: 1;
+}
