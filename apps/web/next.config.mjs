@@ -1,11 +1,6 @@
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 const nextConfig = {
   reactStrictMode: true,
-  outputFileTracingRoot: join(__dirname, "../.."),
+  // outputFileTracingRoot: add back when shared packages exist at monorepo root
 };
 
 export default nextConfig;
