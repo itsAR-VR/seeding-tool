@@ -28,15 +28,6 @@ interface ShopifyConnectionState {
   storeDomain?: string;
 }
 
-interface AirtableConnectionState {
-  connected: boolean;
-  baseId?: string;
-}
-
-interface PhantombusterConnectionState {
-  connected: boolean;
-  accountLabel?: string;
-}
 
 type FlashMessage =
   | {
@@ -76,23 +67,6 @@ function ConnectionsContent() {
   const [shopifySaving, setShopifySaving] = useState(false);
   const [shopifyMessage, setShopifyMessage] = useState<FlashMessage>(null);
 
-  const [airtableState, setAirtableState] = useState<AirtableConnectionState>({
-    connected: false,
-  });
-  const [airtableApiKey, setAirtableApiKey] = useState("");
-  const [airtableBaseId, setAirtableBaseId] = useState("");
-  const [airtableSaving, setAirtableSaving] = useState(false);
-  const [airtableMessage, setAirtableMessage] = useState<FlashMessage>(null);
-
-  const [phantombusterState, setPhantombusterState] =
-    useState<PhantombusterConnectionState>({
-      connected: false,
-    });
-  const [phantombusterApiKey, setPhantombusterApiKey] = useState("");
-  const [phantombusterSaving, setPhantombusterSaving] = useState(false);
-  const [phantombusterMessage, setPhantombusterMessage] =
-    useState<FlashMessage>(null);
-
   const [unipileApiKey, setUnipileApiKey] = useState("");
   const [unipileAccountId, setUnipileAccountId] = useState("");
   const [unipileSaving, setUnipileSaving] = useState(false);
@@ -111,8 +85,6 @@ function ConnectionsContent() {
     await Promise.allSettled([
       fetchBrand(),
       fetchShopifyConnection(),
-      fetchAirtableConnection(),
-      fetchPhantombusterConnection(),
     ]);
     setLoading(false);
   }
@@ -141,34 +113,6 @@ function ConnectionsContent() {
       // ignore
     }
     setShopifyState({ connected: false });
-  }
-
-  async function fetchAirtableConnection() {
-    try {
-      const res = await fetch("/api/connections/airtable");
-      if (res.ok) {
-        setAirtableState((await res.json()) as AirtableConnectionState);
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    setAirtableState({ connected: false });
-  }
-
-  async function fetchPhantombusterConnection() {
-    try {
-      const res = await fetch("/api/connections/phantombuster");
-      if (res.ok) {
-        setPhantombusterState(
-          (await res.json()) as PhantombusterConnectionState
-        );
-        return;
-      }
-    } catch {
-      // ignore
-    }
-    setPhantombusterState({ connected: false });
   }
 
   function getConnection(provider: string) {
@@ -259,163 +203,6 @@ function ConnectionsContent() {
     }
   }
 
-  async function handleSaveAirtable(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!airtableApiKey.trim() || !airtableBaseId.trim()) {
-      return;
-    }
-
-    setAirtableSaving(true);
-    setAirtableMessage(null);
-
-    try {
-      const res = await fetch("/api/connections/airtable", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: airtableApiKey.trim(),
-          baseId: airtableBaseId.trim(),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to connect Airtable"));
-      }
-
-      const data = (await res.json()) as AirtableConnectionState;
-      setAirtableApiKey("");
-      setAirtableState(data);
-      setAirtableMessage({
-        tone: "success",
-        text: `Airtable connected${data.baseId ? ` for ${data.baseId}` : ""}.`,
-      });
-      await refreshConnectionData();
-    } catch (saveError) {
-      setAirtableMessage({
-        tone: "error",
-        text:
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to connect Airtable.",
-      });
-    } finally {
-      setAirtableSaving(false);
-    }
-  }
-
-  async function handleDisconnectAirtable() {
-    setAirtableSaving(true);
-    setAirtableMessage(null);
-
-    try {
-      const res = await fetch("/api/connections/airtable", {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Airtable")
-        );
-      }
-
-      setAirtableState({ connected: false });
-      setAirtableApiKey("");
-      setAirtableBaseId("");
-      setAirtableMessage({ tone: "success", text: "Airtable disconnected." });
-      await refreshConnectionData();
-    } catch (disconnectError) {
-      setAirtableMessage({
-        tone: "error",
-        text:
-          disconnectError instanceof Error
-            ? disconnectError.message
-            : "Failed to disconnect Airtable.",
-      });
-    } finally {
-      setAirtableSaving(false);
-    }
-  }
-
-  async function handleSavePhantombuster(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!phantombusterApiKey.trim()) {
-      return;
-    }
-
-    setPhantombusterSaving(true);
-    setPhantombusterMessage(null);
-
-    try {
-      const res = await fetch("/api/connections/phantombuster", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: phantombusterApiKey.trim(),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(
-          await readErrorMessage(res, "Failed to connect PhantomBuster")
-        );
-      }
-
-      const data = (await res.json()) as PhantombusterConnectionState;
-      setPhantombusterApiKey("");
-      setPhantombusterState(data);
-      setPhantombusterMessage({
-        tone: "success",
-        text: "PhantomBuster connected successfully.",
-      });
-      await refreshConnectionData();
-    } catch (saveError) {
-      setPhantombusterMessage({
-        tone: "error",
-        text:
-          saveError instanceof Error
-            ? saveError.message
-            : "Failed to connect PhantomBuster.",
-      });
-    } finally {
-      setPhantombusterSaving(false);
-    }
-  }
-
-  async function handleDisconnectPhantombuster() {
-    setPhantombusterSaving(true);
-    setPhantombusterMessage(null);
-
-    try {
-      const res = await fetch("/api/connections/phantombuster", {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        throw new Error(
-          await readErrorMessage(res, "Failed to disconnect PhantomBuster")
-        );
-      }
-
-      setPhantombusterState({ connected: false });
-      setPhantombusterApiKey("");
-      setPhantombusterMessage({
-        tone: "success",
-        text: "PhantomBuster disconnected.",
-      });
-      await refreshConnectionData();
-    } catch (disconnectError) {
-      setPhantombusterMessage({
-        tone: "error",
-        text:
-          disconnectError instanceof Error
-            ? disconnectError.message
-            : "Failed to disconnect PhantomBuster.",
-      });
-    } finally {
-      setPhantombusterSaving(false);
-    }
-  }
-
   async function handleSaveUnipile() {
     if (!brand || !unipileApiKey.trim()) {
       return;
@@ -491,21 +278,12 @@ function ConnectionsContent() {
 
   const gmailConn = getConnection("gmail");
   const shopifyConn = getConnection("shopify");
-  const airtableConn = getConnection("airtable");
-  const phantombusterConn = getConnection("phantombuster");
   const unipileConn = getConnection("unipile");
 
   const shopifyConnected =
     shopifyState.connected || shopifyConn?.status === "connected";
-  const airtableConnected =
-    airtableState.connected || airtableConn?.status === "connected";
-  const phantombusterConnected =
-    phantombusterState.connected || phantombusterConn?.status === "connected";
 
   const shopifyDomain = shopifyState.storeDomain ?? shopifyConn?.externalId ?? "";
-  const airtableBase = airtableState.baseId ?? airtableConn?.externalId ?? "";
-  const phantombusterAccount =
-    phantombusterState.accountLabel ?? phantombusterConn?.externalId ?? "";
 
   return (
     <div className="space-y-6">
@@ -622,126 +400,6 @@ function ConnectionsContent() {
                   }
                 >
                   {shopifySaving ? "Connecting..." : "Connect Shopify"}
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">Airtable</CardTitle>
-              <Badge variant={airtableConnected ? "default" : "secondary"}>
-                {airtableConnected ? "Connected" : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {airtableConnected
-                ? `Connected to base ${airtableBase}`
-                : "Sync campaign data with your Airtable base."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FeedbackBanner message={airtableMessage} />
-            {airtableConnected ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Connected base: <strong>{airtableBase}</strong>
-                </p>
-                <Button
-                  variant="destructive"
-                  onClick={handleDisconnectAirtable}
-                  disabled={airtableSaving}
-                >
-                  {airtableSaving ? "Disconnecting..." : "Disconnect"}
-                </Button>
-              </div>
-            ) : (
-              <form className="space-y-2" onSubmit={handleSaveAirtable}>
-                <Input
-                  type="password"
-                  placeholder="API Key"
-                  value={airtableApiKey}
-                  onChange={(event) => setAirtableApiKey(event.target.value)}
-                />
-                <Input
-                  type="text"
-                  placeholder="Base ID"
-                  value={airtableBaseId}
-                  onChange={(event) => setAirtableBaseId(event.target.value)}
-                />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  disabled={
-                    airtableSaving ||
-                    !airtableApiKey.trim() ||
-                    !airtableBaseId.trim()
-                  }
-                >
-                  {airtableSaving ? "Connecting..." : "Connect Airtable"}
-                </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">PhantomBuster</CardTitle>
-              <Badge
-                variant={phantombusterConnected ? "default" : "secondary"}
-              >
-                {phantombusterConnected ? "Connected" : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {phantombusterConnected
-                ? `Connected${phantombusterAccount ? ` as ${phantombusterAccount}` : ""}`
-                : "Connect PhantomBuster automations with your workspace."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FeedbackBanner message={phantombusterMessage} />
-            {phantombusterConnected ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  PhantomBuster is ready
-                  {phantombusterAccount ? (
-                    <>
-                      {" "}
-                      for <strong>{phantombusterAccount}</strong>
-                    </>
-                  ) : (
-                    "."
-                  )}
-                </p>
-                <Button
-                  variant="destructive"
-                  onClick={handleDisconnectPhantombuster}
-                  disabled={phantombusterSaving}
-                >
-                  {phantombusterSaving ? "Disconnecting..." : "Disconnect"}
-                </Button>
-              </div>
-            ) : (
-              <form className="space-y-2" onSubmit={handleSavePhantombuster}>
-                <Input
-                  type="password"
-                  placeholder="API Key"
-                  value={phantombusterApiKey}
-                  onChange={(event) => setPhantombusterApiKey(event.target.value)}
-                />
-                <Button
-                  type="submit"
-                  variant="outline"
-                  disabled={phantombusterSaving || !phantombusterApiKey.trim()}
-                >
-                  {phantombusterSaving
-                    ? "Connecting..."
-                    : "Connect PhantomBuster"}
                 </Button>
               </form>
             )}
