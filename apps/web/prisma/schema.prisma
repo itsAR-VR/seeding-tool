@@ -266,7 +266,7 @@ model BrandProduct {
 
 model ProviderCredential {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | meta_creator_marketplace
+  provider String // shopify | gmail | instagram | meta_creator_marketplace | unipile
   label    String?
 
   encryptedValue String @db.Text @map("encrypted_value") // AES-256-GCM encrypted
@@ -412,6 +412,16 @@ model Creator {
   bio      String? @db.Text
   notes    String? @db.Text
 
+  instagramHandle String? @map("instagram_handle")
+
+  /// Source of discovery: phantombuster | apify | csv_import | manual | creator_marketplace
+  // INVARIANT: discoverySource is always tagged — never null
+  discoverySource String @default("manual") @map("discovery_source")
+
+  followerCount Int?    @map("follower_count")
+  avgViews      Int?    @map("avg_views")
+  bioCategory   String? @map("bio_category")
+
   optedOut   Boolean   @default(false)
   optOutDate DateTime?
 
@@ -425,6 +435,7 @@ model Creator {
   profiles          CreatorProfile[]
   campaignCreators  CampaignCreator[]
 
+  @@unique([brandId, instagramHandle])
   @@map("creators")
 }
 
@@ -546,8 +557,10 @@ model ConversationThread {
   id      String @id @default(uuid())
   subject String?
   status  String @default("open") // open | closed | snoozed
+  channel String @default("email") // email | instagram_dm
 
   externalThreadId String? @unique @map("external_thread_id") // Gmail thread ID
+  unipileChatId    String? @map("unipile_chat_id") // Unipile chat ID for DM routing
 
   campaignCreatorId String @unique @map("campaign_creator_id")
   brandId           String
@@ -567,7 +580,7 @@ model ConversationThread {
 model Message {
   id        String @id @default(uuid())
   direction String // inbound | outbound
-  channel   String @default("email") // email | manual
+  channel   String @default("email") // email | manual | instagram_dm
 
   fromAddress String?
   toAddress   String?

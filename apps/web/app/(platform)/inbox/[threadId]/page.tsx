@@ -46,13 +46,16 @@ type Thread = {
   id: string;
   subject: string | null;
   status: string;
+  channel: string; // email | instagram_dm
   externalThreadId: string | null;
+  unipileChatId: string | null;
   campaignCreator: {
     id: string;
     lifecycleStatus: string;
     creator: {
       name: string | null;
       email: string | null;
+      instagramHandle: string | null;
       profiles: Array<{
         platform: string;
         handle: string;
@@ -84,6 +87,9 @@ export default function ThreadDetailPage() {
   const [sendLoading, setSendLoading] = useState(false);
   const [editingDraft, setEditingDraft] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
+  const [dmText, setDmText] = useState("");
+  const [dmSending, setDmSending] = useState(false);
+  const [dmError, setDmError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -152,6 +158,36 @@ export default function ThreadDetailPage() {
     }
   }
 
+  // INVARIANT: DM send only on explicit human action — never automated
+  async function handleSendDm() {
+    if (!dmText.trim()) return;
+    setDmSending(true);
+    setDmError(null);
+    try {
+      const res = await fetch(`/api/inbox/${params.threadId}/send-dm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: dmText.trim() }),
+      });
+
+      if (res.ok) {
+        setDmText("");
+        // Refresh thread
+        const threadRes = await fetch(`/api/inbox/${params.threadId}`);
+        if (threadRes.ok) {
+          setThread((await threadRes.json()) as Thread);
+        }
+      } else {
+        const data = await res.json();
+        setDmError(data.error || "Failed to send DM");
+      }
+    } catch {
+      setDmError("Network error sending DM");
+    } finally {
+      setDmSending(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -190,6 +226,9 @@ export default function ThreadDetailPage() {
               {creator.name ?? profile?.handle ?? "Unknown Creator"}
             </h1>
             <Badge>{thread.status}</Badge>
+            <Badge variant="outline">
+              {thread.channel === "instagram_dm" ? "📱 DM" : "📧 Email"}
+            </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
             {thread.campaignCreator.campaign.name}
@@ -358,6 +397,42 @@ export default function ThreadDetailPage() {
           </CardContent>
         </Card>
       ))}
+
+      {/* DM Compose — shown for instagram_dm threads or creators with Instagram handle */}
+      {(thread.channel === "instagram_dm" || creator.instagramHandle) && (
+        <Card className="border-indigo-200 bg-indigo-50">
+          <CardHeader>
+            <CardTitle className="text-base text-indigo-900">
+              📱 Send Instagram DM
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dmError && (
+              <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                {dmError}
+              </div>
+            )}
+            <textarea
+              className="w-full min-h-20 rounded-md border p-3 text-sm"
+              placeholder="Type your DM message…"
+              value={dmText}
+              onChange={(e) => setDmText(e.target.value)}
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Sending to @{creator.instagramHandle || "unknown"}
+              </p>
+              <Button
+                size="sm"
+                onClick={handleSendDm}
+                disabled={dmSending || !dmText.trim()}
+              >
+                {dmSending ? "Sending…" : "Send DM"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Message History */}
       <Card>

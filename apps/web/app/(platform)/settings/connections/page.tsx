@@ -26,6 +26,10 @@ function ConnectionsContent() {
   const searchParams = useSearchParams();
   const [brand, setBrand] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [unipileApiKey, setUnipileApiKey] = useState("");
+  const [unipileAccountId, setUnipileAccountId] = useState("");
+  const [unipileSaving, setUnipileSaving] = useState(false);
+  const [unipileMessage, setUnipileMessage] = useState<string | null>(null);
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
@@ -80,8 +84,38 @@ function ConnectionsContent() {
     );
   }
 
+  async function handleSaveUnipile() {
+    if (!brand || !unipileApiKey.trim()) return;
+    setUnipileSaving(true);
+    setUnipileMessage(null);
+    try {
+      const res = await fetch("/api/connections/unipile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: unipileApiKey.trim(),
+          accountId: unipileAccountId.trim() || undefined,
+        }),
+      });
+      if (res.ok) {
+        setUnipileMessage("Unipile connected successfully!");
+        setUnipileApiKey("");
+        setUnipileAccountId("");
+        fetchBrand();
+      } else {
+        const data = await res.json();
+        setUnipileMessage(`Error: ${data.error || "Failed to save"}`);
+      }
+    } catch {
+      setUnipileMessage("Network error saving credentials");
+    } finally {
+      setUnipileSaving(false);
+    }
+  }
+
   const gmailConn = getConnection("gmail");
   const shopifyConn = getConnection("shopify");
+  const unipileConn = getConnection("unipile");
 
   return (
     <div className="space-y-6">
@@ -170,6 +204,65 @@ function ConnectionsContent() {
                 Coming soon
               </span>
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Unipile (Instagram DMs) */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">📱 Unipile</CardTitle>
+              <Badge variant={unipileConn?.status === "connected" ? "default" : "secondary"}>
+                {unipileConn?.status === "connected" ? "Connected" : "Not connected"}
+              </Badge>
+            </div>
+            <CardDescription>
+              {unipileConn?.status === "connected"
+                ? "Instagram DMs enabled via Unipile"
+                : "Send Instagram DMs to creators via Unipile messaging API."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {unipileMessage && (
+              <div
+                className={`rounded border p-2 text-sm ${
+                  unipileMessage.startsWith("Error")
+                    ? "border-red-200 bg-red-50 text-red-800"
+                    : "border-green-200 bg-green-50 text-green-800"
+                }`}
+              >
+                {unipileMessage}
+              </div>
+            )}
+            {unipileConn?.status === "connected" ? (
+              <p className="text-sm text-muted-foreground">
+                Instagram DM integration is active. Daily limit: 20 DMs per brand.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  type="password"
+                  placeholder="Unipile API Key"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  value={unipileApiKey}
+                  onChange={(e) => setUnipileApiKey(e.target.value)}
+                />
+                <input
+                  type="text"
+                  placeholder="Unipile Account ID (optional)"
+                  className="w-full rounded-md border px-3 py-2 text-sm"
+                  value={unipileAccountId}
+                  onChange={(e) => setUnipileAccountId(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  onClick={handleSaveUnipile}
+                  disabled={unipileSaving || !unipileApiKey.trim()}
+                >
+                  {unipileSaving ? "Saving…" : "Connect Unipile"}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
