@@ -31,6 +31,14 @@ export async function GET() {
             settings: true,
             onboarding: true,
             connections: true,
+            emailAliases: {
+              select: {
+                id: true,
+                address: true,
+                displayName: true,
+                isPrimary: true,
+              },
+            },
           },
         },
       },
