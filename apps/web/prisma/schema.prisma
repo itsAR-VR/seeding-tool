@@ -1,0 +1,859 @@
+// Seed Scale — Canonical Prisma Schema
+// Based on finalplan.md Section 4: Canonical Data Model
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────────────
+// Tenancy & Billing
+// ──────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  avatarUrl String?
+
+  supabaseId String? @unique @map("supabase_id")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  organizationMemberships OrganizationMembership[]
+  brandMemberships        BrandMembership[]
+  activityLogs            ActivityLog[]
+
+  @@map("users")
+}
+
+model Organization {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  stripeCustomerId     String? @unique @map("stripe_customer_id")
+  stripeSubscriptionId String? @map("stripe_subscription_id")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships   OrganizationMembership[]
+  clients       Client[]
+  subscriptions Subscription[]
+
+  @@map("organizations")
+}
+
+model OrganizationMembership {
+  id     String @id @default(uuid())
+  role   String @default("member") // owner | admin | member
+
+  userId         String
+  organizationId String
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, organizationId])
+  @@map("organization_memberships")
+}
+
+model Client {
+  id   String @id @default(uuid())
+  name String
+
+  organizationId String
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brands Brand[]
+
+  @@map("clients")
+}
+
+model Brand {
+  id   String @id @default(uuid())
+  name String
+  slug String @unique
+
+  clientId String
+
+  client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships         BrandMembership[]
+  onboarding          BrandOnboarding?
+  settings            BrandSettings?
+  outreachTemplates   OutreachTemplate[]
+  products            BrandProduct[]
+  providerCredentials ProviderCredential[]
+  connections         BrandConnection[]
+  emailAliases        EmailAlias[]
+  sendingMetrics      SendingMetric[]
+  discoverySeeds      DiscoverySeed[]
+  campaigns           Campaign[]
+  creators            Creator[]
+  conversationThreads ConversationThread[]
+  interventionCases   InterventionCase[]
+  webhookEvents       WebhookEvent[]
+  backgroundJobs      BackgroundJob[]
+  activityLogs        ActivityLog[]
+  creatorSearchJobs   CreatorSearchJob[]
+
+  @@map("brands")
+}
+
+model BrandMembership {
+  id   String @id @default(uuid())
+  role String @default("member") // owner | editor | viewer
+
+  userId  String
+  brandId String
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, brandId])
+  @@map("brand_memberships")
+}
+
+model SubscriptionPlan {
+  id          String @id @default(uuid())
+  name        String // Free | Starter | Growth | Enterprise
+  stripePriceId String? @unique @map("stripe_price_id")
+  monthlyPrice  Int    @default(0) // cents
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  entitlements  SubscriptionEntitlement[]
+  subscriptions Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model SubscriptionEntitlement {
+  id    String @id @default(uuid())
+  key   String // max_brands | max_creators_per_campaign | max_campaigns | etc.
+  value String // numeric or boolean as string
+
+  planId String
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, key])
+  @@map("subscription_entitlements")
+}
+
+model Subscription {
+  id     String @id @default(uuid())
+  status String @default("active") // active | past_due | canceled | trialing
+
+  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+
+  organizationId String
+  planId         String
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan         SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+// ──────────────────────────────────────────────
+// Brand Configuration
+// ──────────────────────────────────────────────
+
+model BrandOnboarding {
+  id            String  @id @default(uuid())
+  currentStep   Int     @default(0)
+  completedSteps Json   @default("[]") // JSON array of completed step numbers
+  isComplete    Boolean @default(false)
+
+  brandId String @unique
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_onboardings")
+}
+
+model BrandSettings {
+  id String @id @default(uuid())
+
+  brandVoice          String? // brand voice description for AI
+  defaultFollowUpDays Int     @default(3)
+  maxFollowUps        Int     @default(3)
+  reminderWindowDays  Int     @default(14)
+  timezone            String  @default("America/New_York")
+
+  brandId String @unique
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_settings")
+}
+
+model OutreachTemplate {
+  id        String @id @default(uuid())
+  name      String
+  type      String // initial | follow_up_1 | follow_up_2 | follow_up_3 | reminder
+  subject   String
+  body      String @db.Text
+  isDefault Boolean @default(false)
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("outreach_templates")
+}
+
+model BrandProduct {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+  productUrl  String?
+
+  shopifyProductId  String? @map("shopify_product_id")
+  shopifyVariantId  String? @map("shopify_variant_id")
+  retailValue       Int?    // cents
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaignProducts CampaignProduct[]
+
+  @@map("brand_products")
+}
+
+model ProviderCredential {
+  id       String @id @default(uuid())
+  provider String // shopify | gmail | instagram | meta_creator_marketplace
+  label    String?
+
+  encryptedValue String @db.Text @map("encrypted_value") // AES-256-GCM encrypted
+  expiresAt      DateTime?
+  isValid        Boolean @default(true)
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, provider])
+  @@map("provider_credentials")
+}
+
+model BrandConnection {
+  id       String @id @default(uuid())
+  provider String // shopify | gmail | instagram
+  status   String @default("connected") // connected | disconnected | error
+
+  externalId  String? // e.g. Shopify store domain, Gmail address
+  metadata    Json?   // provider-specific data
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, provider])
+  @@map("brand_connections")
+}
+
+model EmailAlias {
+  id          String @id @default(uuid())
+  address     String
+  displayName String?
+  isPrimary   Boolean @default(false)
+  isWarmedUp  Boolean @default(false)
+  isPaused    Boolean @default(false)
+  dailyLimit  Int     @default(50)
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sendingMetrics SendingMetric[]
+
+  @@unique([brandId, address])
+  @@map("email_aliases")
+}
+
+model SendingMetric {
+  id   String @id @default(uuid())
+  date DateTime @db.Date
+
+  sent      Int @default(0)
+  bounced   Int @default(0)
+  complained Int @default(0)
+
+  aliasId String
+  brandId String
+
+  alias EmailAlias @relation(fields: [aliasId], references: [id], onDelete: Cascade)
+  brand Brand      @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([aliasId, date])
+  @@map("sending_metrics")
+}
+
+model DiscoverySeed {
+  id       String @id @default(uuid())
+  platform String // instagram | tiktok
+  handle   String
+  note     String?
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, platform, handle])
+  @@map("discovery_seeds")
+}
+
+// ──────────────────────────────────────────────
+// Campaign & Creator Backbone
+// ──────────────────────────────────────────────
+
+model Campaign {
+  id          String @id @default(uuid())
+  name        String
+  description String?
+  status      String @default("draft") // draft | active | paused | completed | archived
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaignProducts  CampaignProduct[]
+  campaignCreators  CampaignCreator[]
+
+  @@map("campaigns")
+}
+
+model CampaignProduct {
+  id String @id @default(uuid())
+
+  campaignId String
+  productId  String
+
+  campaign Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product  BrandProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([campaignId, productId])
+  @@map("campaign_products")
+}
+
+model Creator {
+  id String @id @default(uuid())
+
+  name     String?
+  email    String?
+  phone    String?
+  imageUrl String?
+  bio      String? @db.Text
+  notes    String? @db.Text
+
+  optedOut   Boolean   @default(false)
+  optOutDate DateTime?
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profiles          CreatorProfile[]
+  campaignCreators  CampaignCreator[]
+
+  @@map("creators")
+}
+
+model CreatorProfile {
+  id       String @id @default(uuid())
+  platform String // instagram | tiktok | youtube | twitter
+  handle   String
+  url      String?
+
+  followerCount   Int?
+  engagementRate  Float?
+  isVerified      Boolean @default(false)
+  metadata        Json?   // platform-specific stats
+
+  creatorId String
+
+  creator Creator @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([creatorId, platform])
+  @@map("creator_profiles")
+}
+
+/// CampaignCreator replaces the Airtable People table.
+/// Uses TWO status fields: reviewStatus (approval) + lifecycleStatus (execution).
+model CampaignCreator {
+  id String @id @default(uuid())
+
+  /// Human approval gate: pending | approved | declined | deferred
+  reviewStatus    String @default("pending") @map("review_status")
+
+  /// Post-approval execution: ready | outreach_sent | replied | address_confirmed |
+  /// order_created | shipped | delivered | posted | completed | opted_out | stalled
+  lifecycleStatus String @default("ready") @map("lifecycle_status")
+
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  declineReason String?
+
+  outreachCount  Int @default(0)
+  lastOutreachAt DateTime?
+  lastReplyAt    DateTime?
+
+  campaignId String
+  creatorId  String
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator  Creator  @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversationThread     ConversationThread?
+  shippingSnapshots      ShippingAddressSnapshot[]
+  shopifyOrder           ShopifyOrder?
+  costRecords            CostRecord[]
+  mentionAssets          MentionAsset[]
+  reminderSchedules      ReminderSchedule[]
+  aiDrafts               AIDraft[]
+
+  @@unique([campaignId, creatorId])
+  @@map("campaign_creators")
+}
+
+model CreatorSearchJob {
+  id     String @id @default(uuid())
+  status String @default("pending") // pending | running | completed | failed | paused
+
+  platform   String // instagram | meta_creator_marketplace
+  query      Json   // search parameters
+  resultCount Int   @default(0)
+  error       String?
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  results CreatorSearchResult[]
+
+  @@map("creator_search_jobs")
+}
+
+model CreatorSearchResult {
+  id String @id @default(uuid())
+
+  platform       String
+  handle         String
+  name           String?
+  followerCount  Int?
+  engagementRate Float?
+  profileUrl     String?
+  imageUrl       String?
+  bio            String? @db.Text
+  metadata       Json?
+
+  fitScore    Float? // AI-scored creator fit (0-1)
+  fitReasoning String? @db.Text
+
+  searchJobId String
+
+  searchJob CreatorSearchJob @relation(fields: [searchJobId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("creator_search_results")
+}
+
+// ──────────────────────────────────────────────
+// Inbox & Operations
+// ──────────────────────────────────────────────
+
+model ConversationThread {
+  id      String @id @default(uuid())
+  subject String?
+  status  String @default("open") // open | closed | snoozed
+
+  externalThreadId String? @unique @map("external_thread_id") // Gmail thread ID
+
+  campaignCreatorId String @unique @map("campaign_creator_id")
+  brandId           String
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  brand           Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages    Message[]
+  aiArtifacts AIArtifact[]
+
+  @@map("conversation_threads")
+}
+
+model Message {
+  id        String @id @default(uuid())
+  direction String // inbound | outbound
+  channel   String @default("email") // email | manual
+
+  fromAddress String?
+  toAddress   String?
+  subject     String?
+  body        String  @db.Text
+  bodyHtml    String? @db.Text @map("body_html")
+
+  externalMessageId String? @unique @map("external_message_id") // Gmail message ID
+
+  classification String? // interested | address_provided | question | decline | opt_out | unclear | commercial
+  confidence     Float?
+
+  threadId String
+
+  thread ConversationThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("messages")
+}
+
+model AIArtifact {
+  id   String @id @default(uuid())
+  type String // classification | extraction | fit_score | draft | summary
+
+  input  Json?
+  output Json?
+  model  String? // e.g. gpt-4o
+  tokens Int?
+
+  threadId String?
+
+  thread ConversationThread? @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_artifacts")
+}
+
+model AIDraft {
+  id      String @id @default(uuid())
+  type    String // reply | outreach | follow_up | reminder
+  status  String @default("draft") // draft | approved | sent | discarded
+
+  subject String?
+  body    String  @db.Text
+
+  approvedAt DateTime?
+  approvedBy String?
+
+  campaignCreatorId String @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_drafts")
+}
+
+model ShippingAddressSnapshot {
+  id String @id @default(uuid())
+
+  fullName    String?
+  line1       String?
+  line2       String?
+  city        String?
+  state       String?
+  postalCode  String?  @map("postal_code")
+  country     String?
+  phone       String?
+
+  source     String @default("ai_extracted") // ai_extracted | manual | creator_provided
+  isActive   Boolean @default(false)
+  isLocked   Boolean @default(false)
+  confirmedAt DateTime?
+  confirmedBy String?
+
+  campaignCreatorId String @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("shipping_address_snapshots")
+}
+
+model ShopifyOrder {
+  id String @id @default(uuid())
+
+  shopifyOrderId     String  @unique @map("shopify_order_id")
+  shopifyOrderNumber String? @map("shopify_order_number")
+  status             String  @default("created") // created | processing | shipped | delivered | cancelled
+
+  totalPrice Int? // cents
+  currency   String @default("USD")
+
+  campaignCreatorId String @unique @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fulfillmentEvents FulfillmentEvent[]
+
+  @@map("shopify_orders")
+}
+
+model FulfillmentEvent {
+  id     String @id @default(uuid())
+  status String // confirmed | in_transit | out_for_delivery | delivered | failure | cancelled
+
+  trackingNumber  String? @map("tracking_number")
+  trackingUrl     String? @map("tracking_url")
+  carrier         String?
+  estimatedDelivery DateTime? @map("estimated_delivery")
+
+  externalEventId String? @unique @map("external_event_id")
+
+  orderId String
+
+  order ShopifyOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("fulfillment_events")
+}
+
+model CostRecord {
+  id       String @id @default(uuid())
+  type     String // product | shipping | platform_fee | other
+  amount   Int    // cents
+  currency String @default("USD")
+  note     String?
+
+  campaignCreatorId String @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cost_records")
+}
+
+model MentionAsset {
+  id       String @id @default(uuid())
+  platform String // instagram | tiktok | youtube | twitter
+  mediaUrl String @map("media_url")
+  type     String? // post | story | reel | video
+
+  caption  String? @db.Text
+  likes    Int?
+  comments Int?
+  views    Int?
+  postedAt DateTime? @map("posted_at")
+
+  campaignCreatorId String @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// Dedupe by platform + mediaUrl
+  @@unique([platform, mediaUrl])
+  @@map("mention_assets")
+}
+
+model ReminderSchedule {
+  id     String @id @default(uuid())
+  type   String // post_reminder | follow_up_reminder
+  status String @default("pending") // pending | sent | cancelled | suppressed
+
+  scheduledFor DateTime @map("scheduled_for")
+  sentAt       DateTime?
+  cancelReason String?
+
+  campaignCreatorId String @map("campaign_creator_id")
+
+  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("reminder_schedules")
+}
+
+model InterventionCase {
+  id       String @id @default(uuid())
+  type     String // captcha | auth_failure | duplicate_order | unclear_reply | manual_review | other
+  status   String @default("open") // open | in_progress | resolved | reopened
+  priority String @default("normal") // low | normal | high | critical
+
+  title       String
+  description String? @db.Text
+  resolution  String? @db.Text
+
+  assigneeId String?
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  brandId            String
+  campaignCreatorId  String? @map("campaign_creator_id")
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("intervention_cases")
+}
+
+model WebhookEvent {
+  id       String @id @default(uuid())
+  provider String // stripe | shopify | gmail | instagram
+  eventType String @map("event_type")
+
+  externalEventId String? @unique @map("external_event_id")
+  payload         Json
+  status          String @default("pending") // pending | processing | processed | failed
+  error           String?
+  attempts        Int    @default(0)
+  processedAt     DateTime?
+
+  brandId String?
+
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([provider, status])
+  @@map("webhook_events")
+}
+
+model BackgroundJob {
+  id        String @id @default(uuid())
+  type      String // outreach | follow_up | reply_process | order_create | fulfillment_sync | reminder_send | mention_process | search_dispatch | billing_sync | alias_warmup | health_check
+  status    String @default("pending") // pending | running | completed | failed | cancelled
+
+  dedupeKey String? @unique @map("dedupe_key")
+  payload   Json?
+  result    Json?
+  error     String?
+  attempts  Int    @default(0)
+  maxAttempts Int  @default(3) @map("max_attempts")
+
+  scheduledFor DateTime? @map("scheduled_for")
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  brandId String?
+
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, status])
+  @@index([scheduledFor])
+  @@map("background_jobs")
+}
+
+model ActivityLog {
+  id     String @id @default(uuid())
+  action String // e.g. creator.approved, outreach.sent, order.created, etc.
+
+  entityType String? @map("entity_type")
+  entityId   String? @map("entity_id")
+  metadata   Json?
+
+  userId  String?
+  brandId String
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  brand Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([brandId, action])
+  @@index([entityType, entityId])
+  @@map("activity_logs")
+}

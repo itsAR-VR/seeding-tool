@@ -1,10 +1,17 @@
-type PrismaClientPlaceholder = null;
+import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClientPlaceholder;
+  prisma: PrismaClient;
 };
 
-export const prisma = globalForPrisma.prisma ?? null;
+export const prisma =
+  globalForPrisma.prisma ||
+  new PrismaClient({
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["query", "error"]
+        : ["error"],
+  });
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
