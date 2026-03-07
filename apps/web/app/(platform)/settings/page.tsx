@@ -1,4 +1,25 @@
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+const settingsLinks = [
+  {
+    href: "/settings/brand",
+    title: "Brand",
+    description: "Update your brand name, website, and logo.",
+    icon: "🏷️",
+  },
+  {
+    href: "/settings/connections",
+    title: "Connections",
+    description: "Manage Gmail, Shopify, and other integrations.",
+    icon: "🔌",
+  },
+];
 
 export default function SettingsPage() {
   return (
@@ -10,14 +31,21 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>
-            Billing controls, provider credentials, and brand configuration landing here as Phase 9 progresses.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        {settingsLinks.map((link) => (
+          <Link key={link.href} href={link.href}>
+            <Card className="transition-colors hover:bg-accent/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <span>{link.icon}</span>
+                  {link.title}
+                </CardTitle>
+                <CardDescription>{link.description}</CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
