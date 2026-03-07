@@ -1,42 +1,40 @@
-# Phase 3b — Implement marketing route discovery + capture pipeline
+# Phase 3b — TKS teardown (page-by-page structure + typography + motion evidence)
 
 ## Focus
-Automatically discover all marketing pages and capture deterministic references (screenshots, DOM, tokens) plus observed micro-interactions/animations.
+Perform a deep, page-by-page teardown of TKS pages: information architecture, layout patterns, typography, and micro-animations; produce reusable notes that can be mapped to our product funnel.
 
 ## Inputs
-- Phase 3a scaffold: config loader, artifact directories, Playwright config.
-- Marketing sources:
-  - `https://aha.inc/robots.txt` → `sitemap.xml`
-  - internal crawl starting at `/`
+- `artifacts/<run-id>/competitors/tks/routes.json` (authoritative list).
+- Baseline screenshots/DOM snapshots from Phase 3a.
 
 ## Work
-1. Discover routes (merge two sources):
-   - Parse sitemap URLs and normalize to route keys.
-   - Crawl internal links via BFS up to `MAX_DEPTH`, collecting same-origin routes.
-   - Merge/dedupe and retain provenance (`discoveredFrom: ['sitemap','crawl']`).
-2. Verify routes:
-   - `goto` each candidate and record final URL, redirect chain, status, and “soft 404” heuristics.
-   - Write `artifacts/<run-id>/marketing/routes.json`.
-3. Baseline capture (reduced motion):
-   - wait for fonts (`document.fonts.ready`)
-   - scroll to load lazy content
-   - per viewport: full-page screenshot, above-the-fold screenshot, DOM snapshot, a11y snapshot.
-4. Motion/micro-interaction capture:
-   - enable motion
-   - install listeners for `animation*` and `transition*` events
-   - run interaction script per page: hover CTAs/nav, open menus/accordions/modals, segmented scroll for scroll-triggered animations.
-   - save event logs and short video (at least desktop).
-5. Token extraction:
-   - fonts used (computed styles), type scale, color histogram, radii, shadows
-   - extract CSS `@keyframes` names from CSS responses and map to observed usage where possible.
-   - write `artifacts/<run-id>/marketing/tokens.json` + `animations.json`.
+For each high-priority TKS page (start with `/`, `/apply-now`, `/in-person`, `/virtual`, `/summer-program`, `/about`, `/financial-aid`, `/faq`, `/alumni`):
+1. **Structure outline**
+   - Break the page into sections and components (hero, social proof, program breakdown, outcomes, FAQ, CTA blocks, footer).
+2. **Typography inventory**
+   - Capture computed styles for body, H1/H2/H3, nav, buttons, and key callouts (family, size, weight, letter-spacing, line-height).
+   - Note any Webfont loading behavior and fallback fonts.
+3. **Motion inventory (TKS-specific)**
+   - Identify scroll-triggered animations, text-splitting effects, hover interactions, and transitions.
+   - Capture evidence as either:
+     - short per-interaction videos, or
+     - step screenshots with timestamps (start → mid → end states).
+4. **Interaction walkthroughs**
+   - Document how navigation, “menu” behavior, and key CTAs behave (including any sticky/animated header behaviors).
+5. **Reusable pattern extraction**
+   - Normalize patterns into named templates (e.g., “mega-hero + marquee CTA”, “program section scroller”, “testimonial slider”, “FAQ accordion”).
+
+Documentation method: for each page, apply a strict loop (Plan → Locate → Extract → Solve → Verify → Synthesize) so claims are grounded in captured artifacts.
 
 ## Output
-- `artifacts/<run-id>/marketing/routes.json`
-- Per-route artifacts under `artifacts/<run-id>/marketing/<routeKey>/...`
-- `artifacts/<run-id>/marketing/tokens.json`
-- `artifacts/<run-id>/marketing/animations.json`
+- `docs/audit/pages/competitors/tks/<path>.md` (one file per page) containing:
+  - section map
+  - component list
+  - typography table
+  - motion notes with links to local artifacts (screenshots/videos)
+  - “what we’ll reuse” vs “what we’ll change for our product”
+- `artifacts/<run-id>/competitors/tks/typography.json` and `motion.json` updated with aggregated findings.
 
 ## Handoff
-Phase 3c reuses the same capture primitives but adds a manual auth bootstrap and flow recording for onboarding.
+Subphase 3c should mirror this process for Refunnel, producing comparable docs and JSON so we can later synthesize cross-site patterns directly.
 

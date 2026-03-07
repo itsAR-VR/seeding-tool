@@ -1,7 +1,7 @@
 # Fusion Motion
 
 ## TKS Keyframes
-- spin
+- n/a
 
 ## Refunnel Keyframes
-- SHW, contextAppear, errorNavFadeOut, fadeAway, fadeIn, fadeOut, indicate, rotate, spin
+- n/a

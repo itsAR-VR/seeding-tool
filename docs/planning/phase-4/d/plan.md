@@ -1,68 +1,39 @@
-# Phase 4d — Implement authenticated app runners (bootstrap + onboarding + IA crawl)
+# Phase 4d — Implement authenticated platform crawl + capture + network logs
 
 ## Focus
-Audit the owned authenticated platform (`platform.aha.inc`) end-to-end:
-- manual Google OAuth bootstrap (headed)
-- onboarding flow recording (choose sample data)
-- authenticated IA crawl (“everything reachable”) + per-route capture + network logs
+Crawl “everything reachable” in the authenticated app via UI navigation and capture per-route page artifacts, plus network behavior (HAR + request index) for functional parity mapping.
 
 ## Inputs
-- Phase 4b capture primitives (including network capture).
-- Platform target: `https://platform.aha.inc`
-- Login method: Google OAuth/SSO (manual completion), then onboarding → dashboard.
+- `.auth/platform.afterOnboarding.storageState.json` from Phase 4c.
+- Capture primitives from Phase 4b.
+- Safety defaults: `ALLOW_DESTRUCTIVE=0`, `ALLOW_WRITES=1` (safe creates only) within test org.
 
 ## Work
-1. Bootstrap runner (`audit:platform:bootstrap`):
-   - launch headed browser at `/login` (or canonical entry)
-   - pause for human OAuth completion; do not automate MFA/CAPTCHA
-   - detect logged-in state using combined heuristics (URL + app shell + API success)
-   - **Save storageState immediately after login** to `.auth/platform.afterLogin.storageState.json` (even before onboarding)
-   - immediately start onboarding recorder once onboarding is visible
-   - **Onboarding fallbacks:**
-     - If "sample data" option is not visible, pause and log: `⚠️ Sample data option not found. Please select manually.`
-     - If form validation rejects `PW_TEST_*` values, log the field name and pause for human input
-     - If onboarding flow has changed, capture what's visible and note discrepancies
-   - **Idempotency:** Before creating entities, check if `PW_TEST_*` entities already exist; skip creation if found
-   - save `.auth/platform.afterOnboarding.storageState.json` with metadata `{ "onboardingComplete": true/false }`
-   - write `docs/audit/flows/platform/onboarding.md`.
-2. Authenticated crawl runner (`audit:platform`):
-   - load storage state and navigate to dashboard
-   - discover routes via UI crawl:
-     - nav/sidebar links, menu items, tab controls
-     - BFS click-through with robust wait strategy (URL change or content marker changes)
-   - capture each route:
-     - baseline captures across viewports
-     - motion evidence for key interactions (hover menus, dropdowns, modals)
-   - capture network:
-     - run-level HAR + request index
-3. Flow detection (safe mode):
+1. Implement `audit:platform` runner:
+   - create context with storageState
+   - navigate to a stable post-login route (dashboard)
+2. Discover routes (SPA-aware UI crawl):
+   - collect link candidates from nav/sidebar/menu items and tab controls
+   - BFS click-through: after interaction, wait for URL change or stable content-change heuristic
+   - record route metadata (title/primary heading, how reached)
+   - output `artifacts/<run-id>/platform/routes.json`
+3. Per-route capture:
+   - baseline reduced-motion captures across viewports
+   - motion capture for micro-interactions (hover menus, dropdowns, modals)
+4. Network capture:
+   - write a run-level HAR: `artifacts/<run-id>/platform/network/platform.har`
+   - write request index (JSONL) with method/url/status/resourceType/timing
+5. Flow discovery (non-destructive):
    - detect top CTAs (“Create/New/Add/Next/Save/Publish”)
-   - open and document wizards/modals as flows; do not perform destructive actions unless `ALLOW_DESTRUCTIVE=1`
-   - prefix created entities with `PW_TEST_` and keep everything in test org.
+   - if safe, open and record resulting wizard/modal as a flow stub (no destructive submits)
+   - enforce `ALLOW_DESTRUCTIVE` gating.
 
 ## Output
-- `.auth/platform.afterLogin.storageState.json` (gitignored) — saved immediately after login
-- `.auth/platform.afterOnboarding.storageState.json` (gitignored) — saved after onboarding with `onboardingComplete` flag
 - `artifacts/<run-id>/platform/routes.json`
-- `artifacts/<run-id>/platform/network/platform.har` + request index
-- per-route artifacts under `artifacts/<run-id>/platform/<routeKey>/...`
-- `docs/audit/flows/platform/onboarding.md` (+ additional flow docs as discovered)
-
-## Output (Actual)
-- Implemented onboarding flow recorder and bootstrap runner:
-  - `src/audit/capture/flow.ts`
-  - `src/audit/runners/platform-bootstrap.ts`
-- Implemented authenticated platform crawler:
-  - `src/audit/runners/platform.ts`
-  - Uses HAR capture + request JSONL + scrubbed HAR output
-
-## Verification
-- [ ] `npm run audit:platform:bootstrap` (headed) produces `.auth/platform.afterLogin.storageState.json`
-- [ ] After onboarding completes, `.auth/platform.afterOnboarding.storageState.json` exists
-- [ ] `npm run audit:platform` (using storageState) navigates to dashboard without manual login
-- [ ] `artifacts/<run-id>/platform/routes.json` contains ≥10 routes discovered from UI
-- [ ] HAR file exists and `Authorization`/`Cookie` values are `[REDACTED]`
-- [ ] `docs/audit/flows/platform/onboarding.md` contains step table with screenshots
+- `artifacts/<run-id>/platform/network/platform.har`
+- `artifacts/<run-id>/platform/network/requests.jsonl`
+- Per-route artifacts under `artifacts/<run-id>/platform/<routeKey>/...`
 
 ## Handoff
-Phase 4e should implement the Markdown reporter + runbook, then wire `audit:report` to regenerate docs from the new artifacts.
+Phase 4e consumes `routes.json`, token/animation inventories, and flow artifacts to update the living Markdown knowledge base and indexes.
+

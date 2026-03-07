@@ -13,7 +13,10 @@
     "audit:platform": "tsx src/audit/runners/platform.ts",
     "audit:competitors": "tsx src/audit/runners/competitors.ts",
     "audit:report": "tsx src/audit/report/report.ts",
-    "audit:all": "npm run audit:marketing && npm run audit:competitors && npm run audit:report"
+    "audit:all": "npm run audit:marketing && npm run audit:competitors && npm run audit:report",
+    "web:dev": "cd apps/web && npm run dev",
+    "web:build": "cd apps/web && npm run build",
+    "web:start": "cd apps/web && npm run start"
   },
   "keywords": [],
   "author": "",

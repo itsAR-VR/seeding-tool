@@ -1,40 +1,97 @@
-# Phase 2b — TKS teardown (page-by-page structure + typography + motion evidence)
+# Phase 2b — Implement marketing route discovery + capture pipeline
 
 ## Focus
-Perform a deep, page-by-page teardown of TKS pages: information architecture, layout patterns, typography, and micro-animations; produce reusable notes that can be mapped to our product funnel.
+Automatically discover all marketing routes and capture stable visual + structural references (multi-viewport screenshots, DOM snapshots, tokens, and animation inventory) for each route.
 
 ## Inputs
-- `artifacts/<run-id>/competitors/tks/routes.json` (authoritative list).
-- Baseline screenshots/DOM snapshots from Phase 2a.
+- Phase 2a scaffold:
+  - Playwright config
+  - Config/env var contract
+  - Artifact output directories
+  - `audit:marketing` command
+- Marketing discovery sources:
+  - `robots.txt` and `sitemap.xml`
+  - Internal link crawl starting at `/`
 
 ## Work
-For each high-priority TKS page (start with `/`, `/apply-now`, `/in-person`, `/virtual`, `/summer-program`, `/about`, `/financial-aid`, `/faq`, `/alumni`):
-1. **Structure outline**
-   - Break the page into sections and components (hero, social proof, program breakdown, outcomes, FAQ, CTA blocks, footer).
-2. **Typography inventory**
-   - Capture computed styles for body, H1/H2/H3, nav, buttons, and key callouts (family, size, weight, letter-spacing, line-height).
-   - Note any Webfont loading behavior and fallback fonts.
-3. **Motion inventory (TKS-specific)**
-   - Identify scroll-triggered animations, text-splitting effects, hover interactions, and transitions.
-   - Capture evidence as either:
-     - short per-interaction videos, or
-     - step screenshots with timestamps (start → mid → end states).
-4. **Interaction walkthroughs**
-   - Document how navigation, “menu” behavior, and key CTAs behave (including any sticky/animated header behaviors).
-5. **Reusable pattern extraction**
-   - Normalize patterns into named templates (e.g., “mega-hero + marquee CTA”, “program section scroller”, “testimonial slider”, “FAQ accordion”).
-
-Documentation method: for each page, apply a strict loop (Plan → Locate → Extract → Solve → Verify → Synthesize) so claims are grounded in captured artifacts.
+1. Route discovery (two sources, then merge):
+   - Sitemap parse:
+     - Fetch `${MARKETING_BASE_URL}/robots.txt`, detect sitemap URL(s), fetch sitemap XML.
+     - Extract `<loc>` URLs and normalize to route keys (strip origin, normalize slashes).
+   - Crawl:
+     - Start at `${MARKETING_BASE_URL}/`.
+     - Collect all internal `<a href>` targets (same origin), BFS up to `MAX_DEPTH`.
+   - Merge and normalize:
+     - Deduplicate by normalized routeKey.
+     - Keep a `discoveredFrom: ['sitemap','crawl']` list.
+2. Route verification:
+   - For each candidate URL, `goto` and record:
+     - initial URL, final URL, redirect chain, HTTP status code.
+     - “Next.js 404 shell” detection (title/heading patterns).
+   - Produce `artifacts/<run-id>/marketing/routes.json`.
+3. Baseline capture (deterministic reference):
+   - Emulate reduced motion.
+   - Wait for `document.fonts.ready`.
+   - Scroll page to trigger lazy loads, return to top.
+   - Capture per viewport:
+     - full-page screenshot
+     - above-the-fold screenshot
+     - DOM snapshot (`page.content()`)
+4. Motion/interaction capture:
+   - Motion enabled.
+   - For each route, perform:
+     - hover over primary nav items and CTAs
+     - open/close menus, accordions, modals (if present)
+     - slow scroll to capture scroll-triggered animations
+   - Capture short video and “before/after” screenshots of key states.
+5. Token + animation inventory:
+   - Extract computed typography tokens (font families, sizes, weights, tracking, line-heights) for headings/buttons/body.
+   - Extract color palette usage (color/background/border/shadow).
+   - Parse CSS responses to extract `@keyframes` names and map any observed `animation-name` usage on DOM elements.
+   - Produce `artifacts/<run-id>/marketing/tokens.json` and `animations.json`.
 
 ## Output
-- `docs/audit/pages/competitors/tks/<path>.md` (one file per page) containing:
-  - section map
-  - component list
-  - typography table
-  - motion notes with links to local artifacts (screenshots/videos)
-  - “what we’ll reuse” vs “what we’ll change for our product”
-- `artifacts/<run-id>/competitors/tks/typography.json` and `motion.json` updated with aggregated findings.
+- Marketing artifacts:
+  - `artifacts/<run-id>/marketing/routes.json`
+  - `artifacts/<run-id>/marketing/<routeKey>/{screenshots,dom,tokens,animations,video}/...`
+  - `artifacts/<run-id>/marketing/tokens.json`
+  - `artifacts/<run-id>/marketing/animations.json`
 
 ## Handoff
-Subphase 2c should mirror this process for Refunnel, producing comparable docs and JSON so we can later synthesize cross-site patterns directly.
+Subphase 2c should reuse the same capture primitives for the platform app, but add an auth bootstrap and SPA-aware route discovery/crawling.
 
+## Progress This Turn (Terminus Maximus)
+- Work done:
+  - Verified route discovery and capture pipeline is implemented in `src/audit/runners/marketing.ts`.
+  - Verified canonical run artifacts for marketing exist and are linked by docs index.
+  - Verified aggregate token + animation outputs are produced at run root.
+- Commands run:
+  - `cat src/audit/runners/marketing.ts` — pass; sitemap + crawl merge, per-viewport captures, tokens, animations, routes implemented.
+  - `node - <<'NODE' ... NODE` (route counts) — pass; marketing routes count = 28 in canonical run.
+  - `cat docs/audit/index.md` — pass; marketing artifacts linked for canonical run.
+- Blockers:
+  - None for this subphase.
+- Next concrete steps:
+  - None; this subphase is complete.
+
+## Output (Execution Status — 2026-03-02)
+- Complete.
+- Evidence:
+  - `artifacts/20260302-legacy/marketing/routes.json`
+  - `artifacts/20260302-legacy/marketing/tokens.json`
+  - `artifacts/20260302-legacy/marketing/animations.json`
+  - `docs/audit/pages/marketing/home.md`
+
+## Handoff (Execution Status — 2026-03-02)
+- 2c should reuse capture primitives from `src/audit/capture/**` and add authenticated SPA crawl via storage state.
+
+## Progress This Turn (Terminus Maximus)
+- Work done:
+  - Re-ran marketing audit in landing-only scope to produce fresh canonical evidence for Phase 2 closure.
+- Commands run:
+  - `RUN_ID=20260302-landing-only MAX_ROUTES=80 CAPTURE_MODE=both npm run audit:marketing` — pass; `✅ Marketing audit complete. Routes: 28`.
+  - `RUN_ID=20260302-landing-only npm run audit:report` — pass; `✅ Audit docs generated for run 20260302-landing-only`.
+- Blockers:
+  - None.
+- Next concrete steps:
+  - Use `20260302-landing-only` as Phase 2 closure run id for landing-page-only scope.

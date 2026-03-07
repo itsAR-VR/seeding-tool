@@ -2,4 +2,4 @@
 
 | Step | Label | Action | Screenshot |
 |---|---|---|---|
-| 1 | Advertiser Platform | Aha | manual | artifacts/20260204-120710/platform/flows/campaign-create/step-1/screenshots/desktop-above-fold.png |
+| 1 | Continue to Aha | unauthenticated baseline capture | artifacts/20260302-legacy/platform/flows/campaign-create/step-1/screenshots/desktop-above-fold.png |

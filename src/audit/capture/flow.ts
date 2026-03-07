@@ -32,6 +32,12 @@ export interface FlowRecordOptions {
   allowWrites: boolean;
 }
 
+export interface UnauthFlowBaselineOptions {
+  flowName: string;
+  outDir: string;
+  reason: string;
+}
+
 function parseBooleanFlag(value: string | undefined): boolean {
   if (!value) return false;
   return ['1', 'true', 'yes', 'y'].includes(value.toLowerCase());
@@ -176,6 +182,34 @@ async function stepLabel(page: Page): Promise<string> {
     const heading = document.querySelector('h1,h2');
     return heading?.textContent?.trim() || '';
   });
+}
+
+export async function captureUnauthFlowBaseline(page: Page, options: UnauthFlowBaselineOptions): Promise<FlowStep[]> {
+  await ensureNameHelper(page);
+  await ensureDir(options.outDir);
+
+  const stepDir = path.join(options.outDir, 'step-1');
+  await ensureDir(stepDir);
+
+  const baseline = await captureBaseline(page, { outDir: stepDir, viewportName: 'desktop' });
+  const label = await stepLabel(page);
+  const step: FlowStep = {
+    index: 1,
+    url: page.url(),
+    title: await page.title(),
+    stepLabel: label || 'Unauthenticated baseline',
+    fields: [],
+    action: 'unauthenticated baseline capture',
+    screenshot: baseline.screenshotAboveFold,
+    domSnapshot: baseline.domSnapshot,
+  };
+
+  const steps = [step];
+  await writeJson(path.join(options.outDir, 'steps.json'), steps);
+  const note = `# ${options.flowName} unauthenticated baseline\n\n${options.reason}\n\n- URL: ${step.url}\n- Screenshot: ${step.screenshot}\n- DOM snapshot: ${step.domSnapshot}\n`;
+  await writeText(path.join(options.outDir, 'unauth-baseline.md'), note);
+
+  return steps;
 }
 
 export async function recordFlow(page: Page, options: FlowRecordOptions): Promise<FlowStep[]> {

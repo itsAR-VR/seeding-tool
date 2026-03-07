@@ -1,180 +1,76 @@
-# Phase 4 — Unified Playwright audit system (owned + competitors) + blueprint outputs
+# Phase 4 — Implement Aha Playwright audit pack (marketing + platform) + living docs
+
+> **Status:** Superseded by the merged plan in `docs/planning/phase-5/plan.md`. Phase 4 was never implemented; Phase 5 is the canonical starting point.
 
 ## Purpose
-Consolidate Phase 1 (Aha marketing + platform audit) and Phase 2 (competitor teardown) into one decision-complete plan for a single Playwright-based audit system that captures pages, tokens, and micro-animations into living docs and build-ready blueprints.
+Implement the Playwright-based “audit pack” that captures `aha.inc` (marketing) and `platform.aha.inc` (authenticated app) into deterministic artifacts + living Markdown docs, so we can rebuild the UI/UX 1:1 in custom code (Next.js + Tailwind) without losing animations/micro-interactions.
 
 ## Context
-We have two overlapping plans:
-- **Phase 1** focuses on building an “audit pack” for our owned product (`aha.inc` + `platform.aha.inc`), including auth bootstrap, onboarding recording, and an app “everything” crawl.
-- **Phase 2** focuses on competitor teardown (`tks.world` + `refunnel.com`) with anti-bot hygiene and a “fusion” motion/typography/component spec.
+You own `aha.inc` and need to migrate/recreate the experience (including micro-animations) into a custom-code implementation. We will treat the live sites as black boxes and derive structure from DOM/CSS/runtime behavior + network traffic.
 
-Both phases require the same core primitives (route discovery, deterministic page capture, motion evidence capture, token extraction, and Markdown reporting). This phase merges the overlap and keeps the best parts:
-- Phase 1’s **auth + flow recorder + network logging** (HAR + request index).
-- Phase 2’s **throttled competitor crawling** + **explicit “no asset/code copying” constraints** + **motion/typography library synthesis**.
+Current known shape (from reconnaissance):
+- Marketing (`https://aha.inc`) is served by Next.js and Tailwind (Tailwind CSS banner indicates v4.1.4). It loads multiple fonts (Geist, Inter, Plus Jakarta Sans, Poppins, DM Sans, etc.) via `@font-face` in Next static CSS.
+- Marketing route discovery is supported by `robots.txt` → `sitemap.xml` (currently includes `/pricing`, `/privacy-policy`, `/terms-of-service`, `/caseStudies`).
+- Platform (`https://platform.aha.inc`) is a SPA served from S3/CloudFront with bundles under `https://static.headai.io/advertiser-platform/...`, and uses DM Sans + Bitter (Google Fonts + bundled `@font-face`).
+- Auth is Google OAuth/SSO; after login we must go through onboarding (choosing sample data) and then land in the dashboard. We are not signed in yet, so the audit harness must support a manual “headed bootstrap” pause.
+
+We will run against production but only within a test org, and avoid destructive actions by default.
 
 ## Concurrent Phases
 
 | Phase | Status | Overlap | Coordination |
 |-------|--------|---------|--------------|
-| Phase 1 | Superseded | Domain: Aha audit blueprint | Merged into Phase 4 |
-| Phase 2 | Superseded | Domain: Competitor teardown | Merged into Phase 4 |
-| Phase 3 | Superseded | Domain: Aha audit harness | Never implemented; Phase 4 is the canonical starting point |
-
-**Note:** The repo is empty (no code exists). Phase 4a must scaffold from scratch.
+| Phase 2 | Active | Domain: Aha audit blueprint + output contract | Phase 4 implements Phase 2. Keep the same output conventions (`artifacts/<run-id>/...`, `.auth/`, `docs/audit/...`). |
+| Phase 3 | Active | Domain: Playwright teardown/capture tooling | Reuse shared capture primitives; avoid creating a second, incompatible artifact/doc structure. |
 
 ## Objectives
-* [x] Ship one reusable Playwright audit harness that supports multiple sites and auth/no-auth contexts.
-* [x] Implement deterministic baseline (reduced motion) and motion evidence (micro-interactions) capture primitives.
-* [x] Implement OAuth bootstrap runner (manual) and onboarding flow recorder for the authenticated app.
-* [ ] Capture the full campaign creation flow and catalog key dashboard surfaces.
-* [x] Implement competitor marketing crawlers with throttling and challenge detection.
-* [x] Implement living Markdown docs generation (pages + index + runbook).
-* [x] Implement blueprint generation outputs:
-  - Owned-site rebuild blueprint (Aha 1:1 parity)
-  - Competitor “fusion” blueprint (patterns + motion library, using original assets)
+* [ ] Create a runnable Node/TypeScript + Playwright audit harness with a stable CLI contract.
+* [ ] Capture marketing pages page-by-page: multi-viewport screenshots, DOM snapshots, tokens, and observed animation/micro-interaction evidence.
+* [ ] Support platform manual Google login bootstrap, then automatically record onboarding (sample data) into a flow doc with step artifacts.
+* [ ] Crawl authenticated platform IA (“everything reachable”) and capture per-route pages + network behavior (HAR + request index).
+* [ ] Generate and continuously update a living Markdown knowledge base (one file per page + flow docs + global index).
 
 ## Constraints
-- **Authorization:** only audit/crawl sites you are authorized to access. Competitor capture is for internal reference; do not copy proprietary code/assets.
-- **No bypassing bot protections:** do not bypass CAPTCHA/MFA/Cloudflare/Turnstile; use headed/manual checkpoints and throttle.
-- **Production safety (owned app):** default `ALLOW_DESTRUCTIVE=0`; allow only safe writes needed to proceed in a test org, prefixing data with `PW_TEST_`.
-- **Data sensitivity:** artifacts may contain sensitive data (screenshots/HAR). Store under `artifacts/` and keep `artifacts/` + `.auth/` out of git.
-- **Determinism:** baseline capture runs with reduced motion and stable waits (`document.fonts.ready`, timeboxed network idle).
-- **Single output contract:** do not create parallel artifact/doc directory conventions per site.
-
-## Repo Reality Check (RED TEAM)
-
-- What exists today:
-  - `src/audit/runners/platform-campaign.ts`
-  - `src/audit/runners/platform.ts`
-  - `src/audit/capture/flow.ts`
-  - `docs/audit/flows/platform/onboarding.md`
-  - `docs/audit/flows/platform/campaign-create.md`
-- What the plan assumes:
-  - Manual login + manual campaign flow navigation during capture
-  - Storage state files present in `.auth/`
-  - Route discovery relies on in-app anchors (may undercount SPA routes)
-- Verified touch points:
-  - Platform flow capture: `src/audit/capture/flow.ts`
-  - Campaign flow runner: `src/audit/runners/platform-campaign.ts`
-  - Platform audit runner: `src/audit/runners/platform.ts`
-
-## RED TEAM Findings (Gaps / Weak Spots)
-
-### Highest-risk failure modes
-- Manual campaign flow not completed within step timeout → increase `FLOW_STEP_TIMEOUT_MS` or re-run with user ready.
-
-### Missing or ambiguous requirements
-- “Complete catalog” scope is undefined → need a list of must-cover surfaces or deep links.
-
-### Repo mismatches (fix the plan)
-- Platform route discovery currently captures only 6 routes → add deep-link seeding or nav click exploration if full catalog required.
-
-### Performance / timeouts
-- Manual flow capture depends on per-step timeout → document recommended values (60–120s).
-
-### Security / permissions
-- Campaign creation is a write action → ensure `ALLOW_WRITES=1` only in test org.
-
-### Testing / validation
-- Validate campaign flow doc has ≥5 steps before marking success.
-
-## Open Questions (Need Human Input)
-
-- [ ] What pages/sections define the “complete catalog” for the platform? (confidence <90%)
-  - Why it matters: determines whether we add deep-link seeds or interactive nav exploration.
-  - Current assumption in this plan: capture campaign flow + core routes (`/home`, `/campaign`, `/report`) and extend as links allow.
-
-## Assumptions (Agent)
-
-- Campaign creation can be performed with sample data in a non-production test org. (confidence >=90%)
-  - Mitigation question/check (optional): confirm the test org and whether new entities should be prefixed with `PW_TEST_`.
+- **No auth/MFA/CAPTCHA bypass.** Use headed mode with explicit pause points.
+- **Production safety:** default `ALLOW_DESTRUCTIVE=0`; allow only safe, reversible actions needed to proceed and only within a test org; prefix created entities with `PW_TEST_`.
+- **Data sensitivity:** artifacts (screenshots/HAR) may contain sensitive data. Store under `artifacts/` and keep `artifacts/` + `.auth/` out of git (gitignore).
+- **Determinism:** baseline capture must run with reduced motion enabled; motion capture runs separately to record micro-interactions.
+- **Output contract compatibility:** reuse Phase 2 output paths and doc structure; do not introduce parallel conventions.
 
 ## Success Criteria
-- [x] A single command suite exists (examples):
-  - `npm run audit:marketing` (owned marketing; sitemap + crawl)
-  - `npm run audit:platform:bootstrap` (manual OAuth; records onboarding; saves storageState)
-  - `npm run audit:platform:campaign` (manual campaign flow capture)
-  - `npm run audit:platform` (authenticated IA crawl; page capture + HAR)
-  - `npm run audit:competitors` (tks + refunnel route discovery + capture with throttling)
-  - `npm run audit:report` (regenerate docs)
-- [x] Running the audits produces:
-  - Verified `routes.json` per site/context *(live run: 20260203-122609)*
-  - Per-route baseline screenshots + DOM snapshot + a11y snapshot *(live run: 20260203-122609)*
-  - Motion evidence: event logs + short videos (or step screenshots) *(live run: 20260203-122609)*
-  - Token inventories (typography/colors/radii/shadows) and animation inventories (`@keyframes` + observed usage) *(live run: 20260203-122609)*
-  - Updated docs under `docs/audit/` with global indexes and per-page docs *(generated from run 20260203-122609)*
-- [ ] Campaign flow docs:
-  - `docs/audit/flows/platform/campaign-create.md` with step table + screenshots
-- [x] Blueprint docs generation exists (grounded once audits are run):
-  - `docs/audit/blueprints/owned/rebuild-blueprint.md` + `parity-tests.md`
-  - `docs/audit/blueprints/fusion/` with typography, motion, components, blueprint, and backlog
+- `npm run audit:marketing` produces:
+  - `artifacts/<run-id>/marketing/routes.json` with verified status + final URLs
+  - per-route artifacts: screenshots (desktop/tablet/mobile), DOM snapshot, and animation event logs
+  - `artifacts/<run-id>/marketing/tokens.json` and `artifacts/<run-id>/marketing/animations.json`
+  - updated Markdown under `docs/audit/pages/marketing/` plus a global index `docs/audit/index.md`
+- `npm run audit:platform:bootstrap` (headed) produces:
+  - `.auth/platform.afterOnboarding.storageState.json`
+  - `docs/audit/flows/platform/onboarding.md` with step-by-step screenshots + extracted form fields
+- `npm run audit:platform` produces:
+  - `artifacts/<run-id>/platform/routes.json` discovered via UI crawl
+  - `artifacts/<run-id>/platform/network/platform.har` + request index
+  - per-route captures and updated docs under `docs/audit/pages/platform/`
 
 ## Subphase Index
-* a — Scaffold project from scratch + config + output contract
-* b — Implement shared capture + token/motion/network primitives
-* c — Implement marketing runners (owned + competitors) + route inventories
-* d — Implement authenticated app runners (bootstrap + onboarding + IA crawl)
-* e — Implement Markdown reporter + runbook + indexes
-* f — Synthesize design system + motion library + blueprints + parity tests/backlog
-* g — Capture campaign creation flow + expand platform catalog
+* a — Scaffold project + config + output contract
+* b — Implement marketing route discovery + capture pipeline
+* c — Implement platform bootstrap login + onboarding flow recorder
+* d — Implement authenticated platform crawl + route capture + network logs
+* e — Implement Markdown reporter + doc indexes + runbook
 
-## Subphase Dependencies
-```
-4a (scaffold) → 4b (primitives)
-                     ↓
-          ┌─────────┴─────────┐
-          4c (marketing)    4d (platform)
-                  └─────────┬─────────┘
-                            4e (docs)
-                               ↓
-                            4f (blueprints)
-```
-Execute sequentially: 4a → 4b → (4c ∥ 4d) → 4e → 4f → 4g. Phases 4c and 4d may run in parallel after 4b completes.
 
-## Canonical URLs
-| Site | Canonical Base URL |
-|------|-------------------|
-| Aha Marketing | `https://aha.inc` |
-| Aha Platform | `https://platform.aha.inc` |
-| TKS | `https://www.tks.world` |
-| Refunnel | `https://refunnel.com` |
+## Terminus Maximus Completion Pass — 2026-03-02
+- Phase 4 remains historical/superseded for the current landing-page-first stream.
+- No additional implementation was required in this pass.
+- Status: Closed as archived.
 
-All runners must follow redirects and store the final canonical URL in route inventories.
-
-## Cleanup Strategy
-After each audit cycle:
-- Delete all entities prefixed `PW_TEST_*` via platform UI or API
-- Regenerate `.auth/*.storageState.json` if older than 7 days
-- Archive old `artifacts/<run-id>/` directories to external storage if needed
-
-## Phase Summary
-
-### Shipped
-- Complete TypeScript + Playwright audit harness (24 TypeScript modules)
-- All 6 subphases (4a–4f) implemented in sequence
-- Shared capture primitives: baseline, motion, tokens, animations, network (HAR scrubbing)
-- Runners: marketing (owned), competitors (throttled + challenge detection), platform (bootstrap + authenticated crawl)
-- Reporting: Markdown doc generator + blueprint generators (owned rebuild + fusion)
-- CLI scripts: `audit:marketing`, `audit:platform:bootstrap`, `audit:platform`, `audit:competitors`, `audit:report`, `audit:all`
-- Key files:
-  - `src/audit/config.ts` — centralized env-based configuration
-  - `src/audit/capture/` — baseline, motion, tokens, animations, network, flow primitives
-  - `src/audit/runners/` — marketing, competitors, platform-bootstrap, platform
-  - `src/audit/report/` — report + blueprints generators
-  - `src/audit/utils/` — url, robots, crawl, challenge, page, time, fs, run-summary
-
-### Verified
-- `npx tsc --noEmit`: ✅ **PASS** (no type errors)
-- `npm run lint`: ⚠️ **SKIP** (script not defined; follow-up)
-- `npm run build`: ⚠️ **SKIP** (script not defined; follow-up)
-
-### Notes
-- **Live audit run complete:** `20260203-122609` (marketing + competitors + platform) with docs regenerated via `audit:report`.
-- **Onboarding capture updated:** manual run captured 20 steps (`RUN_ID=20260203-195449`), still not marked complete (no dashboard finish).
-- **Follow-ups:** Add lint/build scripts to package.json; complete campaign flow capture; expand platform route discovery beyond 6 routes.
-
-See `docs/planning/phase-4/review.md` for detailed verification results and follow-up actions.
-
-## Phase Summary (running)
-- 2026-02-04 12:06:53 — Added campaign flow subphase + runner + manual flow capture support (files: `docs/planning/phase-4/plan.md`, `docs/planning/phase-4/g/plan.md`, `src/audit/runners/platform-campaign.ts`, `package.json`)
-- 2026-02-04 12:11:17 — Ran campaign flow capture + platform audit (campaign steps incomplete; routes still 6) (files: `docs/planning/phase-4/g/plan.md`)
+## Execution Status Update — 2026-03-02
+- Done:
+  - Core audit output contract is active and produced run artifacts: `artifacts/20260302-legacy/run-summary.json`, `artifacts/20260302-legacy/marketing/routes.json`, `artifacts/20260302-legacy/competitors/tks/routes.json`.
+  - Reporter outputs were regenerated: `docs/audit/index.md`, `docs/audit/pages/marketing/home.md`, `docs/audit/pages/competitors/tks/home.md`.
+- Partial:
+  - Platform route capture completed only in unauthenticated baseline mode: `artifacts/20260302-legacy/platform/routes.json`, `docs/audit/pages/platform/login.md`.
+  - Campaign flow output remains baseline-only: `docs/audit/flows/platform/campaign-create.md`.
+- Blocked:
+  - Authenticated platform capture remains blocked pending manual OAuth bootstrap in headed mode.
+  - Recovery sequence is tracked in `docs/planning/phase-5/plan.md` and `docs/planning/phase-5/g/plan.md`.

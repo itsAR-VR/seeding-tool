@@ -1,4 +1,5 @@
 import path from 'path';
+import { readFile } from 'fs/promises';
 import { chromium } from 'playwright';
 import { loadConfig, VIEWPORTS } from '../config.js';
 import { ensureDir, writeJson } from '../utils/fs.js';
@@ -16,6 +17,42 @@ interface RouteEntry {
   title: string;
   routeKey: string;
   primaryActions: string[];
+}
+
+const ALLOW_UNAUTH_BASELINE_ENV = 'AUDIT_ALLOW_UNAUTH_BASELINE';
+
+function parseBooleanFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  return ['1', 'true', 'yes', 'y'].includes(value.toLowerCase());
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await readFile(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveStorageStatePath(paths: string[]): Promise<string | undefined> {
+  for (const filePath of paths) {
+    if (await fileExists(filePath)) return filePath;
+  }
+  return undefined;
+}
+
+function buildMissingAuthErrorMessage(): string {
+  return [
+    'Missing platform auth storage state for `audit:platform`.',
+    'Expected one of:',
+    '- `.auth/platform.afterOnboarding.storageState.json`',
+    '- `.auth/platform.afterLogin.storageState.json`',
+    'Next steps:',
+    '1) Run `npm run audit:platform:bootstrap` in headed mode and complete login/onboarding.',
+    '2) Re-run `npm run audit:platform`.',
+    `Optional baseline-only fallback: set ${ALLOW_UNAUTH_BASELINE_ENV}=1 to capture a single unauthenticated baseline route.`,
+  ].join('\n');
 }
 
 async function collectInternalLinks(page: import('playwright').Page, baseUrl: string): Promise<string[]> {
@@ -43,12 +80,24 @@ async function run() {
   await ensureDir(platformDir);
   await ensureDir(networkDir);
 
-  const storageStatePath = path.join('.auth', 'platform.afterOnboarding.storageState.json');
+  const allowUnauthBaseline = parseBooleanFlag(process.env[ALLOW_UNAUTH_BASELINE_ENV]);
+  const storageStatePath = await resolveStorageStatePath([
+    path.join('.auth', 'platform.afterOnboarding.storageState.json'),
+    path.join('.auth', 'platform.afterLogin.storageState.json'),
+  ]);
+  if (!storageStatePath && !allowUnauthBaseline) {
+    throw new Error(buildMissingAuthErrorMessage());
+  }
+  if (!storageStatePath && allowUnauthBaseline) {
+    console.warn(
+      `⚠️ ${ALLOW_UNAUTH_BASELINE_ENV}=1 set and no auth state found. Running unauthenticated baseline capture for the initial route only.`,
+    );
+  }
 
   const browser = await chromium.launch({ headless: config.headless });
   const rawHarPath = path.join(networkDir, 'platform.raw.har');
   const context = await browser.newContext({
-    storageState: storageStatePath,
+    ...(storageStatePath ? { storageState: storageStatePath } : {}),
     recordHar: { path: rawHarPath, content: 'omit' },
   });
   const page = await context.newPage();
@@ -61,8 +110,9 @@ async function run() {
   const visited = new Set<string>();
   const queue: string[] = [normalizeUrl(page.url())];
   const routes: RouteEntry[] = [];
+  const maxRoutes = storageStatePath ? config.maxRoutes : 1;
 
-  while (queue.length && routes.length < config.maxRoutes) {
+  while (queue.length && routes.length < maxRoutes) {
     const current = queue.shift();
     if (!current) break;
     const normalized = normalizeUrl(current);
@@ -96,6 +146,10 @@ async function run() {
       primaryActions: actions,
     });
 
+    if (!storageStatePath) {
+      continue;
+    }
+
     const links = await collectInternalLinks(page, config.platformBaseUrl);
     for (const link of links) {
       const candidate = normalizeUrl(link);
@@ -120,7 +174,11 @@ async function run() {
   runSummary.finishedAt = new Date().toISOString();
   await writeRunSummary(config.runId, runSummary);
 
-  console.log(`✅ Platform audit complete. Routes: ${routes.length}`);
+  if (storageStatePath) {
+    console.log(`✅ Platform audit complete. Routes: ${routes.length}`);
+    return;
+  }
+  console.log(`⚠️ Platform unauthenticated baseline capture complete. Routes: ${routes.length}`);
 }
 
 run().catch((error) => {

@@ -1,60 +1,91 @@
-# Phase 1 — Playwright audit + rebuild blueprint (Aha marketing + platform)
+# Phase 1 — Landing-page-first GTM + planning stack reindex
 
-> **Status:** Superseded by the merged plan in `docs/planning/phase-4/plan.md`. Phase 1 remains for history; implement Phase 4 going forward.
+## Original User Request (verbatim)
+Okay, so my brother  created a bunch of plans, and he filled out this GitHub repo that we're working in with a lot of details around the seeding tool.
+
+Now, what I want to do is build a landing page for it. I want you to go ahead and take a look at all my skills that I have available, including the Hormozi skills, the impeccable design skills, and any other CRO skills—things like that, things for making the design better. Including skills for review and testing of the landing page (we want to start with local env before going to vercel or anything) and want to iterate multiple times to have the CRO we want, the structure thats ideal, the right copy and language and everything. Include the skills to call within the phase plan itself including the evaluation loop described with skills for that and everything else too (with playwright or whatever is best to make sure the platform works and looks at the level we want it)
+
+I want you to take all of that and put it into a new plan. And make it phase-1 answap all other phases up a number. All the stuff that we have right now is the backend and architecture design of the actual app itself, right? But we also want to have a landing page that's associated with that, and that to be obviously the first thing we make. From there, we're building up a flow through all the other stuff, all the other details for what we're going to use.
+
+We're using Supabase with a Prisma ORM, and we're deploying it with Next.js on Vercel. So we need to essentially create that landing page using the structure and all the details that we already have within the planning docs.
+
+Right, and yeah, that's what is needing to be done now.
+
+
+$phase-plan
 
 ## Purpose
-Create a repeatable Playwright-based “audit pack” that captures the full marketing site (aha.inc) and authenticated app (platform.aha.inc) UI/UX and flows into living Markdown docs + artifacts, enabling a faithful reimplementation and then modification for the e-commerce seeding niche.
+Make landing page delivery the first execution phase, physically shift existing phases up one number, and ship a local-first Next.js landing page implementation aligned to CRO, Hormozi offer framing, and motion/design quality requirements.
 
 ## Context
-You want a page-by-page, interaction-by-interaction understanding of the product experience (structure, typography, micro-animations, and core workflows), including authenticated onboarding and in-app functionality. You indicated you own the site/app but don’t have source code; therefore the system must treat the websites as black boxes and derive structure from the live DOM/CSS/JS behavior and network traffic.
+Existing planning was architecture/audit focused. This phase reorders execution so GTM starts with a single high-converting landing page.
 
-Initial reconnaissance against the live outputs shows:
-- Marketing (aha.inc) is a Next.js/Tailwind build (Tailwind banner in CSS indicates v4.1.4) with CSS keyframe animations (e.g., a header fade-in class) and multiple embedded fonts (Geist, Inter, Plus Jakarta Sans, Poppins, DM Sans, etc.).
-- Marketing route discovery is supported via `robots.txt` and `sitemap.xml`, but some routes may differ by casing/hyphenation (e.g., sitemap lists `/caseStudies` while the nav links include `/case-studies`), so the audit must normalize and verify routes by actual 200/404 status and final redirect targets.
-- Platform (platform.aha.inc) is a SPA delivered via bundled JS/CSS assets from `static.headai.io`, uses DM Sans + Bitter, and exposes route strings such as `/login`, `/signup`, and `/onboarding` in the client bundle.
-- Authentication for platform uses Google/OAuth/SSO, so the audit must support a one-time manual “headed bootstrap” to produce a reusable Playwright `storageState.json`.
+Locked decisions:
+- Primary CTA: `Book demo`
+- Single-page homepage scope in this phase
+- No public pricing table on homepage
+- Separate pricing page deferred to next phase
+- Pricing framing: lowest tier starts at `$999/month`; upper tiers are `Contact us`
+- Free social listening included across tiers
+- Booking destination contract: `NEXT_PUBLIC_BOOKING_URL`
+- Repo layout: `apps/web` for Next.js app
+- Physical phase reindex required
 
 ## Concurrent Phases
-None detected.
-- `docs/planning/` had no existing phases.
-- The workspace is not currently a git repository (`git status` not available), so there are no uncommitted-change conflicts to coordinate.
+| Phase | Status | Overlap | Coordination |
+|-------|--------|---------|--------------|
+| Phase 2 | Historical | Old phase-1 content | Reindexed from previous numbering |
+| Phase 3 | Historical | Old phase-2 content | Reindexed from previous numbering |
+| Phase 4 | Historical | Old phase-3 content | Reindexed from previous numbering |
+| Phase 5 | Historical | Old phase-4 content | Reindexed from previous numbering |
 
 ## Objectives
-* [ ] Build a Node/TypeScript Playwright audit harness with a stable output contract (artifacts + docs).
-* [ ] Automatically discover routes for marketing and capture multi-viewport visuals, tokens, and animation evidence.
-* [ ] Bootstrap platform authentication and crawl authenticated routes reliably in a SPA.
-* [ ] Record the onboarding flow and in-app wizards/actions as step-based “flow docs”.
-* [ ] Generate and continuously update a living Markdown knowledge base: one file per page, plus global indexes.
-* [ ] Produce a rebuild blueprint for Next.js + Tailwind that maps audit outputs into components, screens, and parity tests.
+- [x] Physically renumber old phases (`1..4` -> `2..5`)
+- [x] Create new canonical `docs/planning/phase-1/`
+- [x] Scaffold `apps/web` Next.js landing app
+- [x] Implement one-page demo-first landing experience and copy
+- [x] Encode offer and pricing-positioning constraints in content
+- [x] Document evaluation loop and CRO backlog for next iteration
 
 ## Constraints
-- Run against **staging/test** environments to avoid production risk and to allow creating dummy `PW_TEST_*` data.
-- OAuth/MFA/CAPTCHA: do not bypass; allow manual checkpoints where needed.
-- Artifacts may include sensitive data; store locally under `artifacts/` and keep them out of git (gitignore).
-- “Everything in the app” is defined as: all routes reachable from the authenticated UI navigation for the logged-in role, plus executing each primary action once (gated behind an explicit allow flag for destructive actions).
-- Output documentation format: one Markdown file per page + one global index + separate flow docs for onboarding and major wizards.
-- Reimplementation target stack: Next.js + Tailwind for UI, with functional parity driven by mapped API/network behavior.
+- Preserve old planning content while shifting numbering.
+- Keep landing page local-first and deployment-agnostic.
+- Do not expose full pricing matrix on homepage.
+- Use only source-grounded claims and placeholders for proof where real assets are missing.
 
 ## Success Criteria
-- Running `npm run audit:marketing` produces:
-  - `artifacts/<run-id>/marketing/routes.json` with verified status + final URLs.
-  - Per-route screenshots (desktop/tablet/mobile) + DOM snapshots.
-  - `artifacts/<run-id>/marketing/tokens.json` and `animations.json`.
-  - Updated Markdown under `docs/audit/pages/marketing/` and `docs/audit/index.md`.
-- Running `npm run audit:platform:bootstrap` produces `.auth/platform.storageState.json` and a repeatable “human steps” flow doc.
-- Running `npm run audit:platform`:
-  - Enters the authenticated app without manual login.
-  - Produces `artifacts/<run-id>/platform/routes.json`, per-route captures, and network logs (HAR + request index).
-  - Produces onboarding flow documentation with step screenshots and extracted form schemas.
-- The audit output is deterministic enough to use as a build reference (baseline screenshots are stable by running a reduced-motion pass).
-- A rebuild blueprint exists that:
-  - Translates tokens + animations into a component system.
-  - Defines parity Playwright tests for rebuilt screens/flows.
+- [x] `docs/planning/phase-1/plan.md` exists with subphases `a..f`
+- [x] Old phases now exist as `phase-2` to `phase-5`
+- [x] Planning references updated to new numbering
+- [x] `apps/web` contains runnable Next.js App Router scaffold
+- [x] Homepage includes approved core copy line and problem-flow framing
+- [x] Homepage CTA wiring uses `NEXT_PUBLIC_BOOKING_URL`
+- [x] Local Playwright verification run with screenshots/log checks
 
 ## Subphase Index
-* a — Create audit repo scaffolding + config contract
-* b — Implement marketing route discovery + capture pipeline
-* c — Implement platform auth bootstrap + authenticated route crawl
-* d — Implement onboarding/flow recorder + “everything” explorer
-* e — Implement Markdown reporter + living docs structure
-* f — Produce rebuild blueprint + parity test strategy (Next.js + Tailwind)
+- a — Reindex phases and rewrite planning references
+- b — Landing-page strategy, IA, and offer architecture
+- c — Conversion copy system + proof map + objection map
+- d — Next.js implementation scaffold in `apps/web`
+- e — Motion/design quality + accessibility/responsive hardening
+- f — Local evaluation loop + CRO experiment backlog + handoff
+
+## Phase Summary
+Implemented the full planning reindex and created a new canonical Phase 1. Added `apps/web` with a production-style one-page landing page focused on `Book demo` conversion, with Refunnel-inspired motion patterns, Hormozi-style offer framing, and constrained pricing messaging (`$999/mo` floor + contact-us tiers).
+
+Artifacts:
+- Planning: `docs/planning/phase-1/` (+ reindexed existing phases)
+- Web app: `apps/web/`
+
+Follow-up:
+- Execute local Playwright QA pass against `apps/web` and capture evidence.
+- Build deferred `/pricing` page in the next phase.
+
+## Terminus Maximus Completion Pass — 2026-03-02
+- Completed deep Refunnel/Aha-inspired landing page implementation in `apps/web/app/page.tsx` with conversion-first section flow.
+- Implemented deferred pricing page in `apps/web/app/pricing/page.tsx`.
+- Deferred Calendly specifically; CTA remains env-driven via `NEXT_PUBLIC_BOOKING_URL`.
+- Ran local Playwright QA against `http://127.0.0.1:3001/` and `http://127.0.0.1:3001/pricing` with no console errors.
+- Fixed post-redesign visibility bug by adjusting reveal behavior in `apps/web/app/globals.css` so below-fold content is visible without scroll intersection.
+- Evidence screenshots captured: `landing-after-fix.png`, `pricing-after-redesign.png`.
+- Status: Complete.

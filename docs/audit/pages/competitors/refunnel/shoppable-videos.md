@@ -5,11 +5,11 @@
 - Route Key: shoppable-videos
 
 ## Structure Outline
-- See DOM snapshot in artifacts/20260203-122609/competitors/refunnel/shoppable-videos
+- See DOM snapshot in artifacts/20260302-legacy/competitors/refunnel/shoppable-videos
 
 ## Typography + Color Summary
 Fonts: webflow-icons, Cabinetgrotesk, Sf Pro Display, Instrument Serif, Montserrat
-Colors: rgb(31, 29, 30), rgb(141, 132, 141), rgb(0, 0, 0), rgb(27, 25, 36), rgba(138, 138, 138, 0.5)
+Colors: rgb(31, 29, 30), rgb(0, 0, 0), rgb(141, 132, 141), rgb(27, 25, 36), rgba(138, 138, 138, 0.5)
 
 ## Artifacts
-- Screenshots/DOM: artifacts/20260203-122609/competitors/refunnel/shoppable-videos
+- Screenshots/DOM: artifacts/20260302-legacy/competitors/refunnel/shoppable-videos

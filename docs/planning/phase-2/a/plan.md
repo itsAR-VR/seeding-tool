@@ -1,47 +1,64 @@
-# Phase 2a — Establish competitor capture runner + route inventories
+# Phase 2a — Create audit repo scaffolding + config contract
 
 ## Focus
-Create a repeatable, throttled capture workflow and produce an initial verified route inventory for `tks.world` and `refunnel.com` that downstream subphases can consume deterministically.
+Establish the Node/TypeScript Playwright project structure, configuration schema, and output contract so all subsequent subphases can add capabilities without changing the interface.
 
 ## Inputs
-- Phase 2 root plan (constraints, caps, outputs).
-- Phase 1 output contract (target: reuse `artifacts/<run-id>/…` and `docs/audit/…` conventions).
-- Target domains:
-  - `https://www.tks.world`
-  - `https://refunnel.com`
+- Phase 2 root plan (purpose, constraints, and success criteria).
+- Target URLs:
+  - Marketing: `https://aha.inc`
+  - Platform: `https://platform.aha.inc`
+- Requirement: staging/test environment support and local artifact storage.
 
 ## Work
-1. Define a single **run id** format and folder layout (no per-subphase drift):
-   - `RUN_ID = YYYY-MM-DD--competitors--tks-refunnel`
-   - Artifact roots:
-     - `artifacts/<run-id>/competitors/tks/`
-     - `artifacts/<run-id>/competitors/refunnel/`
-2. Route discovery:
-   - TKS: fetch and parse `https://www.tks.world/sitemap.xml` into a candidate URL list.
-   - Refunnel: build a crawl-based candidate URL list:
-     - Start from `/`, then follow internal `<a>` links (same origin), plus nav/footer links, with `MAX_DEPTH=5`.
-     - Track visited canonicalized URLs; strip hash + known tracking queries (`utm_*`, `gclid`, `fbclid`, etc.).
-3. Route verification:
-   - For every candidate URL, record: final URL after redirects, HTTP status, page title, and whether content appears blocked (CAPTCHA/Turnstile page markers).
-   - Maintain `routes.json` with stable keys and ordering.
-4. Capture baseline assets per route (minimal pass to support later analysis):
-   - Screenshots: desktop/tablet/mobile (full page).
-   - DOM snapshot: serialized HTML after `networkidle` (or a timeboxed “rendered DOM” dump if `networkidle` never settles).
-   - Loaded resources: list JS/CSS URLs used on the page (for motion/tooling detection).
-5. Throttling + anti-bot hygiene:
-   - Default to headed mode, `slowMo` enabled for crawl runs.
-   - Add `RATE_LIMIT_MS=500–1500` jitter between navigations and limit concurrency (1–2 pages at a time).
-   - If a challenge page appears (Cloudflare/Turnstile), stop the batch run and record the failure state + manual next step.
+1. Initialize a Node/TypeScript project in the workspace root.
+2. Add Playwright as a dependency and create a shared `playwright.config.ts`:
+   - Default `headless: false`.
+   - Viewports: desktop (1440×900), tablet (834×1112), mobile (390×844).
+   - `trace: on-first-retry` and `video/screenshot` settings aligned to artifact storage.
+3. Create a config module (e.g., `tools/audit/config.ts`) that reads env vars:
+   - `MARKETING_BASE_URL`, `PLATFORM_BASE_URL`, `AUDIT_RUN_ID`, `AUDIT_ENV`, `CAPTURE_MODE`,
+     `MAX_ROUTES`, `MAX_DEPTH`, `RATE_LIMIT_MS`, `ALLOW_DESTRUCTIVE`.
+   - Provide safe defaults (staging-first, reduced-motion baseline enabled).
+4. Create workspace folders and gitignore entries:
+   - `artifacts/` for run outputs
+   - `.auth/` for Playwright storageState
+   - `docs/audit/` for living Markdown docs
+5. Add package scripts (CLI contract):
+   - `audit:marketing`, `audit:platform:bootstrap`, `audit:platform`, `audit:all`, `audit:report`
+6. Add a shared logging format:
+   - Every run prints `RUN_ID`, targets, and output paths.
+   - Log a machine-readable summary JSON at `artifacts/<run-id>/run-summary.json`.
 
 ## Output
-- `artifacts/<run-id>/competitors/tks/routes.json`
-- `artifacts/<run-id>/competitors/refunnel/routes.json`
-- Baseline screenshot + DOM snapshot folders per site
-- A short `docs/audit/pages/competitors/<site>/index.md` describing:
-  - route discovery method
-  - caps/exclusions used
-  - any pages blocked or skipped (with reasons)
+- A runnable project scaffold with stable CLI commands and directories.
+- A clearly defined output contract for later collectors to write into.
 
 ## Handoff
-Subphase 2b should use the finalized TKS `routes.json` as the authoritative page list and deepen captures (structure + typography + motion evidence) without changing the route inventory format.
+Subphase 2b should implement marketing route discovery and captures using the config + output contract from this subphase (no new env vars, no new output conventions).
 
+## Progress This Turn (Terminus Maximus)
+- Work done:
+  - Verified scaffold contract is implemented in `package.json`, `src/audit/config.ts`, and `src/audit/utils/run-summary.ts`.
+  - Verified stable CLI contract exists for `audit:marketing`, `audit:platform:bootstrap`, `audit:platform`, `audit:report`, and `audit:all`.
+  - Verified run-level output summary contract exists and is populated for canonical run id.
+- Commands run:
+  - `cat package.json` — pass; scripts + TypeScript/Playwright dependencies present.
+  - `cat src/audit/config.ts` — pass; env contract + defaults implemented.
+  - `cat src/audit/utils/run-summary.ts` — pass; deterministic run summary write/merge logic implemented.
+  - `cat artifacts/20260302-legacy/run-summary.json` — pass; outputs recorded.
+- Blockers:
+  - None for this subphase.
+- Next concrete steps:
+  - None; this subphase is complete.
+
+## Output (Execution Status — 2026-03-02)
+- Complete.
+- Output contract implemented and evidenced by:
+  - `package.json`
+  - `src/audit/config.ts`
+  - `src/audit/utils/run-summary.ts`
+  - `artifacts/20260302-legacy/run-summary.json`
+
+## Handoff (Execution Status — 2026-03-02)
+- 2b can consume existing config and output contracts without additional interface changes.

@@ -1,49 +1,43 @@
-# Phase 1f — Produce rebuild blueprint + parity test strategy (Next.js + Tailwind)
+# Phase 1f — Local evaluation loop + CRO experiment backlog + handoff
 
 ## Focus
-Convert the audit outputs into a decision-complete implementation blueprint for a Next.js + Tailwind reimplementation that achieves UI parity and functional parity (with your new e-commerce seeding backend), and define Playwright parity tests for ongoing validation.
+Document what is ready, what remains, and how to iterate with local evidence.
 
 ## Inputs
-- Marketing + platform page docs and flow docs (Phase 1e).
-- Token + animation inventories (Phase 1b/1c).
-- Network/API mapping (Phase 1c/1d) to infer the required workflow “shape”.
+- Implemented app and planning outputs from subphases a-e
 
 ## Work
-1. Design system blueprint:
-   - Define core tokens:
-     - typography scale (heading/body/button)
-     - color palette (semantic mapping: background/text/primary/accent/border)
-     - spacing/radius/shadow primitives
-   - Define motion system:
-     - standard durations/easings
-     - reusable keyframes (e.g., header fade-in) and interaction transitions
-2. Component inventory:
-   - Marketing components: header, hero sections, feature blocks, carousels, FAQs/accordions, footer, CTA patterns.
-   - Platform components: nav shell, tables/lists, forms, modals, wizards/steppers, toasts, empty states.
-3. Screen map:
-   - For each platform route, map:
-     - state (loading/empty/error/filled)
-     - primary actions (create/edit/submit)
-     - required data dependencies (from API map)
-4. Functional parity plan:
-   - Define backend contracts needed for your e-commerce seeding niche:
-     - replace influencer-specific concepts with seeding workflows (campaigns, creators, outreach, approvals, tracking)
-   - Keep UI flow shapes consistent with audited flows where beneficial (onboarding, campaign creation, reporting).
-5. Parity testing strategy:
-   - Define Playwright “parity tests” that:
-     - navigate each rebuilt route
-     - perform key interactions
-     - compare layout with tolerant assertions (not pixel-perfect initially)
-   - Tighten to visual diffs later once UI stabilizes.
+1. Define local QA loop (Playwright screenshot + console/network checks).
+2. Define first CRO experiment queue.
+3. Mark completion status and handoff to next phase.
 
 ## Output
-- A rebuild blueprint document (implementation guide) referencing:
-  - token definitions
-  - component list
-  - screen map and flow map
-  - parity test plan
+Local QA runbook for next pass:
+1. `cd apps/web && npm install`
+2. `npm run dev`
+3. Run Playwright checks for:
+   - desktop + mobile screenshots
+   - console error scan
+   - CTA link behavior to booking URL
+
+Initial CRO experiment backlog:
+- Hero headline angle test (workflow automation vs revenue outcome framing)
+- CTA copy test (`Book demo` vs `Get my seeding audit`)
+- Social proof ordering (logos-first vs testimonial-first)
+- Problem-section compression (6 bullets vs 3 grouped statements)
+- Follow-up completed: deferred pricing page now implemented at `apps/web/app/pricing/page.tsx`
+
+QA evidence captured:
+- Home screenshot: `/tmp/seeding-home-local-after-fix.png`
+- Pricing screenshot: `/tmp/seeding-pricing-local.png`
+- Console errors: none on `/` and `/pricing`
+- Runtime fix applied: added `apps/web/public/favicon.ico` to remove `GET /favicon.ico` 404
 
 ## Handoff
-This completes Phase 1. The next phase (implementation) should:
-- generate the audit harness code, run it against staging, and start implementing the Next.js rebuild with parity tests.
+Phase 1 implementation complete for code + docs. Next phase should add `/pricing`, wire analytics provider, and run formal local Playwright evidence capture.
 
+## Execution Update — 2026-03-02
+- Local QA executed with Playwright on `/` and `/pricing` at `http://127.0.0.1:3001`.
+- No console errors observed after fixes.
+- Iteration fix applied: reveal-on-scroll CSS no longer hides below-fold sections before intersection; content remains visible while preserving motion.
+- Generated evidence assets: `landing-after-fix.png`, `pricing-after-redesign.png`.

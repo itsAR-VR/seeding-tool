@@ -1,37 +1,32 @@
-# Phase 3e — Implement Markdown reporter + doc indexes + runbook
+# Phase 3e — “Fusion” site blueprint + implementation backlog (integrated with roadmap)
 
 ## Focus
-Generate and continuously update a living Markdown knowledge base that indexes marketing + platform pages and onboarding/flows with structured sections and artifact links, plus a runbook for repeatable audits.
+Produce the final, decision-complete blueprint for building our marketing site: page IA, templates, component/motion usage, and a prioritized backlog that integrates with the project’s existing plan/roadmap.
 
 ## Inputs
-- Artifacts produced by Phase 3b–3d:
-  - `routes.json`, `tokens.json`, `animations.json`, flow artifacts, HAR/request index
-- Output directories from Phase 3a:
-  - `docs/audit/`
+- Outputs from Phase 3d (typography tokens, motion primitives, component catalog).
+- Business requirement: not SaaS; funnel and content should resemble a TKS-like admissions/program model.
+- Existing roadmap/plans in `docs/planning/` (Phase 2 and any other planning docs that exist).
 
 ## Work
-1. Define doc paths and templates:
-   - `docs/audit/index.md`
-   - `docs/audit/pages/marketing/<slug>.md`
-   - `docs/audit/pages/platform/<slug>.md`
-   - `docs/audit/flows/platform/<flow>.md`
-2. Implement deterministic report generation:
-   - rewrite docs each run from artifact JSON (no manual edits required to keep in sync)
-   - include: URL/status/title, structure outline, typography summary, palette summary, observed micro-animations, artifact links
-3. Maintain run history:
-   - index keeps last N run IDs and pointers to artifacts
-4. Add runbook:
-   - environment variables and safe defaults
-   - bootstrap login instructions
-   - safety flags (`ALLOW_DESTRUCTIVE`, `ALLOW_WRITES`)
-   - troubleshooting (timeouts, bot defenses, flaky animations)
+1. Define the target marketing IA (site map) for our product:
+   - Home, About, Program, Admissions/Apply, Outcomes/Alumni, Financial Aid (if applicable), FAQ, Blog/Resources, Contact.
+2. For each page, select:
+   - a template structure (inspired by TKS funnel order)
+   - component instances from the catalog (Refunnel-level polish where appropriate)
+   - motion primitives to apply (with reduced-motion variants)
+3. Produce the build backlog:
+   - Break into milestones (foundation → core pages → polish/motion → parity tests).
+   - For each milestone, define acceptance criteria in observable UI terms (screenshots/videos, scroll behaviors).
+4. Define parity tests (Playwright):
+   - At minimum: “layout sanity” per page on 3 viewports and a “motion smoke test” for key interactions.
+5. Deliver a “side-by-side animation board”:
+   - A doc that pairs a TKS reference clip and Refunnel reference clip with the intended fused implementation notes per section.
 
 ## Output
-- Updated `docs/audit/index.md`
-- Per-page docs under `docs/audit/pages/**`
-- Flow docs under `docs/audit/flows/platform/**`
-- Runbook doc (location defined in this subphase)
+- `docs/audit/competitors/fusion-blueprint.md` (IA + templates + component/motion mapping)
+- `docs/audit/competitors/implementation-backlog.md` (milestones + acceptance criteria + parity tests)
 
 ## Handoff
-After Phase 3, the repository has a repeatable audit harness and continuously updated documentation sufficient to rebuild UI/UX 1:1 and then adapt to the e-commerce creator seeding niche.
+This subphase closes Phase 3 and hands off to implementation work: building the site in Next.js + Tailwind + GSAP using the blueprint and parity tests as the source of truth.
 

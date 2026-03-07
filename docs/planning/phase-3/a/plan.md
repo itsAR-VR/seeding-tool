@@ -1,39 +1,47 @@
-# Phase 3a — Scaffold project + config + output contract
+# Phase 3a — Establish competitor capture runner + route inventories
 
 ## Focus
-Set up the Node/TypeScript + Playwright codebase and define a single, stable configuration/output contract so all later collectors and reporters write consistent artifacts.
+Create a repeatable, throttled capture workflow and produce an initial verified route inventory for `tks.world` and `refunnel.com` that downstream subphases can consume deterministically.
 
 ## Inputs
-- Phase 3 root plan (objectives, constraints, success criteria).
-- Existing output conventions referenced in Phase 1:
-  - `artifacts/<run-id>/...`
-  - `.auth/` for storage state
-  - `docs/audit/` for living Markdown docs
+- Phase 3 root plan (constraints, caps, outputs).
+- Phase 2 output contract (target: reuse `artifacts/<run-id>/…` and `docs/audit/…` conventions).
+- Target domains:
+  - `https://www.tks.world`
+  - `https://refunnel.com`
 
 ## Work
-1. Initialize a Node/TypeScript project and install Playwright dependencies.
-2. Add a shared `playwright.config.ts`:
-   - headed by default
-   - viewports: desktop/tablet/mobile
-   - retries + trace on first retry
-   - artifact paths parameterized by `RUN_ID`
-3. Implement a config loader module that reads env vars with safe defaults:
-   - `MARKETING_BASE_URL`, `PLATFORM_BASE_URL`, `RUN_ID`, `AUDIT_ENV`
-   - `MAX_ROUTES`, `MAX_DEPTH`, `RATE_LIMIT_MS`
-   - `CAPTURE_MODE=baseline|motion|both`
-   - `ALLOW_DESTRUCTIVE`, `ALLOW_WRITES`
-4. Create directories + gitignore rules:
-   - `artifacts/`
-   - `.auth/`
-   - `docs/audit/`
-5. Create npm scripts (CLI contract):
-   - `audit:marketing`, `audit:platform:bootstrap`, `audit:platform`, `audit:report`, `audit:all`
-6. Add a run summary contract:
-   - `artifacts/<run-id>/run-summary.json` includes run metadata, targets, and outputs.
+1. Define a single **run id** format and folder layout (no per-subphase drift):
+   - `RUN_ID = YYYY-MM-DD--competitors--tks-refunnel`
+   - Artifact roots:
+     - `artifacts/<run-id>/competitors/tks/`
+     - `artifacts/<run-id>/competitors/refunnel/`
+2. Route discovery:
+   - TKS: fetch and parse `https://www.tks.world/sitemap.xml` into a candidate URL list.
+   - Refunnel: build a crawl-based candidate URL list:
+     - Start from `/`, then follow internal `<a>` links (same origin), plus nav/footer links, with `MAX_DEPTH=5`.
+     - Track visited canonicalized URLs; strip hash + known tracking queries (`utm_*`, `gclid`, `fbclid`, etc.).
+3. Route verification:
+   - For every candidate URL, record: final URL after redirects, HTTP status, page title, and whether content appears blocked (CAPTCHA/Turnstile page markers).
+   - Maintain `routes.json` with stable keys and ordering.
+4. Capture baseline assets per route (minimal pass to support later analysis):
+   - Screenshots: desktop/tablet/mobile (full page).
+   - DOM snapshot: serialized HTML after `networkidle` (or a timeboxed “rendered DOM” dump if `networkidle` never settles).
+   - Loaded resources: list JS/CSS URLs used on the page (for motion/tooling detection).
+5. Throttling + anti-bot hygiene:
+   - Default to headed mode, `slowMo` enabled for crawl runs.
+   - Add `RATE_LIMIT_MS=500–1500` jitter between navigations and limit concurrency (1–2 pages at a time).
+   - If a challenge page appears (Cloudflare/Turnstile), stop the batch run and record the failure state + manual next step.
 
 ## Output
-- Runnable Playwright scaffold with stable CLI commands and output paths.
+- `artifacts/<run-id>/competitors/tks/routes.json`
+- `artifacts/<run-id>/competitors/refunnel/routes.json`
+- Baseline screenshot + DOM snapshot folders per site
+- A short `docs/audit/pages/competitors/<site>/index.md` describing:
+  - route discovery method
+  - caps/exclusions used
+  - any pages blocked or skipped (with reasons)
 
 ## Handoff
-Phase 3b reuses the config + capture primitives from this subphase without adding new env vars or changing output conventions.
+Subphase 3b should use the finalized TKS `routes.json` as the authoritative page list and deepen captures (structure + typography + motion evidence) without changing the route inventory format.
 
