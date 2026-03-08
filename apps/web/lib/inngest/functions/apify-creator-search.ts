@@ -1,5 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   runInstagramProfileScraper,
   runInstagramHashtagScraper,
@@ -124,7 +125,7 @@ export const apifyCreatorSearch = inngest.createFunction(
             profileUrl: c.profileUrl,
             imageUrl: c.imageUrl,
             bio: c.bio,
-            metadata: c.metadata,
+            metadata: c.metadata as Prisma.InputJsonValue,
             searchJobId: jobId,
           },
         });
@@ -169,7 +170,7 @@ export const apifyCreatorSearch = inngest.createFunction(
               followerCount: c.followerCount,
               engagementRate: c.engagementRate,
               isVerified: c.isVerified,
-              metadata: c.metadata,
+              metadata: c.metadata as Prisma.InputJsonValue,
             },
             create: {
               creatorId: newCreator.id,
@@ -179,7 +180,7 @@ export const apifyCreatorSearch = inngest.createFunction(
               followerCount: c.followerCount,
               engagementRate: c.engagementRate,
               isVerified: c.isVerified,
-              metadata: c.metadata,
+              metadata: c.metadata as Prisma.InputJsonValue,
             },
           });
 

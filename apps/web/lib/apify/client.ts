@@ -48,7 +48,7 @@ export type MappedCreatorData = {
   profileUrl: string | null;
   imageUrl: string | null;
   isVerified: boolean;
-  metadata: Record<string, unknown>;
+  metadata: Record<string, string | number | boolean | null | undefined>;
 };
 
 // ──────────────────────────────────────────────
@@ -136,10 +136,10 @@ export function mapProfileToCreator(
     imageUrl: profile.profilePicUrlHD || profile.profilePicUrl || null,
     isVerified: profile.isVerified ?? false,
     metadata: {
-      followsCount: profile.followsCount,
-      postsCount: profile.postsCount,
-      igtvVideoCount: profile.igtvVideoCount,
-      externalUrl: profile.externalUrl,
+      followsCount: profile.followsCount ?? null,
+      postsCount: profile.postsCount ?? null,
+      igtvVideoCount: profile.igtvVideoCount ?? null,
+      externalUrl: profile.externalUrl ?? null,
     },
   };
 }
@@ -166,10 +166,10 @@ export function mapHashtagPostToCreator(
     imageUrl: post.displayUrl || null,
     isVerified: false,
     metadata: {
-      likesCount: post.likesCount,
-      commentsCount: post.commentsCount,
-      caption: post.caption,
-      postUrl: post.url,
+      likesCount: post.likesCount ?? null,
+      commentsCount: post.commentsCount ?? null,
+      caption: post.caption ?? null,
+      postUrl: post.url ?? null,
     },
   };
 }
