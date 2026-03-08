@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
 
 const UNIPILE_BASE_URL =
-  process.env.UNIPILE_BASE_URL ?? "https://api11.unipile.com:14124";
+  process.env.UNIPILE_BASE_URL ?? "https://api27.unipile.com:15723";
 
 export type UnipileClient = {
   baseUrl: string;
