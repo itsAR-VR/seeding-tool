@@ -112,6 +112,9 @@ model Brand {
   backgroundJobs      BackgroundJob[]
   activityLogs        ActivityLog[]
   creatorSearchJobs   CreatorSearchJob[]
+  aiPersonas          AiPersona[]
+  automations         Automation[]
+  shopifyProducts     ShopifyProduct[]
 
   @@map("brands")
 }
@@ -391,11 +394,16 @@ model Campaign {
 model CampaignProduct {
   id String @id @default(uuid())
 
-  campaignId String
-  productId  String
+  campaignId       String
+  productId        String
+  shopifyProductId String?
+  shopifyVariantId String?
+  note             String?
 
-  campaign Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  product  BrandProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+  campaign       Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product        BrandProduct    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shopifyProduct ShopifyProduct? @relation(fields: [shopifyProductId], references: [id])
+  shopifyVariant ShopifyVariant? @relation(fields: [shopifyVariantId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -871,4 +879,99 @@ model ActivityLog {
   @@index([brandId, action])
   @@index([entityType, entityId])
   @@map("activity_logs")
+}
+
+// ──────────────────────────────────────────────
+// AI Personas
+// ──────────────────────────────────────────────
+
+model AiPersona {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  tone        String  // professional | casual | influencer
+  systemPrompt String @db.Text @map("system_prompt")
+  exampleMessages Json? @map("example_messages") // array of example messages
+
+  brandId   String
+  isDefault Boolean @default(false)
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ai_personas")
+}
+
+// ──────────────────────────────────────────────
+// Automations
+// ──────────────────────────────────────────────
+
+model Automation {
+  id       String  @id @default(uuid())
+  name     String
+  type     String  // creator_discovery | mention_check | etc.
+  schedule String  // cron expression or preset (e.g. "daily", "every_12h", "every_6h", "weekly")
+  config   Json    // type-specific configuration
+  enabled  Boolean @default(true)
+
+  lastRunAt DateTime?
+  nextRunAt DateTime?
+
+  brandId String
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("automations")
+}
+
+// ──────────────────────────────────────────────
+// Shopify Product Catalog
+// ──────────────────────────────────────────────
+
+model ShopifyProduct {
+  id          String  @id @default(uuid())
+  shopifyId   String
+  title       String
+  description String? @db.Text
+  handle      String?
+  productType String?
+  imageUrl    String?
+  status      String  @default("active") // active | draft | archived
+
+  variants ShopifyVariant[]
+
+  brandId String
+  brand   Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  campaignProducts CampaignProduct[]
+
+  syncedAt  DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([brandId, shopifyId])
+  @@map("shopify_products")
+}
+
+model ShopifyVariant {
+  id               String  @id @default(uuid())
+  shopifyVariantId String
+  title            String
+  price            String
+  sku              String?
+  inventoryQuantity Int?
+  imageUrl         String?
+
+  productId String
+  product   ShopifyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  campaignProducts CampaignProduct[]
+
+  @@unique([productId, shopifyVariantId])
+  @@map("shopify_variants")
 }
