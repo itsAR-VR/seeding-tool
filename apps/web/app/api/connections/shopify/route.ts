@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
-import { encrypt } from "@/lib/encryption";
+import { encrypt, decrypt } from "@/lib/encryption";
+import { registerWebhooks, cleanupWebhooks } from "@/lib/shopify/webhooks";
+import { syncProducts } from "@/lib/shopify/products";
 
 const SHOPIFY_API_VERSION = "2024-01";
 
@@ -174,6 +176,41 @@ export async function POST(request: NextRequest) {
       });
     });
 
+    // Register webhooks (non-blocking — warn on failure)
+    const callbackBaseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000";
+
+    try {
+      const whResult = await registerWebhooks(
+        storeDomain,
+        accessToken,
+        callbackBaseUrl
+      );
+      console.log(
+        "[connections/shopify/POST] Webhooks registered:",
+        JSON.stringify(whResult)
+      );
+    } catch (whErr) {
+      console.warn(
+        "[connections/shopify/POST] Webhook registration failed (non-fatal):",
+        whErr
+      );
+    }
+
+    // Trigger initial product sync (non-blocking — warn on failure)
+    try {
+      await syncProducts(brandId);
+      console.log("[connections/shopify/POST] Initial product sync completed");
+    } catch (syncErr) {
+      console.warn(
+        "[connections/shopify/POST] Initial product sync failed (non-fatal):",
+        syncErr
+      );
+    }
+
     return NextResponse.json({
       connected: true,
       storeDomain,
@@ -194,6 +231,40 @@ export async function POST(request: NextRequest) {
 export async function DELETE() {
   try {
     const brandId = await getCurrentBrandId();
+
+    // Attempt to cleanup webhooks before disconnecting
+    const credential = await prisma.providerCredential.findFirst({
+      where: { brandId, provider: "shopify", isValid: true },
+    });
+    const connection = await prisma.brandConnection.findFirst({
+      where: { brandId, provider: "shopify", status: "connected" },
+    });
+
+    if (credential && connection?.externalId) {
+      const callbackBaseUrl =
+        process.env.NEXT_PUBLIC_APP_URL ||
+        process.env.VERCEL_URL
+          ? `https://${process.env.VERCEL_URL}`
+          : "http://localhost:3000";
+
+      try {
+        const accessToken = decrypt(credential.encryptedValue);
+        const result = await cleanupWebhooks(
+          connection.externalId,
+          accessToken,
+          callbackBaseUrl
+        );
+        console.log(
+          "[connections/shopify/DELETE] Webhooks cleaned up:",
+          JSON.stringify(result)
+        );
+      } catch (cleanupErr) {
+        console.warn(
+          "[connections/shopify/DELETE] Webhook cleanup failed (non-fatal):",
+          cleanupErr
+        );
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.providerCredential.updateMany({
