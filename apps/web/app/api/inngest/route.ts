@@ -11,6 +11,11 @@ import {
   pollTrack17Status,
 } from "@/lib/inngest/functions/track17-sync";
 import { apifyCreatorSearch } from "@/lib/inngest/functions/apify-creator-search";
+import { runAutomations } from "@/lib/inngest/functions/run-automation";
+import {
+  mentionMediaArchive,
+  mentionMediaArchiveCron,
+} from "@/lib/inngest/functions/mention-media-archive";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -23,5 +28,8 @@ export const { GET, POST, PUT } = serve({
     registerTrack17Tracking,
     pollTrack17Status,
     apifyCreatorSearch,
+    runAutomations,
+    mentionMediaArchive,
+    mentionMediaArchiveCron,
   ],
 });

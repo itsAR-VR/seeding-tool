@@ -148,7 +148,7 @@ export const instagramMentionPoll = inngest.createFunction(
                 continue;
               }
 
-              await createAndAttributeMention({
+              const mentionId = await createAndAttributeMention({
                 platform: "instagram",
                 mediaUrl: media.permalink,
                 type: mapMediaType(media.media_type),
@@ -159,6 +159,12 @@ export const instagramMentionPoll = inngest.createFunction(
                   ? new Date(media.timestamp)
                   : undefined,
                 campaignCreatorId: campaignCreator.id,
+              });
+
+              // Queue media archival to Supabase Storage
+              await inngest.send({
+                name: "mention/media.archive",
+                data: { mentionAssetId: mentionId },
               });
 
               newMentions++;
