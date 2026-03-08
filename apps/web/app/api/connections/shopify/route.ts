@@ -179,9 +179,9 @@ export async function POST(request: NextRequest) {
     // Register webhooks (non-blocking — warn on failure)
     const callbackBaseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
-      process.env.VERCEL_URL
+      (process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
+        : "http://localhost:3000");
 
     try {
       const whResult = await registerWebhooks(
@@ -243,9 +243,9 @@ export async function DELETE() {
     if (credential && connection?.externalId) {
       const callbackBaseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
-        process.env.VERCEL_URL
+        (process.env.VERCEL_URL
           ? `https://${process.env.VERCEL_URL}`
-          : "http://localhost:3000";
+          : "http://localhost:3000");
 
       try {
         const accessToken = decrypt(credential.encryptedValue);
