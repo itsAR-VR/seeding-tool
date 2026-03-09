@@ -17,6 +17,7 @@
     "collabstr:scrape": "tsx scripts/scrape-collabstr.ts",
     "collabstr:import": "tsx scripts/import-collabstr.ts",
     "vercel:env:merge": "node scripts/vercel-env-merge.mjs",
+    "vercel:env:sync": "node scripts/vercel-env-sync.mjs",
     "web:dev": "cd apps/web && npm run dev",
     "web:dev:webpack": "cd apps/web && npm run dev:webpack",
     "web:build": "cd apps/web && npm run build",
