@@ -2,12 +2,15 @@ import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
-const E2E_EMAIL = process.env.E2E_EMAIL;
-const E2E_PASSWORD = process.env.E2E_PASSWORD;
+const E2E_EMAIL = process.env.E2E_EMAIL ?? process.env.e2e_email;
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? process.env.e2e_password;
 
 async function login(page: Page) {
   if (!APP_URL || !E2E_EMAIL || !E2E_PASSWORD) {
-    test.skip(true, "Set NEXT_PUBLIC_APP_URL, E2E_EMAIL, and E2E_PASSWORD to run production cutover checks.");
+    test.skip(
+      true,
+      "Set NEXT_PUBLIC_APP_URL plus E2E_EMAIL/E2E_PASSWORD or e2e_email/e2e_password to run production cutover checks."
+    );
   }
 
   await page.goto(`${APP_URL}/login`);
