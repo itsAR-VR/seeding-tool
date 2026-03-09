@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "creators:refresh-followers": "tsx scripts/refresh-instagram-followers.ts",
     "inngest:dev": "npx inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "postinstall": "prisma generate"
   },
@@ -32,6 +33,7 @@
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.9.0",
     "clsx": "^2.1.1",
+    "crawlee": "^3.16.0",
     "date-fns": "^4.1.0",
     "google-auth-library": "^10.5.0",
     "inngest": "^3.52.6",
