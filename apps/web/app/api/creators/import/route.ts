@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
 
 /**
  * POST /api/creators/import — Bulk import creators from CSV data.
@@ -83,6 +84,10 @@ export async function POST(request: NextRequest) {
       const source = validSources.includes(row.discoverySource ?? "")
         ? row.discoverySource!
         : "csv_import";
+      const normalizedFollowerCount = sanitizeFollowerCount(
+        source,
+        row.followerCount
+      );
 
       // INVARIANT: Creators are deduplicated by instagramHandle on import
       const existing = await prisma.creator.findFirst({
@@ -100,7 +105,10 @@ export async function POST(request: NextRequest) {
             name: row.name || existing.name,
             email: row.email || existing.email,
             bio: row.bio || existing.bio,
-            followerCount: row.followerCount ?? existing.followerCount,
+            followerCount:
+              normalizedFollowerCount === undefined
+                ? existing.followerCount
+                : normalizedFollowerCount,
             avgViews: row.avgViews ?? existing.avgViews,
             bioCategory: row.bioCategory || existing.bioCategory,
             imageUrl: row.imageUrl || existing.imageUrl,
@@ -118,7 +126,7 @@ export async function POST(request: NextRequest) {
           update: {
             handle,
             url: row.profileUrl || undefined,
-            followerCount: row.followerCount ?? undefined,
+            followerCount: normalizedFollowerCount ?? undefined,
             engagementRate: row.engagementRate ?? undefined,
           },
           create: {
@@ -126,7 +134,7 @@ export async function POST(request: NextRequest) {
             platform: "instagram",
             handle,
             url: row.profileUrl || `https://instagram.com/${handle}`,
-            followerCount: row.followerCount ?? null,
+            followerCount: normalizedFollowerCount ?? null,
             engagementRate: row.engagementRate ?? null,
           },
         });
@@ -139,7 +147,7 @@ export async function POST(request: NextRequest) {
             name: row.name || handle,
             email: row.email || null,
             bio: row.bio || null,
-            followerCount: row.followerCount ?? null,
+            followerCount: normalizedFollowerCount ?? null,
             avgViews: row.avgViews ?? null,
             bioCategory: row.bioCategory || null,
             imageUrl: row.imageUrl || null,
@@ -167,14 +175,14 @@ export async function POST(request: NextRequest) {
             update: {
               handle,
               url: row.profileUrl || `https://instagram.com/${handle}`,
-              followerCount: row.followerCount ?? null,
+              followerCount: normalizedFollowerCount ?? null,
               engagementRate: row.engagementRate ?? null,
             },
             create: {
               creatorId: creator.id,
               platform: "instagram",
               handle,
-              followerCount: row.followerCount ?? null,
+              followerCount: normalizedFollowerCount ?? null,
               engagementRate: row.engagementRate ?? null,
               url: row.profileUrl || `https://instagram.com/${handle}`,
             },

@@ -38,6 +38,12 @@ export type BrandICP = {
   summary: string;
 };
 
+type CampaignProductsSelection = {
+  campaignProducts?: Array<{
+    product: BrandProduct;
+  }>;
+};
+
 // ─── Main function ─────────────────────────────────────────────────────────
 
 /**
@@ -97,9 +103,8 @@ export async function deriveBrandICP(
   // Resolve products
   let products: BrandProduct[] = [];
   if (campaignId && brand.campaigns?.[0]) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const campaign = brand.campaigns[0] as any;
-    products = (campaign.campaignProducts ?? []).map((cp: any) => cp.product);
+    const campaign = brand.campaigns[0] as CampaignProductsSelection;
+    products = (campaign.campaignProducts ?? []).map((cp) => cp.product);
   } else if (brand.products) {
     products = brand.products;
   }

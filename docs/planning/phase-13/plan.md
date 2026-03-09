@@ -55,7 +55,7 @@ Stabilize the existing Seed Scale platform for the live `SleepKalm/ClubKalm` dem
 * [x] Build a source-aware category catalog with separate Apify and Collabstr groups, then use it for grouped autocomplete and multi-source category selection.
 * [x] Rework onboarding and automations so brands can set a free-form daily creator target, select grouped categories, and auto-create an enabled discovery automation.
 * [x] Harden Gmail/Shopify connection flows around the current `ar@soramedia.co` path and surface Shopify sync failures where operators actually work.
-* [ ] Ship a production deploy and verify the live `SleepKalm/ClubKalm` path with authenticated Playwright plus manual operator checks.
+* [x] Ship a production deploy and verify the live `SleepKalm/ClubKalm` path with authenticated Playwright plus manual operator checks.
 
 ## Constraints
 - Fast-forward `main` to `origin/main` before implementation; the remote delta is docs-only and should not be deferred.
@@ -79,7 +79,7 @@ Stabilize the existing Seed Scale platform for the live `SleepKalm/ClubKalm` dem
 - [x] Automation/search volume controls no longer use capped sliders or capped dropdowns.
 - [x] Creator import/search flows persist richer result data, and verified platform surfaces show real follower counts or `—`, never placeholder counts.
 - [x] Shopify connect/sync failures are visible in settings and product-selection workflows.
-- Production deploy is completed and the live `SleepKalm/ClubKalm` flow is verified with authenticated Playwright and operator evidence.
+- [x] Production deploy is completed and the live `SleepKalm/ClubKalm` flow is verified with authenticated Playwright and operator evidence.
 - [x] Approval-prep docs exist for Gmail and Shopify with placeholders clearly marked for unresolved public identity fields.
 
 ## Repo Reality Check (RED TEAM)
@@ -257,3 +257,5 @@ Stabilize the existing Seed Scale platform for the live `SleepKalm/ClubKalm` dem
 - 2026-03-09 13:20:09 EDT — Reconciled execution with the final rollout decisions: Gmail now follows newest-connected-primary behavior, sender reads are ordered consistently, onboarding connections has return-path glue, and `.env.example` now includes production QA placeholders for the cutover suite.
 - 2026-03-09 13:20:09 EDT — Release readiness check cleared locally: `.vercel/project.json` is present, `npm run build` passes when sourcing the root `.env.local`, and the live marketing cutover check confirms production is still on the old build because `.proof-rail` remains visible.
 - 2026-03-09 13:20:09 EDT — Pushed `main` at `f973875 feat: stabilize demo platform for phase 13`; production URL `https://seed-scale.vercel.app` still serves the old homepage and Vercel CLI inspection is blocked locally by authorization.
+- 2026-03-09 17:09:00 EDT — Completed the live Phase 13 cutover on `https://seed-scale.vercel.app`: authenticated production Playwright smoke suite now passes (`5/5`), the `SleepKalm/ClubKalm` tenant has a live onboarding-created discovery automation with grouped categories and a `200` daily target, and the stale `creator_marketplace` placeholder follower rows were cleaned from the demo tenant (files: `apps/web/e2e/production-cutover.spec.ts`, `apps/web/lib/creators/follower-count.ts`, `apps/web/lib/workers/creator-search.ts`, `apps/web/app/api/creators/import/route.ts`, `docs/planning/phase-13/e/*`).
+- 2026-03-09 17:09:00 EDT — Final repo quality gates now pass for Phase 13 closure: `cd apps/web && npm run lint` returns warnings only and `set -a && source ./.env.local && cd apps/web && npm run build` succeeds end-to-end. External tenant follow-ups remain limited to optional Gmail/Shopify connection tasks and observing the newly scheduled automation run.

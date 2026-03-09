@@ -20,6 +20,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveBrandICP, icpToSearchHints, type BrandICP } from "@/lib/brands/icp";
 import { CREDIT_COSTS, debit, getBalance } from "@/lib/credits";
+import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -535,6 +536,10 @@ async function persistCreators(
 
   for (const creatorRow of scoredCreators) {
     try {
+      const normalizedFollowerCount = sanitizeFollowerCount(
+        "creator_marketplace",
+        creatorRow.followerCount
+      );
       const existingCreator = await prisma.creator.findFirst({
         where: {
           brandId,
@@ -554,7 +559,10 @@ async function persistCreators(
               name: creatorRow.name ?? existingCreator.name,
               instagramHandle:
                 creatorRow.instagram ?? existingCreator.instagramHandle,
-              followerCount: creatorRow.followerCount ?? existingCreator.followerCount,
+              followerCount:
+                normalizedFollowerCount === undefined
+                  ? existingCreator.followerCount
+                  : normalizedFollowerCount,
               bio: creatorRow.bio ?? existingCreator.bio,
               bioCategory: creatorRow.niche ?? existingCreator.bioCategory,
               imageUrl: creatorRow.imageUrl ?? existingCreator.imageUrl,
@@ -565,7 +573,7 @@ async function persistCreators(
             data: {
               name: creatorRow.name ?? creatorRow.collabstrSlug,
               instagramHandle: creatorRow.instagram,
-              followerCount: creatorRow.followerCount,
+              followerCount: normalizedFollowerCount,
               bio: creatorRow.bio,
               bioCategory: creatorRow.niche,
               imageUrl: creatorRow.imageUrl,
@@ -589,7 +597,7 @@ async function persistCreators(
             url:
               creatorRow.instagramUrl ??
               `https://instagram.com/${creatorRow.instagram}`,
-            followerCount: creatorRow.followerCount,
+            followerCount: normalizedFollowerCount,
             metadata: toProfileMetadata(creatorRow),
           },
           update: {
@@ -597,7 +605,7 @@ async function persistCreators(
             url:
               creatorRow.instagramUrl ??
               `https://instagram.com/${creatorRow.instagram}`,
-            followerCount: creatorRow.followerCount,
+            followerCount: normalizedFollowerCount,
             metadata: toProfileMetadata(creatorRow),
           },
         });
@@ -697,7 +705,10 @@ async function recordSearchJobResults(
         platform: "instagram",
         handle: result.instagram ?? result.collabstrSlug,
         name: result.name,
-        followerCount: result.followerCount,
+        followerCount: sanitizeFollowerCount(
+          "creator_marketplace",
+          result.followerCount
+        ),
         profileUrl: result.instagramUrl ?? result.collabstrUrl,
         imageUrl: result.imageUrl,
         bio: result.bio,
