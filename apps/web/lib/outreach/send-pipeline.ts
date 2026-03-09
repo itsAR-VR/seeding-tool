@@ -7,6 +7,13 @@
  *
  * INVARIANT: AI drafts are NEVER auto-sent. This pipeline fires
  * only on explicit human action (Send button click).
+ *
+ * SAFETY INVARIANTS (enforced in this pipeline):
+ * 1. Creator is ALWAYS loaded via the validated CampaignCreator record —
+ *    never via the untrusted draft.creatorId alone (RC-3).
+ * 2. draft.creatorId must match CampaignCreator.creatorId in DB (RC-4).
+ * 3. ConversationThread existence is checked BEFORE any send (RC-2 idempotency).
+ * 4. Exact handle verification is enforced inside sendInstagramDM (RC-1).
  */
 
 import { prisma } from "@/lib/prisma";
@@ -81,25 +88,64 @@ export async function sendOutreachBatch(
       await new Promise((r) => setTimeout(r, DELAY_BETWEEN_SENDS_MS));
     }
 
-    // Load creator details
-    const creator = await prisma.creator.findUnique({
-      where: { id: draft.creatorId },
+    // ── Load CampaignCreator + creator via validated DB relationship (RC-3 fix) ──
+    // We load the creator THROUGH the CampaignCreator record that was already
+    // validated to belong to this brand. This means draft.creatorId is only used
+    // to cross-check identity — it never drives the actual recipient lookup.
+    const campaignCreator = await prisma.campaignCreator.findUnique({
+      where: { id: draft.campaignCreatorId },
       select: {
         id: true,
-        email: true,
-        instagramHandle: true,
-        name: true,
+        creatorId: true,
+        creator: {
+          select: {
+            id: true,
+            email: true,
+            instagramHandle: true,
+            name: true,
+          },
+        },
+        conversationThread: {
+          select: { id: true, unipileChatId: true, channel: true },
+        },
       },
     });
 
-    if (!creator) {
+    if (!campaignCreator) {
       results.push({
         ...draft,
         status: "failed",
-        error: "Creator not found",
+        error: "CampaignCreator not found",
       });
       continue;
     }
+
+    // ── RC-4: Verify draft.creatorId matches canonical CC.creatorId ──────────
+    // Prevents body→creator mismatch when the client submits mis-paired tuples.
+    if (campaignCreator.creatorId !== draft.creatorId) {
+      console.warn(
+        `[send-pipeline] creatorId mismatch: draft says ${draft.creatorId} but CC ${draft.campaignCreatorId} owns creatorId ${campaignCreator.creatorId}. Rejecting.`
+      );
+      results.push({
+        ...draft,
+        status: "failed",
+        error: `Identity mismatch: draft.creatorId (${draft.creatorId}) does not match CampaignCreator.creatorId (${campaignCreator.creatorId}). Send aborted.`,
+      });
+      continue;
+    }
+
+    // ── RC-2: Idempotency — skip if a ConversationThread already exists ───────
+    // This prevents double-sends on UI retry, double-click, or pipeline re-run.
+    if (campaignCreator.conversationThread) {
+      results.push({
+        ...draft,
+        status: "skipped",
+        error: `Already messaged: ConversationThread ${campaignCreator.conversationThread.id} already exists for this creator. Skipping to prevent duplicate send.`,
+      });
+      continue;
+    }
+
+    const creator = campaignCreator.creator;
 
     if (draft.channel === "email") {
       // --- Email channel ---
@@ -191,6 +237,8 @@ export async function sendOutreachBatch(
       }
 
       try {
+        // RC-1 exact handle verification is enforced inside sendInstagramDM.
+        // If Unipile's fuzzy search resolves to a different account, it aborts.
         const dmResult = await sendInstagramDM(
           unipileClient,
           unipileAccountId,
@@ -207,7 +255,7 @@ export async function sendOutreachBatch(
           continue;
         }
 
-        // Create conversation thread
+        // Create conversation thread — only reached if send succeeded
         await prisma.conversationThread.create({
           data: {
             brandId,
