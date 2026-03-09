@@ -83,9 +83,10 @@ model Client {
 }
 
 model Brand {
-  id   String @id @default(uuid())
-  name String
-  slug String @unique
+  id         String  @id @default(uuid())
+  name       String
+  slug       String  @unique
+  websiteUrl String? @map("website_url")
 
   clientId String
 
@@ -115,6 +116,7 @@ model Brand {
   aiPersonas          AiPersona[]
   automations         Automation[]
   shopifyProducts     ShopifyProduct[]
+  creditBalance       BrandCreditBalance?
 
   @@map("brands")
 }
@@ -212,6 +214,7 @@ model BrandSettings {
   id String @id @default(uuid())
 
   brandVoice          String? // brand voice description for AI
+  brandProfile        Json?
   defaultFollowUpDays Int     @default(3)
   maxFollowUps        Int     @default(3)
   reminderWindowDays  Int     @default(14)
@@ -227,6 +230,43 @@ model BrandSettings {
   updatedAt DateTime @updatedAt
 
   @@map("brand_settings")
+}
+
+// ──────────────────────────────────────────────
+// Credit System
+// ──────────────────────────────────────────────
+
+model BrandCreditBalance {
+  id      String @id @default(uuid())
+  credits Int    @default(0)
+
+  brandId String @unique
+
+  brand        Brand                    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  transactions BrandCreditTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("brand_credit_balances")
+}
+
+model BrandCreditTransaction {
+  id        String  @id @default(uuid())
+  type      String  // "mint" | "debit"
+  amount    Int     // positive for mint, negative for debit
+  reason    String?
+  metadata  Json?
+
+  stripePaymentIntentId String? @map("stripe_payment_intent_id")
+
+  balanceId String
+
+  balance BrandCreditBalance @relation(fields: [balanceId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("brand_credit_transactions")
 }
 
 model OutreachTemplate {
@@ -975,3 +1015,5 @@ model ShopifyVariant {
   @@unique([productId, shopifyVariantId])
   @@map("shopify_variants")
 }
+
+
