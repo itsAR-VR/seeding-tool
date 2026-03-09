@@ -1,41 +1,52 @@
 #!/usr/bin/env npx tsx
 /**
- * Collabstr Influencer Scraper
+ * Collabstr influencer scraper.
  *
- * Scrapes the Collabstr influencer directory using Playwright browser.
- * Extracts: name, niche, location, IG handle, TikTok handle, website, followers, bio, image.
- * Data source: JSON-LD structured data embedded in each profile page (no login required).
+ * Hard requirements:
+ * - deterministic Playwright/browser scraping only
+ * - no LLM in the scrape loop
+ * - output schema exposes first-class: name, instagram, tiktok, profileDump
  *
  * Usage:
- *   npx tsx scripts/scrape-collabstr.ts [--start-page N] [--max-pages N] [--output path]
+ *   npx tsx scripts/scrape-collabstr.ts [--start-page N] [--max-pages N] [--max-profiles N] [--output path]
  *
- * Checkpointing: Writes state to scripts/.collabstr-checkpoint.json for resume.
- * Output: JSONL file at scripts/collabstr-influencers.jsonl
+ * Checkpointing:
+ *   Writes state to scripts/.collabstr-checkpoint.json for resume.
+ *
+ * Output:
+ *   JSONL file at scripts/collabstr-influencers.jsonl by default.
  */
 
 import { chromium, type Browser, type Page } from "playwright";
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
 
-// ── Config ──────────────────────────────────────────────────────────────────
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const BASE_URL = "https://collabstr.com";
 const LISTING_URL = `${BASE_URL}/influencers`;
-const DELAY_BETWEEN_PROFILES_MS = 2000; // Be respectful
+const DELAY_BETWEEN_PROFILES_MS = 2000;
 const DELAY_BETWEEN_PAGES_MS = 3000;
-const CHECKPOINT_EVERY = 10; // Save state every N profiles
+const CHECKPOINT_EVERY = 10;
 const MAX_RETRIES = 3;
 
-// ── Types ───────────────────────────────────────────────────────────────────
 interface ScrapedInfluencer {
+  name: string | null;
+  instagram: string | null;
+  tiktok: string | null;
+  profileDump: string | null;
   collabstrSlug: string;
   collabstrUrl: string;
-  name: string | null;
   niche: string | null;
   location: string | null;
   bio: string | null;
   imageUrl: string | null;
   instagramHandle: string | null;
   tiktokHandle: string | null;
+  instagramUrl: string | null;
+  tiktokUrl: string | null;
   website: string | null;
   followerCount: number | null;
   price: string | null;
@@ -58,15 +69,23 @@ interface OutputState {
   scrapedSlugs: Set<string>;
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-function parseArgs(): {
+interface ScrapeArgs {
   startPage: number;
   maxPages: number;
+  maxProfiles: number | null;
   output: string;
-} {
+}
+
+interface SocialLinkInfo {
+  handle: string | null;
+  url: string | null;
+}
+
+function parseArgs(): ScrapeArgs {
   const args = process.argv.slice(2);
   let startPage = 1;
   let maxPages = 9999;
+  let maxProfiles: number | null = null;
   let output = path.join(__dirname, "collabstr-influencers.jsonl");
 
   for (let i = 0; i < args.length; i++) {
@@ -76,18 +95,188 @@ function parseArgs(): {
     } else if (args[i] === "--max-pages" && args[i + 1]) {
       maxPages = parseInt(args[i + 1], 10);
       i++;
+    } else if (args[i] === "--max-profiles" && args[i + 1]) {
+      maxProfiles = parseInt(args[i + 1], 10);
+      i++;
     } else if (args[i] === "--output" && args[i + 1]) {
       output = args[i + 1];
       i++;
     }
   }
 
-  return { startPage, maxPages, output };
+  return { startPage, maxPages, maxProfiles, output };
 }
 
-function loadCheckpoint(): CheckpointState | null {
-  const cpPath = path.join(__dirname, ".collabstr-checkpoint.json");
+function cleanNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function cleanNullableTextDump(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value
+    .replace(/\u00a0/g, " ")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim();
+
+  return normalized.length ? normalized : null;
+}
+
+function parseSlugFromUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const slug = url.pathname.replace(/^\//, "").replace(/\/$/, "");
+    return slug || null;
+  } catch {
+    return null;
+  }
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const normalized = value.replace(/,/g, "").trim();
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function buildInfluencerRecord(input: {
+  name: string | null;
+  instagram: string | null;
+  tiktok: string | null;
+  profileDump: string | null;
+  collabstrSlug: string;
+  collabstrUrl: string;
+  niche: string | null;
+  location: string | null;
+  bio: string | null;
+  imageUrl: string | null;
+  instagramUrl: string | null;
+  tiktokUrl: string | null;
+  website: string | null;
+  followerCount: number | null;
+  price: string | null;
+  rating: number | null;
+  reviewCount: number | null;
+  scrapedAt: string;
+}): ScrapedInfluencer {
+  return {
+    name: input.name,
+    instagram: input.instagram,
+    tiktok: input.tiktok,
+    profileDump: input.profileDump,
+    collabstrSlug: input.collabstrSlug,
+    collabstrUrl: input.collabstrUrl,
+    niche: input.niche,
+    location: input.location,
+    bio: input.bio,
+    imageUrl: input.imageUrl,
+    instagramHandle: input.instagram,
+    tiktokHandle: input.tiktok,
+    instagramUrl: input.instagramUrl,
+    tiktokUrl: input.tiktokUrl,
+    website: input.website,
+    followerCount: input.followerCount,
+    price: input.price,
+    rating: input.rating,
+    reviewCount: input.reviewCount,
+    scrapedAt: input.scrapedAt,
+  };
+}
+
+function normalizeInfluencer(raw: unknown): ScrapedInfluencer | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const record = raw as Record<string, unknown>;
+  const collabstrSlug =
+    cleanNullableString(record.collabstrSlug) ||
+    parseSlugFromUrl(record.collabstrUrl);
+
+  if (!collabstrSlug) return null;
+
+  const instagram =
+    cleanNullableString(record.instagram) ||
+    cleanNullableString(record.instagramHandle);
+  const tiktok =
+    cleanNullableString(record.tiktok) ||
+    cleanNullableString(record.tiktokHandle);
+
+  return buildInfluencerRecord({
+    name: cleanNullableString(record.name),
+    instagram,
+    tiktok,
+    profileDump: cleanNullableTextDump(record.profileDump),
+    collabstrSlug,
+    collabstrUrl:
+      cleanNullableString(record.collabstrUrl) || `${BASE_URL}/${collabstrSlug}`,
+    niche: cleanNullableString(record.niche),
+    location: cleanNullableString(record.location),
+    bio: cleanNullableString(record.bio),
+    imageUrl: cleanNullableString(record.imageUrl),
+    instagramUrl:
+      cleanNullableString(record.instagramUrl) ||
+      (instagram ? `https://www.instagram.com/${instagram}` : null),
+    tiktokUrl:
+      cleanNullableString(record.tiktokUrl) ||
+      (tiktok ? `https://www.tiktok.com/@${tiktok}` : null),
+    website: cleanNullableString(record.website),
+    followerCount: toFiniteNumber(record.followerCount),
+    price: cleanNullableString(record.price),
+    rating: toFiniteNumber(record.rating),
+    reviewCount: toFiniteNumber(record.reviewCount),
+    scrapedAt: cleanNullableString(record.scrapedAt) || new Date().toISOString(),
+  });
+}
+
+function mergeInfluencers(
+  base: ScrapedInfluencer,
+  incoming: ScrapedInfluencer
+): ScrapedInfluencer {
+  const merged = {
+    ...base,
+    ...Object.fromEntries(
+      Object.entries(incoming).filter(([, value]) => value !== null)
+    ),
+  };
+
+  return buildInfluencerRecord({
+    name: merged.name,
+    instagram: merged.instagram,
+    tiktok: merged.tiktok,
+    profileDump: merged.profileDump,
+    collabstrSlug: base.collabstrSlug,
+    collabstrUrl: merged.collabstrUrl || base.collabstrUrl,
+    niche: merged.niche,
+    location: merged.location,
+    bio: merged.bio,
+    imageUrl: merged.imageUrl,
+    instagramUrl: merged.instagramUrl,
+    tiktokUrl: merged.tiktokUrl,
+    website: merged.website,
+    followerCount: merged.followerCount,
+    price: merged.price,
+    rating: merged.rating,
+    reviewCount: merged.reviewCount,
+    scrapedAt: merged.scrapedAt,
+  });
+}
+
+function getCheckpointPath(output: string): string {
+  const parsed = path.parse(output);
+  const safeName = parsed.name || "collabstr-influencers";
+  return path.join(parsed.dir || __dirname, `.${safeName}.checkpoint.json`);
+}
+
+function loadCheckpoint(output: string): CheckpointState | null {
+  const cpPath = getCheckpointPath(output);
   if (!fs.existsSync(cpPath)) return null;
+
   try {
     const data = JSON.parse(fs.readFileSync(cpPath, "utf-8"));
     return {
@@ -99,8 +288,8 @@ function loadCheckpoint(): CheckpointState | null {
   }
 }
 
-function saveCheckpoint(state: CheckpointState): void {
-  const cpPath = path.join(__dirname, ".collabstr-checkpoint.json");
+function saveCheckpoint(output: string, state: CheckpointState): void {
+  const cpPath = getCheckpointPath(output);
   fs.writeFileSync(
     cpPath,
     JSON.stringify(
@@ -115,7 +304,7 @@ function saveCheckpoint(state: CheckpointState): void {
 }
 
 function appendToOutput(output: string, influencer: ScrapedInfluencer): void {
-  fs.appendFileSync(output, JSON.stringify(influencer) + "\n");
+  fs.appendFileSync(output, `${JSON.stringify(influencer)}\n`);
 }
 
 function writeOutput(output: string, influencers: ScrapedInfluencer[]): void {
@@ -123,76 +312,6 @@ function writeOutput(output: string, influencers: ScrapedInfluencer[]): void {
     influencers.map((influencer) => JSON.stringify(influencer)).join("\n") +
     (influencers.length ? "\n" : "");
   fs.writeFileSync(output, content);
-}
-
-function cleanNullableString(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
-
-function parseSlugFromUrl(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  try {
-    const url = new URL(value);
-    const slug = url.pathname.replace(/^\//, "").replace(/\/$/, "");
-    return slug || null;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeInfluencer(raw: unknown): ScrapedInfluencer | null {
-  if (!raw || typeof raw !== "object") return null;
-
-  const record = raw as Record<string, unknown>;
-  const collabstrSlug =
-    cleanNullableString(record.collabstrSlug) ||
-    parseSlugFromUrl(record.collabstrUrl);
-
-  if (!collabstrSlug) return null;
-
-  const toNumber = (value: unknown): number | null => {
-    if (typeof value === "number" && Number.isFinite(value)) return value;
-    if (typeof value === "string" && value.trim()) {
-      const parsed = Number(value);
-      return Number.isFinite(parsed) ? parsed : null;
-    }
-    return null;
-  };
-
-  return {
-    collabstrSlug,
-    collabstrUrl:
-      cleanNullableString(record.collabstrUrl) || `${BASE_URL}/${collabstrSlug}`,
-    name: cleanNullableString(record.name),
-    niche: cleanNullableString(record.niche),
-    location: cleanNullableString(record.location),
-    bio: cleanNullableString(record.bio),
-    imageUrl: cleanNullableString(record.imageUrl),
-    instagramHandle: cleanNullableString(record.instagramHandle),
-    tiktokHandle: cleanNullableString(record.tiktokHandle),
-    website: cleanNullableString(record.website),
-    followerCount: toNumber(record.followerCount),
-    price: cleanNullableString(record.price),
-    rating: toNumber(record.rating),
-    reviewCount: toNumber(record.reviewCount),
-    scrapedAt: cleanNullableString(record.scrapedAt) || new Date().toISOString(),
-  };
-}
-
-function mergeInfluencers(
-  base: ScrapedInfluencer,
-  incoming: ScrapedInfluencer
-): ScrapedInfluencer {
-  return {
-    ...base,
-    ...Object.fromEntries(
-      Object.entries(incoming).filter(([, value]) => value !== null)
-    ),
-    collabstrSlug: base.collabstrSlug,
-    collabstrUrl: incoming.collabstrUrl || base.collabstrUrl,
-  };
 }
 
 function loadExistingOutputState(output: string): OutputState {
@@ -261,9 +380,13 @@ function loadExistingOutputState(output: string): OutputState {
 
 function parseFollowerCount(text: string | null): number | null {
   if (!text) return null;
-  const match = text.match(/([\d.]+)\s*(k|m|K|M)?/i);
+  const normalized = text.replace(/,/g, "").trim();
+  const match = normalized.match(/([\d.]+)\s*(k|m)?/i);
   if (!match) return null;
+
   const num = parseFloat(match[1]);
+  if (!Number.isFinite(num)) return null;
+
   const suffix = (match[2] || "").toLowerCase();
   if (suffix === "k") return Math.round(num * 1_000);
   if (suffix === "m") return Math.round(num * 1_000_000);
@@ -271,45 +394,89 @@ function parseFollowerCount(text: string | null): number | null {
 }
 
 function extractHandleFromUrl(
-  url: string,
+  rawUrl: string,
   platform: "instagram" | "tiktok"
 ): string | null {
   try {
-    const u = new URL(url);
-    const pathPart = u.pathname.replace(/^\//, "").replace(/\/$/, "");
+    const url = new URL(rawUrl);
+    const pathPart = url.pathname.replace(/^\//, "").replace(/\/$/, "");
+    if (!pathPart) return null;
+
     if (platform === "tiktok") {
-      return pathPart.replace(/^@/, "");
+      const firstSegment = pathPart.split("/")[0] || "";
+      const handle = firstSegment.replace(/^@/, "");
+      return handle || null;
     }
-    // Skip non-user paths
+
+    const firstSegment = pathPart.split("/")[0] || "";
     if (
-      ["p", "explore", "reel", "stories", "accounts", "i18n"].includes(
-        pathPart.split("/")[0]
+      ["p", "reel", "reels", "stories", "explore", "accounts", "i18n"].includes(
+        firstSegment
       )
     ) {
       return null;
     }
-    return pathPart || null;
+
+    return firstSegment || null;
   } catch {
     return null;
   }
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+function extractSocialLink(
+  urls: string[],
+  platform: "instagram" | "tiktok"
+): SocialLinkInfo {
+  const hostnameMatcher =
+    platform === "instagram"
+      ? /(^|\.)instagram\.com$/i
+      : /(^|\.)tiktok\.com$/i;
+
+  for (const rawUrl of urls) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (!hostnameMatcher.test(parsed.hostname)) continue;
+
+      const handle = extractHandleFromUrl(rawUrl, platform);
+      if (!handle || handle === "collabstr" || handle === "i18n") continue;
+
+      return { handle, url: rawUrl };
+    } catch {
+      continue;
+    }
+  }
+
+  return { handle: null, url: null };
 }
 
-// ── Listing page scraper ────────────────────────────────────────────────────
-async function scrapeListingPage(
-  page: Page,
-  pageNum: number
-): Promise<string[]> {
+function extractWebsite(urls: string[]): string | null {
+  for (const rawUrl of urls) {
+    try {
+      const parsed = new URL(rawUrl);
+      if (!["http:", "https:"].includes(parsed.protocol)) continue;
+      if (/collabstr\.com$/i.test(parsed.hostname)) continue;
+      if (/instagram\.com$/i.test(parsed.hostname)) continue;
+      if (/tiktok\.com$/i.test(parsed.hostname)) continue;
+      return rawUrl;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+async function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function scrapeListingPage(page: Page, pageNum: number): Promise<string[]> {
   const url = pageNum === 1 ? LISTING_URL : `${LISTING_URL}?pg=${pageNum}`;
   console.log(`[listing] Navigating to page ${pageNum}: ${url}`);
 
   await page.goto(url, { waitUntil: "networkidle", timeout: 30_000 });
   await sleep(1000);
 
-  // Extract all profile links from the page
   const slugs = await page.evaluate(() => {
     const links = document.querySelectorAll("a[href]");
     const result: string[] = [];
@@ -318,14 +485,14 @@ async function scrapeListingPage(
     links.forEach((link) => {
       const href = link.getAttribute("href");
       if (!href) return;
-      // Profile links are like /username (no slashes, not system paths)
+
       if (
         href.startsWith("/") &&
         !href.includes("?") &&
+        !href.includes("#") &&
         href.split("/").length === 2
       ) {
         const slug = href.slice(1);
-        // Exclude known system paths
         const systemPaths = [
           "login",
           "brand",
@@ -356,6 +523,7 @@ async function scrapeListingPage(
           "ultimate-guide-to-tiktok-for-brands",
           "2026-influencer-marketing-report",
         ];
+
         if (
           slug &&
           !systemPaths.includes(slug) &&
@@ -367,6 +535,7 @@ async function scrapeListingPage(
         }
       }
     });
+
     return result;
   });
 
@@ -374,7 +543,6 @@ async function scrapeListingPage(
   return slugs;
 }
 
-// ── Profile page scraper ────────────────────────────────────────────────────
 async function scrapeProfilePage(
   page: Page,
   slug: string
@@ -387,10 +555,10 @@ async function scrapeProfilePage(
       await sleep(500);
 
       const data = await page.evaluate(() => {
-        // Extract JSON-LD
         const jsonLdScripts = document.querySelectorAll(
           'script[type="application/ld+json"]'
         );
+
         let sameAs: string[] = [];
         let name: string | null = null;
         let description: string | null = null;
@@ -406,41 +574,55 @@ async function scrapeProfilePage(
             const items = Array.isArray(parsed) ? parsed : [parsed];
 
             for (const item of items) {
-              if (item.provider?.sameAs) {
+              if (Array.isArray(item?.provider?.sameAs)) {
                 sameAs = sameAs.concat(item.provider.sameAs);
-                if (item.provider.name) name = item.provider.name;
-                if (item.provider.image) imageUrl = item.provider.image;
               }
-              if (item.brand?.name && !name) name = item.brand.name;
-              if (item.image?.[0] && !imageUrl) imageUrl = item.image[0];
-              if (item.description) description = item.description;
-              if (item.areaServed?.name) location = item.areaServed.name;
-              if (item.offers?.lowPrice) lowPrice = item.offers.lowPrice;
-              if (item.aggregateRating) {
-                ratingValue = item.aggregateRating.ratingValue;
-                reviewCount = item.aggregateRating.reviewCount;
+              if (item?.provider?.name && !name) name = item.provider.name;
+              if (item?.provider?.image && !imageUrl) imageUrl = item.provider.image;
+              if (item?.brand?.name && !name) name = item.brand.name;
+              if (Array.isArray(item?.image) && item.image[0] && !imageUrl) {
+                imageUrl = item.image[0];
+              }
+              if (typeof item?.description === "string") description = item.description;
+              if (typeof item?.areaServed?.name === "string") {
+                location = item.areaServed.name;
+              }
+              if (typeof item?.offers?.lowPrice === "string") {
+                lowPrice = item.offers.lowPrice;
+              }
+              if (item?.aggregateRating) {
+                ratingValue =
+                  typeof item.aggregateRating.ratingValue === "number"
+                    ? item.aggregateRating.ratingValue
+                    : ratingValue;
+                reviewCount =
+                  typeof item.aggregateRating.reviewCount === "number"
+                    ? item.aggregateRating.reviewCount
+                    : reviewCount;
               }
             }
-          } catch {}
+          } catch {
+            // Ignore malformed JSON-LD blocks.
+          }
         });
 
-        // Extract niche from h1
-        const h1s = document.querySelectorAll("h1");
+        const h1s = Array.from(document.querySelectorAll("h1"));
         let niche: string | null = null;
         h1s.forEach((h1) => {
           const text = h1.textContent?.trim() || "";
-          // The first h1 is usually the niche (e.g., "Lifestyle content creator")
-          // The second h1 is the name
           if (text && text !== name && !niche) {
             niche = text;
           }
         });
 
-        // Extract follower text
-        const bodyText = document.body.textContent || "";
-        const followerMatch = bodyText.match(
-          /([\d.]+\s*[kmKM]?)\s*Followers/i
-        );
+        const bodyText = document.body?.innerText || document.body?.textContent || "";
+        const followerMatches = Array.from(
+          bodyText.matchAll(/([\d.,]+\s*[kmKM]?)\s*Followers/gi)
+        ).map((match) => match[1]);
+        const nonZeroFollowerText = followerMatches.find((value) => {
+          const digits = value.replace(/[^\d]/g, "");
+          return digits.length > 0 && Number(digits) > 0;
+        });
 
         return {
           name,
@@ -449,51 +631,54 @@ async function scrapeProfilePage(
           bio: description,
           imageUrl,
           sameAs,
-          followerText: followerMatch ? followerMatch[1] : null,
+          followerText: nonZeroFollowerText || followerMatches[0] || null,
           price: lowPrice ? `$${lowPrice}` : null,
           ratingValue,
           reviewCount,
+          profileDump: bodyText || null,
         };
       });
 
-      // Parse social handles from sameAs
-      let instagramHandle: string | null = null;
-      let tiktokHandle: string | null = null;
-      let website: string | null = null;
+      const hasCreatorSignals = Boolean(
+        data.name ||
+          data.location ||
+          data.bio ||
+          data.imageUrl ||
+          data.price ||
+          (data.sameAs || []).length
+      );
 
-      for (const url of data.sameAs) {
-        if (url.includes("instagram.com")) {
-          const h = extractHandleFromUrl(url, "instagram");
-          if (h && h !== "collabstr") instagramHandle = h;
-        } else if (url.includes("tiktok.com")) {
-          const h = extractHandleFromUrl(url, "tiktok");
-          if (h && h !== "collabstr.com" && h !== "i18n")
-            tiktokHandle = h;
-        } else if (
-          url.startsWith("http") &&
-          !url.includes("collabstr.com")
-        ) {
-          website = url;
-        }
+      if (!hasCreatorSignals) {
+        console.log(`[profile] Skipping non-creator page: ${slug}`);
+        return null;
       }
 
-      return {
-        collabstrSlug: slug,
-        collabstrUrl: `${BASE_URL}/${slug}`,
+      const candidateUrls = Array.from(new Set(data.sameAs || []));
+
+      const instagram = extractSocialLink(candidateUrls, "instagram");
+      const tiktok = extractSocialLink(candidateUrls, "tiktok");
+      const website = extractWebsite(candidateUrls);
+
+      return buildInfluencerRecord({
         name: data.name,
+        instagram: instagram.handle,
+        tiktok: tiktok.handle,
+        profileDump: cleanNullableTextDump(data.profileDump),
+        collabstrSlug: slug,
+        collabstrUrl: url,
         niche: data.niche,
         location: data.location,
         bio: data.bio,
         imageUrl: data.imageUrl,
-        instagramHandle,
-        tiktokHandle,
+        instagramUrl: instagram.url,
+        tiktokUrl: tiktok.url,
         website,
         followerCount: parseFollowerCount(data.followerText),
         price: data.price,
         rating: data.ratingValue,
         reviewCount: data.reviewCount,
         scrapedAt: new Date().toISOString(),
-      };
+      });
     } catch (err) {
       console.error(
         `[profile] Attempt ${attempt}/${MAX_RETRIES} failed for ${slug}:`,
@@ -507,34 +692,49 @@ async function scrapeProfilePage(
   return null;
 }
 
-// ── Main ────────────────────────────────────────────────────────────────────
 async function main() {
-  const { startPage, maxPages, output } = parseArgs();
+  const { startPage, maxPages, maxProfiles, output } = parseArgs();
 
   console.log("=== Collabstr Influencer Scraper ===");
   console.log(`Output: ${output}`);
   console.log(`Start page: ${startPage}, Max pages: ${maxPages}`);
+  console.log(
+    `Max profiles this run: ${maxProfiles === null ? "unbounded" : maxProfiles}`
+  );
 
-  // Load checkpoint
-  const checkpoint = loadCheckpoint();
-  const state: CheckpointState = checkpoint || {
+  const existingOutputState = loadExistingOutputState(output);
+  if (existingOutputState.duplicateCount || existingOutputState.invalidCount) {
+    console.log(
+      `[output] normalized existing JSONL | deduped=${existingOutputState.duplicateCount} invalid=${existingOutputState.invalidCount}`
+    );
+  }
+
+  const checkpoint = loadCheckpoint(output);
+  const baseState: CheckpointState = checkpoint || {
     lastPage: startPage - 1,
     lastSlugIndex: -1,
     totalScraped: 0,
-    scrapedSlugs: new Set(),
+    scrapedSlugs: new Set<string>(),
   };
 
-  const effectiveStartPage = checkpoint
-    ? checkpoint.lastPage
-    : startPage;
+  const state: CheckpointState = {
+    lastPage: baseState.lastPage,
+    lastSlugIndex: baseState.lastSlugIndex,
+    totalScraped: Math.max(baseState.totalScraped, existingOutputState.totalRecords),
+    scrapedSlugs: new Set([
+      ...Array.from(existingOutputState.scrapedSlugs),
+      ...Array.from(baseState.scrapedSlugs),
+    ]),
+  };
+
+  const effectiveStartPage = checkpoint ? checkpoint.lastPage : startPage;
 
   console.log(
-    `Resuming from page ${effectiveStartPage}, total scraped so far: ${state.totalScraped}`
+    `Resuming from page ${effectiveStartPage}, total known records: ${state.totalScraped}`
   );
 
-  // Launch browser
   const browser: Browser = await chromium.launch({
-    headless: false, // Use headed mode to avoid Cloudflare
+    headless: process.env.PLAYWRIGHT_HEADLESS !== 'false',
     args: ["--disable-blink-features=AutomationControlled"],
   });
 
@@ -546,15 +746,18 @@ async function main() {
 
   const page = await context.newPage();
 
+  let scrapedThisRun = 0;
+
   try {
     let currentPage = effectiveStartPage;
     let emptyPages = 0;
 
-    while (
-      currentPage < effectiveStartPage + maxPages &&
-      emptyPages < 3
-    ) {
-      // Scrape listing page
+    while (currentPage < effectiveStartPage + maxPages && emptyPages < 3) {
+      if (maxProfiles !== null && scrapedThisRun >= maxProfiles) {
+        console.log(`[main] Reached --max-profiles=${maxProfiles}`);
+        break;
+      }
+
       const slugs = await scrapeListingPage(page, currentPage);
 
       if (slugs.length === 0) {
@@ -568,39 +771,37 @@ async function main() {
 
       emptyPages = 0;
 
-      // Determine starting index within page (for resume)
       const startIdx =
         currentPage === effectiveStartPage && checkpoint
           ? checkpoint.lastSlugIndex + 1
           : 0;
 
       for (let i = startIdx; i < slugs.length; i++) {
-        const slug = slugs[i];
-
-        // Skip already scraped
-        if (state.scrapedSlugs.has(slug)) {
-          continue;
+        if (maxProfiles !== null && scrapedThisRun >= maxProfiles) {
+          console.log(`[main] Reached --max-profiles=${maxProfiles}`);
+          break;
         }
 
-        // Scrape profile
-        const influencer = await scrapeProfilePage(page, slug);
+        const slug = slugs[i];
+        if (state.scrapedSlugs.has(slug)) continue;
 
+        const influencer = await scrapeProfilePage(page, slug);
         if (influencer) {
           appendToOutput(output, influencer);
           state.scrapedSlugs.add(slug);
           state.totalScraped++;
+          scrapedThisRun++;
 
           console.log(
-            `[${state.totalScraped}] ${influencer.name || slug} | IG: ${influencer.instagramHandle || "—"} | TT: ${influencer.tiktokHandle || "—"} | ${influencer.location || "—"}`
+            `[${state.totalScraped}] ${influencer.name || slug} | IG: ${influencer.instagram || "—"} | TT: ${influencer.tiktok || "—"} | dump: ${influencer.profileDump ? `${influencer.profileDump.length} chars` : "—"}`
           );
         }
 
         state.lastPage = currentPage;
         state.lastSlugIndex = i;
 
-        // Checkpoint
         if (state.totalScraped % CHECKPOINT_EVERY === 0) {
-          saveCheckpoint(state);
+          saveCheckpoint(output, state);
           console.log(
             `[checkpoint] Saved at ${state.totalScraped} profiles (page ${currentPage}, index ${i})`
           );
@@ -609,14 +810,16 @@ async function main() {
         await sleep(DELAY_BETWEEN_PROFILES_MS);
       }
 
-      // Save checkpoint at end of page
-      saveCheckpoint(state);
+      saveCheckpoint(output, state);
 
-      // Report at page boundaries
       if (currentPage % 5 === 0) {
         console.log(
-          `\n=== PROGRESS REPORT ===\nPage: ${currentPage}\nTotal scraped: ${state.totalScraped}\nLast profile: ${Array.from(state.scrapedSlugs).pop()}\n========================\n`
+          `\n=== PROGRESS REPORT ===\nPage: ${currentPage}\nTotal known records: ${state.totalScraped}\nNew this run: ${scrapedThisRun}\n========================\n`
         );
+      }
+
+      if (maxProfiles !== null && scrapedThisRun >= maxProfiles) {
+        break;
       }
 
       currentPage++;
@@ -624,9 +827,9 @@ async function main() {
     }
 
     console.log(`\n=== SCRAPE COMPLETE ===`);
-    console.log(`Total profiles scraped: ${state.totalScraped}`);
+    console.log(`Total known records: ${state.totalScraped}`);
+    console.log(`New records this run: ${scrapedThisRun}`);
     console.log(`Output file: ${output}`);
-    console.log(`Pages processed: ${effectiveStartPage} to ${currentPage - 1}`);
   } finally {
     await browser.close();
   }
