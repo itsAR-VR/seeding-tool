@@ -51,6 +51,13 @@ interface CheckpointState {
   scrapedSlugs: Set<string>;
 }
 
+interface OutputState {
+  totalRecords: number;
+  duplicateCount: number;
+  invalidCount: number;
+  scrapedSlugs: Set<string>;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function parseArgs(): {
   startPage: number;
@@ -109,6 +116,147 @@ function saveCheckpoint(state: CheckpointState): void {
 
 function appendToOutput(output: string, influencer: ScrapedInfluencer): void {
   fs.appendFileSync(output, JSON.stringify(influencer) + "\n");
+}
+
+function writeOutput(output: string, influencers: ScrapedInfluencer[]): void {
+  const content =
+    influencers.map((influencer) => JSON.stringify(influencer)).join("\n") +
+    (influencers.length ? "\n" : "");
+  fs.writeFileSync(output, content);
+}
+
+function cleanNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function parseSlugFromUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    const url = new URL(value);
+    const slug = url.pathname.replace(/^\//, "").replace(/\/$/, "");
+    return slug || null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeInfluencer(raw: unknown): ScrapedInfluencer | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const record = raw as Record<string, unknown>;
+  const collabstrSlug =
+    cleanNullableString(record.collabstrSlug) ||
+    parseSlugFromUrl(record.collabstrUrl);
+
+  if (!collabstrSlug) return null;
+
+  const toNumber = (value: unknown): number | null => {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim()) {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  return {
+    collabstrSlug,
+    collabstrUrl:
+      cleanNullableString(record.collabstrUrl) || `${BASE_URL}/${collabstrSlug}`,
+    name: cleanNullableString(record.name),
+    niche: cleanNullableString(record.niche),
+    location: cleanNullableString(record.location),
+    bio: cleanNullableString(record.bio),
+    imageUrl: cleanNullableString(record.imageUrl),
+    instagramHandle: cleanNullableString(record.instagramHandle),
+    tiktokHandle: cleanNullableString(record.tiktokHandle),
+    website: cleanNullableString(record.website),
+    followerCount: toNumber(record.followerCount),
+    price: cleanNullableString(record.price),
+    rating: toNumber(record.rating),
+    reviewCount: toNumber(record.reviewCount),
+    scrapedAt: cleanNullableString(record.scrapedAt) || new Date().toISOString(),
+  };
+}
+
+function mergeInfluencers(
+  base: ScrapedInfluencer,
+  incoming: ScrapedInfluencer
+): ScrapedInfluencer {
+  return {
+    ...base,
+    ...Object.fromEntries(
+      Object.entries(incoming).filter(([, value]) => value !== null)
+    ),
+    collabstrSlug: base.collabstrSlug,
+    collabstrUrl: incoming.collabstrUrl || base.collabstrUrl,
+  };
+}
+
+function loadExistingOutputState(output: string): OutputState {
+  if (!fs.existsSync(output)) {
+    return {
+      totalRecords: 0,
+      duplicateCount: 0,
+      invalidCount: 0,
+      scrapedSlugs: new Set(),
+    };
+  }
+
+  const lines = fs
+    .readFileSync(output, "utf-8")
+    .split("\n")
+    .filter((line) => line.trim());
+
+  const deduped = new Map<string, ScrapedInfluencer>();
+  let duplicateCount = 0;
+  let invalidCount = 0;
+  let needsRewrite = false;
+
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      const normalized = normalizeInfluencer(parsed);
+      if (!normalized) {
+        invalidCount++;
+        needsRewrite = true;
+        continue;
+      }
+
+      const normalizedLine = JSON.stringify(normalized);
+      if (normalizedLine !== line.trim()) needsRewrite = true;
+
+      const existing = deduped.get(normalized.collabstrSlug);
+      if (existing) {
+        duplicateCount++;
+        deduped.set(
+          normalized.collabstrSlug,
+          mergeInfluencers(existing, normalized)
+        );
+        needsRewrite = true;
+      } else {
+        deduped.set(normalized.collabstrSlug, normalized);
+      }
+    } catch {
+      invalidCount++;
+      needsRewrite = true;
+    }
+  }
+
+  const influencers = Array.from(deduped.values());
+
+  if (needsRewrite) {
+    writeOutput(output, influencers);
+  }
+
+  return {
+    totalRecords: influencers.length,
+    duplicateCount,
+    invalidCount,
+    scrapedSlugs: new Set(influencers.map((record) => record.collabstrSlug)),
+  };
 }
 
 function parseFollowerCount(text: string | null): number | null {
