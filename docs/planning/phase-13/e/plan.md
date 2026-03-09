@@ -91,10 +91,12 @@ If the live cutover passes, Phase 13 closes. If it does not, the next phase must
   - Confirmed local Vercel linkage exists at `.vercel/project.json`
   - Confirmed `npm run build` passes when sourcing the actual root `.env.local`
   - Ran the live marketing cutover check against `NEXT_PUBLIC_APP_URL`; it failed because the deployed app still serves the old build with `.proof-rail` present
+  - Pushed `main` to origin at commit `f973875 feat: stabilize demo platform for phase 13`
 - Blockers:
   - No production QA credentials in local env (`E2E_EMAIL` / `E2E_PASSWORD` still missing).
   - The deployed production app has not picked up the Phase 13 changes yet; live marketing verification still sees `.proof-rail`.
+  - Vercel CLI deployment inspection is blocked on this machine with `Error: Not authorized`.
 - Next concrete steps:
-  - Push `main` so the linked Vercel project can auto-deploy the Phase 13 changes.
-  - Re-run the marketing live check after deploy completes.
+  - Wait for or investigate the deployment attached to `https://seed-scale.vercel.app`.
+  - Re-run the marketing live check after deploy completes and confirm `.proof-rail` is gone.
   - Provide or wire the live QA env needed for authenticated Playwright (`E2E_EMAIL`, `E2E_PASSWORD`) to finish the authenticated production cutover suite.

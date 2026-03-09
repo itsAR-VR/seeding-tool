@@ -1,12 +1,13 @@
 # Phase 13e Cutover Results
 
 ## Status
-- Deployment status: `[BLOCKED: not started]`
-- Verification date: `[PLACEHOLDER]`
-- Target environment: `[PLACEHOLDER: production URL]`
+- Deployment status: `[BLOCKED: pushed to main, production URL still serving previous build]`
+- Verification date: `2026-03-09`
+- Target environment: `https://seed-scale.vercel.app`
 - Tenant: `SleepKalm/ClubKalm`
 
 ## Automated checks
+- [x] Local production build succeeds when sourcing the root `.env.local`
 - [ ] Marketing homepage shows no proof rail
 - [ ] Login succeeds
 - [ ] Logout succeeds
@@ -24,7 +25,9 @@
 - [ ] Scheduled automation fired within expected window
 
 ## Blockers
-- `[PLACEHOLDER]`
+- `main` was pushed at commit `f973875`, but `https://seed-scale.vercel.app` still shows `.proof-rail`, so the production URL has not picked up the new build yet.
+- Vercel CLI inspection from this machine is blocked with `Error: Not authorized`, so deployment status cannot be queried directly here.
+- `E2E_EMAIL` and `E2E_PASSWORD` are still missing locally, so authenticated production Playwright checks remain blocked.
 
 ## Non-blocking issues
-- `[PLACEHOLDER]`
+- Playwright generates local `apps/web/test-results/` artifacts during live checks; these are now ignored via `.gitignore`.
