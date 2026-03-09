@@ -62,10 +62,86 @@ function isAuthorized(req) {
   return actual.length === expected.length && timingSafeEqual(actual, expected);
 }
 
+/**
+ * Build a rich brand-context scoring prompt.
+ *
+ * Uses all available context in priority order:
+ *   1. Persona systemPrompt (brand-configured AI persona)
+ *   2. Persona tone + name
+ *   3. Products (campaign-specific product context)
+ *   4. brandIdentity summary (derived ICP string)
+ *   5. Creator profile data
+ *
+ * Output: strict JSON { score, reasoning, approved, confidence, signals }
+ */
+function buildScoringPrompt({ brandIdentity, persona, products, approvalThreshold, creator, profileText }) {
+  const threshold = typeof approvalThreshold === "number" ? approvalThreshold : 0.65;
+  const handle = creator.instagram || creator.name || "unknown";
+  const niche = creator.niche || "unknown";
+  const followers = creator.followerCount != null ? creator.followerCount.toLocaleString() : "unknown";
+  const snippet = (profileText || creator.bio || "").slice(0, 1000);
+
+  // System context block — prefer persona.systemPrompt if available
+  const systemBlock = persona?.systemPrompt
+    ? `=== BRAND PERSONA INSTRUCTIONS ===\n${persona.systemPrompt.trim()}\n===`
+    : `=== BRAND CONTEXT ===\n${brandIdentity || "Brand context not provided."}\n===`;
+
+  // Persona tone hint
+  const toneHint = persona?.tone
+    ? `Evaluate through the lens of a ${persona.tone} brand voice.`
+    : "";
+
+  // Product context
+  const productLines =
+    Array.isArray(products) && products.length > 0
+      ? `Campaign products: ${products
+          .slice(0, 5)
+          .map((p) => (p.description ? `${p.name} (${p.description})` : p.name))
+          .join("; ")}`
+      : "";
+
+  return `${systemBlock}
+
+You are an expert influencer partnership analyst scoring creator-brand fit.
+${toneHint}
+
+Brand summary: ${brandIdentity || "Not provided"}
+${productLines}
+
+Creator to evaluate:
+- Handle: @${handle}
+- Niche: ${niche}
+- Followers: ${followers}
+- Bio/profile excerpt: ${snippet || "(no data)"}
+
+Scoring rubric (weight each dimension equally):
+1. Niche alignment — does the creator's content area match the brand's category/products?
+2. Audience fit — would this creator's followers be receptive to this brand?
+3. Brand voice compatibility — does the creator's tone/style match the brand persona?
+4. Content quality signals — (infer from bio/profile text; professional, authentic, engaged)
+
+Approved if aggregate score >= ${threshold}.
+
+Reply with valid JSON ONLY (no markdown, no extra text):
+{
+  "score": 0.00,
+  "reasoning": "2-3 sentence explanation covering strongest signals for and against",
+  "approved": false,
+  "confidence": "high|medium|low",
+  "signals": {
+    "nicheAlignment": 0.0,
+    "audienceFit": 0.0,
+    "brandVoiceMatch": 0.0,
+    "contentQuality": 0.0
+  }
+}`;
+}
+
 const server = http.createServer(async (req, res) => {
   const requestId = req.headers["fly-request-id"] || randomUUID();
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
+  // ── Health ──────────────────────────────────────────────────────────────
   if (req.method === "GET" && (url.pathname === "/healthz" || url.pathname === "/readyz")) {
     return sendJson(res, 200, {
       ok: true,
@@ -78,80 +154,140 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  // ── Creator scoring ─────────────────────────────────────────────────────
   if (req.method === "POST" && url.pathname === "/v1/search") {
     if (!isAuthorized(req)) {
-      return sendJson(res, 401, {
-        error: "unauthorized",
-        requestId,
-      });
+      return sendJson(res, 401, { error: "unauthorized", requestId });
     }
 
     try {
       const body = await readJsonBody(req);
 
-      // --- real search pipeline ---
-      const { campaignId, brandId, criteria, brandIdentity, icpCategories, creators } = body;
+      const {
+        campaignId,
+        brandId,
+        criteria,
+        brandIdentity,
+        icpCategories,
+        creators,
+        // New fields — persona context and campaign products
+        persona,       // { name?, tone?, systemPrompt? }
+        products,      // [{ name, description? }]
+        approvalThreshold, // number 0-1, default 0.65
+      } = body;
 
       if (!creators || creators.length === 0) {
         return sendJson(res, 200, { results: [], message: "no_creators_provided" });
       }
 
-      const { chromium } = await import("playwright");
-      const browser = await chromium.launch({ headless: true });
-      const results = [];
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) {
+        return sendJson(res, 500, { error: "OPENAI_API_KEY_not_set", requestId });
+      }
 
-      for (const creator of creators.slice(0, 10)) {
+      const threshold = typeof approvalThreshold === "number"
+        ? Math.min(Math.max(approvalThreshold, 0), 1)
+        : 0.65;
+
+      const { chromium } = await import("playwright");
+      const browser = await chromium.launch({
+        headless: true,
+        args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+      });
+
+      const results = [];
+      const batchSize = Math.min(creators.length, 10);
+
+      for (let i = 0; i < batchSize; i++) {
+        const creator = creators[i];
+
         try {
           const profileUrl = creator.instagramUrl || creator.collabstrUrl;
           let profileText = creator.profileDump || creator.bio || "";
 
+          // Real Playwright profile enrichment — scrape profile page if we have a URL
+          // and no pre-fetched dump
           if (profileUrl && !creator.profileDump) {
             const page = await browser.newPage();
             try {
-              await page.goto(profileUrl, { timeout: 15000, waitUntil: "domcontentloaded" });
+              await page.goto(profileUrl, {
+                timeout: 15000,
+                waitUntil: "domcontentloaded",
+              });
               profileText = await page.evaluate(() => document.body?.innerText || "");
-            } catch { /* use fallback */ } finally {
+            } catch (scrapeErr) {
+              // Non-fatal — fall through to bio/empty
+              console.log(JSON.stringify({
+                level: "warn",
+                msg: "playwright_scrape_failed",
+                url: profileUrl,
+                error: scrapeErr?.message,
+                requestId,
+              }));
+            } finally {
               await page.close();
             }
           }
 
-          // OpenAI brand fit scoring
-          const openaiKey = process.env.OPENAI_API_KEY;
-          if (!openaiKey) throw new Error("OPENAI_API_KEY not set");
+          // Build brand-aware scoring prompt
+          const prompt = buildScoringPrompt({
+            brandIdentity,
+            persona,
+            products,
+            approvalThreshold: threshold,
+            creator,
+            profileText,
+          });
 
-          const prompt = `You are a brand partnership analyst. Score creator-brand fit.
-
-Brand: ${brandIdentity || "wellness/sleep brand"}
-Creator handle: ${creator.instagram || creator.name || "unknown"}
-Creator niche: ${creator.niche || "unknown"}
-Creator bio/profile snippet: ${(profileText || "").slice(0, 800)}
-
-Rate fit 0.0-1.0. Reply JSON only: {"score": 0.0-1.0, "reasoning": "1-2 sentence reason", "approved": true/false}
-Approved if score >= 0.65.`;
-
+          // OpenAI scoring call
           const oaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
             method: "POST",
-            headers: { Authorization: `Bearer ${openaiKey}`, "Content-Type": "application/json" },
+            headers: {
+              Authorization: `Bearer ${openaiKey}`,
+              "Content-Type": "application/json",
+            },
             body: JSON.stringify({
               model: "gpt-4o-mini",
               messages: [{ role: "user", content: prompt }],
               response_format: { type: "json_object" },
-              max_tokens: 150,
+              max_tokens: 300,
+              temperature: 0.1,
             }),
           });
 
+          if (!oaiRes.ok) {
+            const errText = await oaiRes.text();
+            throw new Error(`openai_http_${oaiRes.status}: ${errText.slice(0, 200)}`);
+          }
+
           const oaiData = await oaiRes.json();
-          const parsed = JSON.parse(oaiData.choices?.[0]?.message?.content || "{}");
+          const rawContent = oaiData.choices?.[0]?.message?.content || "{}";
+
+          let parsed;
+          try {
+            parsed = JSON.parse(rawContent);
+          } catch {
+            parsed = {};
+          }
+
+          const fitScore = typeof parsed.score === "number"
+            ? Math.min(Math.max(parsed.score, 0), 1)
+            : 0;
 
           results.push({
             handle: creator.instagram || creator.name,
             collabstrSlug: creator.collabstrSlug,
             niche: creator.niche,
             followerCount: creator.followerCount,
-            fitScore: parsed.score ?? 0,
+            fitScore,
             fitReasoning: parsed.reasoning ?? "",
-            approved: parsed.approved ?? false,
+            approved: typeof parsed.approved === "boolean"
+              ? parsed.approved
+              : fitScore >= threshold,
+            confidence: parsed.confidence ?? "medium",
+            signals: parsed.signals ?? null,
             instagramUrl: creator.instagramUrl,
+            profileScraped: Boolean(profileUrl && !creator.profileDump),
           });
         } catch (err) {
           results.push({
@@ -160,27 +296,39 @@ Approved if score >= 0.65.`;
             fitScore: 0,
             fitReasoning: `analysis_error: ${err.message}`,
             approved: false,
+            confidence: "low",
+            signals: null,
             error: true,
           });
         }
       }
 
       await browser.close();
-      return sendJson(res, 200, { results, analyzed: results.length });
+
+      return sendJson(res, 200, {
+        results,
+        analyzed: results.length,
+        approvalThreshold: threshold,
+        personaUsed: Boolean(persona?.systemPrompt),
+        productsProvided: Array.isArray(products) ? products.length : 0,
+        requestId,
+      });
     } catch (error) {
       const code = error instanceof Error ? error.message : "unknown_error";
       const status = code === "payload_too_large" ? 413 : 400;
-      return sendJson(res, status, {
+
+      console.log(JSON.stringify({
+        level: "error",
+        msg: "search_handler_error",
         error: code,
         requestId,
-      });
+      }));
+
+      return sendJson(res, status, { error: code, requestId });
     }
   }
 
-  return sendJson(res, 404, {
-    error: "not_found",
-    requestId,
-  });
+  return sendJson(res, 404, { error: "not_found", requestId });
 });
 
 server.listen(port, host, () => {

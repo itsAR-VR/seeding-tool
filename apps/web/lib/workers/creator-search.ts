@@ -1,8 +1,14 @@
 /**
  * Creator search pipeline.
  *
- * Discovery source today: the local Collabstr dataset, narrowed by brand ICP.
- * Verification path: the Fly worker when configured, with local OpenAI fallback.
+ * Discovery source: local Collabstr dataset narrowed by brand ICP.
+ * Verification path: Fly worker (real Playwright + OpenAI) with local OpenAI fallback.
+ * Approval path: agent-driven via brand context + AI persona (auto or recommend mode).
+ *
+ * Approval modes (controlled by BrandSettings.metadata.approvalMode):
+ *   "auto"      — AI decision is final; writes approved/declined directly (default)
+ *   "recommend" — AI decision is advisory; all creators land in "pending" queue
+ *                 with an InterventionCase for human review
  */
 
 import * as fs from "node:fs";
@@ -12,8 +18,10 @@ import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { deriveBrandICP, icpToSearchHints } from "@/lib/brands/icp";
+import { deriveBrandICP, icpToSearchHints, type BrandICP } from "@/lib/brands/icp";
 import { CREDIT_COSTS, debit, getBalance } from "@/lib/credits";
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 type SearchCriteria = {
   platform?: string;
@@ -52,7 +60,22 @@ type ScoredCreator = CollabstrRow & {
   fitScore: number;
   fitReasoning: string;
   approved: boolean;
+  confidence?: string;
+  signals?: Record<string, number> | null;
   analysisSource: "worker" | "local";
+};
+
+/** Persona context forwarded to the Fly worker */
+type PersonaContext = {
+  name: string;
+  tone: string;
+  systemPrompt: string;
+};
+
+/** Single product forwarded to the Fly worker */
+type ProductContext = {
+  name: string;
+  description?: string | null;
 };
 
 type WorkerResponse = {
@@ -64,14 +87,31 @@ type WorkerResponse = {
     fitScore?: number;
     fitReasoning?: string;
     approved?: boolean;
+    confidence?: string;
+    signals?: Record<string, number> | null;
     instagramUrl?: string | null;
+    error?: boolean;
   }>;
   analyzed?: number;
+  approvalThreshold?: number;
+  personaUsed?: boolean;
+  productsProvided?: number;
+  requestId?: string;
 };
+
+/** Approval mode from BrandSettings.metadata */
+type ApprovalMode = "auto" | "recommend";
+
+// ─── Config ──────────────────────────────────────────────────────────────────
 
 const WORKER_BASE_URL = process.env.CREATOR_SEARCH_WORKER_BASE_URL?.trim().replace(/\/$/, "");
 const WORKER_TOKEN = process.env.CREATOR_SEARCH_WORKER_TOKEN?.trim();
 const WORKER_MAX_ANALYSIS = 10;
+
+/** Default approval threshold — creators at or above are approved */
+const DEFAULT_APPROVAL_THRESHOLD = 0.65;
+
+// ─── Dataset helpers ─────────────────────────────────────────────────────────
 
 function getCollabstrPath(): string {
   const webDir = path.dirname(fileURLToPath(import.meta.url));
@@ -177,52 +217,147 @@ function shortlistCreators(
     .slice(0, Math.max(limit * 3, limit));
 }
 
+// ─── Brand context helpers ────────────────────────────────────────────────────
+
+/**
+ * Fetch the brand's active AI persona (default=true, else most recent).
+ * Returns null if none configured.
+ */
+async function fetchBrandPersona(brandId: string): Promise<PersonaContext | null> {
+  const persona = await prisma.aiPersona.findFirst({
+    where: { brandId },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }],
+    select: { name: true, tone: true, systemPrompt: true },
+  });
+
+  return persona ?? null;
+}
+
+/**
+ * Read approvalMode from BrandSettings.metadata.
+ * Falls back to "auto" (backward-compatible — existing behaviour unchanged).
+ */
+async function fetchApprovalMode(brandId: string): Promise<ApprovalMode> {
+  const settings = await prisma.brandSettings.findUnique({
+    where: { brandId },
+    select: { metadata: true },
+  });
+
+  const meta = settings?.metadata as Record<string, unknown> | null;
+  const mode = meta?.approvalMode;
+
+  return mode === "recommend" ? "recommend" : "auto";
+}
+
+/**
+ * Read brand's configured approval threshold (0-1).
+ * Falls back to DEFAULT_APPROVAL_THRESHOLD.
+ */
+async function fetchApprovalThreshold(brandId: string): Promise<number> {
+  const settings = await prisma.brandSettings.findUnique({
+    where: { brandId },
+    select: { metadata: true },
+  });
+
+  const meta = settings?.metadata as Record<string, unknown> | null;
+  const t = meta?.approvalThreshold;
+
+  if (typeof t === "number" && t > 0 && t <= 1) return t;
+  if (typeof t === "string") {
+    const parsed = parseFloat(t);
+    if (!isNaN(parsed) && parsed > 0 && parsed <= 1) return parsed;
+  }
+
+  return DEFAULT_APPROVAL_THRESHOLD;
+}
+
+// ─── Local scoring (fallback) ─────────────────────────────────────────────────
+
 async function scoreFitLocally(
   creator: CollabstrRow,
-  brandSummary: string,
+  icp: BrandICP,
+  persona: PersonaContext | null,
+  approvalThreshold: number,
   openai: OpenAI
-): Promise<{ fitScore: number; fitReasoning: string; approved: boolean }> {
+): Promise<{ fitScore: number; fitReasoning: string; approved: boolean; confidence: string; signals: Record<string, number> | null }> {
   const snippet = (creator.profileDump ?? creator.bio ?? "").slice(0, 800);
-  const prompt = `You are a brand partnership analyst. Score creator-brand fit.
 
-Brand: ${brandSummary}
-Creator handle: @${creator.instagram ?? creator.name ?? "unknown"}
-Creator niche: ${creator.niche ?? "unknown"}
-Creator bio/profile: ${snippet || "(no data)"}
-Followers: ${creator.followerCount ?? "unknown"}
+  // Build a persona-aware prompt locally too
+  const systemBlock = persona?.systemPrompt
+    ? `=== BRAND PERSONA INSTRUCTIONS ===\n${persona.systemPrompt.trim()}\n===`
+    : `=== BRAND CONTEXT ===\n${icp.summary}\n===`;
 
-Rate fit 0.0-1.0. Approved if score >= 0.65.
-Reply JSON only: {"score": 0.0, "reasoning": "1-2 sentence reason", "approved": false}`;
+  const toneHint = persona?.tone
+    ? `Evaluate through the lens of a ${persona.tone} brand voice.`
+    : "";
+
+  const productLines =
+    icp.products.length
+      ? `Campaign products: ${icp.products
+          .slice(0, 5)
+          .map((p) => (p.description ? `${p.name} (${p.description})` : p.name))
+          .join("; ")}`
+      : "";
+
+  const prompt = `${systemBlock}
+
+You are an expert influencer partnership analyst.
+${toneHint}
+
+Brand: ${icp.brandName}
+${productLines}
+
+Creator:
+- Handle: @${creator.instagram ?? creator.name ?? "unknown"}
+- Niche: ${creator.niche ?? "unknown"}
+- Followers: ${creator.followerCount ?? "unknown"}
+- Bio/profile: ${snippet || "(no data)"}
+
+Score fit 0.0-1.0. Approved if score >= ${approvalThreshold}.
+Reply JSON ONLY: {"score": 0.0, "reasoning": "2-3 sentences", "approved": false, "confidence": "high|medium|low", "signals": {"nicheAlignment": 0.0, "audienceFit": 0.0, "brandVoiceMatch": 0.0, "contentQuality": 0.0}}`;
 
   try {
     const res = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      max_tokens: 150,
-      temperature: 0.2,
+      max_tokens: 300,
+      temperature: 0.1,
     });
 
     const parsed = JSON.parse(res.choices[0]?.message?.content ?? "{}") as {
       score?: number;
       reasoning?: string;
       approved?: boolean;
+      confidence?: string;
+      signals?: Record<string, number>;
     };
 
-    const fitScore = typeof parsed.score === "number" ? parsed.score : 0;
+    const fitScore = typeof parsed.score === "number"
+      ? Math.min(Math.max(parsed.score, 0), 1)
+      : 0;
+
     return {
       fitScore,
       fitReasoning: parsed.reasoning ?? "",
-      approved: parsed.approved ?? fitScore >= 0.65,
+      approved: typeof parsed.approved === "boolean"
+        ? parsed.approved
+        : fitScore >= approvalThreshold,
+      confidence: parsed.confidence ?? "medium",
+      signals: parsed.signals ?? null,
     };
   } catch {
     return {
       fitScore: 0,
       fitReasoning: "scoring_error",
       approved: false,
+      confidence: "low",
+      signals: null,
     };
   }
 }
+
+// ─── Worker integration ──────────────────────────────────────────────────────
 
 function canUseWorker(): boolean {
   return Boolean(WORKER_BASE_URL && WORKER_TOKEN);
@@ -236,6 +371,9 @@ async function scoreWithWorker(
     criteria: SearchCriteria;
     brandIdentity: string;
     icpCategories: string[];
+    persona: PersonaContext | null;
+    products: ProductContext[];
+    approvalThreshold: number;
   }
 ): Promise<ScoredCreator[] | null> {
   if (!canUseWorker() || candidates.length === 0) return null;
@@ -247,7 +385,14 @@ async function scoreWithWorker(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      ...payload,
+      campaignId: payload.campaignId,
+      brandId: payload.brandId,
+      criteria: payload.criteria,
+      brandIdentity: payload.brandIdentity,
+      icpCategories: payload.icpCategories,
+      persona: payload.persona,
+      products: payload.products,
+      approvalThreshold: payload.approvalThreshold,
       creators: candidates.slice(0, WORKER_MAX_ANALYSIS),
     }),
   });
@@ -276,7 +421,9 @@ async function scoreWithWorker(
       fitScore: result.fitScore ?? 0,
       fitReasoning: result.fitReasoning ?? "",
       approved: Boolean(result.approved),
-      analysisSource: "worker",
+      confidence: result.confidence ?? "medium",
+      signals: result.signals ?? null,
+      analysisSource: "worker" as const,
     };
   });
 
@@ -285,7 +432,9 @@ async function scoreWithWorker(
 
 async function scoreLocally(
   candidates: CollabstrRow[],
-  brandSummary: string,
+  icp: BrandICP,
+  persona: PersonaContext | null,
+  approvalThreshold: number,
   limit: number
 ): Promise<ScoredCreator[]> {
   const openaiKey = process.env.OPENAI_API_KEY;
@@ -297,7 +446,7 @@ async function scoreLocally(
   const results: ScoredCreator[] = [];
 
   for (const candidate of candidates.slice(0, limit)) {
-    const scored = await scoreFitLocally(candidate, brandSummary, openai);
+    const scored = await scoreFitLocally(candidate, icp, persona, approvalThreshold, openai);
     results.push({
       ...candidate,
       ...scored,
@@ -307,6 +456,8 @@ async function scoreLocally(
 
   return results;
 }
+
+// ─── Persistence ──────────────────────────────────────────────────────────────
 
 function toProfileMetadata(creator: ScoredCreator): Prisma.InputJsonValue {
   return JSON.parse(
@@ -318,16 +469,66 @@ function toProfileMetadata(creator: ScoredCreator): Prisma.InputJsonValue {
       fitScore: creator.fitScore,
       fitReasoning: creator.fitReasoning,
       approved: creator.approved,
+      confidence: creator.confidence,
+      signals: creator.signals,
       analysisSource: creator.analysisSource,
       scrapedAt: creator.scrapedAt,
     })
   ) as Prisma.InputJsonValue;
 }
 
+/**
+ * Store an AIArtifact record for creator approval decisions.
+ * This provides an audit trail: what AI decided, why, and with what context.
+ */
+async function storeApprovalArtifact(
+  creator: ScoredCreator,
+  brandId: string,
+  campaignId: string,
+  approvalMode: ApprovalMode
+): Promise<void> {
+  try {
+    await prisma.aIArtifact.create({
+      data: {
+        type: "fit_score",
+        input: {
+          handle: creator.instagram ?? creator.collabstrSlug,
+          niche: creator.niche,
+          followerCount: creator.followerCount,
+          analysisSource: creator.analysisSource,
+          brandId,
+          campaignId,
+          approvalMode,
+        } as Prisma.InputJsonValue,
+        output: {
+          fitScore: creator.fitScore,
+          fitReasoning: creator.fitReasoning,
+          approved: creator.approved,
+          confidence: creator.confidence ?? "medium",
+          signals: creator.signals,
+          agentDecision: approvalMode === "auto" ? (creator.approved ? "approve" : "decline") : "recommend",
+        } as Prisma.InputJsonValue,
+        model: creator.analysisSource === "worker" ? "gpt-4o-mini@fly-worker" : "gpt-4o-mini@local",
+      },
+    });
+  } catch (err) {
+    // Non-fatal — log and continue
+    console.warn("[creator-search] Failed to store AIArtifact", err);
+  }
+}
+
+/**
+ * Persist creators into the database.
+ *
+ * Approval mode controls how CampaignCreator.reviewStatus is set:
+ *   - "auto":      reviewStatus = approved | declined (immediate AI decision)
+ *   - "recommend": reviewStatus = pending (always), InterventionCase created for human review
+ */
 async function persistCreators(
   brandId: string,
   campaignId: string,
-  scoredCreators: ScoredCreator[]
+  scoredCreators: ScoredCreator[],
+  approvalMode: ApprovalMode
 ): Promise<{ added: number; skipped: number }> {
   let added = 0;
   let skipped = 0;
@@ -417,16 +618,60 @@ async function persistCreators(
         continue;
       }
 
-      await prisma.campaignCreator.create({
+      // ── Approval mode branching ──────────────────────────────────────────
+      let reviewStatus: string;
+      let lifecycleStatus: string;
+      let declineReason: string | null;
+
+      if (approvalMode === "recommend") {
+        // Recommendation mode: everything lands in pending queue, human decides
+        reviewStatus = "pending";
+        lifecycleStatus = "ready"; // ready for human review
+        declineReason = null;
+      } else {
+        // Auto mode: AI decision is final
+        reviewStatus = creatorRow.approved ? "approved" : "declined";
+        lifecycleStatus = creatorRow.approved ? "ready" : "stalled";
+        declineReason = creatorRow.approved ? null : creatorRow.fitReasoning;
+      }
+
+      const campaignCreator = await prisma.campaignCreator.create({
         data: {
           campaignId,
           creatorId: creator.id,
-          reviewStatus: creatorRow.approved ? "approved" : "declined",
-          lifecycleStatus: creatorRow.approved ? "ready" : "stalled",
-          reviewedAt: new Date(),
-          declineReason: creatorRow.approved ? null : creatorRow.fitReasoning,
+          reviewStatus,
+          lifecycleStatus,
+          reviewedAt: approvalMode === "auto" ? new Date() : null,
+          declineReason,
         },
       });
+
+      // Store audit artifact for every creator decision
+      await storeApprovalArtifact(creatorRow, brandId, campaignId, approvalMode);
+
+      // In recommend mode: create an InterventionCase for borderline creators
+      // (score between 0.4 and threshold + 0.1) so humans focus review effort
+      if (approvalMode === "recommend") {
+        const isBorderline = creatorRow.fitScore >= 0.4;
+        if (isBorderline) {
+          await prisma.interventionCase.create({
+            data: {
+              type: "manual_review",
+              status: "open",
+              priority: creatorRow.fitScore >= 0.65 ? "normal" : "low",
+              title: `Creator review: @${creatorRow.instagram ?? creatorRow.name ?? creatorRow.collabstrSlug}`,
+              description: [
+                `AI fit score: ${(creatorRow.fitScore * 100).toFixed(0)}% (${creatorRow.confidence ?? "medium"} confidence).`,
+                `Reasoning: ${creatorRow.fitReasoning}`,
+                `Source: ${creatorRow.analysisSource}.`,
+                `Campaign: ${campaignId}`,
+              ].join(" "),
+              brandId,
+              campaignCreatorId: campaignCreator.id,
+            },
+          });
+        }
+      }
 
       added += 1;
     } catch (error) {
@@ -493,6 +738,8 @@ async function debitSearchCredits(
   }
 }
 
+// ─── Main export ─────────────────────────────────────────────────────────────
+
 export async function searchCreatorsForCampaign(
   campaignId: string,
   brandId: string,
@@ -505,11 +752,20 @@ export async function searchCreatorsForCampaign(
   creditsConsumed?: number;
   icpKeywords?: string[];
   usedWorker?: boolean;
+  approvalMode?: ApprovalMode;
+  personaUsed?: boolean;
 }> {
   const jobId = randomUUID();
   const limit = Math.max(1, Math.min(criteria.limit ?? 20, 25));
 
-  const icp = await deriveBrandICP(brandId, campaignId);
+  // Load brand context in parallel
+  const [icp, persona, approvalMode, approvalThreshold] = await Promise.all([
+    deriveBrandICP(brandId, campaignId),
+    fetchBrandPersona(brandId),
+    fetchApprovalMode(brandId),
+    fetchApprovalThreshold(brandId),
+  ]);
+
   const { keywords: icpKeywords } = icpToSearchHints(icp);
   const shortlist = shortlistCreators(
     loadCollabstrDataset(),
@@ -517,6 +773,12 @@ export async function searchCreatorsForCampaign(
     icpKeywords,
     limit
   );
+
+  // Products for forwarding to worker
+  const products: ProductContext[] = icp.products.map((p) => ({
+    name: p.name,
+    description: p.description ?? null,
+  }));
 
   await prisma.creatorSearchJob.create({
     data: {
@@ -529,6 +791,9 @@ export async function searchCreatorsForCampaign(
           ...criteria,
           derivedIcpKeywords: icpKeywords,
           shortlistCount: shortlist.length,
+          approvalMode,
+          personaUsed: Boolean(persona),
+          approvalThreshold,
         })
       ) as Prisma.InputJsonValue,
     },
@@ -539,29 +804,45 @@ export async function searchCreatorsForCampaign(
     let usedWorker = false;
 
     if (shortlist.length > 0) {
-      try {
-        const workerResults = await scoreWithWorker(shortlist, {
-          campaignId,
-          brandId,
-          criteria,
-          brandIdentity: icp.summary,
-          icpCategories: icpKeywords,
-        });
+      // ── Try Fly worker first ───────────────────────────────────────────
+      if (canUseWorker()) {
+        try {
+          const workerResults = await scoreWithWorker(shortlist, {
+            campaignId,
+            brandId,
+            criteria,
+            brandIdentity: icp.summary,
+            icpCategories: icpKeywords,
+            persona,
+            products,
+            approvalThreshold,
+          });
 
-        if (workerResults && workerResults.length > 0) {
-          results = workerResults.slice(0, limit);
-          usedWorker = true;
+          if (workerResults && workerResults.length > 0) {
+            results = workerResults.slice(0, limit);
+            usedWorker = true;
+            console.log(
+              `[creator-search] Worker scored ${results.length} creators (personaUsed=${Boolean(persona)}, threshold=${approvalThreshold})`
+            );
+          }
+        } catch (error) {
+          console.warn(
+            "[creator-search] Worker call failed, falling back to local scoring",
+            error
+          );
         }
-      } catch (error) {
-        console.warn("[creator-search] Worker call failed, falling back to local scoring", error);
       }
 
+      // ── Local fallback ─────────────────────────────────────────────────
       if (results.length === 0) {
-        results = await scoreLocally(shortlist, icp.summary, limit);
+        results = await scoreLocally(shortlist, icp, persona, approvalThreshold, limit);
+        console.log(
+          `[creator-search] Local scored ${results.length} creators (personaUsed=${Boolean(persona)}, threshold=${approvalThreshold})`
+        );
       }
     }
 
-    const { added, skipped } = await persistCreators(brandId, campaignId, results);
+    const { added, skipped } = await persistCreators(brandId, campaignId, results, approvalMode);
     await recordSearchJobResults(jobId, results);
 
     const creditsConsumed = await debitSearchCredits(
@@ -574,6 +855,7 @@ export async function searchCreatorsForCampaign(
         added,
         skipped,
         usedWorker,
+        approvalMode,
       }
     );
 
@@ -586,7 +868,7 @@ export async function searchCreatorsForCampaign(
     });
 
     console.log(
-      `[creator-search] complete campaign=${campaignId} analyzed=${results.length} added=${added} skipped=${skipped} worker=${usedWorker}`
+      `[creator-search] complete campaign=${campaignId} analyzed=${results.length} added=${added} skipped=${skipped} worker=${usedWorker} mode=${approvalMode} persona=${Boolean(persona)}`
     );
 
     return {
@@ -597,6 +879,8 @@ export async function searchCreatorsForCampaign(
       creditsConsumed,
       icpKeywords,
       usedWorker,
+      approvalMode,
+      personaUsed: Boolean(persona),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown_error";

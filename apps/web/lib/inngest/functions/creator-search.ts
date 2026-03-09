@@ -6,11 +6,14 @@ import { prisma } from "@/lib/prisma";
  *
  * Listens on "creator-search/requested" and:
  * 1. Creates a CreatorSearchJob record for tracking
- * 2. Creates an InterventionCase so operators know a search was queued
- * 3. Logs the criteria for the future Playwright worker integration
+ * 2. Creates an InterventionCase so operators can monitor queued searches
  *
- * The real Playwright worker will plug in here — this stub ensures the
- * event pipeline and tracking infrastructure exist.
+ * Real scoring: the Fly worker (`podhi-seeding-creator-search.fly.dev`)
+ * runs Playwright + brand-context-aware OpenAI scoring.
+ * Falls back to local OpenAI scoring if the worker is unavailable.
+ * Approval mode is controlled by BrandSettings.metadata.approvalMode:
+ *   "auto"      — AI decision is final (default)
+ *   "recommend" — creators land in pending queue for human review
  */
 export const handleCreatorSearch = inngest.createFunction(
   {
@@ -38,14 +41,14 @@ export const handleCreatorSearch = inngest.createFunction(
       },
     });
 
-    // Create intervention so operators can see the search was queued
+    // Create intervention so operators can track the search
     await prisma.interventionCase.create({
       data: {
         type: "manual_review",
         status: "open",
         priority: "normal",
         title: `Creator search queued for campaign`,
-        description: `Search job ${searchJob.id} queued with criteria: ${JSON.stringify(criteria)}. Campaign: ${campaignId}. Playwright worker stub — real browser automation not yet connected.`,
+        description: `Search job ${searchJob.id} queued with criteria: ${JSON.stringify(criteria)}. Campaign: ${campaignId}. Worker: podhi-seeding-creator-search.fly.dev.`,
         brandId,
       },
     });
