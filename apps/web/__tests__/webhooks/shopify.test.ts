@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 import { createHmac } from "crypto";
 
 /**
@@ -66,7 +67,7 @@ async function callShopifyWebhook(
 
   const { POST } = await import("@/app/api/webhooks/shopify/route");
 
-  const req = new Request("http://localhost:3000/api/webhooks/shopify", {
+  const req = new NextRequest("http://localhost:3000/api/webhooks/shopify", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -78,7 +79,7 @@ async function callShopifyWebhook(
     body,
   });
 
-  return POST(req as any);
+  return POST(req);
 }
 
 // ─── Fixtures ────────────────────────────────────────────
@@ -293,7 +294,7 @@ describe("Shopify webhook handler", () => {
       const { POST } = await import("@/app/api/webhooks/shopify/route");
 
       const body = JSON.stringify(orderPayload);
-      const req = new Request("http://localhost:3000/api/webhooks/shopify", {
+      const req = new NextRequest("http://localhost:3000/api/webhooks/shopify", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -304,7 +305,7 @@ describe("Shopify webhook handler", () => {
         body,
       });
 
-      const res = await POST(req as any);
+      const res = await POST(req);
       expect(res.status).toBe(401);
     });
   });

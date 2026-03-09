@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
-import { getOrCreateThread } from "@/lib/inbox/threads";
 import { fetchNewMessages, resolveThreadByExternalId, resolveBrandByEmail } from "@/lib/gmail/ingest";
 import { classifyReply, extractAddress, generateDraft } from "@/lib/inbox/ai";
 import { inngest } from "@/lib/inngest/client";
@@ -76,8 +75,8 @@ export async function POST(request: NextRequest) {
       const normalized = normalizeInboundMessage(raw);
 
       // Check if this is a reply to one of our threads
-      let thread = await resolveThreadByExternalId(raw.threadId);
-      
+      const thread = await resolveThreadByExternalId(raw.threadId);
+
       if (!thread) {
         // Could be an unknown thread — skip if we can't resolve it
         // In future phases we might handle unsolicited inbound
