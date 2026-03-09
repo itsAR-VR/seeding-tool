@@ -8,3 +8,14 @@ playwright-report/
 *.log
 .env
 .vercel
+
+# Build artifacts
+apps/web/tsconfig.tsbuildinfo
+
+# E2E screenshots (not tracked)
+e2e-screenshots/
+
+# Collabstr data / runtime state (large data files)
+scripts/collabstr-influencers.jsonl
+scripts/archive/
+scripts/.collabstr-influencers.checkpoint.json

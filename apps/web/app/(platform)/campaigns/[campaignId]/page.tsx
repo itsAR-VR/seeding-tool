@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TriggerSearchButton } from "./_components/TriggerSearchButton";
 
 const lifecycleColors: Record<string, string> = {
   ready: "bg-gray-100 text-gray-800",
@@ -118,6 +119,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           <Link href={`/campaigns/${campaignId}/analytics`}>
             <Button variant="outline">📊 Analytics</Button>
           </Link>
+          <TriggerSearchButton campaignId={campaignId} />
           <Link href={`/campaigns/${campaignId}/outreach`}>
             <Button variant="outline">✨ Draft Outreach</Button>
           </Link>
@@ -192,10 +194,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         </CardHeader>
         <CardContent>
           {creators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No creators added yet. Add creators from the discovery page or
-              import them manually.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No creators added yet.
+              </p>
+              <div className="flex gap-2">
+                <Link href={`/campaigns/${campaignId}/discover`}>
+                  <Button size="sm">🔍 Discover Creators</Button>
+                </Link>
+                <Link href={`/campaigns/${campaignId}/import`}>
+                  <Button size="sm" variant="outline">Import Manually</Button>
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

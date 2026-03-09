@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId, requireOrg } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  fetchBrandProfile,
+  normalizeBrandWebsiteUrl,
+} from "@/lib/brands/profile";
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,6 +38,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let normalizedWebsiteUrl: string | null = null;
+    let brandProfile = null;
+
+    try {
+      normalizedWebsiteUrl = normalizeBrandWebsiteUrl(websiteUrl);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Website URL must be a valid http(s) URL",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (normalizedWebsiteUrl) {
+      try {
+        brandProfile = await fetchBrandProfile(normalizedWebsiteUrl);
+      } catch (error) {
+        console.warn("[onboarding/brand] brand profile extraction failed", {
+          websiteUrl: normalizedWebsiteUrl,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     // Find or create a default client for this org
     let client = await prisma.client.findFirst({
       where: { organizationId: org.id },
@@ -60,6 +92,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: name.trim(),
           slug: `${slug}-${Date.now().toString(36)}`,
+          websiteUrl: normalizedWebsiteUrl,
           clientId: client.id,
         },
       });
@@ -75,7 +108,9 @@ export async function POST(request: NextRequest) {
       await tx.brandSettings.create({
         data: {
           brandId: brand.id,
-          brandVoice: websiteUrl ? `Brand website: ${websiteUrl}` : undefined,
+          brandProfile: brandProfile
+            ? JSON.parse(JSON.stringify(brandProfile))
+            : undefined,
         },
       });
 

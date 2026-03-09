@@ -11,8 +11,11 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 
-// Load env for DATABASE_URL
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const envPath = path.join(__dirname, "../apps/web/.env.local");
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, "utf-8");
@@ -24,20 +27,45 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-import { PrismaClient } from "@prisma/client";
+const COLLABSTR_NOTES_HEADER = "## Collabstr";
 
-const prisma = new PrismaClient();
+async function loadPrismaClientCtor() {
+  const candidates = [
+    "@prisma/client",
+    pathToFileURL(
+      path.join(__dirname, "../apps/web/node_modules/@prisma/client/index.js")
+    ).href,
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      const mod = await import(candidate);
+      if (mod?.PrismaClient) return mod.PrismaClient;
+    } catch {
+      // Try next resolution candidate.
+    }
+  }
+
+  throw new Error(
+    "Could not load PrismaClient. Install @prisma/client or use the apps/web dependency tree."
+  );
+}
 
 interface ScrapedInfluencer {
+  name: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  profileDump?: string | null;
   collabstrSlug: string;
   collabstrUrl: string;
-  name: string | null;
   niche: string | null;
   location: string | null;
   bio: string | null;
   imageUrl: string | null;
-  instagramHandle: string | null;
-  tiktokHandle: string | null;
+  instagramHandle?: string | null;
+  tiktokHandle?: string | null;
+  instagramUrl?: string | null;
+  tiktokUrl?: string | null;
   website: string | null;
   followerCount: number | null;
   price: string | null;
@@ -48,7 +76,7 @@ interface ScrapedInfluencer {
 function parseArgs() {
   const args = process.argv.slice(2);
   let input = path.join(__dirname, "collabstr-influencers.jsonl");
-  let brandId = "9d4f824b-639a-43ce-93f9-cbf233912f91"; // Sleepkalm
+  let brandId = "9d4f824b-639a-43ce-93f9-cbf233912f91";
   let dryRun = false;
 
   for (let i = 0; i < args.length; i++) {
@@ -64,6 +92,52 @@ function parseArgs() {
   }
 
   return { input, brandId, dryRun };
+}
+
+function cleanNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+}
+
+function resolveInstagramHandle(data: ScrapedInfluencer): string | null {
+  return cleanNullableString(data.instagram) || cleanNullableString(data.instagramHandle);
+}
+
+function resolveTikTokHandle(data: ScrapedInfluencer): string | null {
+  return cleanNullableString(data.tiktok) || cleanNullableString(data.tiktokHandle);
+}
+
+function buildCollabstrNotesBlock(data: ScrapedInfluencer): string {
+  const lines = [
+    COLLABSTR_NOTES_HEADER,
+    `Profile: ${data.collabstrUrl}`,
+    data.website ? `Website: ${data.website}` : null,
+    data.price ? `Price: ${data.price}` : null,
+    data.rating ? `Rating: ${data.rating}` : null,
+    data.reviewCount ? `Review count: ${data.reviewCount}` : null,
+    data.profileDump ? "" : null,
+    data.profileDump ? "Profile dump:" : null,
+    data.profileDump || null,
+  ].filter((line): line is string => line !== null);
+
+  return lines.join("\n").trim();
+}
+
+function mergeCreatorNotes(
+  existingNotes: string | null | undefined,
+  data: ScrapedInfluencer
+): string {
+  const existing = cleanNullableString(existingNotes) || "";
+  const stripped = existing
+    ? existing.replace(
+        new RegExp(`(?:\\n{0,2})${COLLABSTR_NOTES_HEADER}[\\s\\S]*$`),
+        ""
+      ).trim()
+    : "";
+
+  const collabstrBlock = buildCollabstrNotesBlock(data);
+  return [stripped || null, collabstrBlock].filter(Boolean).join("\n\n");
 }
 
 async function main() {
@@ -82,13 +156,17 @@ async function main() {
   const lines = fs
     .readFileSync(input, "utf-8")
     .split("\n")
-    .filter((l) => l.trim());
+    .filter((line) => line.trim());
 
   console.log(`Found ${lines.length} influencers to import`);
 
   let imported = 0;
   let skipped = 0;
   let errors = 0;
+
+  const prisma = dryRun
+    ? null
+    : new (await loadPrismaClientCtor())();
 
   for (const line of lines) {
     let data: ScrapedInfluencer;
@@ -99,27 +177,44 @@ async function main() {
       continue;
     }
 
-    // Must have at least an IG handle or name
-    if (!data.instagramHandle && !data.name) {
+    const instagramHandle = resolveInstagramHandle(data);
+    const tiktokHandle = resolveTikTokHandle(data);
+
+    if (!instagramHandle && !tiktokHandle && !data.name) {
       skipped++;
       continue;
     }
 
     if (dryRun) {
       console.log(
-        `[dry-run] ${data.name} | IG: ${data.instagramHandle} | TT: ${data.tiktokHandle} | ${data.location}`
+        `[dry-run] ${data.name || data.collabstrSlug} | IG: ${instagramHandle || "—"} | TT: ${tiktokHandle || "—"} | dump: ${data.profileDump?.length || 0} chars`
       );
       imported++;
       continue;
     }
 
     try {
-      // Upsert creator
-      const creator = await prisma.creator.upsert({
+      const uniqueInstagramHandle = instagramHandle || data.collabstrSlug;
+      const existingCreator = await prisma!.creator.findUnique({
         where: {
           brandId_instagramHandle: {
             brandId,
-            instagramHandle: data.instagramHandle || data.collabstrSlug,
+            instagramHandle: uniqueInstagramHandle,
+          },
+        },
+        select: {
+          id: true,
+          notes: true,
+        },
+      });
+
+      const mergedNotes = mergeCreatorNotes(existingCreator?.notes, data);
+
+      const creator = await prisma!.creator.upsert({
+        where: {
+          brandId_instagramHandle: {
+            brandId,
+            instagramHandle: uniqueInstagramHandle,
           },
         },
         update: {
@@ -128,25 +223,24 @@ async function main() {
           imageUrl: data.imageUrl || undefined,
           bioCategory: data.niche || undefined,
           followerCount: data.followerCount || undefined,
-          notes: data.collabstrUrl,
+          notes: mergedNotes || undefined,
         },
         create: {
           brandId,
           name: data.name,
           email: null,
-          instagramHandle: data.instagramHandle || data.collabstrSlug,
+          instagramHandle: uniqueInstagramHandle,
           bio: [data.bio, data.location].filter(Boolean).join(" | "),
           imageUrl: data.imageUrl,
           bioCategory: data.niche,
           followerCount: data.followerCount,
           discoverySource: "collabstr",
-          notes: data.collabstrUrl,
+          notes: mergedNotes,
         },
       });
 
-      // Add TikTok profile if present
-      if (data.tiktokHandle) {
-        await prisma.creatorProfile.upsert({
+      if (tiktokHandle) {
+        await prisma!.creatorProfile.upsert({
           where: {
             creatorId_platform: {
               creatorId: creator.id,
@@ -154,21 +248,24 @@ async function main() {
             },
           },
           update: {
-            handle: data.tiktokHandle,
-            url: `https://tiktok.com/@${data.tiktokHandle}`,
+            handle: tiktokHandle,
+            url:
+              cleanNullableString(data.tiktokUrl) ||
+              `https://www.tiktok.com/@${tiktokHandle}`,
           },
           create: {
             creatorId: creator.id,
             platform: "tiktok",
-            handle: data.tiktokHandle,
-            url: `https://tiktok.com/@${data.tiktokHandle}`,
+            handle: tiktokHandle,
+            url:
+              cleanNullableString(data.tiktokUrl) ||
+              `https://www.tiktok.com/@${tiktokHandle}`,
           },
         });
       }
 
-      // Add Instagram profile record
-      if (data.instagramHandle) {
-        await prisma.creatorProfile.upsert({
+      if (instagramHandle) {
+        await prisma!.creatorProfile.upsert({
           where: {
             creatorId_platform: {
               creatorId: creator.id,
@@ -176,21 +273,27 @@ async function main() {
             },
           },
           update: {
-            handle: data.instagramHandle,
-            url: `https://instagram.com/${data.instagramHandle}`,
+            handle: instagramHandle,
+            url:
+              cleanNullableString(data.instagramUrl) ||
+              `https://www.instagram.com/${instagramHandle}`,
           },
           create: {
             creatorId: creator.id,
             platform: "instagram",
-            handle: data.instagramHandle,
-            url: `https://instagram.com/${data.instagramHandle}`,
+            handle: instagramHandle,
+            url:
+              cleanNullableString(data.instagramUrl) ||
+              `https://www.instagram.com/${instagramHandle}`,
           },
         });
       }
 
       imported++;
       if (imported % 50 === 0) {
-        console.log(`[progress] ${imported} imported, ${skipped} skipped, ${errors} errors`);
+        console.log(
+          `[progress] ${imported} imported, ${skipped} skipped, ${errors} errors`
+        );
       }
     } catch (err) {
       console.error(
@@ -206,7 +309,9 @@ async function main() {
   console.log(`Skipped: ${skipped}`);
   console.log(`Errors: ${errors}`);
 
-  await prisma.$disconnect();
+  if (prisma) {
+    await prisma.$disconnect();
+  }
 }
 
 main().catch((err) => {

@@ -128,7 +128,7 @@ export async function sendOutreachBatch(
             brandId,
             campaignCreatorId: draft.campaignCreatorId,
             channel: "email",
-            status: "active",
+            status: "open",
           },
         });
 
@@ -213,7 +213,7 @@ export async function sendOutreachBatch(
             brandId,
             campaignCreatorId: draft.campaignCreatorId,
             channel: "instagram_dm",
-            status: "active",
+            status: "open",
             unipileChatId: dmResult.chatId,
           },
         });

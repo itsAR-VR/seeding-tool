@@ -108,6 +108,13 @@ export default function OutreachPage() {
     load();
   }, []);
 
+  const MAX_BATCH_SIZE = 20;
+
+  // Derive approved list here so all handlers below have access
+  const approvedCreators = creators.filter(
+    (c) => c.reviewStatus === "approved"
+  );
+
   const toggleCreator = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -118,15 +125,21 @@ export default function OutreachPage() {
   };
 
   const selectAll = () => {
-    if (selectedIds.size === creators.length) {
+    const batch = approvedCreators.slice(0, MAX_BATCH_SIZE);
+    const allBatchSelected = batch.length > 0 && batch.every((c) => selectedIds.has(c.id));
+    if (allBatchSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(creators.map((c) => c.id)));
+      setSelectedIds(new Set(batch.map((c) => c.id)));
     }
   };
 
   const generateDrafts = async () => {
     if (selectedIds.size === 0) return;
+    if (selectedIds.size > MAX_BATCH_SIZE) {
+      alert(`Please select ${MAX_BATCH_SIZE} or fewer creators per batch. You have ${selectedIds.size} selected.`);
+      return;
+    }
     setGenerating(true);
     setDrafts([]);
     setEditedDrafts({});
@@ -178,10 +191,6 @@ export default function OutreachPage() {
       [ccId]: { ...prev[ccId]!, [field]: value },
     }));
   };
-
-  const approvedCreators = creators.filter(
-    (c) => c.reviewStatus === "approved"
-  );
 
   return (
     <div className="space-y-6">
@@ -290,9 +299,10 @@ export default function OutreachPage() {
             </div>
             {approvedCreators.length > 0 && (
               <Button variant="outline" size="sm" onClick={selectAll}>
-                {selectedIds.size === creators.length
+                {selectedIds.size === approvedCreators.slice(0, MAX_BATCH_SIZE).length &&
+                  approvedCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
                   ? "Deselect All"
-                  : "Select All"}
+                  : `Select All (up to ${MAX_BATCH_SIZE})`}
               </Button>
             )}
           </div>
@@ -347,10 +357,15 @@ export default function OutreachPage() {
             </div>
           )}
 
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex items-center justify-end gap-3">
+            {selectedIds.size > MAX_BATCH_SIZE && (
+              <span className="text-sm text-red-500 font-medium">
+                Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
+              </span>
+            )}
             <Button
               onClick={generateDrafts}
-              disabled={selectedIds.size === 0 || generating}
+              disabled={selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
                 ? "Generating..."
