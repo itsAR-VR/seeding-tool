@@ -58,7 +58,7 @@ export async function getUnipileClient(
       const res = await fetch(url, {
         ...options,
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          "X-API-KEY": apiKey,
           "Content-Type": "application/json",
           ...(options?.headers ?? {}),
         },
