@@ -28,6 +28,12 @@ interface ShopifyConnectionState {
   storeDomain?: string;
 }
 
+interface InstagramConnectionState {
+  connected: boolean;
+  username?: string;
+  status?: string;
+}
+
 
 type FlashMessage =
   | {
@@ -67,6 +73,12 @@ function ConnectionsContent() {
   const [shopifySaving, setShopifySaving] = useState(false);
   const [shopifyMessage, setShopifyMessage] = useState<FlashMessage>(null);
 
+  const [instagramState, setInstagramState] = useState<InstagramConnectionState>({
+    connected: false,
+  });
+  const [instagramLoading, setInstagramLoading] = useState(false);
+  const [instagramMessage, setInstagramMessage] = useState<FlashMessage>(null);
+
   const [unipileApiKey, setUnipileApiKey] = useState("");
   const [unipileAccountId, setUnipileAccountId] = useState("");
   const [unipileSaving, setUnipileSaving] = useState(false);
@@ -85,6 +97,7 @@ function ConnectionsContent() {
     await Promise.allSettled([
       fetchBrand(),
       fetchShopifyConnection(),
+      fetchInstagramConnection(),
     ]);
     setLoading(false);
   }
@@ -113,6 +126,50 @@ function ConnectionsContent() {
       // ignore
     }
     setShopifyState({ connected: false });
+  }
+
+  async function fetchInstagramConnection() {
+    try {
+      const res = await fetch("/api/connections/instagram");
+      if (res.ok) {
+        setInstagramState((await res.json()) as InstagramConnectionState);
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    setInstagramState({ connected: false });
+  }
+
+  async function handleDisconnectInstagram() {
+    setInstagramLoading(true);
+    setInstagramMessage(null);
+
+    try {
+      const res = await fetch("/api/connections/instagram", {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          await readErrorMessage(res, "Failed to disconnect Instagram")
+        );
+      }
+
+      setInstagramState({ connected: false });
+      setInstagramMessage({ tone: "success", text: "Instagram disconnected." });
+      await refreshConnectionData();
+    } catch (disconnectError) {
+      setInstagramMessage({
+        tone: "error",
+        text:
+          disconnectError instanceof Error
+            ? disconnectError.message
+            : "Failed to disconnect Instagram.",
+      });
+    } finally {
+      setInstagramLoading(false);
+    }
   }
 
   function getConnection(provider: string) {
@@ -278,6 +335,7 @@ function ConnectionsContent() {
 
   const gmailConn = getConnection("gmail");
   const shopifyConn = getConnection("shopify");
+  const instagramConn = getConnection("instagram");
   const unipileConn = getConnection("unipile");
 
   const shopifyConnected =
@@ -300,6 +358,12 @@ function ConnectionsContent() {
         </div>
       )}
 
+      {connected === "instagram" && (
+        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+          Instagram connected successfully.
+        </div>
+      )}
+
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           Connection failed:{" "}
@@ -309,7 +373,9 @@ function ConnectionsContent() {
               ? "No refresh token returned. Revoke access in Google Account and reconnect."
               : error === "forbidden"
                 ? "You do not have access to this brand."
-                : "An error occurred. Please try again."}
+                : error === "no_instagram_account"
+                  ? "No Instagram Business Account found. Ensure your Instagram account is connected to a Facebook Page."
+                  : "An error occurred. Please try again."}
         </div>
       )}
 
@@ -402,6 +468,62 @@ function ConnectionsContent() {
                   {shopifySaving ? "Connecting..." : "Connect Shopify"}
                 </Button>
               </form>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <CardTitle className="text-lg">Instagram</CardTitle>
+              <Badge
+                variant={
+                  instagramState.connected || instagramConn?.status === "connected"
+                    ? "default"
+                    : "secondary"
+                }
+              >
+                {instagramState.connected || instagramConn?.status === "connected"
+                  ? "Connected"
+                  : "Not connected"}
+              </Badge>
+            </div>
+            <CardDescription>
+              {instagramState.connected || instagramConn?.status === "connected"
+                ? `Connected as @${instagramState.username ?? instagramConn?.externalId ?? "unknown"}`
+                : "Monitor tagged posts and mentions from Instagram creators."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <FeedbackBanner message={instagramMessage} />
+            {instagramState.connected || instagramConn?.status === "connected" ? (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Connected account:{" "}
+                  <strong>
+                    @{instagramState.username ?? instagramConn?.externalId ?? "unknown"}
+                  </strong>
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Tagged posts and mentions are checked every 15 minutes.
+                </p>
+                <Button
+                  variant="destructive"
+                  onClick={handleDisconnectInstagram}
+                  disabled={instagramLoading}
+                >
+                  {instagramLoading ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  window.location.href = `/api/auth/instagram?brandId=${brand.id}`;
+                }}
+              >
+                Connect Instagram
+              </Button>
             )}
           </CardContent>
         </Card>

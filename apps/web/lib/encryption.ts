@@ -11,15 +11,19 @@ function getEncryptionKey(): Buffer {
       "APP_ENCRYPTION_KEY environment variable is required for encryption"
     );
   }
-  // Key must be 32 bytes (256 bits) — accept hex-encoded (64 chars) or raw
+  // Key must be 32 bytes (256 bits) — accept hex-encoded (64 chars), base64 (44 chars), or raw (32 chars)
   if (key.length === 64) {
     return Buffer.from(key, "hex");
+  }
+  if (key.length === 44) {
+    const buf = Buffer.from(key, "base64");
+    if (buf.length === 32) return buf;
   }
   if (key.length === 32) {
     return Buffer.from(key, "utf-8");
   }
   throw new Error(
-    "APP_ENCRYPTION_KEY must be 32 bytes (raw) or 64 hex characters"
+    "APP_ENCRYPTION_KEY must be 32 bytes (raw), 44 base64 characters, or 64 hex characters"
   );
 }
 

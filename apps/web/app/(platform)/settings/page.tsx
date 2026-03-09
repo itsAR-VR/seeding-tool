@@ -19,6 +19,18 @@ const settingsLinks = [
     description: "Manage Gmail, Shopify, and other integrations.",
     icon: "🔌",
   },
+  {
+    href: "/settings/ai-personas",
+    title: "AI Personas",
+    description: "Manage AI outreach personas and customize message styles.",
+    icon: "🤖",
+  },
+  {
+    href: "/settings/automations",
+    title: "Automations",
+    description: "Schedule recurring creator discovery and other tasks.",
+    icon: "⚡",
+  },
 ];
 
 export default function SettingsPage() {

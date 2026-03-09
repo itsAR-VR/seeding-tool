@@ -114,11 +114,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             </p>
           )}
         </div>
-        <Link href={`/campaigns/${campaignId}/review`}>
-          <Button variant="outline">
-            Review Queue ({stats.pendingReview})
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/campaigns/${campaignId}/analytics`}>
+            <Button variant="outline">📊 Analytics</Button>
+          </Link>
+          <Link href={`/campaigns/${campaignId}/outreach`}>
+            <Button variant="outline">✨ Draft Outreach</Button>
+          </Link>
+          <Link href={`/campaigns/${campaignId}/review`}>
+            <Button variant="outline">
+              Review Queue ({stats.pendingReview})
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -142,12 +150,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       </div>
 
       {/* Products */}
-      {campaign.campaignProducts.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Products</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-base">Products</CardTitle>
+          <Link href={`/campaigns/${campaignId}/products`}>
+            <Button variant="outline" size="sm">
+              {campaign.campaignProducts.length > 0
+                ? "Manage Products"
+                : "Add Products"}
+            </Button>
+          </Link>
+        </CardHeader>
+        <CardContent>
+          {campaign.campaignProducts.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {campaign.campaignProducts.map((cp) => (
                 <Badge key={cp.id} variant="outline">
@@ -158,9 +173,13 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                 </Badge>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No products added yet. Add products from your Shopify catalog.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Creator List */}
       <Card>

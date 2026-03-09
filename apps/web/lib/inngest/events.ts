@@ -1,4 +1,7 @@
-export type AppEventName = "app/ping" | "gmail/message.received";
+export type AppEventName =
+  | "app/ping"
+  | "gmail/message.received"
+  | "mention/media.archive";
 
 export type AppEventPayloads = {
   "app/ping": {
@@ -14,6 +17,12 @@ export type AppEventPayloads = {
       messageId: string;
       brandId: string;
       campaignCreatorId: string;
+    };
+  };
+  "mention/media.archive": {
+    name: "mention/media.archive";
+    data: {
+      mentionAssetId: string;
     };
   };
 };
