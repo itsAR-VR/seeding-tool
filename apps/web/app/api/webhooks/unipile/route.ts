@@ -235,16 +235,40 @@ async function handleAccountStatus(payload: Record<string, unknown>) {
     return;
   }
 
-  // Look up brand by Unipile provider credential
-  const credential = await prisma.providerCredential.findFirst({
-    where: {
-      provider: "unipile",
-      isValid: true,
-    },
-  });
+  // Look up brand via BrandConnection.metadata.accountId to avoid
+  // cross-brand contamination when multiple brands have Unipile configured.
+  // accountId from the webhook payload is the Unipile account identifier
+  // stored in BrandConnection.metadata at connection time.
+  let brandId: string | undefined;
+  let credentialId: string | undefined;
 
-  const brandId = credential?.brandId;
+  if (accountId) {
+    const connection = await prisma.brandConnection.findFirst({
+      where: {
+        provider: "unipile",
+        metadata: {
+          path: ["accountId"],
+          equals: accountId,
+        },
+      },
+    });
+    if (connection) {
+      brandId = connection.brandId;
+      // Fetch the specific credential for this brand
+      const credential = await prisma.providerCredential.findUnique({
+        where: {
+          brandId_provider: {
+            brandId: connection.brandId,
+            provider: "unipile",
+          },
+        },
+      });
+      credentialId = credential?.id;
+    }
+  }
 
+  // Fallback: if accountId was absent or no matching connection found,
+  // warn and bail — do not pick an arbitrary credential.
   if (!brandId) {
     log("warn", "unipile.webhook.account_status_no_brand", {
       accountId,
@@ -270,9 +294,9 @@ async function handleAccountStatus(payload: Record<string, unknown>) {
   });
 
   // Mark credential as invalid if credentials issue
-  if (status === "credentials" && credential) {
+  if (status === "credentials" && credentialId) {
     await prisma.providerCredential.update({
-      where: { id: credential.id },
+      where: { id: credentialId },
       data: { isValid: false },
     });
   }
