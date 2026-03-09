@@ -16,9 +16,15 @@ interface BrandData {
   id: string;
   name: string;
   slug: string;
+  websiteUrl?: string | null;
   settings?: {
     brandVoice?: string | null;
     timezone?: string | null;
+    brandProfile?: {
+      title?: string | null;
+      description?: string | null;
+      heroHeadings?: string[];
+    } | null;
   } | null;
 }
 
@@ -52,12 +58,10 @@ export default function BrandSettingsPage() {
       const data = (await res.json()) as BrandData;
       setBrand(data);
       setName(data.name);
+      setWebsiteUrl(data.websiteUrl ?? "");
 
-      // Parse website/logo from brandVoice
       const voice = data.settings?.brandVoice ?? "";
-      const websiteMatch = voice.match(/Brand website: (.+)/);
       const logoMatch = voice.match(/Logo URL: (.+)/);
-      if (websiteMatch) setWebsiteUrl(websiteMatch[1]);
       if (logoMatch) setLogoUrl(logoMatch[1]);
     } catch {
       setError("Failed to load brand settings");

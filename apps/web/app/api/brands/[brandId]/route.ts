@@ -1,7 +1,12 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  fetchBrandProfile,
+  normalizeBrandWebsiteUrl,
+} from "@/lib/brands/profile";
 
 export async function GET(
   _request: NextRequest,
@@ -97,58 +102,87 @@ export async function PATCH(
       timezone?: string;
     };
 
-    // Update brand name if provided
-    if (name) {
+    const existingSettings = await prisma.brandSettings.findUnique({
+      where: { brandId },
+    });
+
+    let normalizedWebsiteUrl: string | null | undefined;
+    if (websiteUrl !== undefined) {
+      try {
+        normalizedWebsiteUrl = normalizeBrandWebsiteUrl(websiteUrl);
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Website URL must be a valid http(s) URL",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    let extractedBrandProfile: Prisma.InputJsonValue | Prisma.JsonNullValueInput | undefined;
+    if (websiteUrl !== undefined) {
+      if (normalizedWebsiteUrl) {
+        try {
+          extractedBrandProfile = JSON.parse(
+            JSON.stringify(await fetchBrandProfile(normalizedWebsiteUrl))
+          ) as Prisma.InputJsonValue;
+        } catch (error) {
+          console.warn("[brands/PATCH] brand profile extraction failed", {
+            brandId,
+            websiteUrl: normalizedWebsiteUrl,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          extractedBrandProfile = Prisma.JsonNull;
+        }
+      } else {
+        extractedBrandProfile = Prisma.JsonNull;
+      }
+    }
+
+    const brandData: { name?: string; websiteUrl?: string | null } = {};
+    if (name !== undefined) {
+      brandData.name = name.trim();
+    }
+    if (websiteUrl !== undefined) {
+      brandData.websiteUrl = normalizedWebsiteUrl ?? null;
+    }
+
+    if (Object.keys(brandData).length > 0) {
       await prisma.brand.update({
         where: { id: brandId },
-        data: { name: name.trim() },
+        data: brandData,
       });
     }
 
-    // Update brand settings
-    const settingsData: Record<string, string | undefined> = {};
-    if (brandVoice !== undefined) settingsData.brandVoice = brandVoice;
-    if (timezone !== undefined) settingsData.timezone = timezone;
+    const settingsData: {
+      brandVoice?: string | null;
+      timezone?: string;
+      brandProfile?: Prisma.InputJsonValue | Prisma.JsonNullValueInput;
+    } = {};
 
-    // Store websiteUrl and logoUrl in brandVoice metadata for now
-    // (schema doesn't have dedicated fields — these go in settings)
-    if (websiteUrl !== undefined || logoUrl !== undefined) {
-      const existing = await prisma.brandSettings.findUnique({
-        where: { brandId },
-      });
-      const currentVoice = existing?.brandVoice ?? "";
-      let updatedVoice = currentVoice;
+    if (brandVoice !== undefined) {
+      settingsData.brandVoice = brandVoice || null;
+    }
+    if (timezone !== undefined) {
+      settingsData.timezone = timezone;
+    }
+    if (extractedBrandProfile !== undefined) {
+      settingsData.brandProfile = extractedBrandProfile;
+    }
 
-      if (websiteUrl !== undefined) {
-        // Replace or append website URL
-        const websiteRegex = /Brand website: .+/;
-        if (websiteRegex.test(updatedVoice)) {
-          updatedVoice = updatedVoice.replace(
-            websiteRegex,
-            `Brand website: ${websiteUrl}`
-          );
-        } else if (websiteUrl) {
-          updatedVoice = updatedVoice
-            ? `${updatedVoice}\nBrand website: ${websiteUrl}`
-            : `Brand website: ${websiteUrl}`;
-        }
-      }
-
-      if (logoUrl !== undefined) {
-        const logoRegex = /Logo URL: .+/;
-        if (logoRegex.test(updatedVoice)) {
-          updatedVoice = updatedVoice.replace(
-            logoRegex,
-            `Logo URL: ${logoUrl}`
-          );
-        } else if (logoUrl) {
-          updatedVoice = updatedVoice
-            ? `${updatedVoice}\nLogo URL: ${logoUrl}`
-            : `Logo URL: ${logoUrl}`;
-        }
-      }
-
-      settingsData.brandVoice = updatedVoice;
+    if (logoUrl !== undefined) {
+      const currentVoice =
+        settingsData.brandVoice ?? existingSettings?.brandVoice ?? "";
+      const withoutLogo = currentVoice
+        .replace(/\n?Logo URL: .+/g, "")
+        .trim();
+      settingsData.brandVoice = logoUrl
+        ? [withoutLogo, `Logo URL: ${logoUrl}`].filter(Boolean).join("\n")
+        : withoutLogo || null;
     }
 
     if (Object.keys(settingsData).length > 0) {
