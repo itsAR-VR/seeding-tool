@@ -70,6 +70,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
               imageUrl: r.imageUrl,
               bio: r.bio,
               platform: r.platform,
+              fitScore: r.fitScore ?? null,
+              fitReasoning: r.fitReasoning ?? null,
             }))
           : [],
     });
