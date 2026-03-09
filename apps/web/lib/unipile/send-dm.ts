@@ -12,6 +12,12 @@ type SendDMResult = {
 
 /**
  * Look up a user by Instagram handle and send them a DM.
+ *
+ * Unipile API notes (confirmed 2026-03-09):
+ * - User search: GET /api/v1/users/search?account_id=<id>&q=<handle>
+ *   Returns a single UserProfile (not an array) with `provider_messaging_id`.
+ * - Chat creation: POST /api/v1/chats with `attendees_ids: [provider_messaging_id]`
+ *   For Instagram, use the `provider_messaging_id` (not `id`) from the search result.
  */
 export async function sendInstagramDM(
   client: UnipileClient,
@@ -22,9 +28,9 @@ export async function sendInstagramDM(
   try {
     const handle = instagramHandle.replace(/^@/, "").trim();
 
-    // Look up user by handle
+    // Look up user by handle — correct endpoint: /api/v1/users/search
     const userRes = await client.fetch(
-      `/api/v1/users?search=${encodeURIComponent(handle)}&account_id=${accountId}`,
+      `/api/v1/users/search?account_id=${encodeURIComponent(accountId)}&q=${encodeURIComponent(handle)}`,
       { method: "GET" }
     );
 
@@ -37,22 +43,23 @@ export async function sendInstagramDM(
     }
 
     const userData = (await userRes.json()) as {
-      items?: Array<{ id: string; provider_id?: string }>;
+      provider_messaging_id?: string;
+      public_identifier?: string;
     };
 
-    const user = userData.items?.[0];
-    if (!user) {
+    const providerMessagingId = userData.provider_messaging_id;
+    if (!providerMessagingId) {
       return {
         success: false,
         error: `No Unipile user found for handle: ${handle}`,
       };
     }
 
-    // Start chat / send message
+    // Start chat / send message — use provider_messaging_id in attendees_ids for Instagram
     const chatRes = await client.fetch("/api/v1/chats", {
       method: "POST",
       body: JSON.stringify({
-        attendees_ids: [user.id],
+        attendees_ids: [providerMessagingId],
         account_id: accountId,
         text: message,
       }),
