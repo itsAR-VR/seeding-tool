@@ -199,7 +199,7 @@ export const instagramMentionPoll = inngest.createFunction(
                   brandId: cred.brandId,
                   provider: "instagram",
                 },
-                data: { status: "error", connectionMethod: "oauth" },
+                data: { status: "error" },
               });
             }
 
