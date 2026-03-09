@@ -115,6 +115,9 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           )}
         </div>
         <div className="flex gap-2">
+          <Link href={`/campaigns/${campaignId}/analytics`}>
+            <Button variant="outline">📊 Analytics</Button>
+          </Link>
           <Link href={`/campaigns/${campaignId}/outreach`}>
             <Button variant="outline">✨ Draft Outreach</Button>
           </Link>
