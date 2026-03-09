@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 /**
  * Stripe webhook contract tests.
@@ -71,7 +72,7 @@ async function callStripeWebhook(
     "@/app/api/billing/webhook/route"
   );
 
-  const req = new Request("http://localhost:3000/api/billing/webhook", {
+  const req = new NextRequest("http://localhost:3000/api/billing/webhook", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -80,7 +81,7 @@ async function callStripeWebhook(
     body: JSON.stringify(body),
   });
 
-  return mod.POST(req as any);
+  return mod.POST(req);
 }
 
 // ─── Fixtures ────────────────────────────────────────────
@@ -288,7 +289,7 @@ describe("Stripe webhook handler", () => {
 
       const mod = await import("@/app/api/billing/webhook/route");
 
-      const req = new Request("http://localhost:3000/api/billing/webhook", {
+      const req = new NextRequest("http://localhost:3000/api/billing/webhook", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -297,7 +298,7 @@ describe("Stripe webhook handler", () => {
         body: JSON.stringify({ bad: "payload" }),
       });
 
-      const res = await mod.POST(req as any);
+      const res = await mod.POST(req);
       expect(res.status).toBe(400);
     });
   });

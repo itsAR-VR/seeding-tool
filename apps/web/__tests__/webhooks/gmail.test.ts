@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 /**
  * Gmail Pub/Sub webhook contract tests.
@@ -114,13 +115,13 @@ const rawGmailMessage = {
 async function callGmailWebhook(payload: Record<string, unknown>) {
   const { POST } = await import("@/app/api/gmail/webhook/route");
 
-  const req = new Request("http://localhost:3000/api/gmail/webhook", {
+  const req = new NextRequest("http://localhost:3000/api/gmail/webhook", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
   });
 
-  return POST(req as any);
+  return POST(req);
 }
 
 // ─── Tests ───────────────────────────────────────────────

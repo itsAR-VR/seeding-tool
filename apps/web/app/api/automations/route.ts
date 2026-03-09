@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
         name: body.name.trim(),
         type: body.type.trim(),
         schedule: body.schedule,
-        config: (body.config || {}) as any,
+        config: (body.config || {}) as Prisma.InputJsonValue,
         enabled: body.enabled ?? true,
         nextRunAt: body.enabled !== false ? computeNextRunAt(body.schedule) : null,
         brandId: membership.brandId,

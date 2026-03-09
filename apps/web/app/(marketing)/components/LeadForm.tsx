@@ -36,16 +36,26 @@ export default function LeadForm({
 }: LeadFormProps) {
   const calendlyHref = getCalendlyHref();
   const [state, formAction, pending] = useActionState(submitLead, initialState);
+  const shellClassName = [
+    "lead-form-shell",
+    calendlyHref ? "" : "lead-form-shell-single",
+    className ?? "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className={`lead-form-shell${className ? ` ${className}` : ""}`}>
+    <div className={shellClassName}>
       <form action={formAction} className="lead-form" id={formId}>
         <input type="hidden" name="source" value={source} />
         {intro ? <p className="lead-form-intro">{intro}</p> : null}
         <div className="lead-form-grid">
           {fields.map((field) => (
             <label className="lead-field" key={field.name}>
-              <span>{field.label}</span>
+              <span className="lead-field-label">
+                {field.label}
+                {field.required ? <em className="field-required">(required)</em> : null}
+              </span>
               <input
                 name={field.name}
                 placeholder={field.placeholder}
