@@ -3,24 +3,108 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { deriveBrandICP, icpToSearchHints } from "@/lib/brands/icp";
+import { computeNextRunAt } from "@/lib/automations/schedule";
 
-/**
- * Compute nextRunAt from a schedule preset, relative to now.
- */
-function computeNextRunAt(schedule: string): Date {
-  const now = new Date();
-  switch (schedule) {
-    case "every_6h":
-      return new Date(now.getTime() + 6 * 60 * 60 * 1000);
-    case "every_12h":
-      return new Date(now.getTime() + 12 * 60 * 60 * 1000);
-    case "daily":
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    case "weekly":
-      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    default:
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+type CategorySelection = {
+  apify?: string[];
+  collabstr?: string[];
+};
+
+function normalizeCategories(
+  value: unknown
+): { apify: string[]; collabstr: string[] } | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const source = value as CategorySelection;
+
+  const normalize = (entries: unknown) =>
+    Array.isArray(entries)
+      ? Array.from(
+          new Set(
+            entries
+              .filter((entry): entry is string => typeof entry === "string")
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          )
+        )
+      : [];
+
+  const categories = {
+    apify: normalize(source.apify),
+    collabstr: normalize(source.collabstr),
+  };
+
+  return categories.apify.length || categories.collabstr.length
+    ? categories
+    : undefined;
+}
+
+function normalizeLimit(value: unknown) {
+  if (value == null || value === "") return undefined;
+
+  const limit =
+    typeof value === "number" ? value : Number.parseInt(String(value), 10);
+
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new Error("config.limit must be a positive integer");
   }
+
+  return limit;
+}
+
+function toHashtag(value: string | undefined) {
+  if (!value) return undefined;
+
+  const normalized = value
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
+
+  return normalized || undefined;
+}
+
+async function buildAutomationConfig(
+  brandId: string,
+  type: string,
+  incomingConfig: Record<string, unknown> | undefined
+) {
+  if (type !== "creator_discovery") {
+    return (incomingConfig || {}) as Prisma.InputJsonValue;
+  }
+
+  const categories = normalizeCategories(incomingConfig?.categories);
+  const limit = normalizeLimit(incomingConfig?.limit);
+  const providedHashtag =
+    typeof incomingConfig?.hashtag === "string"
+      ? incomingConfig.hashtag.trim().replace(/^#/, "")
+      : "";
+
+  let derivedHashtag = providedHashtag || undefined;
+
+  if (!derivedHashtag) {
+    const icp = await deriveBrandICP(brandId);
+    const searchHints = icpToSearchHints(icp);
+    derivedHashtag =
+      searchHints.keywords[0] ??
+      toHashtag(categories?.apify[0]) ??
+      toHashtag(categories?.collabstr[0]);
+  }
+
+  return {
+    ...(incomingConfig || {}),
+    searchMode:
+      incomingConfig?.searchMode === "profile" ? "profile" : "hashtag",
+    platform:
+      typeof incomingConfig?.platform === "string" &&
+      incomingConfig.platform.trim()
+        ? incomingConfig.platform.trim()
+        : "instagram",
+    autoImport: incomingConfig?.autoImport !== false,
+    ...(limit ? { limit } : {}),
+    ...(categories ? { categories } : {}),
+    ...(derivedHashtag ? { hashtag: derivedHashtag } : {}),
+  } as Prisma.InputJsonValue;
 }
 
 /**
@@ -126,12 +210,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let config: Prisma.InputJsonValue;
+    try {
+      config = await buildAutomationConfig(
+        membership.brandId,
+        body.type.trim(),
+        body.config
+      );
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : "Invalid automation config",
+        },
+        { status: 400 }
+      );
+    }
+
     const automation = await prisma.automation.create({
       data: {
         name: body.name.trim(),
         type: body.type.trim(),
         schedule: body.schedule,
-        config: (body.config || {}) as Prisma.InputJsonValue,
+        config,
         enabled: body.enabled ?? true,
         nextRunAt: body.enabled !== false ? computeNextRunAt(body.schedule) : null,
         brandId: membership.brandId,

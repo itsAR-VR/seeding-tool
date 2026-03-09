@@ -73,6 +73,7 @@ export async function sendOutreachBatch(
   if (hasAnyEmail) {
     const alias = await prisma.emailAlias.findFirst({
       where: { brandId, isPrimary: true, isPaused: false },
+      orderBy: { updatedAt: "desc" },
     });
     if (alias) {
       emailAliasId = alias.id;

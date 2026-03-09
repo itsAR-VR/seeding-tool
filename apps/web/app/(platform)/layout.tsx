@@ -54,6 +54,14 @@ export default async function PlatformLayout({
           <p className="truncate text-xs text-muted-foreground">
             {user.email}
           </p>
+          <form action="/api/auth/logout" method="POST" className="mt-3">
+            <button
+              type="submit"
+              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              Logout
+            </button>
+          </form>
         </div>
       </aside>
 

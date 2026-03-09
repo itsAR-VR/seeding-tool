@@ -16,6 +16,11 @@ type Creator = {
   avgViews: number | null;
   bioCategory: string | null;
   discoverySource: string;
+  profiles: Array<{
+    platform: string;
+    handle: string;
+    url: string | null;
+  }>;
   campaignCreators: Array<{
     campaignId: string;
     campaign: { name: string };
@@ -209,14 +214,19 @@ export default function CampaignImportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {creators.map((creator) => (
-                    <tr
-                      key={creator.id}
-                      className={`border-b cursor-pointer ${
-                        selected.has(creator.id) ? "bg-blue-50" : ""
-                      }`}
-                      onClick={() => toggleSelect(creator.id)}
-                    >
+                  {creators.map((creator) => {
+                    const instagramProfile = creator.profiles.find(
+                      (profile) => profile.platform === "instagram"
+                    );
+
+                    return (
+                      <tr
+                        key={creator.id}
+                        className={`border-b cursor-pointer ${
+                          selected.has(creator.id) ? "bg-blue-50" : ""
+                        }`}
+                        onClick={() => toggleSelect(creator.id)}
+                      >
                       <td className="py-2 pr-4">
                         <input
                           type="checkbox"
@@ -227,6 +237,7 @@ export default function CampaignImportPage() {
                       <td className="py-2 pr-4">
                         <InstagramHandleLink
                           handle={creator.instagramHandle}
+                          url={instagramProfile?.url}
                           className="font-mono text-xs text-blue-600 hover:underline"
                         >
                           {creator.instagramHandle
@@ -248,8 +259,9 @@ export default function CampaignImportPage() {
                           {creator.discoverySource}
                         </Badge>
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

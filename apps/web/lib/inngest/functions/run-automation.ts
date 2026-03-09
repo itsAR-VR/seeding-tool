@@ -1,23 +1,16 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { computeNextRunAt } from "@/lib/automations/schedule";
 
-/**
- * Compute nextRunAt from a schedule preset, relative to now.
- */
-function computeNextRunAt(schedule: string): Date {
-  const now = new Date();
-  switch (schedule) {
-    case "every_6h":
-      return new Date(now.getTime() + 6 * 60 * 60 * 1000);
-    case "every_12h":
-      return new Date(now.getTime() + 12 * 60 * 60 * 1000);
-    case "daily":
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    case "weekly":
-      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    default:
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
-  }
+function toHashtag(value: string | undefined) {
+  if (!value) return undefined;
+
+  const normalized = value
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
+
+  return normalized || undefined;
 }
 
 /**
@@ -62,7 +55,15 @@ export const runAutomations = inngest.createFunction(
             limit?: number;
             platform?: string;
             autoImport?: boolean;
+            categories?: {
+              apify?: string[];
+              collabstr?: string[];
+            };
           };
+          const derivedHashtag =
+            config.hashtag ||
+            toHashtag(config.categories?.apify?.[0]) ||
+            toHashtag(config.categories?.collabstr?.[0]);
 
           // Create a search job
           const job = await prisma.creatorSearchJob.create({
@@ -71,9 +72,10 @@ export const runAutomations = inngest.createFunction(
               platform: config.platform || "instagram",
               query: {
                 searchMode: config.searchMode || "hashtag",
-                hashtag: config.hashtag,
+                hashtag: derivedHashtag,
                 usernames: config.usernames,
                 limit: config.limit || 50,
+                categories: config.categories,
                 automationId: automation.id,
               },
               brandId: automation.brandId,
@@ -91,9 +93,10 @@ export const runAutomations = inngest.createFunction(
               criteria: {
                 platform: config.platform || "instagram",
                 searchMode: config.searchMode || "hashtag",
-                hashtag: config.hashtag,
+                hashtag: derivedHashtag,
                 usernames: config.usernames,
                 limit: config.limit || 50,
+                categories: config.categories,
               },
             },
           });

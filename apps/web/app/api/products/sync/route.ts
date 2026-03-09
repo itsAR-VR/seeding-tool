@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { syncProducts, getProducts } from "@/lib/shopify/products";
+import { updateShopifyConnectionStatus } from "@/lib/shopify/status";
 
 async function getCurrentBrandId(): Promise<string> {
   const supabase = await createClient();
@@ -46,9 +47,26 @@ export async function POST() {
   try {
     const brandId = await getCurrentBrandId();
     const result = await syncProducts(brandId);
+    await updateShopifyConnectionStatus(brandId, {
+      lastSyncAt: new Date().toISOString(),
+      lastSyncError: null,
+      lastSyncedCount: result.synced,
+      truncated: result.truncated,
+    });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Product sync failed";
+    try {
+      const brandId = await getCurrentBrandId();
+      await updateShopifyConnectionStatus(brandId, {
+        lastSyncAt: new Date().toISOString(),
+        lastSyncError: message,
+        lastSyncedCount: null,
+        truncated: null,
+      });
+    } catch {
+      // ignore status update failures
+    }
     const status = message === "Unauthorized" ? 401 : 500;
     console.error("[products/sync/POST]", error);
     return NextResponse.json({ error: message }, { status });

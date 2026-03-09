@@ -313,6 +313,7 @@ function toProfileMetadata(creator: ScoredCreator): Prisma.InputJsonValue {
     JSON.stringify({
       collabstrSlug: creator.collabstrSlug,
       collabstrUrl: creator.collabstrUrl,
+      niche: creator.niche,
       profileDumpPresent: Boolean(creator.profileDump),
       fitScore: creator.fitScore,
       fitReasoning: creator.fitReasoning,
@@ -455,6 +456,7 @@ async function recordSearchJobResults(
         profileUrl: result.instagramUrl ?? result.collabstrUrl,
         imageUrl: result.imageUrl,
         bio: result.bio,
+        bioCategory: result.niche,
         metadata: toProfileMetadata(result),
         fitScore: result.fitScore,
         fitReasoning: result.fitReasoning,

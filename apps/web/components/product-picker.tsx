@@ -40,6 +40,15 @@ interface ProductPickerProps {
   showSyncButton?: boolean;
 }
 
+interface ShopifyStatus {
+  connected: boolean;
+  storeDomain?: string;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+  lastSyncedCount?: number | null;
+  truncated?: boolean;
+}
+
 export function ProductPicker({
   selectedProductIds,
   onSelectionChange,
@@ -51,6 +60,20 @@ export function ProductPicker({
   const [search, setSearch] = useState("");
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shopifyStatus, setShopifyStatus] = useState<ShopifyStatus>({
+    connected: false,
+  });
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/connections/shopify/status");
+      if (res.ok) {
+        setShopifyStatus((await res.json()) as ShopifyStatus);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -72,7 +95,8 @@ export function ProductPicker({
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    fetchStatus();
+  }, [fetchProducts, fetchStatus]);
 
   async function handleSync() {
     try {
@@ -84,8 +108,10 @@ export function ProductPicker({
         throw new Error(data.error ?? "Sync failed");
       }
       await fetchProducts();
+      await fetchStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
+      await fetchStatus();
     } finally {
       setSyncing(false);
     }
@@ -206,8 +232,46 @@ export function ProductPicker({
   return (
     <div className="space-y-4">
       {error && (
-        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
+        <div className="flex items-center justify-between gap-3 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <span>{error}</span>
+          {showSyncButton && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              {syncing ? "Retrying…" : "Retry sync"}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {shopifyStatus.connected && (
+        <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
+            <span>
+              Store: <strong>{shopifyStatus.storeDomain ?? "Connected"}</strong>
+            </span>
+            {shopifyStatus.lastSyncAt && (
+              <span>
+                Last sync:{" "}
+                <strong>
+                  {new Date(shopifyStatus.lastSyncAt).toLocaleString()}
+                </strong>
+              </span>
+            )}
+            {typeof shopifyStatus.lastSyncedCount === "number" && (
+              <span>{shopifyStatus.lastSyncedCount} products</span>
+            )}
+            {shopifyStatus.truncated && <span>Partial sync</span>}
+          </div>
+          {shopifyStatus.lastSyncError && (
+            <p className="mt-2 text-red-700">
+              Last sync failed: {shopifyStatus.lastSyncError}
+            </p>
+          )}
         </div>
       )}
 

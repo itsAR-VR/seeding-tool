@@ -610,61 +610,6 @@
     stroke-linecap: round;
   }
 
-  /* ── Proof rail ── */
-  .proof-rail {
-    max-width: 1180px;
-    display: grid;
-    gap: 1rem;
-    padding: clamp(1.2rem, 1.8vw, 1.5rem);
-    border: 1px solid color-mix(in srgb, var(--color-brand-line) 84%, transparent);
-    border-radius: 28px;
-    background: color-mix(in srgb, var(--color-brand-surface) 92%, white 8%);
-  }
-
-  .proof-rail-copy { display: grid; gap: 0.45rem; }
-
-  .proof-rail-copy h2 {
-    margin: 0;
-    font-size: clamp(1.7rem, 3vw, 2.6rem);
-    font-family: var(--font-display), sans-serif;
-    letter-spacing: -0.04em;
-  }
-
-  .proof-rail-note {
-    margin: 0;
-    color: var(--color-brand-muted);
-    max-width: 36rem;
-  }
-
-  /* ── Brand band ── */
-  .brand-band {
-    overflow: hidden;
-    mask-image: linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, black 8%, black 92%, transparent 100%);
-  }
-
-  .brand-band-track {
-    display: flex;
-    gap: 2.8rem;
-    width: max-content;
-    align-items: center;
-    animation: marquee 36s linear infinite;
-  }
-
-  .brand-band:hover .brand-band-track { animation-play-state: paused; }
-
-  .brand-mark {
-    flex-shrink: 0;
-    height: 30px;
-    width: auto;
-    object-fit: contain;
-    filter: grayscale(1);
-    opacity: 0.65;
-    transition: filter 300ms var(--ease-out), opacity 300ms var(--ease-out);
-  }
-
-  .brand-mark:hover { filter: grayscale(0); opacity: 1; }
-
   /* ── Pain strip ── */
   .pain-strip {
     max-width: 1180px;
@@ -2370,7 +2315,7 @@
 }
 
 @media (max-width: 1024px) {
-  .hero-grid, .final-capture, .lead-form-shell, .proof-rail-copy, .price-bridge {
+  .hero-grid, .final-capture, .lead-form-shell, .price-bridge {
     grid-template-columns: 1fr;
   }
   .hero-shell { min-height: auto; }
@@ -2398,8 +2343,6 @@
   .story-card[data-step="3"] { border-left: 3px solid color-mix(in srgb, var(--color-brand-teal) 30%, var(--color-brand-line)); border-top: none; }
 
   .story-node { position: absolute; left: -2.25rem; top: 1.25rem; transform: none; }
-  .brand-band-track { gap: 2rem; }
-
   .decision-hero-grid, .pricing-contact, .decision-grid, .fit-grid,
   .rollout-lane-grid, .pricing-faq-grid, .implementation-proof {
     grid-template-columns: 1fr;

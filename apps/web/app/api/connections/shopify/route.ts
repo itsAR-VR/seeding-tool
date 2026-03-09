@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { registerWebhooks, cleanupWebhooks } from "@/lib/shopify/webhooks";
 import { syncProducts } from "@/lib/shopify/products";
+import {
+  getShopifyConnectionStatus,
+  updateShopifyConnectionStatus,
+} from "@/lib/shopify/status";
 
 const SHOPIFY_API_VERSION = "2024-01";
 
@@ -61,27 +65,7 @@ async function getErrorText(response: Response) {
 export async function GET() {
   try {
     const brandId = await getCurrentBrandId();
-
-    const [credential, connection] = await Promise.all([
-      prisma.providerCredential.findFirst({
-        where: {
-          brandId,
-          provider: "shopify",
-          isValid: true,
-        },
-      }),
-      prisma.brandConnection.findFirst({
-        where: {
-          brandId,
-          provider: "shopify",
-        },
-      }),
-    ]);
-
-    return NextResponse.json({
-      connected: Boolean(credential),
-      storeDomain: connection?.externalId ?? credential?.label ?? undefined,
-    });
+    return NextResponse.json(await getShopifyConnectionStatus(brandId));
   } catch (error) {
     if (error instanceof ResponseError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -202,9 +186,23 @@ export async function POST(request: NextRequest) {
 
     // Trigger initial product sync (non-blocking — warn on failure)
     try {
-      await syncProducts(brandId);
+      const result = await syncProducts(brandId);
+      await updateShopifyConnectionStatus(brandId, {
+        lastSyncAt: new Date().toISOString(),
+        lastSyncError: null,
+        lastSyncedCount: result.synced,
+        truncated: result.truncated,
+      });
       console.log("[connections/shopify/POST] Initial product sync completed");
     } catch (syncErr) {
+      const message =
+        syncErr instanceof Error ? syncErr.message : "Initial product sync failed";
+      await updateShopifyConnectionStatus(brandId, {
+        lastSyncAt: new Date().toISOString(),
+        lastSyncError: message,
+        lastSyncedCount: null,
+        truncated: null,
+      });
       console.warn(
         "[connections/shopify/POST] Initial product sync failed (non-fatal):",
         syncErr

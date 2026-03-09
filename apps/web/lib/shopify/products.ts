@@ -59,129 +59,150 @@ export interface FlatVariant {
  * Fetch all products from the connected Shopify store and upsert into DB.
  * Paginates via Shopify's link-header pagination.
  */
-export async function syncProducts(brandId: string): Promise<{ synced: number }> {
+export async function syncProducts(
+  brandId: string
+): Promise<{ synced: number; truncated: boolean }> {
   const client = await getShopifyClient(brandId);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30_000);
 
-  let allProducts: ShopifyProductRaw[] = [];
-  let nextPageUrl: string | null = "/products.json?limit=250&status=active";
+  try {
+    let allProducts: ShopifyProductRaw[] = [];
+    let nextPageUrl: string | null = "/products.json?limit=250&status=active";
+    let pageCount = 0;
+    let truncated = false;
 
-  while (nextPageUrl) {
-    const res = await client.fetch(nextPageUrl);
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Failed to fetch products: ${text}`);
+    while (nextPageUrl) {
+      pageCount += 1;
+
+      if (pageCount > 20) {
+        truncated = true;
+        break;
+      }
+
+      const res = await client.fetch(nextPageUrl, {
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Failed to fetch products: ${text}`);
+      }
+
+      const data = (await res.json()) as ShopifyProductsResponse;
+      allProducts = allProducts.concat(data.products || []);
+
+      const linkHeader = res.headers.get("link");
+      nextPageUrl = parseLinkNext(linkHeader);
     }
 
-    const data = (await res.json()) as ShopifyProductsResponse;
-    allProducts = allProducts.concat(data.products || []);
+    const now = new Date();
 
-    // Parse Link header for pagination
-    const linkHeader = res.headers.get("link");
-    nextPageUrl = parseLinkNext(linkHeader);
-  }
+    for (const raw of allProducts) {
+      const shopifyId = String(raw.id);
+      const imageUrl = raw.image?.src || null;
 
-  const now = new Date();
-
-  // Upsert each product and its variants
-  for (const raw of allProducts) {
-    const shopifyId = String(raw.id);
-    const imageUrl = raw.image?.src || null;
-
-    const product = await prisma.shopifyProduct.upsert({
-      where: { brandId_shopifyId: { brandId, shopifyId } },
-      create: {
-        shopifyId,
-        title: raw.title,
-        description: stripHtml(raw.body_html),
-        handle: raw.handle,
-        productType: raw.product_type,
-        imageUrl,
-        status: raw.status || "active",
-        brandId,
-        syncedAt: now,
-      },
-      update: {
-        title: raw.title,
-        description: stripHtml(raw.body_html),
-        handle: raw.handle,
-        productType: raw.product_type,
-        imageUrl,
-        status: raw.status || "active",
-        syncedAt: now,
-      },
-    });
-
-    // Build image map for variant images
-    const imageMap = new Map<number, string>();
-    for (const img of raw.images || []) {
-      imageMap.set(img.id, img.src);
-    }
-
-    // Upsert variants
-    for (const v of raw.variants || []) {
-      const shopifyVariantId = String(v.id);
-      const variantImage = v.image_id ? imageMap.get(v.image_id) || null : null;
-
-      await prisma.shopifyVariant.upsert({
-        where: {
-          productId_shopifyVariantId: {
-            productId: product.id,
-            shopifyVariantId,
-          },
-        },
+      const product = await prisma.shopifyProduct.upsert({
+        where: { brandId_shopifyId: { brandId, shopifyId } },
         create: {
-          shopifyVariantId,
-          title: v.title,
-          price: v.price,
-          sku: v.sku,
-          inventoryQuantity: v.inventory_quantity,
-          imageUrl: variantImage,
-          productId: product.id,
+          shopifyId,
+          title: raw.title,
+          description: stripHtml(raw.body_html),
+          handle: raw.handle,
+          productType: raw.product_type,
+          imageUrl,
+          status: raw.status || "active",
+          brandId,
+          syncedAt: now,
         },
         update: {
-          title: v.title,
-          price: v.price,
-          sku: v.sku,
-          inventoryQuantity: v.inventory_quantity,
-          imageUrl: variantImage,
+          title: raw.title,
+          description: stripHtml(raw.body_html),
+          handle: raw.handle,
+          productType: raw.product_type,
+          imageUrl,
+          status: raw.status || "active",
+          syncedAt: now,
         },
       });
-    }
 
-    // Remove variants that no longer exist in Shopify
-    const currentVariantIds = new Set(
-      raw.variants.map((v) => String(v.id))
-    );
-    const dbVariants = await prisma.shopifyVariant.findMany({
-      where: { productId: product.id },
-      select: { id: true, shopifyVariantId: true },
-    });
-    const staleVariantIds = dbVariants
-      .filter((v) => !currentVariantIds.has(v.shopifyVariantId))
-      .map((v) => v.id);
-    if (staleVariantIds.length > 0) {
-      await prisma.shopifyVariant.deleteMany({
-        where: { id: { in: staleVariantIds } },
+      const imageMap = new Map<number, string>();
+      for (const img of raw.images || []) {
+        imageMap.set(img.id, img.src);
+      }
+
+      for (const v of raw.variants || []) {
+        const shopifyVariantId = String(v.id);
+        const variantImage = v.image_id ? imageMap.get(v.image_id) || null : null;
+
+        await prisma.shopifyVariant.upsert({
+          where: {
+            productId_shopifyVariantId: {
+              productId: product.id,
+              shopifyVariantId,
+            },
+          },
+          create: {
+            shopifyVariantId,
+            title: v.title,
+            price: v.price,
+            sku: v.sku,
+            inventoryQuantity: v.inventory_quantity,
+            imageUrl: variantImage,
+            productId: product.id,
+          },
+          update: {
+            title: v.title,
+            price: v.price,
+            sku: v.sku,
+            inventoryQuantity: v.inventory_quantity,
+            imageUrl: variantImage,
+          },
+        });
+      }
+
+      const currentVariantIds = new Set(
+        raw.variants.map((v) => String(v.id))
+      );
+      const dbVariants = await prisma.shopifyVariant.findMany({
+        where: { productId: product.id },
+        select: { id: true, shopifyVariantId: true },
       });
+      const staleVariantIds = dbVariants
+        .filter((v) => !currentVariantIds.has(v.shopifyVariantId))
+        .map((v) => v.id);
+      if (staleVariantIds.length > 0) {
+        await prisma.shopifyVariant.deleteMany({
+          where: { id: { in: staleVariantIds } },
+        });
+      }
     }
-  }
 
-  // Remove products that no longer exist in Shopify
-  const currentShopifyIds = new Set(allProducts.map((p) => String(p.id)));
-  const dbProducts = await prisma.shopifyProduct.findMany({
-    where: { brandId },
-    select: { id: true, shopifyId: true },
-  });
-  const staleProductIds = dbProducts
-    .filter((p) => !currentShopifyIds.has(p.shopifyId))
-    .map((p) => p.id);
-  if (staleProductIds.length > 0) {
-    await prisma.shopifyProduct.deleteMany({
-      where: { id: { in: staleProductIds } },
-    });
-  }
+    if (!truncated) {
+      const currentShopifyIds = new Set(allProducts.map((p) => String(p.id)));
+      const dbProducts = await prisma.shopifyProduct.findMany({
+        where: { brandId },
+        select: { id: true, shopifyId: true },
+      });
+      const staleProductIds = dbProducts
+        .filter((p) => !currentShopifyIds.has(p.shopifyId))
+        .map((p) => p.id);
+      if (staleProductIds.length > 0) {
+        await prisma.shopifyProduct.deleteMany({
+          where: { id: { in: staleProductIds } },
+        });
+      }
+    }
 
-  return { synced: allProducts.length };
+    return { synced: allProducts.length, truncated };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Shopify product sync timed out after 30 seconds");
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 /**

@@ -11,6 +11,7 @@ import { InstagramHandleLink } from "@/components/instagram-handle-link";
 type CreatorProfile = {
   platform: string;
   handle: string;
+  url: string | null;
   followerCount: number | null;
 };
 
@@ -50,6 +51,7 @@ type SearchResult = {
   profileUrl: string | null;
   imageUrl: string | null;
   bio: string | null;
+  bioCategory: string | null;
   platform: string;
 };
 
@@ -88,6 +90,23 @@ function appendDelimitedValue(current: string, nextValue: string) {
   return [...existing, normalized].join(", ");
 }
 
+function parsePositiveInteger(value: string) {
+  if (!value.trim()) {
+    return { value: null, error: "Creator discovery limit is required." };
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return {
+      value: null,
+      error: "Creator discovery limit must be a positive integer.",
+    };
+  }
+
+  return { value: parsed, error: null };
+}
+
 export default function CreatorsPage() {
   const router = useRouter();
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -120,7 +139,7 @@ export default function CreatorsPage() {
   );
   const [searchHashtag, setSearchHashtag] = useState("");
   const [searchUsernames, setSearchUsernames] = useState("");
-  const [searchLimit, setSearchLimit] = useState(50);
+  const [searchLimit, setSearchLimit] = useState("50");
   const [searching, setSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -237,6 +256,12 @@ export default function CreatorsPage() {
   // ── Search Creators Logic ──
 
   async function startSearch() {
+    const limitState = parsePositiveInteger(searchLimit);
+    if (limitState.error) {
+      alert(limitState.error);
+      return;
+    }
+
     setSearching(true);
     setSearchResults([]);
     setSelectedResults(new Set());
@@ -246,7 +271,7 @@ export default function CreatorsPage() {
       const body: Record<string, unknown> = {
         searchMode,
         platform: "instagram",
-        limit: searchLimit,
+        limit: limitState.value,
       };
 
       if (searchMode === "hashtag") {
@@ -337,7 +362,13 @@ export default function CreatorsPage() {
       const selected = searchResults.filter((r) => selectedResults.has(r.id));
       const rows = selected.map((r) => ({
         username: r.handle,
+        name: r.name,
+        bio: r.bio,
         followerCount: r.followerCount,
+        bioCategory: r.bioCategory,
+        imageUrl: r.imageUrl,
+        profileUrl: r.profileUrl,
+        engagementRate: r.engagementRate,
         discoverySource: "apify",
       }));
 
@@ -374,7 +405,7 @@ export default function CreatorsPage() {
     setSearching(false);
     setSearchHashtag("");
     setSearchUsernames("");
-    setSearchLimit(50);
+    setSearchLimit("50");
     setSearchMode("hashtag");
   }
 
@@ -392,6 +423,14 @@ export default function CreatorsPage() {
     () => facets.usernames.slice(0, 18),
     [facets.usernames]
   );
+  const searchLimitValidation = useMemo(
+    () => parsePositiveInteger(searchLimit),
+    [searchLimit]
+  );
+  const searchLimitWarning =
+    searchLimitValidation.value && searchLimitValidation.value > 100
+      ? "Values above 100 are allowed, but expect heavier daily discovery volume."
+      : null;
 
   function addHashtagSuggestion(value: string) {
     setSearchHashtag(value.replace(/^#/, ""));
@@ -594,12 +633,18 @@ export default function CreatorsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {creators.map((creator) => (
-                    <tr key={creator.id} className="border-b">
+                  {creators.map((creator) => {
+                    const instagramProfile = creator.profiles.find(
+                      (profile) => profile.platform === "instagram"
+                    );
+
+                    return (
+                      <tr key={creator.id} className="border-b">
                       <td className="py-2 pr-4">
                         <div>
                           <InstagramHandleLink
                             handle={creator.instagramHandle}
+                            url={instagramProfile?.url}
                             className="font-mono text-xs text-blue-600 hover:underline"
                           />
                           {creator.name &&
@@ -608,6 +653,7 @@ export default function CreatorsPage() {
                                 {creator.instagramHandle ? (
                                   <InstagramHandleLink
                                     handle={creator.instagramHandle}
+                                    url={instagramProfile?.url}
                                     className="hover:text-foreground hover:underline"
                                   >
                                     {creator.name}
@@ -668,8 +714,9 @@ export default function CreatorsPage() {
                           Add to Campaign
                         </Button>
                       </td>
-                    </tr>
-                  ))}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -883,23 +930,29 @@ export default function CreatorsPage() {
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
-                      Max Results: {searchLimit}
+                      Creators per day
                     </label>
-                    <input
-                      type="range"
-                      min={10}
-                      max={100}
-                      step={10}
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
                       value={searchLimit}
-                      onChange={(e) =>
-                        setSearchLimit(parseInt(e.target.value))
-                      }
-                      className="w-full"
+                      onChange={(e) => setSearchLimit(e.target.value)}
                     />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>10</span>
-                      <span>100</span>
-                    </div>
+                    {searchLimitValidation.error ? (
+                      <p className="text-sm text-destructive">
+                        {searchLimitValidation.error}
+                      </p>
+                    ) : searchLimitWarning ? (
+                      <p className="text-sm text-amber-700">
+                        {searchLimitWarning}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Use any positive integer. Values above 100 will still
+                        save.
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -1048,7 +1101,8 @@ export default function CreatorsPage() {
                     disabled={
                       (searchMode === "hashtag" && !searchHashtag.trim()) ||
                       (searchMode === "profile" &&
-                        !searchUsernames.trim())
+                        !searchUsernames.trim()) ||
+                      Boolean(searchLimitValidation.error)
                     }
                   >
                     Search

@@ -21,11 +21,21 @@ interface BrandData {
     status: string;
     externalId?: string | null;
   }>;
+  emailAliases: Array<{
+    id: string;
+    address: string;
+    displayName?: string | null;
+    isPrimary: boolean;
+  }>;
 }
 
 interface ShopifyConnectionState {
   connected: boolean;
   storeDomain?: string;
+  lastSyncAt?: string | null;
+  lastSyncError?: string | null;
+  lastSyncedCount?: number | null;
+  truncated?: boolean;
 }
 
 interface InstagramConnectionState {
@@ -86,6 +96,7 @@ function ConnectionsContent() {
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
+  const returnTo = searchParams.get("returnTo");
 
   useEffect(() => {
     void refreshConnectionData();
@@ -117,7 +128,7 @@ function ConnectionsContent() {
 
   async function fetchShopifyConnection() {
     try {
-      const res = await fetch("/api/connections/shopify");
+      const res = await fetch("/api/connections/shopify/status");
       if (res.ok) {
         setShopifyState((await res.json()) as ShopifyConnectionState);
         return;
@@ -337,11 +348,14 @@ function ConnectionsContent() {
   const shopifyConn = getConnection("shopify");
   const instagramConn = getConnection("instagram");
   const unipileConn = getConnection("unipile");
+  const primaryEmailAlias =
+    brand.emailAliases.find((alias) => alias.isPrimary) ?? null;
 
   const shopifyConnected =
     shopifyState.connected || shopifyConn?.status === "connected";
 
   const shopifyDomain = shopifyState.storeDomain ?? shopifyConn?.externalId ?? "";
+  const gmailAddress = primaryEmailAlias?.address ?? gmailConn?.externalId ?? "";
 
   return (
     <div className="space-y-6">
@@ -351,6 +365,22 @@ function ConnectionsContent() {
           Manage your connected services and integrations.
         </p>
       </div>
+
+      {returnTo && (
+        <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-4 text-sm">
+          <p className="text-muted-foreground">
+            Finish connections here, then return to onboarding when you are ready.
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => {
+              window.location.href = returnTo;
+            }}
+          >
+            Return to Onboarding
+          </Button>
+        </div>
+      )}
 
       {connected === "gmail" && (
         <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
@@ -390,7 +420,7 @@ function ConnectionsContent() {
             </div>
             <CardDescription>
               {gmailConn?.status === "connected"
-                ? `Connected as ${gmailConn.externalId}`
+                ? `Connected as ${gmailAddress}`
                 : "Send outreach emails through your Gmail account."}
             </CardDescription>
           </CardHeader>
@@ -398,7 +428,7 @@ function ConnectionsContent() {
             {gmailConn?.status === "connected" ? (
               <p className="text-sm text-muted-foreground">
                 Outreach emails will be sent from{" "}
-                <strong>{gmailConn.externalId}</strong>.
+                <strong>{gmailAddress}</strong>.
               </p>
             ) : (
               <Button
@@ -434,6 +464,66 @@ function ConnectionsContent() {
                 <p className="text-sm text-muted-foreground">
                   Connected store: <strong>{shopifyDomain}</strong>
                 </p>
+                {shopifyState.lastSyncAt && (
+                  <p className="text-sm text-muted-foreground">
+                    Last sync:{" "}
+                    <strong>
+                      {new Date(shopifyState.lastSyncAt).toLocaleString()}
+                    </strong>
+                    {typeof shopifyState.lastSyncedCount === "number" &&
+                      ` · ${shopifyState.lastSyncedCount} products`}
+                    {shopifyState.truncated ? " · partial sync" : ""}
+                  </p>
+                )}
+                {shopifyState.lastSyncError && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                    Last sync failed: {shopifyState.lastSyncError}
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    setShopifySaving(true);
+                    setShopifyMessage(null);
+
+                    try {
+                      const res = await fetch("/api/products/sync", {
+                        method: "POST",
+                      });
+
+                      if (!res.ok) {
+                        throw new Error(
+                          await readErrorMessage(res, "Failed to sync products")
+                        );
+                      }
+
+                      const data = (await res.json()) as {
+                        synced: number;
+                        truncated?: boolean;
+                      };
+                      setShopifyMessage({
+                        tone: "success",
+                        text: data.truncated
+                          ? `Shopify sync completed with a partial catalog (${data.synced} products).`
+                          : `Shopify sync completed (${data.synced} products).`,
+                      });
+                      await refreshConnectionData();
+                    } catch (syncError) {
+                      setShopifyMessage({
+                        tone: "error",
+                        text:
+                          syncError instanceof Error
+                            ? syncError.message
+                            : "Failed to sync products.",
+                      });
+                    } finally {
+                      setShopifySaving(false);
+                    }
+                  }}
+                  disabled={shopifySaving}
+                >
+                  {shopifySaving ? "Syncing..." : "Retry sync"}
+                </Button>
                 <Button
                   variant="destructive"
                   onClick={handleDisconnectShopify}

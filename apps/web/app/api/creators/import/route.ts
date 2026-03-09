@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 /**
  * POST /api/creators/import — Bulk import creators from CSV data.
  *
- * Body: { rows: Array<{ username, email?, followerCount?, avgViews?, bioCategory?, discoverySource? }> }
+ * Body: { rows: Array<{ username, name?, email?, bio?, followerCount?, avgViews?, bioCategory?, imageUrl?, profileUrl?, engagementRate?, discoverySource? }> }
  *
  * // INVARIANT: Creators are deduplicated by instagramHandle on import
  * // INVARIANT: discoverySource is always tagged — never null
@@ -39,10 +39,15 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       rows: Array<{
         username: string;
+        name?: string;
         email?: string;
+        bio?: string;
         followerCount?: number;
         avgViews?: number;
         bioCategory?: string;
+        imageUrl?: string;
+        profileUrl?: string;
+        engagementRate?: number;
         discoverySource?: string;
       }>;
     };
@@ -58,6 +63,7 @@ export async function POST(request: NextRequest) {
     const validSources = [
       "phantombuster",
       "apify",
+      "collabstr",
       "csv_import",
       "manual",
       "creator_marketplace",
@@ -91,11 +97,37 @@ export async function POST(request: NextRequest) {
         await prisma.creator.update({
           where: { id: existing.id },
           data: {
+            name: row.name || existing.name,
             email: row.email || existing.email,
+            bio: row.bio || existing.bio,
             followerCount: row.followerCount ?? existing.followerCount,
             avgViews: row.avgViews ?? existing.avgViews,
             bioCategory: row.bioCategory || existing.bioCategory,
+            imageUrl: row.imageUrl || existing.imageUrl,
             // Don't overwrite discoverySource if already set to something more specific
+          },
+        });
+
+        await prisma.creatorProfile.upsert({
+          where: {
+            creatorId_platform: {
+              creatorId: existing.id,
+              platform: "instagram",
+            },
+          },
+          update: {
+            handle,
+            url: row.profileUrl || undefined,
+            followerCount: row.followerCount ?? undefined,
+            engagementRate: row.engagementRate ?? undefined,
+          },
+          create: {
+            creatorId: existing.id,
+            platform: "instagram",
+            handle,
+            url: row.profileUrl || `https://instagram.com/${handle}`,
+            followerCount: row.followerCount ?? null,
+            engagementRate: row.engagementRate ?? null,
           },
         });
         updated++;
@@ -104,11 +136,13 @@ export async function POST(request: NextRequest) {
         await prisma.creator.create({
           data: {
             instagramHandle: handle,
-            name: handle,
+            name: row.name || handle,
             email: row.email || null,
+            bio: row.bio || null,
             followerCount: row.followerCount ?? null,
             avgViews: row.avgViews ?? null,
             bioCategory: row.bioCategory || null,
+            imageUrl: row.imageUrl || null,
             discoverySource: source,
             brandId: membership.brandId,
           },
@@ -132,14 +166,17 @@ export async function POST(request: NextRequest) {
             },
             update: {
               handle,
+              url: row.profileUrl || `https://instagram.com/${handle}`,
               followerCount: row.followerCount ?? null,
+              engagementRate: row.engagementRate ?? null,
             },
             create: {
               creatorId: creator.id,
               platform: "instagram",
               handle,
               followerCount: row.followerCount ?? null,
-              url: `https://instagram.com/${handle}`,
+              engagementRate: row.engagementRate ?? null,
+              url: row.profileUrl || `https://instagram.com/${handle}`,
             },
           });
         }

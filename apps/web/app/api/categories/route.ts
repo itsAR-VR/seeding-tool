@@ -2,11 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getGroupedCategories } from "@/lib/categories/catalog";
 
-/**
- * GET /api/brands/current
- * Returns the first brand the current user has membership in.
- */
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -25,39 +22,19 @@ export async function GET() {
 
     const membership = await prisma.brandMembership.findFirst({
       where: { userId: user.id },
-      include: {
-        brand: {
-          include: {
-            settings: true,
-            onboarding: true,
-            connections: true,
-            emailAliases: {
-              select: {
-                id: true,
-                address: true,
-                displayName: true,
-                isPrimary: true,
-              },
-              orderBy: [
-                { isPrimary: "desc" },
-                { updatedAt: "desc" },
-              ],
-            },
-          },
-        },
-      },
       orderBy: { createdAt: "asc" },
+      select: { brandId: true },
     });
 
     if (!membership) {
       return NextResponse.json({ error: "No brand found" }, { status: 404 });
     }
 
-    return NextResponse.json(membership.brand);
+    return NextResponse.json(getGroupedCategories());
   } catch (error) {
-    console.error("[brands/current]", error);
+    console.error("[categories/GET]", error);
     return NextResponse.json(
-      { error: "Failed to fetch brand" },
+      { error: "Failed to fetch categories" },
       { status: 500 }
     );
   }

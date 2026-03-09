@@ -69,6 +69,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
               profileUrl: r.profileUrl,
               imageUrl: r.imageUrl,
               bio: r.bio,
+              bioCategory: r.bioCategory,
               platform: r.platform,
               fitScore: r.fitScore ?? null,
               fitReasoning: r.fitReasoning ?? null,

@@ -145,23 +145,27 @@ export async function GET(request: NextRequest) {
         },
       });
 
-      // Create email alias if it doesn't exist
-      const existingAlias = await tx.emailAlias.findUnique({
+      // Newest connected Gmail becomes the primary sender for this phase.
+      await tx.emailAlias.updateMany({
+        where: { brandId },
+        data: { isPrimary: false },
+      });
+
+      await tx.emailAlias.upsert({
         where: {
           brandId_address: { brandId, address: emailAddress },
         },
+        create: {
+          brandId,
+          address: emailAddress,
+          displayName: emailAddress.split("@")[0],
+          isPrimary: true,
+        },
+        update: {
+          displayName: emailAddress.split("@")[0],
+          isPrimary: true,
+        },
       });
-
-      if (!existingAlias) {
-        await tx.emailAlias.create({
-          data: {
-            brandId,
-            address: emailAddress,
-            displayName: emailAddress.split("@")[0],
-            isPrimary: true,
-          },
-        });
-      }
     });
 
     return Response.redirect(

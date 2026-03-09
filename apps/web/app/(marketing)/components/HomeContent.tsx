@@ -1,23 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import { useEffect } from "react";
 import HeroScene from "./HeroScene";
 import LeadForm from "./LeadForm";
 import Shell from "./Shell";
 import { trackEvent } from "./analytics";
-
-const logoRail = [
-  { name: "Wild Bird", src: "/logos/wild-bird.avif" },
-  { name: "Dr. Harvey's", src: "/logos/dr-harveys.png" },
-  { name: "G Fuel", src: "/logos/gfuel.avif" },
-  { name: "iHerb", src: "/logos/iherb.avif" },
-  { name: "Salty Face", src: "/logos/salty-face.avif" },
-  { name: "Black Girl Vitamins", src: "/logos/black-girl-vitamins.png" },
-  { name: "Super Gut", src: "/logos/super-gut.avif" },
-  { name: "So Sweet Bee Organics", src: "/logos/sweet-bee.png" },
-  { name: "Purdy & Figg", src: "/logos/purdy-figg.svg" },
-];
 
 const frictionCards = [
   {
@@ -157,32 +144,6 @@ export default function HomeContent() {
       <main id="main-content" className="lp-main home-main">
         <section className="hero-shell" aria-label="Hero">
           <HeroScene />
-        </section>
-
-        <section className="proof-rail" aria-label="Proof rail" data-reveal>
-          <div className="proof-rail-copy">
-            <p className="eyebrow">Trusted by teams at</p>
-            <h2>Operators at these brands already know what spreadsheet seeding costs.</h2>
-            <p className="proof-rail-note">
-              That is why the pitch lands fast: fewer handoffs, fewer screenshots, and a cleaner line from shortlist
-              to post.
-            </p>
-          </div>
-          <div className="brand-band" aria-hidden="true">
-            <div className="brand-band-track">
-              {[...logoRail, ...logoRail].map((logo, index) => (
-                <Image
-                  key={`${logo.name}-${index}`}
-                  alt={logo.name}
-                  className="brand-mark"
-                  height={28}
-                  sizes="124px"
-                  src={logo.src}
-                  width={124}
-                />
-              ))}
-            </div>
-          </div>
         </section>
 
         <section className="pain-strip" aria-label="Operational pain" data-reveal>

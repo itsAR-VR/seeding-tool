@@ -44,7 +44,11 @@ export const handleReminderSend = inngest.createFunction(
             brand: {
               include: {
                 settings: true,
-                emailAliases: { where: { isPrimary: true }, take: 1 },
+                emailAliases: {
+                  where: { isPrimary: true },
+                  orderBy: { updatedAt: "desc" },
+                  take: 1,
+                },
               },
             },
           },

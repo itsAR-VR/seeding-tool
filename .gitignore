@@ -14,8 +14,10 @@ apps/web/tsconfig.tsbuildinfo
 
 # E2E screenshots (not tracked)
 e2e-screenshots/
+apps/web/test-results/
 
 # Collabstr data / runtime state (large data files)
 scripts/collabstr-influencers.jsonl
 scripts/archive/
 scripts/.collabstr-influencers.checkpoint.json
+.env*.local

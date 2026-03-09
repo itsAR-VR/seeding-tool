@@ -148,11 +148,11 @@ export default function ReviewQueuePage() {
                             url={profile.url}
                             className="text-blue-600 hover:underline"
                           />
-                          {profile.followerCount != null && (
-                            <span>
-                              {profile.followerCount.toLocaleString()} followers
-                            </span>
-                          )}
+                          <span>
+                            {profile.followerCount != null
+                              ? `${profile.followerCount.toLocaleString()} followers`
+                              : "—"}
+                          </span>
                         </>
                       )}
                       {cc.creator.email && (

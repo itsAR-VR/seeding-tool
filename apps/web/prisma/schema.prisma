@@ -584,6 +584,7 @@ model CreatorSearchResult {
   profileUrl     String?
   imageUrl       String?
   bio            String? @db.Text
+  bioCategory    String? @map("bio_category")
   metadata       Json?
 
   fitScore    Float? // AI-scored creator fit (0-1)
@@ -1015,5 +1016,4 @@ model ShopifyVariant {
   @@unique([productId, shopifyVariantId])
   @@map("shopify_variants")
 }
-
 

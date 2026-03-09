@@ -3,26 +3,47 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import { computeNextRunAt } from "@/lib/automations/schedule";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-/**
- * Compute nextRunAt from a schedule preset, relative to now.
- */
-function computeNextRunAt(schedule: string): Date {
-  const now = new Date();
-  switch (schedule) {
-    case "every_6h":
-      return new Date(now.getTime() + 6 * 60 * 60 * 1000);
-    case "every_12h":
-      return new Date(now.getTime() + 12 * 60 * 60 * 1000);
-    case "daily":
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    case "weekly":
-      return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    default:
-      return new Date(now.getTime() + 24 * 60 * 60 * 1000);
+function normalizeLimit(value: unknown) {
+  if (value == null || value === "") return undefined;
+
+  const limit =
+    typeof value === "number" ? value : Number.parseInt(String(value), 10);
+
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new Error("config.limit must be a positive integer");
   }
+
+  return limit;
+}
+
+function normalizeCategories(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+
+  const normalize = (entries: unknown) =>
+    Array.isArray(entries)
+      ? Array.from(
+          new Set(
+            entries
+              .filter((entry): entry is string => typeof entry === "string")
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          )
+        )
+      : [];
+
+  const input = value as { apify?: string[]; collabstr?: string[] };
+  const categories = {
+    apify: normalize(input.apify),
+    collabstr: normalize(input.collabstr),
+  };
+
+  return categories.apify.length || categories.collabstr.length
+    ? categories
+    : undefined;
 }
 
 /**
@@ -134,6 +155,30 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
+    let nextConfig: Prisma.InputJsonValue | undefined;
+    if (body.config) {
+      try {
+        const limit = normalizeLimit(body.config.limit);
+        const categories = normalizeCategories(body.config.categories);
+
+        nextConfig = {
+          ...body.config,
+          ...(limit ? { limit } : {}),
+          ...(categories ? { categories } : {}),
+        } as Prisma.InputJsonValue;
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Invalid automation config",
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     // Compute nextRunAt if schedule or enabled status changes
     const newSchedule = body.schedule || existing.schedule;
     const newEnabled = body.enabled ?? existing.enabled;
@@ -144,7 +189,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       data: {
         ...(body.name && { name: body.name.trim() }),
         ...(body.schedule && { schedule: body.schedule }),
-        ...(body.config && { config: body.config as Prisma.InputJsonValue }),
+        ...(nextConfig && { config: nextConfig }),
         ...(body.enabled !== undefined && { enabled: body.enabled }),
         nextRunAt,
       },

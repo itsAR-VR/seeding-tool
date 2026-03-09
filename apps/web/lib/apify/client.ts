@@ -12,6 +12,7 @@ type ApifyInstagramProfile = {
   username?: string;
   fullName?: string;
   biography?: string;
+  businessCategoryName?: string;
   followersCount?: number;
   followsCount?: number;
   postsCount?: number;
@@ -43,6 +44,7 @@ export type MappedCreatorData = {
   handle: string;
   name: string | null;
   bio: string | null;
+  bioCategory: string | null;
   followerCount: number | null;
   engagementRate: number | null;
   profileUrl: string | null;
@@ -130,6 +132,7 @@ export function mapProfileToCreator(
     handle,
     name: profile.fullName || null,
     bio: profile.biography || null,
+    bioCategory: profile.businessCategoryName || null,
     followerCount: profile.followersCount ?? null,
     engagementRate: profile.engagementRate ?? null,
     profileUrl: profile.url || `https://instagram.com/${handle}`,
@@ -139,6 +142,7 @@ export function mapProfileToCreator(
       followsCount: profile.followsCount ?? null,
       postsCount: profile.postsCount ?? null,
       igtvVideoCount: profile.igtvVideoCount ?? null,
+      businessCategoryName: profile.businessCategoryName ?? null,
       externalUrl: profile.externalUrl ?? null,
     },
   };
@@ -160,6 +164,7 @@ export function mapHashtagPostToCreator(
     handle,
     name: post.ownerFullName || null,
     bio: null,
+    bioCategory: null,
     followerCount: null,
     engagementRate: null,
     profileUrl: `https://instagram.com/${handle}`,

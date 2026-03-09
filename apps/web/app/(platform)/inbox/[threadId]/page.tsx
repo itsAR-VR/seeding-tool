@@ -75,6 +75,7 @@ type BrandData = {
     id: string;
     address: string;
     displayName: string | null;
+    isPrimary: boolean;
   }>;
 };
 
@@ -115,7 +116,11 @@ export default function ThreadDetailPage() {
   }, [params.threadId]);
 
   async function handleSendDraft(draftId: string) {
-    if (!brand?.emailAliases?.[0]) return;
+    const primaryAlias =
+      brand?.emailAliases?.find((alias) => alias.isPrimary) ??
+      brand?.emailAliases?.[0];
+
+    if (!primaryAlias) return;
 
     setSendLoading(true);
     try {
@@ -125,7 +130,7 @@ export default function ThreadDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draftId,
-          aliasId: brand.emailAliases[0].id,
+          aliasId: primaryAlias.id,
         }),
       });
 
