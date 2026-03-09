@@ -116,7 +116,19 @@ export default function HomeContent() {
 
     reveals.forEach((node) => observer.observe(node));
 
+    // Fallback: ensure sections are visible even if IntersectionObserver never fires
+    // (Playwright, SSR render, or very fast scroll past threshold).
+    // 150ms delay is imperceptible to humans but covers initial-render screenshot passes.
+    const fallback = setTimeout(() => {
+      reveals.forEach((node) => {
+        if (!node.classList.contains("is-visible")) {
+          node.classList.add("is-visible");
+        }
+      });
+    }, 150);
+
     return () => {
+      clearTimeout(fallback);
       observer.disconnect();
       root.classList.remove("has-reveal");
     };
@@ -247,6 +259,43 @@ export default function HomeContent() {
                 The win is not just finding more creators. It is getting the day-to-day work out of spreadsheets,
                 screenshots, and inbox archaeology.
               </p>
+            </article>
+          </div>
+        </section>
+
+        <section className="guarantee-strip" aria-label="Platform guarantees" data-reveal>
+          <div className="guarantee-header">
+            <p className="eyebrow">How it works in practice</p>
+            <h2>The operational layer you hand off to Aha.</h2>
+          </div>
+          <div className="guarantee-cards">
+            <article className="guarantee-card guarantee-card--blue">
+              <div className="guarantee-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 2L12.39 7.26L18 8.27L14 12.14L14.76 17.74L10 15.27L5.24 17.74L6 12.14L2 8.27L7.61 7.26L10 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <h3>Creator fit scoring</h3>
+              <p>Every creator is scored against your brand before a single message goes out. No gut-feel shortlists, no wasted outreach on mismatched audiences.</p>
+            </article>
+            <article className="guarantee-card guarantee-card--teal">
+              <div className="guarantee-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </div>
+              <h3>Address and order tracking</h3>
+              <p>Shipping addresses collected and orders placed without a single reply thread. You see the status; the system handles the back-and-forth.</p>
+            </article>
+            <article className="guarantee-card guarantee-card--coral">
+              <div className="guarantee-icon" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M15 10c0 2.761-2.239 5-5 5s-5-2.239-5-5 2.239-5 5-5 5 2.239 5 5z" stroke="currentColor" strokeWidth="1.5"/>
+                  <path d="M10 7v3l2 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+              <h3>Post detection and follow-up</h3>
+              <p>When someone posts, you see it. When they do not, the system flags it before it becomes a mystery. No manual monitoring, no missed content.</p>
             </article>
           </div>
         </section>

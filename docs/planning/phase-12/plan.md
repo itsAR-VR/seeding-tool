@@ -25,12 +25,19 @@ Replace the current combined hero stage with a two-part corridor: a hero carouse
 - The real dashboard reference lives in `apps/web/app/(platform)/dashboard/page.tsx`.
 - The marketing home composition currently places the proof rail immediately below the hero.
 
+## ⚠️ STATUS: NOT IMPLEMENTED (2026-03-09)
+
+The `[x]` checkboxes below were written aspirationally in the planning doc and merged before
+implementation. **No code for this phase exists in the codebase.** `HeroScene.tsx` still combines
+carousel + dashboard dock in one component. `HeroCarousel.tsx` and `DashboardShowcase.tsx` do not exist.
+See `docs/planning/phase-landing-redesign/phase-gaps.md` GAP-LP-02 for integration plan.
+
 ## Objectives
-* [x] Separate the hero carousel from the dashboard showcase in the homepage structure
-* [x] Dock 4 reel items into a dashboard-derived mentions area below the hero
-* [x] Move the proof rail below the new dashboard section
-* [x] Preserve a calm mobile variant with a simplified dock
-* [x] Update Playwright coverage and screenshots for the new section order and motion model
+* [ ] Separate the hero carousel from the dashboard showcase in the homepage structure
+* [ ] Dock 4 reel items into a dashboard-derived mentions area below the hero
+* [ ] Move the proof rail below the new dashboard section
+* [ ] Preserve a calm mobile variant with a simplified dock
+* [ ] Update Playwright coverage and screenshots for the new section order and motion model
 
 ## Constraints
 - No real video assets yet; placeholders only.
@@ -40,13 +47,13 @@ Replace the current combined hero stage with a two-part corridor: a hero carouse
 - Do not perform unnecessary git sync work while the branch is already ahead-only.
 
 ## Success Criteria
-- [x] Desktop hero shows reels without embedded dashboard rails or shell content behind them
-- [x] Dashboard showcase appears directly below the hero and uses the mentions area as the visual dock target
-- [x] Four reel cards resolve into the mentions grid on scroll and restore on reverse scroll
-- [x] Mobile keeps a simplified, calmer dock behavior
-- [x] Proof rail renders below the dashboard showcase
-- [x] `tests/hero-media-stage.spec.ts` passes against the new architecture
-- [x] `tests/marketing-redesign.spec.ts` passes without landing-page regressions
+- [ ] Desktop hero shows reels without embedded dashboard rails or shell content behind them
+- [ ] Dashboard showcase appears directly below the hero and uses the mentions area as the visual dock target
+- [ ] Four reel cards resolve into the mentions grid on scroll and restore on reverse scroll
+- [ ] Mobile keeps a simplified, calmer dock behavior
+- [ ] Proof rail renders below the dashboard showcase
+- [ ] `tests/hero-media-stage.spec.ts` passes against the new architecture
+- [ ] `tests/marketing-redesign.spec.ts` passes without landing-page regressions
 
 ## Repo Reality Check (RED TEAM)
 - `apps/web/app/(marketing)/components/HeroScene.tsx` currently owns both the reel carousel and the dashboard dock shell, so the component boundary itself is wrong for the new request.
