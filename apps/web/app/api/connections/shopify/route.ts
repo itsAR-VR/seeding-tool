@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
+import { encrypt } from "@/lib/encryption";
+import {
+  BrandAccessError,
+  getCurrentBrandMembership,
+} from "@/lib/integrations/brand-access";
+import { resolveProviderCredential, upsertBrandConnection, upsertProviderCredential } from "@/lib/integrations/state";
 import { prisma } from "@/lib/prisma";
-import { encrypt, decrypt } from "@/lib/encryption";
 import { registerWebhooks, cleanupWebhooks } from "@/lib/shopify/webhooks";
 import { syncProducts } from "@/lib/shopify/products";
 import {
@@ -12,39 +15,8 @@ import {
 
 const SHOPIFY_API_VERSION = "2024-01";
 
-class ResponseError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number
-  ) {
-    super(message);
-  }
-}
-
 async function getCurrentBrandId() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
-    throw new ResponseError("Unauthorized", 401);
-  }
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) {
-    throw new ResponseError("User not found", 404);
-  }
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    throw new ResponseError("No brand found", 404);
-  }
-
+  const membership = await getCurrentBrandMembership({ requireAdmin: true });
   return membership.brandId;
 }
 
@@ -67,7 +39,7 @@ export async function GET() {
     const brandId = await getCurrentBrandId();
     return NextResponse.json(await getShopifyConnectionStatus(brandId));
   } catch (error) {
-    if (error instanceof ResponseError) {
+    if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
@@ -119,44 +91,20 @@ export async function POST(request: NextRequest) {
     const encryptedValue = encrypt(accessToken);
 
     await prisma.$transaction(async (tx) => {
-      await tx.providerCredential.upsert({
-        where: {
-          brandId_provider: {
-            brandId,
-            provider: "shopify",
-          },
-        },
-        update: {
-          label: storeDomain,
-          encryptedValue,
-          isValid: true,
-        },
-        create: {
-          brandId,
-          provider: "shopify",
-          label: storeDomain,
-          encryptedValue,
-          isValid: true,
-        },
+      await upsertProviderCredential(tx, {
+        brandId,
+        provider: "shopify",
+        label: storeDomain,
+        encryptedValue,
+        credentialType: "shopify_admin_token",
       });
 
-      await tx.brandConnection.upsert({
-        where: {
-          brandId_provider: {
-            brandId,
-            provider: "shopify",
-          },
-        },
-        update: {
-          status: "connected",
-          externalId: storeDomain,
-        },
-        create: {
-          brandId,
-          provider: "shopify",
-          status: "connected",
-          externalId: storeDomain,
-        },
+      await upsertBrandConnection(tx, {
+        brandId,
+        provider: "shopify",
+        status: "connected",
+        connectionMethod: "manual",
+        externalId: storeDomain,
       });
     });
 
@@ -214,7 +162,7 @@ export async function POST(request: NextRequest) {
       storeDomain,
     });
   } catch (error) {
-    if (error instanceof ResponseError) {
+    if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
@@ -231,14 +179,9 @@ export async function DELETE() {
     const brandId = await getCurrentBrandId();
 
     // Attempt to cleanup webhooks before disconnecting
-    const credential = await prisma.providerCredential.findFirst({
-      where: { brandId, provider: "shopify", isValid: true },
-    });
-    const connection = await prisma.brandConnection.findFirst({
-      where: { brandId, provider: "shopify", status: "connected" },
-    });
+    const resolved = await resolveProviderCredential(brandId, "shopify");
 
-    if (credential && connection?.externalId) {
+    if (resolved.decryptedValue && resolved.connection?.externalId) {
       const callbackBaseUrl =
         process.env.NEXT_PUBLIC_APP_URL ||
         (process.env.VERCEL_URL
@@ -246,10 +189,9 @@ export async function DELETE() {
           : "http://localhost:3000");
 
       try {
-        const accessToken = decrypt(credential.encryptedValue);
         const result = await cleanupWebhooks(
-          connection.externalId,
-          accessToken,
+          resolved.connection.externalId,
+          resolved.decryptedValue,
           callbackBaseUrl
         );
         console.log(
@@ -266,26 +208,28 @@ export async function DELETE() {
 
     await prisma.$transaction(async (tx) => {
       await tx.providerCredential.updateMany({
-        where: {
-          brandId,
-          provider: "shopify",
-        },
-        data: {
-          isValid: false,
-        },
+        where: { brandId, provider: "shopify" },
+        data: { isValid: false },
       });
 
-      await tx.brandConnection.deleteMany({
-        where: {
-          brandId,
-          provider: "shopify",
-        },
+      const existingConnection = await tx.brandConnection.findFirst({
+        where: { brandId, provider: "shopify" },
+      });
+
+      await upsertBrandConnection(tx, {
+        brandId,
+        provider: "shopify",
+        status: "disconnected",
+        connectionMethod:
+          existingConnection?.connectionMethod === "oauth" ? "oauth" : "manual",
+        externalId: existingConnection?.externalId ?? null,
+        metadata: existingConnection?.metadata ?? undefined,
       });
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof ResponseError) {
+    if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 

@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import type { IntegrationMethod } from "@/lib/integrations/methods";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 
 type ShopifyConnectionMetadata = {
   lastSyncAt?: string | null;
@@ -9,6 +11,7 @@ type ShopifyConnectionMetadata = {
 
 export type ShopifyConnectionStatus = {
   connected: boolean;
+  activeMethod: IntegrationMethod;
   storeDomain?: string;
   lastSyncAt?: string | null;
   lastSyncError?: string | null;
@@ -42,27 +45,16 @@ function parseMetadata(raw: unknown): ShopifyConnectionMetadata {
 export async function getShopifyConnectionStatus(
   brandId: string
 ): Promise<ShopifyConnectionStatus> {
-  const [credential, connection] = await Promise.all([
-    prisma.providerCredential.findFirst({
-      where: {
-        brandId,
-        provider: "shopify",
-        isValid: true,
-      },
-    }),
-    prisma.brandConnection.findFirst({
-      where: {
-        brandId,
-        provider: "shopify",
-      },
-    }),
-  ]);
+  const resolved = await resolveProviderCredential(brandId, "shopify");
+  const connection = resolved.connection;
 
   const metadata = parseMetadata(connection?.metadata);
 
   return {
-    connected: Boolean(credential),
-    storeDomain: connection?.externalId ?? credential?.label ?? undefined,
+    connected: resolved.connected,
+    activeMethod: resolved.method,
+    storeDomain:
+      connection?.externalId ?? resolved.credential?.label ?? undefined,
     lastSyncAt: metadata.lastSyncAt ?? null,
     lastSyncError: metadata.lastSyncError ?? null,
     lastSyncedCount: metadata.lastSyncedCount ?? null,

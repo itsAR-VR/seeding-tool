@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
+import { encodeIntegrationOAuthState } from "@/lib/integrations/oauth-state";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -15,9 +17,20 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const brandId = searchParams.get("brandId");
+  const returnTo = searchParams.get("returnTo") ?? undefined;
 
   if (!brandId) {
     return new Response("Missing brandId parameter", { status: 400 });
+  }
+
+  try {
+    await assertBrandAccess(brandId, { requireAdmin: true });
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return new Response(error.message, { status: error.status });
+    }
+
+    return new Response("Forbidden", { status: 403 });
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -39,7 +52,7 @@ export async function GET(request: NextRequest) {
     ].join(" "),
     access_type: "offline",
     prompt: "consent",
-    state: brandId,
+    state: encodeIntegrationOAuthState({ brandId, returnTo }),
   });
 
   return Response.redirect(

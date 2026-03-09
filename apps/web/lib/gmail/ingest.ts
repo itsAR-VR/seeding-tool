@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { decrypt } from "@/lib/encryption";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 
 type GmailMessageHeader = {
   name: string;
@@ -106,15 +106,13 @@ function extractBody(payload: GmailMessage["payload"]): {
  * Returns normalized message data ready for processing.
  */
 export async function fetchNewMessages(brandId: string) {
-  const credential = await prisma.providerCredential.findFirst({
-    where: { brandId, provider: "gmail", isValid: true },
-  });
+  const resolved = await resolveProviderCredential(brandId, "gmail");
 
-  if (!credential) {
+  if (!resolved.decryptedValue) {
     throw new Error("No valid Gmail credential for brand");
   }
 
-  const refreshToken = decrypt(credential.encryptedValue);
+  const refreshToken = resolved.decryptedValue;
   const accessToken = await getAccessToken(refreshToken);
 
   // List recent messages (last 24 hours of unread)

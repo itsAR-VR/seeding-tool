@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
-import { prisma } from "@/lib/prisma";
 import { encrypt } from "@/lib/encryption";
+import {
+  BrandAccessError,
+  getCurrentBrandMembership,
+} from "@/lib/integrations/brand-access";
+import { disconnectProvider, upsertBrandConnection, upsertProviderCredential } from "@/lib/integrations/state";
+import { prisma } from "@/lib/prisma";
 
 /**
  * POST /api/connections/unipile — Save Unipile API credentials for a brand.
@@ -14,28 +17,7 @@ import { encrypt } from "@/lib/encryption";
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership({ requireAdmin: true });
 
     const body = (await request.json()) as {
       apiKey: string;
@@ -57,52 +39,49 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Upsert ProviderCredential
-    await prisma.providerCredential.upsert({
-      where: {
-        brandId_provider: {
-          brandId: membership.brandId,
-          provider: "unipile",
-        },
-      },
-      update: {
-        encryptedValue,
-        isValid: true,
-      },
-      create: {
-        provider: "unipile",
-        label: "Unipile Instagram DM",
-        encryptedValue,
-        brandId: membership.brandId,
-        isValid: true,
-      },
+    await upsertProviderCredential(prisma, {
+      provider: "unipile",
+      label: "Unipile Instagram DM",
+      encryptedValue,
+      brandId: membership.brandId,
+      credentialType: "api_key",
     });
 
-    // Upsert BrandConnection for UI status
-    await prisma.brandConnection.upsert({
-      where: {
-        brandId_provider: {
-          brandId: membership.brandId,
-          provider: "unipile",
-        },
-      },
-      update: {
-        status: "connected",
-        metadata: { accountId: body.accountId?.trim() || "" },
-      },
-      create: {
-        provider: "unipile",
-        status: "connected",
-        brandId: membership.brandId,
-        metadata: { accountId: body.accountId?.trim() || "" },
-      },
+    await upsertBrandConnection(prisma, {
+      provider: "unipile",
+      status: "connected",
+      brandId: membership.brandId,
+      connectionMethod: "manual",
+      metadata: { accountId: body.accountId?.trim() || "" },
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     console.error("[connections/unipile/POST]", error);
     return NextResponse.json(
       { error: "Failed to save credentials" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE() {
+  try {
+    const membership = await getCurrentBrandMembership({ requireAdmin: true });
+    await disconnectProvider(prisma, membership.brandId, "unipile");
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    console.error("[connections/unipile/DELETE]", error);
+    return NextResponse.json(
+      { error: "Failed to disconnect Unipile" },
       { status: 500 }
     );
   }

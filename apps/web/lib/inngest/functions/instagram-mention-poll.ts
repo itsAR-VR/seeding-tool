@@ -46,13 +46,18 @@ export const instagramMentionPoll = inngest.createFunction(
         const creds = await prisma.providerCredential.findMany({
           where: {
             provider: "instagram",
+            credentialType: "oauth_access_token",
             isValid: true,
           },
           include: {
             brand: {
               include: {
                 connections: {
-                  where: { provider: "instagram", status: "connected" },
+                  where: {
+                    provider: "instagram",
+                    status: "connected",
+                    connectionMethod: "oauth",
+                  },
                 },
               },
             },
@@ -194,7 +199,7 @@ export const instagramMentionPoll = inngest.createFunction(
                   brandId: cred.brandId,
                   provider: "instagram",
                 },
-                data: { status: "error" },
+                data: { status: "error", connectionMethod: "oauth" },
               });
             }
 

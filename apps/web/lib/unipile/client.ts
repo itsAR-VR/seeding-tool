@@ -1,5 +1,4 @@
-import { prisma } from "@/lib/prisma";
-import { decrypt } from "@/lib/encryption";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 
 const UNIPILE_BASE_URL =
   process.env.UNIPILE_BASE_URL ?? "https://api27.unipile.com:15723";
@@ -23,21 +22,15 @@ export type UnipileClient = {
 export async function getUnipileClient(
   brandId: string
 ): Promise<UnipileClient> {
-  const credential = await prisma.providerCredential.findFirst({
-    where: {
-      brandId,
-      provider: "unipile",
-      isValid: true,
-    },
-  });
+  const resolved = await resolveProviderCredential(brandId, "unipile");
 
-  if (!credential) {
+  if (!resolved.decryptedValue) {
     throw new Error(
       `No Unipile credential found for brand ${brandId}. Connect Unipile in Settings → Connections.`
     );
   }
 
-  const decrypted = decrypt(credential.encryptedValue);
+  const decrypted = resolved.decryptedValue;
   let parsed: { apiKey: string; accountId?: string };
   try {
     parsed = JSON.parse(decrypted);

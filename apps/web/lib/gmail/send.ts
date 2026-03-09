@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { decrypt } from "@/lib/encryption";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 import {
   isSuppressed,
   SuppressedRecipientError,
@@ -101,14 +101,11 @@ export async function sendEmail(params: SendEmailParams) {
   // 1. Look up alias and brand credential
   const alias = await prisma.emailAlias.findUnique({
     where: { id: params.aliasId },
-    include: {
-      brand: {
-        include: {
-          providerCredentials: {
-            where: { provider: "gmail", isValid: true },
-          },
-        },
-      },
+    select: {
+      id: true,
+      address: true,
+      displayName: true,
+      brandId: true,
     },
   });
 
@@ -116,13 +113,13 @@ export async function sendEmail(params: SendEmailParams) {
     throw new Error("Email alias not found");
   }
 
-  const credential = alias.brand.providerCredentials[0];
-  if (!credential) {
+  const resolved = await resolveProviderCredential(alias.brandId, "gmail");
+  if (!resolved.decryptedValue) {
     throw new Error("No valid Gmail credential for this brand");
   }
 
   // 2. Decrypt refresh token and get access token
-  const refreshToken = decrypt(credential.encryptedValue);
+  const refreshToken = resolved.decryptedValue;
   const accessToken = await getAccessToken(refreshToken);
 
   // 3. Build and send email

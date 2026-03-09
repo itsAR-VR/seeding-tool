@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,38 +13,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
-interface BrandData {
-  id: string;
-  name: string;
-  connections: Array<{
-    provider: string;
-    status: string;
-    externalId?: string | null;
-  }>;
-  emailAliases: Array<{
-    id: string;
-    address: string;
-    displayName?: string | null;
-    isPrimary: boolean;
-  }>;
-}
-
-interface ShopifyConnectionState {
-  connected: boolean;
-  storeDomain?: string;
-  lastSyncAt?: string | null;
-  lastSyncError?: string | null;
-  lastSyncedCount?: number | null;
-  truncated?: boolean;
-}
-
-interface InstagramConnectionState {
-  connected: boolean;
-  username?: string;
-  status?: string;
-}
-
+import {
+  type ConnectionsOverviewResponse,
+  type IntegrationMethod,
+  type IntegrationProvider,
+} from "@/lib/integrations/methods";
+import { cn } from "@/lib/utils";
 
 type FlashMessage =
   | {
@@ -59,102 +34,200 @@ function FeedbackBanner({ message }: { message: FlashMessage }) {
 
   return (
     <div
-      className={`rounded-lg border px-3 py-2 text-sm ${
+      className={cn(
+        "rounded-lg border px-3 py-2 text-sm",
         message.tone === "error"
           ? "border-red-200 bg-red-50 text-red-800"
           : "border-green-200 bg-green-50 text-green-800"
-      }`}
+      )}
     >
       {message.text}
     </div>
   );
 }
 
+function MethodSelector({
+  methods,
+  activeMethod,
+  disabled,
+  onChange,
+}: {
+  methods: readonly IntegrationMethod[];
+  activeMethod: IntegrationMethod;
+  disabled: boolean;
+  onChange: (method: IntegrationMethod) => void;
+}) {
+  if (methods.length === 1) {
+    return (
+      <div className="rounded-lg border bg-muted/20 px-3 py-1 text-xs text-muted-foreground">
+        Setup method: {methods[0] === "oauth" ? "OAuth" : "Manual credentials"}
+      </div>
+    );
+  }
+
+  return (
+    <div className="inline-flex rounded-lg border bg-muted/30 p-1">
+      {methods.map((method) => {
+        const selected = method === activeMethod;
+        return (
+          <button
+            key={method}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(method)}
+            className={cn(
+              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+              selected
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+              disabled && "opacity-60"
+            )}
+          >
+            {method === "oauth" ? "OAuth" : "Manual"}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function ConnectionsContent() {
   const searchParams = useSearchParams();
-  const [brand, setBrand] = useState<BrandData | null>(null);
+  const [overview, setOverview] = useState<ConnectionsOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [shopifyState, setShopifyState] = useState<ShopifyConnectionState>({
-    connected: false,
-  });
-  const [shopifyStoreDomain, setShopifyStoreDomain] = useState("");
-  const [shopifyAccessToken, setShopifyAccessToken] = useState("");
+  const [messages, setMessages] = useState<
+    Partial<Record<IntegrationProvider, FlashMessage>>
+  >({});
+  const [switchingProvider, setSwitchingProvider] =
+    useState<IntegrationProvider | null>(null);
   const [shopifySaving, setShopifySaving] = useState(false);
-  const [shopifyMessage, setShopifyMessage] = useState<FlashMessage>(null);
-
-  const [instagramState, setInstagramState] = useState<InstagramConnectionState>({
-    connected: false,
-  });
   const [instagramLoading, setInstagramLoading] = useState(false);
-  const [instagramMessage, setInstagramMessage] = useState<FlashMessage>(null);
-
-  const [unipileApiKey, setUnipileApiKey] = useState("");
-  const [unipileAccountId, setUnipileAccountId] = useState("");
   const [unipileSaving, setUnipileSaving] = useState(false);
-  const [unipileMessage, setUnipileMessage] = useState<FlashMessage>(null);
+  const [shopifyForm, setShopifyForm] = useState({
+    storeDomain: "",
+    accessToken: "",
+    oauthShop: "",
+  });
+  const [unipileForm, setUnipileForm] = useState({
+    apiKey: "",
+    accountId: "",
+  });
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
   const returnTo = searchParams.get("returnTo");
+  const authReturnTo = useMemo(() => {
+    if (!returnTo) {
+      return undefined;
+    }
+    return `/settings/connections?returnTo=${encodeURIComponent(returnTo)}`;
+  }, [returnTo]);
 
   useEffect(() => {
     void refreshConnectionData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!connected) {
+      return;
+    }
+
+    const provider = connected as IntegrationProvider;
+    const textByProvider: Partial<Record<IntegrationProvider, string>> = {
+      gmail: "Gmail connected successfully.",
+      instagram: "Instagram connected successfully.",
+      shopify: "Shopify connected successfully.",
+    };
+
+    if (textByProvider[provider]) {
+      setMessages((current) => ({
+        ...current,
+        [provider]: {
+          tone: "success",
+          text: textByProvider[provider]!,
+        },
+      }));
+    }
+  }, [connected]);
 
   async function refreshConnectionData() {
     setLoading(true);
-    await Promise.allSettled([
-      fetchBrand(),
-      fetchShopifyConnection(),
-      fetchInstagramConnection(),
-    ]);
-    setLoading(false);
-  }
-
-  async function fetchBrand() {
     try {
-      const res = await fetch("/api/brands/current");
-      if (res.ok) {
-        setBrand((await res.json()) as BrandData);
-      } else {
-        setBrand(null);
-      }
-    } catch {
-      setBrand(null);
-    }
-  }
-
-  async function fetchShopifyConnection() {
-    try {
-      const res = await fetch("/api/connections/shopify/status");
-      if (res.ok) {
-        setShopifyState((await res.json()) as ShopifyConnectionState);
+      const res = await fetch("/api/connections/overview");
+      if (!res.ok) {
+        setOverview(null);
         return;
       }
+
+      setOverview((await res.json()) as ConnectionsOverviewResponse);
     } catch {
-      // ignore
+      setOverview(null);
+    } finally {
+      setLoading(false);
     }
-    setShopifyState({ connected: false });
   }
 
-  async function fetchInstagramConnection() {
+  function setProviderMessage(provider: IntegrationProvider, message: FlashMessage) {
+    setMessages((current) => ({
+      ...current,
+      [provider]: message,
+    }));
+  }
+
+  function getProvider(provider: IntegrationProvider) {
+    return overview?.providers.find((item) => item.provider === provider) ?? null;
+  }
+
+  async function readErrorMessage(res: Response, fallback: string) {
+    const payload = (await res.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+
+    return payload?.error || fallback;
+  }
+
+  async function handleMethodChange(
+    provider: IntegrationProvider,
+    method: IntegrationMethod
+  ) {
+    setSwitchingProvider(provider);
+    setProviderMessage(provider, null);
+
     try {
-      const res = await fetch("/api/connections/instagram");
-      if (res.ok) {
-        setInstagramState((await res.json()) as InstagramConnectionState);
-        return;
+      const res = await fetch(`/api/connections/${provider}/method`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method }),
+      });
+
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to switch method"));
       }
-    } catch {
-      // ignore
+
+      setProviderMessage(provider, {
+        tone: "success",
+        text:
+          method === "oauth"
+            ? "Switched to OAuth. Finish reconnecting to activate this provider."
+            : "Switched to manual credentials. Finish setup to activate this provider.",
+      });
+      await refreshConnectionData();
+    } catch (methodError) {
+      setProviderMessage(provider, {
+        tone: "error",
+        text:
+          methodError instanceof Error
+            ? methodError.message
+            : "Failed to switch connection method.",
+      });
+    } finally {
+      setSwitchingProvider(null);
     }
-    setInstagramState({ connected: false });
   }
 
   async function handleDisconnectInstagram() {
     setInstagramLoading(true);
-    setInstagramMessage(null);
+    setProviderMessage("instagram", null);
 
     try {
       const res = await fetch("/api/connections/instagram", {
@@ -167,11 +240,13 @@ function ConnectionsContent() {
         );
       }
 
-      setInstagramState({ connected: false });
-      setInstagramMessage({ tone: "success", text: "Instagram disconnected." });
+      setProviderMessage("instagram", {
+        tone: "success",
+        text: "Instagram disconnected.",
+      });
       await refreshConnectionData();
     } catch (disconnectError) {
-      setInstagramMessage({
+      setProviderMessage("instagram", {
         tone: "error",
         text:
           disconnectError instanceof Error
@@ -183,33 +258,22 @@ function ConnectionsContent() {
     }
   }
 
-  function getConnection(provider: string) {
-    return brand?.connections.find((connection) => connection.provider === provider);
-  }
-
-  async function readErrorMessage(res: Response, fallback: string) {
-    const payload = (await res.json().catch(() => null)) as {
-      error?: string;
-    } | null;
-    return payload?.error || fallback;
-  }
-
   async function handleSaveShopify(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!shopifyStoreDomain.trim() || !shopifyAccessToken.trim()) {
+    if (!shopifyForm.storeDomain.trim() || !shopifyForm.accessToken.trim()) {
       return;
     }
 
     setShopifySaving(true);
-    setShopifyMessage(null);
+    setProviderMessage("shopify", null);
 
     try {
       const res = await fetch("/api/connections/shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          storeDomain: shopifyStoreDomain.trim(),
-          accessToken: shopifyAccessToken.trim(),
+          storeDomain: shopifyForm.storeDomain.trim(),
+          accessToken: shopifyForm.accessToken.trim(),
         }),
       });
 
@@ -217,16 +281,17 @@ function ConnectionsContent() {
         throw new Error(await readErrorMessage(res, "Failed to connect Shopify"));
       }
 
-      const data = (await res.json()) as ShopifyConnectionState;
-      setShopifyAccessToken("");
-      setShopifyState(data);
-      setShopifyMessage({
+      setShopifyForm((current) => ({
+        ...current,
+        accessToken: "",
+      }));
+      setProviderMessage("shopify", {
         tone: "success",
-        text: `Shopify connected${data.storeDomain ? ` to ${data.storeDomain}` : ""}.`,
+        text: `Shopify connected to ${shopifyForm.storeDomain.trim()}.`,
       });
       await refreshConnectionData();
     } catch (saveError) {
-      setShopifyMessage({
+      setProviderMessage("shopify", {
         tone: "error",
         text:
           saveError instanceof Error
@@ -240,7 +305,7 @@ function ConnectionsContent() {
 
   async function handleDisconnectShopify() {
     setShopifySaving(true);
-    setShopifyMessage(null);
+    setProviderMessage("shopify", null);
 
     try {
       const res = await fetch("/api/connections/shopify", {
@@ -253,13 +318,13 @@ function ConnectionsContent() {
         );
       }
 
-      setShopifyState({ connected: false });
-      setShopifyStoreDomain("");
-      setShopifyAccessToken("");
-      setShopifyMessage({ tone: "success", text: "Shopify disconnected." });
+      setProviderMessage("shopify", {
+        tone: "success",
+        text: "Shopify disconnected.",
+      });
       await refreshConnectionData();
     } catch (disconnectError) {
-      setShopifyMessage({
+      setProviderMessage("shopify", {
         tone: "error",
         text:
           disconnectError instanceof Error
@@ -271,21 +336,72 @@ function ConnectionsContent() {
     }
   }
 
+  async function handleSyncShopify() {
+    setShopifySaving(true);
+    setProviderMessage("shopify", null);
+
+    try {
+      const res = await fetch("/api/products/sync", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error(await readErrorMessage(res, "Failed to sync products"));
+      }
+
+      const data = (await res.json()) as {
+        synced: number;
+        truncated?: boolean;
+      };
+
+      setProviderMessage("shopify", {
+        tone: "success",
+        text: data.truncated
+          ? `Shopify sync completed with a partial catalog (${data.synced} products).`
+          : `Shopify sync completed (${data.synced} products).`,
+      });
+      await refreshConnectionData();
+    } catch (syncError) {
+      setProviderMessage("shopify", {
+        tone: "error",
+        text:
+          syncError instanceof Error
+            ? syncError.message
+            : "Failed to sync products.",
+      });
+    } finally {
+      setShopifySaving(false);
+    }
+  }
+
+  function buildShopifyOAuthUrl(brandId: string) {
+    const params = new URLSearchParams({
+      brandId,
+      shop: shopifyForm.oauthShop.trim(),
+    });
+
+    if (authReturnTo) {
+      params.set("returnTo", authReturnTo);
+    }
+
+    return `/api/auth/shopify?${params.toString()}`;
+  }
+
   async function handleSaveUnipile() {
-    if (!brand || !unipileApiKey.trim()) {
+    if (!overview?.brand.id || !unipileForm.apiKey.trim()) {
       return;
     }
 
     setUnipileSaving(true);
-    setUnipileMessage(null);
+    setProviderMessage("unipile", null);
 
     try {
       const res = await fetch("/api/connections/unipile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiKey: unipileApiKey.trim(),
-          accountId: unipileAccountId.trim() || undefined,
+          apiKey: unipileForm.apiKey.trim(),
+          accountId: unipileForm.accountId.trim() || undefined,
         }),
       });
 
@@ -293,20 +409,52 @@ function ConnectionsContent() {
         throw new Error(await readErrorMessage(res, "Failed to save Unipile"));
       }
 
-      setUnipileMessage({
+      setProviderMessage("unipile", {
         tone: "success",
         text: "Unipile connected successfully.",
       });
-      setUnipileApiKey("");
-      setUnipileAccountId("");
-      await fetchBrand();
+      setUnipileForm({ apiKey: "", accountId: "" });
+      await refreshConnectionData();
     } catch (saveError) {
-      setUnipileMessage({
+      setProviderMessage("unipile", {
         tone: "error",
         text:
           saveError instanceof Error
             ? saveError.message
             : "Network error saving credentials.",
+      });
+    } finally {
+      setUnipileSaving(false);
+    }
+  }
+
+  async function handleDisconnectUnipile() {
+    setUnipileSaving(true);
+    setProviderMessage("unipile", null);
+
+    try {
+      const res = await fetch("/api/connections/unipile", {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error(
+          await readErrorMessage(res, "Failed to disconnect Unipile")
+        );
+      }
+
+      setProviderMessage("unipile", {
+        tone: "success",
+        text: "Unipile disconnected.",
+      });
+      await refreshConnectionData();
+    } catch (disconnectError) {
+      setProviderMessage("unipile", {
+        tone: "error",
+        text:
+          disconnectError instanceof Error
+            ? disconnectError.message
+            : "Failed to disconnect Unipile.",
       });
     } finally {
       setUnipileSaving(false);
@@ -321,7 +469,7 @@ function ConnectionsContent() {
     );
   }
 
-  if (!brand) {
+  if (!overview) {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
@@ -344,25 +492,34 @@ function ConnectionsContent() {
     );
   }
 
-  const gmailConn = getConnection("gmail");
-  const shopifyConn = getConnection("shopify");
-  const instagramConn = getConnection("instagram");
-  const unipileConn = getConnection("unipile");
-  const primaryEmailAlias =
-    brand.emailAliases.find((alias) => alias.isPrimary) ?? null;
+  const gmail = getProvider("gmail");
+  const instagram = getProvider("instagram");
+  const shopify = getProvider("shopify");
+  const unipile = getProvider("unipile");
 
-  const shopifyConnected =
-    shopifyState.connected || shopifyConn?.status === "connected";
-
-  const shopifyDomain = shopifyState.storeDomain ?? shopifyConn?.externalId ?? "";
-  const gmailAddress = primaryEmailAlias?.address ?? gmailConn?.externalId ?? "";
+  const errorText =
+    error === "oauth_denied"
+      ? "OAuth access was denied."
+      : error === "no_refresh_token"
+        ? "No refresh token returned. Revoke access in Google Account and reconnect."
+        : error === "forbidden"
+          ? "You do not have access to this brand."
+          : error === "no_instagram_account"
+            ? "No Instagram Business Account found. Ensure your Instagram account is connected to a Facebook Page."
+            : error === "invalid_signature"
+              ? "Shopify OAuth signature validation failed."
+              : error === "invalid_state"
+                ? "Shopify OAuth state expired. Start the connection again."
+                : error
+                  ? "An error occurred. Please try again."
+                  : null;
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
         <p className="text-muted-foreground">
-          Manage your connected services and integrations.
+          Manage your connected services and choose how each provider authenticates.
         </p>
       </div>
 
@@ -382,286 +539,310 @@ function ConnectionsContent() {
         </div>
       )}
 
-      {connected === "gmail" && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-          Gmail connected successfully.
-        </div>
-      )}
-
-      {connected === "instagram" && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
-          Instagram connected successfully.
-        </div>
-      )}
-
-      {error && (
+      {errorText && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          Connection failed:{" "}
-          {error === "oauth_denied"
-            ? "OAuth access was denied."
-            : error === "no_refresh_token"
-              ? "No refresh token returned. Revoke access in Google Account and reconnect."
-              : error === "forbidden"
-                ? "You do not have access to this brand."
-                : error === "no_instagram_account"
-                  ? "No Instagram Business Account found. Ensure your Instagram account is connected to a Facebook Page."
-                  : "An error occurred. Please try again."}
+          Connection failed: {errorText}
         </div>
       )}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">Gmail</CardTitle>
-              <Badge variant={gmailConn?.status === "connected" ? "default" : "secondary"}>
-                {gmailConn?.status === "connected" ? "Connected" : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {gmailConn?.status === "connected"
-                ? `Connected as ${gmailAddress}`
-                : "Send outreach emails through your Gmail account."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {gmailConn?.status === "connected" ? (
-              <p className="text-sm text-muted-foreground">
-                Outreach emails will be sent from{" "}
-                <strong>{gmailAddress}</strong>.
-              </p>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  window.location.href = `/api/auth/gmail?brandId=${brand.id}`;
-                }}
-              >
-                Connect Gmail
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">Shopify</CardTitle>
-              <Badge variant={shopifyConnected ? "default" : "secondary"}>
-                {shopifyConnected ? "Connected" : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {shopifyConnected
-                ? `Connected to ${shopifyDomain}`
-                : "Automate product seeding and order fulfillment."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FeedbackBanner message={shopifyMessage} />
-            {shopifyConnected ? (
-              <div className="space-y-3">
+        {gmail && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg">{gmail.label}</CardTitle>
+                <Badge variant={gmail.connected ? "default" : "secondary"}>
+                  {gmail.connected ? "Connected" : "Not connected"}
+                </Badge>
+              </div>
+              <CardDescription>{gmail.summary}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <MethodSelector
+                methods={gmail.availableMethods}
+                activeMethod={gmail.activeMethod}
+                disabled
+                onChange={() => undefined}
+              />
+              {gmail.connected ? (
                 <p className="text-sm text-muted-foreground">
-                  Connected store: <strong>{shopifyDomain}</strong>
+                  Outreach emails will be sent from{" "}
+                  <strong>{gmail.details?.gmailAddress ?? gmail.externalId ?? "your Gmail account"}</strong>.
                 </p>
-                {shopifyState.lastSyncAt && (
-                  <p className="text-sm text-muted-foreground">
-                    Last sync:{" "}
-                    <strong>
-                      {new Date(shopifyState.lastSyncAt).toLocaleString()}
-                    </strong>
-                    {typeof shopifyState.lastSyncedCount === "number" &&
-                      ` · ${shopifyState.lastSyncedCount} products`}
-                    {shopifyState.truncated ? " · partial sync" : ""}
-                  </p>
-                )}
-                {shopifyState.lastSyncError && (
-                  <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                    Last sync failed: {shopifyState.lastSyncError}
-                  </div>
-                )}
+              ) : (
                 <Button
                   variant="outline"
-                  onClick={async () => {
-                    setShopifySaving(true);
-                    setShopifyMessage(null);
-
-                    try {
-                      const res = await fetch("/api/products/sync", {
-                        method: "POST",
-                      });
-
-                      if (!res.ok) {
-                        throw new Error(
-                          await readErrorMessage(res, "Failed to sync products")
-                        );
-                      }
-
-                      const data = (await res.json()) as {
-                        synced: number;
-                        truncated?: boolean;
-                      };
-                      setShopifyMessage({
-                        tone: "success",
-                        text: data.truncated
-                          ? `Shopify sync completed with a partial catalog (${data.synced} products).`
-                          : `Shopify sync completed (${data.synced} products).`,
-                      });
-                      await refreshConnectionData();
-                    } catch (syncError) {
-                      setShopifyMessage({
-                        tone: "error",
-                        text:
-                          syncError instanceof Error
-                            ? syncError.message
-                            : "Failed to sync products.",
-                      });
-                    } finally {
-                      setShopifySaving(false);
+                  onClick={() => {
+                    const params = new URLSearchParams({ brandId: overview.brand.id });
+                    if (authReturnTo) {
+                      params.set("returnTo", authReturnTo);
                     }
+                    window.location.href = `/api/auth/gmail?${params.toString()}`;
                   }}
-                  disabled={shopifySaving}
                 >
-                  {shopifySaving ? "Syncing..." : "Retry sync"}
+                  Connect Gmail
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={handleDisconnectShopify}
-                  disabled={shopifySaving}
-                >
-                  {shopifySaving ? "Disconnecting..." : "Disconnect"}
-                </Button>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {shopify && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg">{shopify.label}</CardTitle>
+                <Badge variant={shopify.connected ? "default" : "secondary"}>
+                  {shopify.connected ? "Connected" : "Not connected"}
+                </Badge>
               </div>
-            ) : (
-              <form className="space-y-2" onSubmit={handleSaveShopify}>
-                <Input
-                  type="text"
-                  placeholder="Store domain"
-                  value={shopifyStoreDomain}
-                  onChange={(event) => setShopifyStoreDomain(event.target.value)}
-                />
-                <Input
-                  type="password"
-                  placeholder="Access Token"
-                  value={shopifyAccessToken}
-                  onChange={(event) => setShopifyAccessToken(event.target.value)}
-                />
+              <CardDescription>{shopify.summary}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <MethodSelector
+                methods={shopify.availableMethods}
+                activeMethod={shopify.activeMethod}
+                disabled={switchingProvider === "shopify"}
+                onChange={(method) => void handleMethodChange("shopify", method)}
+              />
+              <FeedbackBanner message={messages.shopify ?? null} />
+
+              {shopify.connected ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Connected store:{" "}
+                    <strong>
+                      {shopify.details?.storeDomain ??
+                        shopify.externalId ??
+                        "Unknown store"}
+                    </strong>
+                  </p>
+                  {shopify.details?.lastSyncAt && (
+                    <p className="text-sm text-muted-foreground">
+                      Last sync:{" "}
+                      <strong>
+                        {new Date(shopify.details.lastSyncAt).toLocaleString()}
+                      </strong>
+                      {typeof shopify.details.lastSyncedCount === "number" &&
+                        ` · ${shopify.details.lastSyncedCount} products`}
+                      {shopify.details.truncated ? " · partial sync" : ""}
+                    </p>
+                  )}
+                  {shopify.details?.lastSyncError && (
+                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                      Last sync failed: {shopify.details.lastSyncError}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleSyncShopify()}
+                      disabled={shopifySaving}
+                    >
+                      {shopifySaving ? "Syncing..." : "Retry sync"}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void handleDisconnectShopify()}
+                      disabled={shopifySaving}
+                    >
+                      {shopifySaving ? "Disconnecting..." : "Disconnect"}
+                    </Button>
+                  </div>
+                </div>
+              ) : shopify.activeMethod === "manual" ? (
+                <form className="space-y-2" onSubmit={(event) => void handleSaveShopify(event)}>
+                  <Input
+                    type="text"
+                    placeholder="Store domain"
+                    value={shopifyForm.storeDomain}
+                    onChange={(event) =>
+                      setShopifyForm((current) => ({
+                        ...current,
+                        storeDomain: event.target.value,
+                      }))
+                    }
+                  />
+                  <Input
+                    type="password"
+                    placeholder="Access Token"
+                    value={shopifyForm.accessToken}
+                    onChange={(event) =>
+                      setShopifyForm((current) => ({
+                        ...current,
+                        accessToken: event.target.value,
+                      }))
+                    }
+                  />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={
+                      shopifySaving ||
+                      !shopifyForm.storeDomain.trim() ||
+                      !shopifyForm.accessToken.trim()
+                    }
+                  >
+                    {shopifySaving ? "Connecting..." : "Connect manually"}
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="your-store.myshopify.com"
+                    value={shopifyForm.oauthShop}
+                    onChange={(event) =>
+                      setShopifyForm((current) => ({
+                        ...current,
+                        oauthShop: event.target.value,
+                      }))
+                    }
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={!shopifyForm.oauthShop.trim()}
+                    onClick={() => {
+                      window.location.href = buildShopifyOAuthUrl(overview.brand.id);
+                    }}
+                  >
+                    Connect with Shopify OAuth
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {instagram && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg">{instagram.label}</CardTitle>
+                <Badge variant={instagram.connected ? "default" : "secondary"}>
+                  {instagram.connected ? "Connected" : "Not connected"}
+                </Badge>
+              </div>
+              <CardDescription>{instagram.summary}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <MethodSelector
+                methods={instagram.availableMethods}
+                activeMethod={instagram.activeMethod}
+                disabled
+                onChange={() => undefined}
+              />
+              <FeedbackBanner message={messages.instagram ?? null} />
+              {instagram.connected ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Connected account:{" "}
+                    <strong>
+                      @{instagram.details?.instagramUsername ?? instagram.externalId ?? "unknown"}
+                    </strong>
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Tagged posts and mentions are checked every 15 minutes.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    onClick={() => void handleDisconnectInstagram()}
+                    disabled={instagramLoading}
+                  >
+                    {instagramLoading ? "Disconnecting..." : "Disconnect"}
+                  </Button>
+                </div>
+              ) : (
                 <Button
-                  type="submit"
                   variant="outline"
-                  disabled={
-                    shopifySaving ||
-                    !shopifyStoreDomain.trim() ||
-                    !shopifyAccessToken.trim()
-                  }
+                  onClick={() => {
+                    const params = new URLSearchParams({ brandId: overview.brand.id });
+                    if (authReturnTo) {
+                      params.set("returnTo", authReturnTo);
+                    }
+                    window.location.href = `/api/auth/instagram?${params.toString()}`;
+                  }}
                 >
-                  {shopifySaving ? "Connecting..." : "Connect Shopify"}
+                  Connect Instagram
                 </Button>
-              </form>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">Instagram</CardTitle>
-              <Badge
-                variant={
-                  instagramState.connected || instagramConn?.status === "connected"
-                    ? "default"
-                    : "secondary"
-                }
-              >
-                {instagramState.connected || instagramConn?.status === "connected"
-                  ? "Connected"
-                  : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {instagramState.connected || instagramConn?.status === "connected"
-                ? `Connected as @${instagramState.username ?? instagramConn?.externalId ?? "unknown"}`
-                : "Monitor tagged posts and mentions from Instagram creators."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FeedbackBanner message={instagramMessage} />
-            {instagramState.connected || instagramConn?.status === "connected" ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Connected account:{" "}
-                  <strong>
-                    @{instagramState.username ?? instagramConn?.externalId ?? "unknown"}
-                  </strong>
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Tagged posts and mentions are checked every 15 minutes.
-                </p>
-                <Button
-                  variant="destructive"
-                  onClick={handleDisconnectInstagram}
-                  disabled={instagramLoading}
-                >
-                  {instagramLoading ? "Disconnecting..." : "Disconnect"}
-                </Button>
+        {unipile && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <CardTitle className="text-lg">{unipile.label}</CardTitle>
+                <Badge variant={unipile.connected ? "default" : "secondary"}>
+                  {unipile.connected ? "Connected" : "Not connected"}
+                </Badge>
               </div>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  window.location.href = `/api/auth/instagram?brandId=${brand.id}`;
-                }}
-              >
-                Connect Instagram
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <CardTitle className="text-lg">Unipile</CardTitle>
-              <Badge variant={unipileConn?.status === "connected" ? "default" : "secondary"}>
-                {unipileConn?.status === "connected" ? "Connected" : "Not connected"}
-              </Badge>
-            </div>
-            <CardDescription>
-              {unipileConn?.status === "connected"
-                ? "Instagram DMs enabled via Unipile"
-                : "Send Instagram DMs to creators via Unipile messaging API."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <FeedbackBanner message={unipileMessage} />
-            {unipileConn?.status === "connected" ? (
-              <p className="text-sm text-muted-foreground">
-                Instagram DM integration is active. Daily limit: 20 DMs per brand.
-              </p>
-            ) : null}
-            <div className="space-y-2">
-              <Input
-                type="password"
-                placeholder="Unipile API Key"
-                value={unipileApiKey}
-                onChange={(event) => setUnipileApiKey(event.target.value)}
+              <CardDescription>{unipile.summary}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <MethodSelector
+                methods={unipile.availableMethods}
+                activeMethod={unipile.activeMethod}
+                disabled
+                onChange={() => undefined}
               />
-              <Input
-                type="text"
-                placeholder="Unipile Account ID (optional)"
-                value={unipileAccountId}
-                onChange={(event) => setUnipileAccountId(event.target.value)}
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={handleSaveUnipile}
-              disabled={unipileSaving || !unipileApiKey.trim()}
-            >
-              {unipileSaving ? "Saving..." : "Connect Unipile"}
-            </Button>
-          </CardContent>
-        </Card>
+              <FeedbackBanner message={messages.unipile ?? null} />
+              {unipile.connected ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Instagram DMs are active
+                    {unipile.details?.accountId
+                      ? ` for account ${unipile.details.accountId}`
+                      : ""}.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    onClick={() => void handleDisconnectUnipile()}
+                    disabled={unipileSaving}
+                  >
+                    {unipileSaving ? "Disconnecting..." : "Disconnect"}
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Input
+                      type="password"
+                      placeholder="Unipile API Key"
+                      value={unipileForm.apiKey}
+                      onChange={(event) =>
+                        setUnipileForm((current) => ({
+                          ...current,
+                          apiKey: event.target.value,
+                        }))
+                      }
+                    />
+                    <Input
+                      type="text"
+                      placeholder="Unipile Account ID (optional)"
+                      value={unipileForm.accountId}
+                      onChange={(event) =>
+                        setUnipileForm((current) => ({
+                          ...current,
+                          accountId: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => void handleSaveUnipile()}
+                    disabled={unipileSaving || !unipileForm.apiKey.trim()}
+                  >
+                    {unipileSaving ? "Saving..." : "Connect Unipile"}
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

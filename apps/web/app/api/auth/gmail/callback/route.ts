@@ -1,56 +1,51 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { encrypt } from "@/lib/encryption";
+import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
+import {
+  buildConnectionRedirect,
+  decodeIntegrationOAuthState,
+} from "@/lib/integrations/oauth-state";
+import { upsertBrandConnection, upsertProviderCredential } from "@/lib/integrations/state";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  let state: ReturnType<typeof decodeIntegrationOAuthState> | null = null;
 
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
-    const brandId = searchParams.get("state");
+    state = decodeIntegrationOAuthState(searchParams.get("state"));
+    const brandId = state?.brandId ?? null;
     const error = searchParams.get("error");
 
     if (error) {
       console.error("[gmail-callback] OAuth error:", error);
       return Response.redirect(
-        `${appUrl}/settings/connections?error=oauth_denied`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "oauth_denied",
+        })
       );
     }
 
     if (!code || !brandId) {
       return Response.redirect(
-        `${appUrl}/settings/connections?error=missing_params`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "missing_params",
+        })
       );
     }
 
-    // Verify auth
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return Response.redirect(`${appUrl}/login`);
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return Response.redirect(`${appUrl}/login`);
-    }
-
-    // Verify brand access
-    const membership = await prisma.brandMembership.findUnique({
-      where: {
-        userId_brandId: { userId: user.id, brandId },
-      },
-    });
-
-    if (!membership) {
+    try {
+      await assertBrandAccess(brandId, { requireAdmin: true });
+    } catch (accessError) {
+      if (accessError instanceof BrandAccessError && accessError.status === 401) {
+        return Response.redirect(`${appUrl}/login`);
+      }
       return Response.redirect(
-        `${appUrl}/settings/connections?error=forbidden`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "forbidden",
+        })
       );
     }
 
@@ -71,7 +66,9 @@ export async function GET(request: NextRequest) {
       const errBody = await tokenResponse.text();
       console.error("[gmail-callback] Token exchange failed:", errBody);
       return Response.redirect(
-        `${appUrl}/settings/connections?error=token_exchange`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "token_exchange",
+        })
       );
     }
 
@@ -84,7 +81,9 @@ export async function GET(request: NextRequest) {
     if (!tokens.refresh_token) {
       console.error("[gmail-callback] No refresh token returned");
       return Response.redirect(
-        `${appUrl}/settings/connections?error=no_refresh_token`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "no_refresh_token",
+        })
       );
     }
 
@@ -96,7 +95,7 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    let emailAddress = authUser.email ?? "unknown";
+    let emailAddress = "unknown";
     if (profileResponse.ok) {
       const profile = (await profileResponse.json()) as { email?: string };
       if (profile.email) {
@@ -109,40 +108,20 @@ export async function GET(request: NextRequest) {
 
     // Store credential and connection in a transaction
     await prisma.$transaction(async (tx) => {
-      // Upsert provider credential
-      await tx.providerCredential.upsert({
-        where: {
-          brandId_provider: { brandId, provider: "gmail" },
-        },
-        create: {
-          brandId,
-          provider: "gmail",
-          label: emailAddress,
-          encryptedValue: encryptedRefreshToken,
-          isValid: true,
-        },
-        update: {
-          label: emailAddress,
-          encryptedValue: encryptedRefreshToken,
-          isValid: true,
-        },
+      await upsertProviderCredential(tx, {
+        brandId,
+        provider: "gmail",
+        label: emailAddress,
+        encryptedValue: encryptedRefreshToken,
+        credentialType: "oauth_refresh_token",
       });
 
-      // Upsert brand connection
-      await tx.brandConnection.upsert({
-        where: {
-          brandId_provider: { brandId, provider: "gmail" },
-        },
-        create: {
-          brandId,
-          provider: "gmail",
-          status: "connected",
-          externalId: emailAddress,
-        },
-        update: {
-          status: "connected",
-          externalId: emailAddress,
-        },
+      await upsertBrandConnection(tx, {
+        brandId,
+        provider: "gmail",
+        status: "connected",
+        connectionMethod: "oauth",
+        externalId: emailAddress,
       });
 
       // Newest connected Gmail becomes the primary sender for this phase.
@@ -169,12 +148,16 @@ export async function GET(request: NextRequest) {
     });
 
     return Response.redirect(
-      `${appUrl}/settings/connections?connected=gmail`
+      buildConnectionRedirect(appUrl, state?.returnTo, {
+        connected: "gmail",
+      })
     );
   } catch (error) {
     console.error("[gmail-callback] Error:", error);
     return Response.redirect(
-      `${appUrl}/settings/connections?error=internal`
+      buildConnectionRedirect(appUrl, state?.returnTo, {
+        error: "internal",
+      })
     );
   }
 }

@@ -313,6 +313,7 @@ model ProviderCredential {
   id       String @id @default(uuid())
   provider String // shopify | gmail | instagram | meta_creator_marketplace | unipile
   label    String?
+  credentialType String @default("api_key") // oauth_refresh_token | oauth_access_token | api_key | shopify_admin_token
 
   encryptedValue String @db.Text @map("encrypted_value") // AES-256-GCM encrypted
   expiresAt      DateTime?
@@ -331,8 +332,9 @@ model ProviderCredential {
 
 model BrandConnection {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram
+  provider String // shopify | gmail | instagram | unipile
   status   String @default("connected") // connected | disconnected | error
+  connectionMethod String @default("manual") // oauth | manual
 
   externalId  String? // e.g. Shopify store domain, Gmail address
   metadata    Json?   // provider-specific data
@@ -1016,4 +1018,3 @@ model ShopifyVariant {
   @@unique([productId, shopifyVariantId])
   @@map("shopify_variants")
 }
-

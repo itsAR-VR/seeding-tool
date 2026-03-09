@@ -1,5 +1,4 @@
-import { prisma } from "@/lib/prisma";
-import { decrypt } from "@/lib/encryption";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 
 /**
  * Shopify Admin API client for a specific brand.
@@ -22,28 +21,15 @@ export interface ShopifyClient {
  * @throws if no valid Shopify credential exists for the brand.
  */
 export async function getShopifyClient(brandId: string): Promise<ShopifyClient> {
-  const credential = await prisma.providerCredential.findFirst({
-    where: {
-      brandId,
-      provider: "shopify",
-      isValid: true,
-    },
-  });
+  const resolved = await resolveProviderCredential(brandId, "shopify");
 
-  if (!credential) {
+  if (!resolved.decryptedValue) {
     throw new Error(`No valid Shopify credential found for brand ${brandId}`);
   }
 
-  const accessToken = decrypt(credential.encryptedValue);
+  const accessToken = resolved.decryptedValue;
 
-  // Get the store domain from BrandConnection
-  const connection = await prisma.brandConnection.findFirst({
-    where: {
-      brandId,
-      provider: "shopify",
-      status: "connected",
-    },
-  });
+  const connection = resolved.connection;
 
   if (!connection?.externalId) {
     throw new Error(`No connected Shopify store found for brand ${brandId}`);

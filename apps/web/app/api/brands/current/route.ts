@@ -31,6 +31,13 @@ export async function GET() {
             settings: true,
             onboarding: true,
             connections: true,
+            providerCredentials: {
+              select: {
+                provider: true,
+                credentialType: true,
+                isValid: true,
+              },
+            },
             emailAliases: {
               select: {
                 id: true,

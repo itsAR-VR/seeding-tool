@@ -1,7 +1,11 @@
 import { NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { encrypt } from "@/lib/encryption";
+import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
+import {
+  buildConnectionRedirect,
+  decodeIntegrationOAuthState,
+} from "@/lib/integrations/oauth-state";
+import { upsertBrandConnection, upsertProviderCredential } from "@/lib/integrations/state";
 import { prisma } from "@/lib/prisma";
 import {
   exchangeForLongLivedToken,
@@ -22,51 +26,42 @@ import {
  */
 export async function GET(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  let state: ReturnType<typeof decodeIntegrationOAuthState> | null = null;
 
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get("code");
-    const brandId = searchParams.get("state");
+    state = decodeIntegrationOAuthState(searchParams.get("state"));
+    const brandId = state?.brandId ?? null;
     const error = searchParams.get("error");
 
     if (error) {
       console.error("[instagram-callback] OAuth error:", error);
       return Response.redirect(
-        `${appUrl}/settings/connections?error=oauth_denied`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "oauth_denied",
+        })
       );
     }
 
     if (!code || !brandId) {
       return Response.redirect(
-        `${appUrl}/settings/connections?error=missing_params`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "missing_params",
+        })
       );
     }
 
-    // Verify auth
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return Response.redirect(`${appUrl}/login`);
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return Response.redirect(`${appUrl}/login`);
-    }
-
-    // Verify brand access
-    const membership = await prisma.brandMembership.findUnique({
-      where: {
-        userId_brandId: { userId: user.id, brandId },
-      },
-    });
-
-    if (!membership) {
+    try {
+      await assertBrandAccess(brandId, { requireAdmin: true });
+    } catch (accessError) {
+      if (accessError instanceof BrandAccessError && accessError.status === 401) {
+        return Response.redirect(`${appUrl}/login`);
+      }
       return Response.redirect(
-        `${appUrl}/settings/connections?error=forbidden`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "forbidden",
+        })
       );
     }
 
@@ -76,7 +71,9 @@ export async function GET(request: NextRequest) {
     if (!appId || !appSecret) {
       console.error("[instagram-callback] Missing META_APP_ID or INSTAGRAM_APP_SECRET");
       return Response.redirect(
-        `${appUrl}/settings/connections?error=internal`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "internal",
+        })
       );
     }
 
@@ -96,7 +93,9 @@ export async function GET(request: NextRequest) {
       const errBody = await tokenRes.text();
       console.error("[instagram-callback] Token exchange failed:", errBody);
       return Response.redirect(
-        `${appUrl}/settings/connections?error=token_exchange`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "token_exchange",
+        })
       );
     }
 
@@ -147,7 +146,9 @@ export async function GET(request: NextRequest) {
         "[instagram-callback] No Instagram Business Account found on any Page"
       );
       return Response.redirect(
-        `${appUrl}/settings/connections?error=no_instagram_account`
+        buildConnectionRedirect(appUrl, state?.returnTo, {
+          error: "no_instagram_account",
+        })
       );
     }
 
@@ -168,60 +169,39 @@ export async function GET(request: NextRequest) {
     );
 
     await prisma.$transaction(async (tx) => {
-      // Upsert provider credential
-      await tx.providerCredential.upsert({
-        where: {
-          brandId_provider: { brandId, provider: "instagram" },
-        },
-        create: {
-          brandId,
-          provider: "instagram",
-          label: igUsername ?? igAccountId,
-          encryptedValue,
-          expiresAt,
-          isValid: true,
-        },
-        update: {
-          label: igUsername ?? igAccountId,
-          encryptedValue,
-          expiresAt,
-          isValid: true,
-        },
+      await upsertProviderCredential(tx, {
+        brandId,
+        provider: "instagram",
+        label: igUsername ?? igAccountId,
+        encryptedValue,
+        credentialType: "oauth_access_token",
+        expiresAt,
       });
 
-      // Upsert brand connection
-      await tx.brandConnection.upsert({
-        where: {
-          brandId_provider: { brandId, provider: "instagram" },
-        },
-        create: {
-          brandId,
-          provider: "instagram",
-          status: "connected",
-          externalId: igUsername ?? igAccountId,
-          metadata: {
-            igUserId: igAccountId,
-            igUsername,
-          },
-        },
-        update: {
-          status: "connected",
-          externalId: igUsername ?? igAccountId,
-          metadata: {
-            igUserId: igAccountId,
-            igUsername,
-          },
+      await upsertBrandConnection(tx, {
+        brandId,
+        provider: "instagram",
+        status: "connected",
+        connectionMethod: "oauth",
+        externalId: igUsername ?? igAccountId,
+        metadata: {
+          igUserId: igAccountId,
+          igUsername,
         },
       });
     });
 
     return Response.redirect(
-      `${appUrl}/settings/connections?connected=instagram`
+      buildConnectionRedirect(appUrl, state?.returnTo, {
+        connected: "instagram",
+      })
     );
   } catch (error) {
     console.error("[instagram-callback] Error:", error);
     return Response.redirect(
-      `${appUrl}/settings/connections?error=internal`
+      buildConnectionRedirect(appUrl, state?.returnTo, {
+        error: "internal",
+      })
     );
   }
 }
