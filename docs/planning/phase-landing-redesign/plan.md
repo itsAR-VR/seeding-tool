@@ -1,5 +1,29 @@
 # Phase Plan — aha.inc Landing Page Redesign
 
+## Original User Request (verbatim)
+
+> Design direction from AGENTS.md — canonical spec for this phase (committed 2026-03-09):
+>
+> **Aesthetic Direction**
+> Light mode first. Warm neutral base, restrained accent color, and very selective motion.
+> The interface should feel more like an operator's briefing surface than a startup marketing
+> collage. References should be taken from premium editorial SaaS pages, not toy-like product
+> diagrams. Anti-references: generic flowchart heroes, too many pills and badges, intrusive
+> sticky CTAs, and motion that reads as decoration instead of signal.
+>
+> **Design Principles**
+> 1. Relevance beats cleverness in the first viewport.
+> 2. One dominant action at a time; everything else supports it.
+> 3. Motion must clarify state or pacing, never just fill space.
+> 4. Fewer, stronger visual ideas beat many small decorative ones.
+> 5. Mobile should feel calmer than desktop, not more crowded.
+
+> **⚠️ SPEC CONFLICT (surfaced by RED TEAM 2026-03-09):**
+> The Design Direction section below (frosted glass, dark navy) was the original V1 brief
+> and has been superseded by AGENTS.md. The canonical direction is LIGHT MODE with warm
+> neutral base as above. The hero-media-dock implementation on `feature/hero-media-dock`
+> correctly follows AGENTS.md, not the V1 dark brief below. See `red-team.md` for full analysis.
+
 > **Owner:** AR (assigned via Podhi, 2026-03-02)
 > **Status:** In Progress
 > **Reference:** Phase 1 audit baseline (seeding-tool Playwright harness), Phase 6 soak/QA
@@ -217,3 +241,41 @@ Tasks:
 - **Z2A reference:** `/home/podhi/.openclaw/workspace/Z2A` — use for glass + GSAP pattern reference
 - **GitHub:** `mmoahid/seeding-tool` (Mo's account — use `gh auth switch --user mmoahid` before push)
 - **Report back to:** AR (this was assigned by AR, not Mo)
+
+---
+
+## Skills Available for Implementation
+
+_Discovered 2026-03-09 via installed skill scan._
+
+| Skill | Location | Role |
+|-------|----------|------|
+| `coding-agent` | `~/.npm-global/lib/node_modules/openclaw/skills/coding-agent/SKILL.md` | Codex/Claude Code lane for implementation |
+| `canvas-design` | `~/.openclaw/skills/canvas-design/SKILL.md` | Visual before/after comparison |
+| `browser-automation` | `~/.openclaw/skills/browser-automation/SKILL.md` | Playwright QA harness |
+| `phase-gaps` | `~/.openclaw/skills/phase-gaps/SKILL.md` | RED TEAM analysis of this plan |
+| `commit-work` | `~/.openclaw/skills/commit-work/SKILL.md` | Structured commits after each subphase |
+
+No required skills are missing. GSAP is a npm package (no skill needed). Lenis is deferred per RED TEAM — not needed for the carousel-dock approach actually implemented.
+
+---
+
+## Concurrent Phases
+
+| Phase | Status | Overlap | Coordination |
+|-------|--------|---------|--------------|
+| Phase 10 (Seeding Rollout) | Untracked/in-progress | `apps/web/app/globals.css`, root `package.json` | Landing page touches `globals.css`; platform work in `(platform)/` is safe. Merge landing changes after platform CSS pass. |
+| Phase 11 (unknown, feature branch) | On `feature/hero-media-dock` | Multiple doc files | Sub-phases a–c co-located on branch; merge landing before platform phase-11 |
+| `feat/email-enrichment` (branch) | Stale | `lib/outreach/`, `lib/unipile/`, `(platform)/` | No overlap with `(marketing)/` files — independent |
+
+**Active dirty-tree conflict (MEDIUM):**
+Root `package.json` modified in dirty tree (platform work) while `apps/web/package.json` also modified in feature branch. These are different files in the monorepo — no direct conflict. Verify `npm install` runs clean after merge.
+
+---
+
+## Subphase Index
+
+* a — Hero Carousel-Dock Animation (scroll-progress carousel → dock, `HeroScene.tsx`)
+* b — Marketing Sections Rebuild (friction cards, story steps, AI capabilities, evidence, logo rail)
+* c — Design System + CSS Token Pass (globals.css updates, Turbopack config, responsive tokens)
+* d — QA Gate (browser verification loop, Playwright smoke, mobile 390px, merge to main)
