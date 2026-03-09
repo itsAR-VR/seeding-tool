@@ -92,6 +92,7 @@ export default function CreatorsPage() {
     new Set()
   );
   const [importing, setImporting] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchCreators = useCallback(async () => {
@@ -374,6 +375,42 @@ export default function CreatorsPage() {
           <Button onClick={() => router.push("/creators/import")}>
             Import CSV
           </Button>
+          <Button
+            variant="outline"
+            disabled={enriching || creators.filter((c) => !c.email).length === 0}
+            onClick={async () => {
+              const withoutEmail = creators.filter((c) => !c.email);
+              if (withoutEmail.length === 0) {
+                alert("All visible creators already have emails.");
+                return;
+              }
+              setEnriching(true);
+              try {
+                const res = await fetch("/api/creators/enrich", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    creatorIds: withoutEmail.map((c) => c.id),
+                  }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  alert(data.error || "Enrichment failed");
+                } else {
+                  alert(
+                    `Enrichment complete: ${data.enriched} found, ${data.notFound} not found, ${data.alreadyHasEmail || 0} already had email, ${data.skipped} skipped`
+                  );
+                  fetchCreators();
+                }
+              } catch {
+                alert("Enrichment request failed");
+              } finally {
+                setEnriching(false);
+              }
+            }}
+          >
+            {enriching ? "Enriching..." : `📧 Enrich Emails (${creators.filter((c) => !c.email).length})`}
+          </Button>
         </div>
       </div>
 
@@ -482,6 +519,7 @@ export default function CreatorsPage() {
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-2 pr-4 font-medium">Handle</th>
+                    <th className="pb-2 pr-4 font-medium">Email</th>
                     <th className="pb-2 pr-4 font-medium">Followers</th>
                     <th className="pb-2 pr-4 font-medium">Avg Views</th>
                     <th className="pb-2 pr-4 font-medium">Category</th>
@@ -505,6 +543,13 @@ export default function CreatorsPage() {
                               </p>
                             )}
                         </div>
+                      </td>
+                      <td className="py-2 pr-4 text-xs">
+                        {creator.email ? (
+                          <span className="text-green-600">{creator.email}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                       <td className="py-2 pr-4 text-xs">
                         {creator.followerCount?.toLocaleString() ?? "—"}

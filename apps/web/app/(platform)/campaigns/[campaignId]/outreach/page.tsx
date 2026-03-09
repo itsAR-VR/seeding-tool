@@ -44,6 +44,7 @@ type CustomPersona = {
 
 type GeneratedDraft = {
   campaignCreatorId: string;
+  creatorId: string;
   creatorHandle: string;
   creatorName: string | null;
   subject: string | null;
@@ -68,6 +69,8 @@ export default function OutreachPage() {
   const [loading, setLoading] = useState(false);
   const [loadingCreators, setLoadingCreators] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendProgress, setSendProgress] = useState("");
 
   // Load campaign creators
   useEffect(() => {
@@ -381,9 +384,67 @@ export default function OutreachPage() {
                       @{draft.creatorHandle}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {draft.tokens} tokens
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {draft.tokens} tokens
+                    </span>
+                    {!draft.error && draft.body && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={sending}
+                        onClick={async () => {
+                          const confirmed = confirm(
+                            `Send ${channel === "email" ? "email" : "DM"} to @${draft.creatorHandle}?`
+                          );
+                          if (!confirmed) return;
+                          setSending(true);
+                          try {
+                            const res = await fetch("/api/outreach/send", {
+                              method: "POST",
+                              headers: {
+                                "Content-Type": "application/json",
+                              },
+                              body: JSON.stringify({
+                                drafts: [
+                                  {
+                                    campaignCreatorId:
+                                      draft.campaignCreatorId,
+                                    creatorId: draft.creatorId,
+                                    channel,
+                                    subject:
+                                      editedDrafts[draft.campaignCreatorId]
+                                        ?.subject ??
+                                      draft.subject ??
+                                      undefined,
+                                    body:
+                                      editedDrafts[draft.campaignCreatorId]
+                                        ?.body ?? draft.body!,
+                                  },
+                                ],
+                              }),
+                            });
+                            const data = await res.json();
+                            if (!res.ok) {
+                              alert(data.error || "Send failed");
+                            } else {
+                              alert(
+                                data.sent > 0
+                                  ? `Sent to @${draft.creatorHandle}`
+                                  : `Failed: ${data.results?.[0]?.error || "Unknown error"}`
+                              );
+                            }
+                          } catch {
+                            alert("Send failed");
+                          } finally {
+                            setSending(false);
+                          }
+                        }}
+                      >
+                        Send
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {draft.error ? (
@@ -444,16 +505,62 @@ export default function OutreachPage() {
               </Button>
               <Button
                 disabled={
-                  drafts.filter((d) => !d.error).length === 0
+                  sending || drafts.filter((d) => !d.error).length === 0
                 }
-                onClick={() => {
-                  // TODO: Hook into existing DM/email sending infrastructure
-                  alert(
-                    "Send functionality will be connected to existing outreach pipeline. Drafts are ready for review."
+                onClick={async () => {
+                  const validDrafts = drafts.filter(
+                    (d) => !d.error && d.body
                   );
+                  if (validDrafts.length === 0) return;
+
+                  const confirmed = confirm(
+                    `Send ${validDrafts.length} ${channel === "email" ? "email(s)" : "DM(s)"}? This action cannot be undone.`
+                  );
+                  if (!confirmed) return;
+
+                  setSending(true);
+                  setSendProgress(`Sending 0/${validDrafts.length}...`);
+
+                  try {
+                    const payload = validDrafts.map((d) => ({
+                      campaignCreatorId: d.campaignCreatorId,
+                      creatorId: d.creatorId,
+                      channel,
+                      subject:
+                        editedDrafts[d.campaignCreatorId]?.subject ??
+                        d.subject ??
+                        undefined,
+                      body:
+                        editedDrafts[d.campaignCreatorId]?.body ?? d.body!,
+                    }));
+
+                    const res = await fetch("/api/outreach/send", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ drafts: payload }),
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok) {
+                      alert(data.error || "Send failed");
+                    } else {
+                      setSendProgress("");
+                      alert(
+                        `Send complete: ${data.sent} sent, ${data.failed} failed, ${data.noContact} missing contact info`
+                      );
+                    }
+                  } catch {
+                    alert("Send request failed");
+                  } finally {
+                    setSending(false);
+                    setSendProgress("");
+                  }
                 }}
               >
-                Send All ({drafts.filter((d) => !d.error).length})
+                {sending
+                  ? sendProgress || "Sending..."
+                  : `Send All (${drafts.filter((d) => !d.error).length})`}
               </Button>
             </div>
           </CardContent>
