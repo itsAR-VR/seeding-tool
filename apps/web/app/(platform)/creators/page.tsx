@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { InstagramHandleLink } from "@/components/instagram-handle-link";
 
 type CreatorProfile = {
   platform: string;
@@ -52,6 +53,41 @@ type SearchResult = {
   platform: string;
 };
 
+type FacetOption = {
+  value: string;
+  count: number;
+};
+
+type CreatorFacets = {
+  categories: FacetOption[];
+  keywords: FacetOption[];
+  hashtags: FacetOption[];
+  usernames: FacetOption[];
+};
+
+const EMPTY_FACETS: CreatorFacets = {
+  categories: [],
+  keywords: [],
+  hashtags: [],
+  usernames: [],
+};
+
+function appendDelimitedValue(current: string, nextValue: string) {
+  const normalized = nextValue.trim().replace(/^[@#]/, "");
+  if (!normalized) return current;
+
+  const existing = current
+    .split(/[\n,]+/)
+    .map((value) => value.trim().replace(/^[@#]/, ""))
+    .filter(Boolean);
+
+  if (existing.some((value) => value.toLowerCase() === normalized.toLowerCase())) {
+    return current;
+  }
+
+  return [...existing, normalized].join(", ");
+}
+
 export default function CreatorsPage() {
   const router = useRouter();
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -66,6 +102,7 @@ export default function CreatorsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
 
   // Add-to-campaign modal state
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -85,7 +122,6 @@ export default function CreatorsPage() {
   const [searchUsernames, setSearchUsernames] = useState("");
   const [searchLimit, setSearchLimit] = useState(50);
   const [searching, setSearching] = useState(false);
-  const [searchJobId, setSearchJobId] = useState<string | null>(null);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(
@@ -107,6 +143,7 @@ export default function CreatorsPage() {
     if (source) params.set("source", source);
     params.set("page", page.toString());
     params.set("limit", "50");
+    params.set("includeFacets", "1");
 
     try {
       const res = await fetch(`/api/creators?${params}`);
@@ -115,6 +152,7 @@ export default function CreatorsPage() {
         setCreators(data.creators);
         setTotalPages(data.pagination.totalPages);
         setTotal(data.pagination.total);
+        setFacets(data.facets ?? EMPTY_FACETS);
       }
     } catch {
       // ignore
@@ -215,7 +253,7 @@ export default function CreatorsPage() {
         body.hashtag = searchHashtag;
       } else {
         body.usernames = searchUsernames
-          .split(",")
+          .split(/[\n,]+/)
           .map((u) => u.trim())
           .filter(Boolean);
       }
@@ -235,8 +273,6 @@ export default function CreatorsPage() {
       }
 
       const data = await res.json();
-      setSearchJobId(data.jobId);
-
       // Start polling
       pollRef.current = setInterval(async () => {
         try {
@@ -332,7 +368,6 @@ export default function CreatorsPage() {
   function resetSearchState() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = null;
-    setSearchJobId(null);
     setSearchStatus(null);
     setSearchResults([]);
     setSelectedResults(new Set());
@@ -341,6 +376,29 @@ export default function CreatorsPage() {
     setSearchUsernames("");
     setSearchLimit(50);
     setSearchMode("hashtag");
+  }
+
+  const hashtagSuggestions = useMemo(
+    () => facets.hashtags.slice(0, 12),
+    [facets.hashtags]
+  );
+
+  const keywordSuggestions = useMemo(
+    () => facets.keywords.slice(0, 16),
+    [facets.keywords]
+  );
+
+  const usernameSuggestions = useMemo(
+    () => facets.usernames.slice(0, 18),
+    [facets.usernames]
+  );
+
+  function addHashtagSuggestion(value: string) {
+    setSearchHashtag(value.replace(/^#/, ""));
+  }
+
+  function addUsernameSuggestion(value: string) {
+    setSearchUsernames((current) => appendDelimitedValue(current, value));
   }
 
   const sourceOptions = [
@@ -467,14 +525,21 @@ export default function CreatorsPage() {
               />
             </div>
             <div className="flex gap-2">
-              <Input
-                placeholder="Category"
+              <select
+                className="w-full rounded-md border px-3 py-2 text-sm"
                 value={category}
                 onChange={(e) => {
                   setCategory(e.target.value);
                   setPage(1);
                 }}
-              />
+              >
+                <option value="">All categories</option>
+                {facets.categories.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.value} ({option.count})
+                  </option>
+                ))}
+              </select>
               <select
                 className="rounded-md border px-3 py-2 text-sm"
                 value={source}
@@ -533,13 +598,23 @@ export default function CreatorsPage() {
                     <tr key={creator.id} className="border-b">
                       <td className="py-2 pr-4">
                         <div>
-                          <span className="font-mono text-xs">
-                            @{creator.instagramHandle || "—"}
-                          </span>
+                          <InstagramHandleLink
+                            handle={creator.instagramHandle}
+                            className="font-mono text-xs text-blue-600 hover:underline"
+                          />
                           {creator.name &&
                             creator.name !== creator.instagramHandle && (
                               <p className="text-xs text-muted-foreground">
-                                {creator.name}
+                                {creator.instagramHandle ? (
+                                  <InstagramHandleLink
+                                    handle={creator.instagramHandle}
+                                    className="hover:text-foreground hover:underline"
+                                  >
+                                    {creator.name}
+                                  </InstagramHandleLink>
+                                ) : (
+                                  creator.name
+                                )}
                               </p>
                             )}
                         </div>
@@ -708,27 +783,103 @@ export default function CreatorsPage() {
                   </div>
 
                   {searchMode === "hashtag" ? (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Hashtag</label>
-                      <Input
-                        placeholder="e.g. skincare, beauty, fitness"
-                        value={searchHashtag}
-                        onChange={(e) => setSearchHashtag(e.target.value)}
-                      />
+                    <div className="space-y-4">
+                      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                        Hashtag search looks for creators posting under a topic.
+                        Use one of the saved tags below if you want a term that
+                        already appears in your creator data.
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Hashtag</label>
+                        <Input
+                          placeholder="e.g. skincare, pilates, supplements"
+                          value={searchHashtag}
+                          onChange={(e) => setSearchHashtag(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Suggested hashtags
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {hashtagSuggestions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
+                              onClick={() => addHashtagSuggestion(option.value)}
+                            >
+                              {option.value} ({option.count})
+                            </button>
+                          ))}
+                          {hashtagSuggestions.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No saved hashtag suggestions yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Usernames (comma-separated)
-                      </label>
-                      <textarea
-                        className="w-full rounded-md border px-3 py-2 text-sm min-h-[80px]"
-                        placeholder="user1, user2, user3"
-                        value={searchUsernames}
-                        onChange={(e) => setSearchUsernames(e.target.value)}
-                      />
+                    <div className="space-y-4">
+                      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                        Username list search checks exact Instagram handles.
+                        Paste handles separated by commas or new lines, or click
+                        a saved handle below to avoid typos.
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">
+                          Usernames
+                        </label>
+                        <textarea
+                          className="min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
+                          placeholder={"creatorone, creatortwo\ncreatorthree"}
+                          value={searchUsernames}
+                          onChange={(e) => setSearchUsernames(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Saved usernames
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {usernameSuggestions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
+                              onClick={() => addUsernameSuggestion(option.value)}
+                            >
+                              @{option.value}
+                            </button>
+                          ))}
+                          {usernameSuggestions.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No saved usernames yet.
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   )}
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                      Popular keywords from your database
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {keywordSuggestions.map((option) => (
+                        <Badge key={option.value} variant="outline" className="text-xs">
+                          {option.value} ({option.count})
+                        </Badge>
+                      ))}
+                      {keywordSuggestions.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No keyword guidance yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium">
@@ -841,12 +992,20 @@ export default function CreatorsPage() {
                                   />
                                 )}
                                 <div>
-                                  <span className="font-mono text-xs">
-                                    @{result.handle}
-                                  </span>
+                                  <InstagramHandleLink
+                                    handle={result.handle}
+                                    url={result.profileUrl}
+                                    className="font-mono text-xs text-blue-600 hover:underline"
+                                  />
                                   {result.name && (
                                     <p className="text-xs text-muted-foreground">
-                                      {result.name}
+                                      <InstagramHandleLink
+                                        handle={result.handle}
+                                        url={result.profileUrl}
+                                        className="hover:text-foreground hover:underline"
+                                      >
+                                        {result.name}
+                                      </InstagramHandleLink>
                                     </p>
                                   )}
                                 </div>
@@ -903,7 +1062,6 @@ export default function CreatorsPage() {
                       onClick={() => {
                         setSearchResults([]);
                         setSelectedResults(new Set());
-                        setSearchJobId(null);
                         setSearchStatus(null);
                       }}
                     >

@@ -5,6 +5,7 @@ import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import {
   Card,
   CardContent,
@@ -229,18 +230,11 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                         </td>
                         <td className="py-2">
                           {profile ? (
-                            profile.url ? (
-                              <a
-                                href={profile.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline"
-                              >
-                                @{profile.handle}
-                              </a>
-                            ) : (
-                              `@${profile.handle}`
-                            )
+                            <InstagramHandleLink
+                              handle={profile.handle}
+                              url={profile.url}
+                              className="text-blue-600 hover:underline"
+                            />
                           ) : (
                             "—"
                           )}

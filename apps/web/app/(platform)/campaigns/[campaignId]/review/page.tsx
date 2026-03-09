@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InstagramHandleLink } from "@/components/instagram-handle-link";
 
 type CreatorProfile = {
   platform: string;
@@ -142,18 +143,11 @@ export default function ReviewQueuePage() {
                     <div className="flex gap-4 text-sm text-muted-foreground">
                       {profile && (
                         <>
-                          {profile.url ? (
-                            <a
-                              href={profile.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              @{profile.handle}
-                            </a>
-                          ) : (
-                            <span>@{profile.handle}</span>
-                          )}
+                          <InstagramHandleLink
+                            handle={profile.handle}
+                            url={profile.url}
+                            className="text-blue-600 hover:underline"
+                          />
                           {profile.followerCount != null && (
                             <span>
                               {profile.followerCount.toLocaleString()} followers

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { InstagramHandleLink } from "@/components/instagram-handle-link";
 
 type Creator = {
   id: string;
@@ -224,9 +225,14 @@ export default function CampaignImportPage() {
                         />
                       </td>
                       <td className="py-2 pr-4">
-                        <span className="font-mono text-xs">
-                          @{creator.instagramHandle || creator.name || "—"}
-                        </span>
+                        <InstagramHandleLink
+                          handle={creator.instagramHandle}
+                          className="font-mono text-xs text-blue-600 hover:underline"
+                        >
+                          {creator.instagramHandle
+                            ? `@${creator.instagramHandle.replace(/^@/, "")}`
+                            : creator.name || "—"}
+                        </InstagramHandleLink>
                       </td>
                       <td className="py-2 pr-4 text-xs">
                         {creator.followerCount?.toLocaleString() ?? "—"}
