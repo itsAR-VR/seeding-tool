@@ -3,12 +3,12 @@
  *
  * Discovery source: local Collabstr dataset narrowed by brand ICP.
  * Verification path: Fly worker (real Playwright + OpenAI) with local OpenAI fallback.
- * Approval path: agent-driven via brand context + AI persona (auto or recommend mode).
+ * Approval path: agent-driven via brand context + AI persona (recommend or auto mode).
  *
  * Approval modes (controlled by BrandSettings.metadata.approvalMode):
- *   "auto"      — AI decision is final; writes approved/declined directly (default)
  *   "recommend" — AI decision is advisory; all creators land in "pending" queue
- *                 with an InterventionCase for human review
+ *                 for human review (default — safer for live rollouts)
+ *   "auto"      — AI decision is final; writes approved/declined directly (opt-in)
  */
 
 import * as fs from "node:fs";
@@ -109,8 +109,12 @@ const WORKER_BASE_URL = process.env.CREATOR_SEARCH_WORKER_BASE_URL?.trim().repla
 const WORKER_TOKEN = process.env.CREATOR_SEARCH_WORKER_TOKEN?.trim();
 const WORKER_MAX_ANALYSIS = 10;
 
-/** Default approval threshold — creators at or above are approved */
-const DEFAULT_APPROVAL_THRESHOLD = 0.65;
+/**
+ * Default approval threshold — creators at or above are approved.
+ * Set to 0.75 for safer rollout (higher bar = fewer false-positives).
+ * Override per-brand via BrandSettings.metadata.approvalThreshold.
+ */
+const DEFAULT_APPROVAL_THRESHOLD = 0.75;
 
 // ─── Dataset helpers ─────────────────────────────────────────────────────────
 
@@ -236,7 +240,11 @@ async function fetchBrandPersona(brandId: string): Promise<PersonaContext | null
 
 /**
  * Read approvalMode from BrandSettings.metadata.
- * Falls back to "auto" (backward-compatible — existing behaviour unchanged).
+ * Default: "recommend" — the safer mode; human reviews before any creator advances.
+ * Opt-in: "auto" — AI decision is final; only set explicitly in BrandSettings.
+ *
+ * "recommend": all AI-scored creators land in pending queue for human review.
+ * "auto": AI decision is final (approve/decline written immediately).
  */
 async function fetchApprovalMode(brandId: string): Promise<ApprovalMode> {
   const settings = await prisma.brandSettings.findUnique({
@@ -247,7 +255,8 @@ async function fetchApprovalMode(brandId: string): Promise<ApprovalMode> {
   const meta = settings?.metadata as Record<string, unknown> | null;
   const mode = meta?.approvalMode;
 
-  return mode === "recommend" ? "recommend" : "auto";
+  // "auto" is opt-in — only if explicitly set. Everything else defaults to "recommend".
+  return mode === "auto" ? "auto" : "recommend";
 }
 
 /**
@@ -529,7 +538,8 @@ async function persistCreators(
   brandId: string,
   campaignId: string,
   scoredCreators: ScoredCreator[],
-  approvalMode: ApprovalMode
+  approvalMode: ApprovalMode,
+  approvalThreshold: number
 ): Promise<{ added: number; skipped: number }> {
   let added = 0;
   let skipped = 0;
@@ -657,19 +667,26 @@ async function persistCreators(
       // Store audit artifact for every creator decision
       await storeApprovalArtifact(creatorRow, brandId, campaignId, approvalMode);
 
-      // In recommend mode: create an InterventionCase for borderline creators
-      // (score between 0.4 and threshold + 0.1) so humans focus review effort
+      // In recommend mode: create an InterventionCase ONLY for genuinely borderline
+      // creators — those within ±BORDERLINE_WINDOW of the threshold. This keeps
+      // the intervention queue focused on ambiguous cases where human judgment
+      // adds the most value. Clear approvals (well above threshold) and clear
+      // rejects (well below) do not need special flagging; they land in pending
+      // queue for routine review without an explicit intervention.
       if (approvalMode === "recommend") {
-        const isBorderline = creatorRow.fitScore >= 0.4;
+        const BORDERLINE_WINDOW = 0.15;
+        const isBorderline =
+          Math.abs(creatorRow.fitScore - approvalThreshold) <= BORDERLINE_WINDOW;
         if (isBorderline) {
           await prisma.interventionCase.create({
             data: {
               type: "manual_review",
               status: "open",
-              priority: creatorRow.fitScore >= 0.65 ? "normal" : "low",
+              priority: creatorRow.fitScore >= approvalThreshold ? "normal" : "low",
               title: `Creator review: @${creatorRow.instagram ?? creatorRow.name ?? creatorRow.collabstrSlug}`,
               description: [
                 `AI fit score: ${(creatorRow.fitScore * 100).toFixed(0)}% (${creatorRow.confidence ?? "medium"} confidence).`,
+                `Borderline: within ${(BORDERLINE_WINDOW * 100).toFixed(0)}% of ${(approvalThreshold * 100).toFixed(0)}% threshold.`,
                 `Reasoning: ${creatorRow.fitReasoning}`,
                 `Source: ${creatorRow.analysisSource}.`,
                 `Campaign: ${campaignId}`,
@@ -853,7 +870,7 @@ export async function searchCreatorsForCampaign(
       }
     }
 
-    const { added, skipped } = await persistCreators(brandId, campaignId, results, approvalMode);
+    const { added, skipped } = await persistCreators(brandId, campaignId, results, approvalMode, approvalThreshold);
     await recordSearchJobResults(jobId, results);
 
     const creditsConsumed = await debitSearchCredits(

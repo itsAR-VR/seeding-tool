@@ -2,9 +2,11 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 
 /**
- * Inngest function: Handle creator search requests.
+ * Inngest function: Handle creator search requests (Collabstr/marketplace path).
  *
- * Listens on "creator-search/requested" and:
+ * Listens on "creator-search/requested" but ONLY handles non-Apify sources.
+ * Apify discovery is handled exclusively by `apify-creator-search`.
+ *
  * 1. Creates a CreatorSearchJob record for tracking
  * 2. Creates an InterventionCase so operators can monitor queued searches
  *
@@ -12,8 +14,8 @@ import { prisma } from "@/lib/prisma";
  * runs Playwright + brand-context-aware OpenAI scoring.
  * Falls back to local OpenAI scoring if the worker is unavailable.
  * Approval mode is controlled by BrandSettings.metadata.approvalMode:
- *   "auto"      — AI decision is final (default)
- *   "recommend" — creators land in pending queue for human review
+ *   "recommend" — creators land in pending queue for human review (default)
+ *   "auto"      — AI decision is final (opt-in)
  */
 export const handleCreatorSearch = inngest.createFunction(
   {
@@ -23,12 +25,20 @@ export const handleCreatorSearch = inngest.createFunction(
   },
   { event: "creator-search/requested" },
   async ({ event }) => {
-    const { jobId, campaignId, brandId, criteria } = event.data as {
+    const { jobId, campaignId, brandId, criteria, discoverySource } = event.data as {
       jobId: string;
       campaignId: string;
       brandId: string;
+      discoverySource?: string;
       criteria: { platform?: string; [key: string]: string | number | string[] | undefined };
     };
+
+    // Guard: Apify searches are handled exclusively by apify-creator-search.
+    // Without this guard, both functions fire for every "creator-search/requested"
+    // event, causing duplicate CreatorSearchJob creates and unique-constraint noise.
+    if (discoverySource === "apify") {
+      return { status: "skipped", reason: "Apify path handled by apify-creator-search" };
+    }
 
     // Create search job record
     const searchJob = await prisma.creatorSearchJob.create({

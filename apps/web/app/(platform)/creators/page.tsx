@@ -148,6 +148,10 @@ export default function CreatorsPage() {
   );
   const [importing, setImporting] = useState(false);
   const [enriching, setEnriching] = useState(false);
+
+  // Approval settings — shown in search modal for operator context
+  const [discoveryApprovalMode, setDiscoveryApprovalMode] = useState<"recommend" | "auto">("recommend");
+  const [discoveryApprovalThreshold, setDiscoveryApprovalThreshold] = useState(0.75);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchCreators = useCallback(async () => {
@@ -191,6 +195,16 @@ export default function CreatorsPage() {
 
   useEffect(() => {
     fetchCreators();
+    // Fetch approval settings for display in the search modal
+    fetch("/api/settings/approval")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { approvalMode?: "recommend" | "auto"; approvalThreshold?: number } | null) => {
+        if (data) {
+          setDiscoveryApprovalMode(data.approvalMode ?? "recommend");
+          setDiscoveryApprovalThreshold(data.approvalThreshold ?? 0.75);
+        }
+      })
+      .catch(() => {/* non-fatal */});
   }, [fetchCreators]);
 
   // Cleanup poll interval on unmount
@@ -802,6 +816,19 @@ export default function CreatorsPage() {
           <Card className="w-full max-w-2xl mx-4">
             <CardHeader>
               <CardTitle>Search Creators</CardTitle>
+              {/* Approval mode context — surfaces the setting operators need without leaving the modal */}
+              <p className="text-xs text-muted-foreground mt-1">
+                Discovered creators will use{" "}
+                <span className={`font-medium ${discoveryApprovalMode === "recommend" ? "text-green-700" : "text-yellow-700"}`}>
+                  {discoveryApprovalMode === "recommend" ? "Recommend" : "Auto"} mode
+                </span>
+                {" "}·{" "}
+                <span className="font-medium">{(discoveryApprovalThreshold * 100).toFixed(0)}% threshold</span>
+                {" · "}
+                <a href="/settings/brand" className="underline hover:text-foreground">
+                  Change in Brand Settings →
+                </a>
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Search Form — only shown before results */}
