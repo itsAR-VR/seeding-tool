@@ -1,17 +1,30 @@
-## Design Context
+# AGENTS.md — Seed Scale
 
-### Users
-Growth and brand operators who already run seeding and creator gifting workflows. They are usually arriving with a practical question: can this replace the spreadsheets, inbox cleanup, and status guessing that currently slow the team down?
+Seed Scale influencer gifting platform. Keep this root file concise and operational.
 
-### Brand Personality
-Precise, capable, and calm.
+## Quick Reference
+- **Package manager:** npm
+- **App dev:** `npm run web:dev`
+- **App build:** `npm run web:build`
+- **Marketing audit:** `npm run audit:marketing`
+- **Platform audit:** `npm run audit:platform`
+- **Competitor audit:** `npm run audit:competitors`
+- **Collabstr scrape:** `npm run collabstr:scrape`
+- **Collabstr import:** `npm run collabstr:import`
 
-### Aesthetic Direction
-Light mode first. Warm neutral base, restrained accent color, and very selective motion. The interface should feel more like an operator's briefing surface than a startup marketing collage. References should be taken from premium editorial SaaS pages, not toy-like product diagrams. Anti-references: generic flowchart heroes, too many pills and badges, intrusive sticky CTAs, and motion that reads as decoration instead of signal.
+## Routing
+- **Codex owns:** local app changes, tests, scripts, migrations, and direct repo debugging.
+- **Podhi sidecar owns:** product research, browser workflows, visual QA, competitor analysis, strategy synthesis, and multi-agent execution.
+- **Primary lane:** `openclaw-seed` using `seed-sidecar`.
+- **Async default:** prefer `podhi_seed_bg` for parallelizable research/review/audit work; ask for `summary`, `verification`, `blockers`, `nextAction`.
+- **Ops-only issues:** use `openclaw-ops` / `podhi_ops_bg` for gateway, tailscale, cron, Vercel-adjacent infra, and environment-health triage.
 
-### Design Principles
-1. Relevance beats cleverness in the first viewport.
-2. One dominant action at a time; everything else supports it.
-3. Motion must clarify state or pacing, never just fill space.
-4. Fewer, stronger visual ideas beat many small decorative ones.
-5. Mobile should feel calmer than desktop, not more crowded.
+## Hard Overrides
+- Do **not** deploy to Vercel as part of the normal dev/test loop.
+- Run visual verification against `localhost:3000` / local app flow when applicable.
+- Keep the product feel calm, operator-grade, and relevance-first.
+
+## Detailed Context
+- [Design context](docs/agent-context/design.md)
+- [Workflow](docs/agent-context/workflow.md)
+- [Shared git/file safety contract](../orchestration/STEINBERGER_GIT_SAFETY.md)
