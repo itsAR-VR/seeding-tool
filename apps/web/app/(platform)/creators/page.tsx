@@ -12,6 +12,8 @@ import {
   type CategoryGroups,
   type CategorySelection,
 } from "@/components/grouped-category-picker";
+import { FacetSelector } from "@/components/facet-selector";
+import type { CreatorFacets } from "@/lib/creators/facets";
 
 type CreatorProfile = {
   platform: string;
@@ -82,23 +84,12 @@ type SearchJobSummary = {
   error?: string | null;
 };
 
-type FacetOption = {
-  value: string;
-  count: number;
-};
-
-type CreatorFacets = {
-  categories: FacetOption[];
-  keywords: FacetOption[];
-  hashtags: FacetOption[];
-  usernames: FacetOption[];
-};
-
 const EMPTY_FACETS: CreatorFacets = {
   categories: [],
   keywords: [],
   hashtags: [],
   usernames: [],
+  locations: [],
 };
 
 const EMPTY_CATEGORY_GROUPS: CategoryGroups = {
@@ -110,8 +101,6 @@ const EMPTY_CATEGORY_SELECTION: CategorySelection = {
   apify: [],
   collabstr: [],
 };
-
-const MAX_KEYWORD_SUGGESTIONS = 8;
 
 type SearchSourceKey =
   | "collabstr"
@@ -125,22 +114,6 @@ const DEFAULT_SEARCH_SOURCES: Record<SearchSourceKey, boolean> = {
   approved_seed_following: false,
   apify_keyword_email: false,
 };
-
-function appendDelimitedValue(current: string, nextValue: string) {
-  const normalized = nextValue.trim().replace(/^[@#]/, "");
-  if (!normalized) return current;
-
-  const existing = current
-    .split(/[\n,]+/)
-    .map((value) => value.trim().replace(/^[@#]/, ""))
-    .filter(Boolean);
-
-  if (existing.some((value) => value.toLowerCase() === normalized.toLowerCase())) {
-    return current;
-  }
-
-  return [...existing, normalized].join(", ");
-}
 
 function parsePositiveInteger(value: string) {
   if (!value.trim()) {
@@ -186,9 +159,13 @@ export default function CreatorsPage() {
 
   // Search Creators modal state
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchKeywords, setSearchKeywords] = useState("");
+  const [selectedKeywordOptions, setSelectedKeywordOptions] = useState<string[]>(
+    []
+  );
   const [searchUsernames, setSearchUsernames] = useState("");
-  const [searchLocation, setSearchLocation] = useState("");
+  const [selectedLocationOptions, setSelectedLocationOptions] = useState<
+    string[]
+  >([]);
   const [searchMinFollowers, setSearchMinFollowers] = useState("");
   const [searchMaxFollowers, setSearchMaxFollowers] = useState("");
   const [searchLimit, setSearchLimit] = useState("50");
@@ -412,10 +389,7 @@ export default function CreatorsPage() {
     }
 
     const keywordList = [
-      ...searchKeywords
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
+      ...selectedKeywordOptions,
       ...searchCategories.collabstr,
     ];
     const usernames = searchUsernames
@@ -461,7 +435,7 @@ export default function CreatorsPage() {
           maxFollowingPerSeed: 100,
         },
       };
-      if (searchLocation.trim()) body.location = searchLocation.trim();
+      if (selectedLocationOptions[0]) body.location = selectedLocationOptions[0];
       if (usernames.length > 0) body.usernames = usernames;
 
       const res = await fetch("/api/creators/search", {
@@ -568,9 +542,9 @@ export default function CreatorsPage() {
     setSearchResults([]);
     setSelectedResults(new Set());
     setSearching(false);
-    setSearchKeywords("");
+    setSelectedKeywordOptions([]);
     setSearchUsernames("");
-    setSearchLocation("");
+    setSelectedLocationOptions([]);
     setSearchMinFollowers("");
     setSearchMaxFollowers("");
     setSearchLimit("50");
@@ -578,9 +552,10 @@ export default function CreatorsPage() {
     setSearchCategories(EMPTY_CATEGORY_SELECTION);
   }
 
-  const keywordSuggestions = useMemo(
-    () => facets.keywords.slice(0, 16),
-    [facets.keywords]
+  const keywordSuggestions = useMemo(() => facets.keywords, [facets.keywords]);
+  const locationSuggestions = useMemo(
+    () => facets.locations,
+    [facets.locations]
   );
 
   const usernameSuggestions = useMemo(
@@ -1074,22 +1049,25 @@ export default function CreatorsPage() {
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Keywords</label>
-                          <Input
-                            placeholder="e.g. sleep, wellness, skincare"
-                            value={searchKeywords}
-                            onChange={(e) => setSearchKeywords(e.target.value)}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium">Location</label>
-                          <Input
-                            placeholder="e.g. United States"
-                            value={searchLocation}
-                            onChange={(e) => setSearchLocation(e.target.value)}
-                          />
-                        </div>
+                        <FacetSelector
+                          label="Keywords"
+                          options={keywordSuggestions}
+                          selected={selectedKeywordOptions}
+                          onChange={setSelectedKeywordOptions}
+                          placeholder="Choose keywords"
+                          searchPlaceholder="Filter keywords"
+                          emptyText="No saved keywords yet."
+                        />
+                        <FacetSelector
+                          label="Location"
+                          options={locationSuggestions}
+                          selected={selectedLocationOptions}
+                          onChange={setSelectedLocationOptions}
+                          placeholder="Choose location"
+                          searchPlaceholder="Filter locations"
+                          emptyText="No saved locations yet."
+                          multiple={false}
+                        />
                       </div>
 
                       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
@@ -1141,7 +1119,7 @@ export default function CreatorsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Categories</label>
+                        <label className="text-sm font-medium">Discovery keywords</label>
                         {searchCategoriesLoading ? (
                           <p className="text-sm text-muted-foreground">
                             Loading category sources…
@@ -1196,51 +1174,13 @@ export default function CreatorsPage() {
                     <aside className="space-y-4">
                       <div className="rounded-lg border bg-muted/15 p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Popular keywords
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Pull from your existing creator database when you want
-                          a faster starting point.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {keywordSuggestions
-                            .slice(0, MAX_KEYWORD_SUGGESTIONS)
-                            .map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
-                                onClick={() =>
-                                  setSearchKeywords((current) =>
-                                    appendDelimitedValue(current, option.value)
-                                  )
-                                }
-                              >
-                                {option.value} ({option.count})
-                              </button>
-                            ))}
-                        </div>
-                        {keywordSuggestions.length === 0 ? (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            No keyword guidance yet.
-                          </p>
-                        ) : keywordSuggestions.length > MAX_KEYWORD_SUGGESTIONS ? (
-                          <p className="mt-3 text-xs text-muted-foreground">
-                            Showing the strongest {MAX_KEYWORD_SUGGESTIONS}. Start
-                            typing to refine further.
-                          </p>
-                        ) : null}
-                      </div>
-
-                      <div className="rounded-lg border bg-muted/15 p-4">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Query shape
+                          Selector rules
                         </p>
                         <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-                          <li>Use keywords for broad discovery.</li>
-                          <li>Add categories to narrow intent.</li>
-                          <li>Exact usernames skip the guesswork.</li>
-                          <li>Seed following is best once you already have approved creators.</li>
+                          <li>Keywords and locations come from your saved creator data.</li>
+                          <li>Categories come from the grouped discovery catalog.</li>
+                          <li>Use the X on selected chips to remove them directly.</li>
+                          <li>Exact usernames stay freeform for known handles only.</li>
                         </ul>
                       </div>
                     </aside>
@@ -1395,7 +1335,7 @@ export default function CreatorsPage() {
                     onClick={startSearch}
                     disabled={
                       (
-                        !searchKeywords.trim() &&
+                        selectedKeywordOptions.length === 0 &&
                         searchCategories.apify.length === 0 &&
                         searchCategories.collabstr.length === 0 &&
                         !searchUsernames.trim()

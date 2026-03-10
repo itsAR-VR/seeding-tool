@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import {
+  FacetSelector,
+  type FacetSelectorOption,
+} from "@/components/facet-selector";
 
 export type CategoryGroups = {
   apify: string[];
@@ -21,42 +22,32 @@ type GroupedCategoryPickerProps = {
   onChange: (next: CategorySelection) => void;
 };
 
-const GROUP_LABELS = {
-  apify: "Apify",
-  collabstr: "Collabstr",
-} as const;
-
-function toggleValue(values: string[], value: string) {
-  return values.includes(value)
-    ? values.filter((entry) => entry !== value)
-    : [...values, value];
+function buildCombinedOptions(categories: CategoryGroups): FacetSelectorOption[] {
+  return Array.from(
+    new Set([...categories.apify, ...categories.collabstr].map((value) => value.trim()))
+  )
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .map((value) => ({ value }));
 }
 
-function SelectedSummary({
-  label,
-  values,
-  variant,
-}: {
-  label: string;
-  values: string[];
-  variant: "default" | "secondary";
-}) {
-  if (values.length === 0) {
-    return null;
-  }
+function flattenSelection(selected: CategorySelection) {
+  return Array.from(
+    new Set([...selected.apify, ...selected.collabstr].map((value) => value.trim()))
+  ).filter(Boolean);
+}
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </span>
-      {values.map((value) => (
-        <Badge key={`${label}-${value}`} variant={variant}>
-          {value}
-        </Badge>
-      ))}
-    </div>
-  );
+function splitSelection(
+  values: string[],
+  categories: CategoryGroups
+): CategorySelection {
+  const apifySet = new Set(categories.apify);
+  const collabstrSet = new Set(categories.collabstr);
+
+  return {
+    apify: values.filter((value) => apifySet.has(value)),
+    collabstr: values.filter((value) => collabstrSet.has(value)),
+  };
 }
 
 export function GroupedCategoryPicker({
@@ -64,108 +55,62 @@ export function GroupedCategoryPicker({
   selected,
   onChange,
 }: GroupedCategoryPickerProps) {
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return categories;
-    }
-
-    return {
-      apify: categories.apify.filter((value) =>
-        value.toLowerCase().includes(normalizedQuery)
-      ),
-      collabstr: categories.collabstr.filter((value) =>
-        value.toLowerCase().includes(normalizedQuery)
-      ),
-    };
-  }, [categories, query]);
-
-  function toggleGroupValue(
-    group: keyof CategorySelection,
-    value: string
-  ) {
-    onChange({
-      ...selected,
-      [group]: toggleValue(selected[group], value),
-    });
+  function removeValue(value: string) {
+    const nextValues = flattenSelection(selected).filter((entry) => entry !== value);
+    onChange(splitSelection(nextValues, categories));
   }
 
-  const totalSelected = selected.apify.length + selected.collabstr.length;
+  const combinedOptions = buildCombinedOptions(categories);
+  const selectedValues = flattenSelection(selected);
 
   return (
     <div className="space-y-3">
-      <Input
-        placeholder="Search categories"
-        value={query}
-        onChange={(event) => setQuery(event.target.value)}
-      />
-
       <div className="rounded-lg border bg-muted/15 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="space-y-2">
-            <p className="text-sm font-medium">Selected categories</p>
-            {totalSelected === 0 ? (
+            <p className="text-sm font-medium">Selected keywords</p>
+            {selectedValues.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                Pick at least one category to guide discovery.
+                Pick at least one keyword to guide discovery.
               </p>
             ) : (
-              <div className="space-y-2">
-                <SelectedSummary
-                  label="Apify"
-                  values={selected.apify}
-                  variant="default"
-                />
-                <SelectedSummary
-                  label="Collabstr"
-                  values={selected.collabstr}
-                  variant="secondary"
-                />
+              <div className="flex flex-wrap gap-2">
+                {selectedValues.map((value) => (
+                  <Badge
+                    key={`selected-${value}`}
+                    variant="secondary"
+                    className="gap-1 rounded-full pr-1"
+                  >
+                    <span>{value}</span>
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 hover:bg-black/10"
+                      onClick={() => removeValue(value)}
+                      aria-label={`Remove ${value}`}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
               </div>
             )}
           </div>
           <span className="shrink-0 text-xs text-muted-foreground">
-            {totalSelected} selected
+            {selectedValues.length} selected
           </span>
         </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        {(Object.keys(filtered) as Array<keyof CategorySelection>).map((group) => (
-          <div key={group} className="space-y-2 rounded-lg border p-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">{GROUP_LABELS[group]}</p>
-              <span className="text-xs text-muted-foreground">
-                {filtered[group].length} options
-              </span>
-            </div>
-            {filtered[group].length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                No {GROUP_LABELS[group]} categories match this search.
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {filtered[group].map((value) => {
-                  const isSelected = selected[group].includes(value);
-
-                  return (
-                    <Button
-                      key={`${group}-${value}`}
-                      type="button"
-                      size="sm"
-                      variant={isSelected ? "default" : "outline"}
-                      className="h-8 rounded-full px-3 text-xs"
-                      onClick={() => toggleGroupValue(group, value)}
-                    >
-                      {value}
-                    </Button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="space-y-2">
+        <FacetSelector
+          label="Discovery keywords"
+          options={combinedOptions}
+          selected={selectedValues}
+          onChange={(nextValues) => onChange(splitSelection(nextValues, categories))}
+          placeholder="Choose supported keywords"
+          searchPlaceholder="Filter supported keywords"
+          emptyText="No supported keywords match."
+        />
       </div>
     </div>
   );

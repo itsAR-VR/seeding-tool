@@ -17,6 +17,8 @@ import {
   type CategoryGroups,
   type CategorySelection,
 } from "@/components/grouped-category-picker";
+import { FacetSelector } from "@/components/facet-selector";
+import type { CreatorFacets } from "@/lib/creators/facets";
 
 type SearchJob = {
   jobId: string;
@@ -32,8 +34,6 @@ type SearchJob = {
 };
 
 type SearchFilters = {
-  keywords: string;
-  location: string;
   minFollowers: string;
   maxFollowers: string;
   limit: string;
@@ -55,19 +55,20 @@ const EMPTY_SELECTION: CategorySelection = {
   collabstr: [],
 };
 
+const EMPTY_FACETS: CreatorFacets = {
+  categories: [],
+  keywords: [],
+  hashtags: [],
+  usernames: [],
+  locations: [],
+};
+
 const DEFAULT_SOURCES: Record<SearchSourceKey, boolean> = {
   collabstr: true,
   apify_search: true,
   approved_seed_following: false,
   apify_keyword_email: false,
 };
-
-function parseCsv(value: string) {
-  return value
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-}
 
 function parsePositiveInteger(value: string) {
   if (!value.trim()) {
@@ -92,12 +93,18 @@ export default function DiscoverCreatorsPage() {
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const [filters, setFilters] = useState<SearchFilters>({
-    keywords: "",
-    location: "",
     minFollowers: "",
     maxFollowers: "",
     limit: "20",
   });
+  const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
+  const [facetLoading, setFacetLoading] = useState(true);
+  const [selectedKeywordOptions, setSelectedKeywordOptions] = useState<string[]>(
+    []
+  );
+  const [selectedLocationOptions, setSelectedLocationOptions] = useState<
+    string[]
+  >([]);
   const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
   const [selectedCategories, setSelectedCategories] =
     useState<CategorySelection>(EMPTY_SELECTION);
@@ -131,19 +138,29 @@ export default function DiscoverCreatorsPage() {
 
     async function fetchCategories() {
       setCategoriesLoading(true);
+      setFacetLoading(true);
       try {
-        const response = await fetch("/api/categories");
-        if (!response.ok) return;
+        const [categoryResponse, facetResponse] = await Promise.all([
+          fetch("/api/categories"),
+          fetch("/api/creators/facets"),
+        ]);
+        if (ignore) return;
 
-        const data = (await response.json()) as CategoryGroups;
-        if (!ignore) {
+        if (categoryResponse.ok) {
+          const data = (await categoryResponse.json()) as CategoryGroups;
           setCategories(data);
+        }
+
+        if (facetResponse.ok) {
+          const facetData = (await facetResponse.json()) as CreatorFacets;
+          setFacets(facetData);
         }
       } catch {
         // ignore
       } finally {
         if (!ignore) {
           setCategoriesLoading(false);
+          setFacetLoading(false);
         }
       }
     }
@@ -200,10 +217,7 @@ export default function DiscoverCreatorsPage() {
       return;
     }
 
-    const keywordList = [
-      ...parseCsv(filters.keywords),
-      ...selectedCategories.collabstr,
-    ];
+    const keywordList = [...selectedKeywordOptions, ...selectedCategories.collabstr];
 
     if (
       keywordList.length === 0 &&
@@ -224,7 +238,9 @@ export default function DiscoverCreatorsPage() {
         canonicalCategories: selectedCategories.apify,
         platform: "instagram",
         limit: parsedLimit.value,
-        ...(filters.location.trim() ? { location: filters.location.trim() } : {}),
+        ...(selectedLocationOptions[0]
+          ? { location: selectedLocationOptions[0] }
+          : {}),
         filters: {
           ...(filters.minFollowers.trim()
             ? { minFollowers: Number(filters.minFollowers) }
@@ -327,26 +343,25 @@ export default function DiscoverCreatorsPage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Keywords</label>
-              <Input
-                placeholder="e.g. wellness, sleep, skincare"
-                value={filters.keywords}
-                onChange={(event) =>
-                  handleFilterChange("keywords", event.target.value)
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Location</label>
-              <Input
-                placeholder="e.g. United States"
-                value={filters.location}
-                onChange={(event) =>
-                  handleFilterChange("location", event.target.value)
-                }
-              />
-            </div>
+            <FacetSelector
+              label="Keywords"
+              options={facets.keywords}
+              selected={selectedKeywordOptions}
+              onChange={setSelectedKeywordOptions}
+              placeholder="Choose keywords"
+              searchPlaceholder="Filter keywords"
+              emptyText="No saved keywords yet."
+            />
+            <FacetSelector
+              label="Location"
+              options={facets.locations}
+              selected={selectedLocationOptions}
+              onChange={setSelectedLocationOptions}
+              placeholder="Choose location"
+              searchPlaceholder="Filter locations"
+              emptyText="No saved locations yet."
+              multiple={false}
+            />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-3">
@@ -394,7 +409,7 @@ export default function DiscoverCreatorsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Categories</label>
+            <label className="text-sm font-medium">Discovery keywords</label>
             {categoriesLoading ? (
               <p className="text-sm text-muted-foreground">
                 Loading category sources…
@@ -411,7 +426,7 @@ export default function DiscoverCreatorsPage() {
           <div className="flex justify-end">
             <Button
               onClick={handleSearch}
-              disabled={loading || categoriesLoading}
+              disabled={loading || categoriesLoading || facetLoading}
               className="min-w-[160px]"
             >
               {loading ? "Running…" : "Run Discovery"}

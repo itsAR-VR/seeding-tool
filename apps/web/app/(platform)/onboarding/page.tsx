@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConnectionsContent } from "../settings/connections/page";
 import {
   GroupedCategoryPicker,
   type CategoryGroups,
@@ -29,6 +30,12 @@ const EMPTY_SELECTION: CategorySelection = {
   apify: [],
   collabstr: [],
 };
+
+const BRAND_ANALYSIS_STEPS = [
+  "Reading your website",
+  "Pulling brand signals",
+  "Matching supported creator keywords",
+] as const;
 
 function getStepIndex(step: string) {
   const index = ONBOARDING_STEPS.indexOf(
@@ -59,6 +66,7 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
   const step = searchParams.get("step") ?? "brand";
   const brandName = searchParams.get("brandName") ?? "";
+  const brandId = searchParams.get("brandId") ?? "";
   const stepIndex = getStepIndex(step);
 
   return (
@@ -85,8 +93,12 @@ function OnboardingContent() {
       </div>
 
       {step === "brand" && <BrandStep />}
-      {step === "discovery" && <DiscoveryStep brandName={brandName} />}
-      {step === "connect" && <ConnectStep brandName={brandName} />}
+      {step === "discovery" && (
+        <DiscoveryStep brandName={brandName} brandId={brandId} />
+      )}
+      {step === "connect" && (
+        <ConnectStep brandName={brandName} brandId={brandId} />
+      )}
       {step === "done" && <DoneStep />}
     </div>
   );
@@ -98,6 +110,20 @@ function BrandStep() {
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [analysisStep, setAnalysisStep] = useState(0);
+
+  useEffect(() => {
+    if (!loading || !websiteUrl.trim()) {
+      setAnalysisStep(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setAnalysisStep((current) => (current + 1) % BRAND_ANALYSIS_STEPS.length);
+    }, 1300);
+
+    return () => clearInterval(interval);
+  }, [loading, websiteUrl]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -125,9 +151,11 @@ function BrandStep() {
         throw new Error(data.error ?? "Failed to create brand");
       }
 
+      const data = (await response.json()) as { brandId?: string };
       const params = new URLSearchParams({
         step: "discovery",
         brandName: name.trim(),
+        ...(data.brandId ? { brandId: data.brandId } : {}),
       });
       router.push(`/onboarding?${params.toString()}`);
     } catch (err) {
@@ -168,8 +196,51 @@ function BrandStep() {
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {loading && websiteUrl.trim() ? (
+            <div className="rounded-xl border bg-muted/20 p-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">
+                    {BRAND_ANALYSIS_STEPS[analysisStep]}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    We&apos;re scraping your site and preparing supported discovery
+                    keywords for onboarding.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {BRAND_ANALYSIS_STEPS.map((_, index) => (
+                    <span
+                      key={index}
+                      className={`h-2.5 w-2.5 rounded-full transition-all ${
+                        index === analysisStep
+                          ? "scale-110 bg-foreground"
+                          : "bg-foreground/25"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+                {BRAND_ANALYSIS_STEPS.map((step, index) => (
+                  <div
+                    key={step}
+                    className={`rounded-lg border px-3 py-2 ${
+                      index === analysisStep ? "bg-background text-foreground" : ""
+                    }`}
+                  >
+                    {step}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? "Creating…" : "Continue"}
+            {loading
+              ? websiteUrl.trim()
+                ? "Analyzing website…"
+                : "Creating…"
+              : "Continue"}
           </Button>
         </form>
       </CardContent>
@@ -177,11 +248,19 @@ function BrandStep() {
   );
 }
 
-function DiscoveryStep({ brandName }: { brandName: string }) {
+function DiscoveryStep({
+  brandName,
+  brandId,
+}: {
+  brandName: string;
+  brandId: string;
+}) {
   const router = useRouter();
   const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
   const [selectedCategories, setSelectedCategories] =
     useState<CategorySelection>(EMPTY_SELECTION);
+  const [suggestedLabels, setSuggestedLabels] = useState<string[]>([]);
+  const [profileDomain, setProfileDomain] = useState<string | null>(null);
   const [dailyTarget, setDailyTarget] = useState("50");
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -193,15 +272,31 @@ function DiscoveryStep({ brandName }: { brandName: string }) {
     async function loadCategories() {
       setLoadingCategories(true);
       try {
-        const response = await fetch("/api/categories");
+        const response = await fetch("/api/onboarding/discovery-defaults");
         if (!response.ok) {
           const data = await response.json();
           throw new Error(data.error ?? "Failed to load categories");
         }
 
-        const data = (await response.json()) as CategoryGroups;
+        const data = (await response.json()) as {
+          categories: CategoryGroups;
+          suggestedCategories: CategorySelection;
+          suggestedLabels: string[];
+          profileSummary: {
+            domain: string | null;
+            title: string | null;
+          };
+        };
         if (!cancelled) {
-          setCategories(data);
+          setCategories(data.categories);
+          setSuggestedLabels(data.suggestedLabels);
+          setProfileDomain(data.profileSummary.domain);
+          setSelectedCategories((current) => {
+            if (current.apify.length > 0 || current.collabstr.length > 0) {
+              return current;
+            }
+            return data.suggestedCategories;
+          });
         }
       } catch (err) {
         if (!cancelled) {
@@ -274,6 +369,7 @@ function DiscoveryStep({ brandName }: { brandName: string }) {
       const params = new URLSearchParams({
         step: "connect",
         ...(brandName ? { brandName } : {}),
+        ...(brandId ? { brandId } : {}),
       });
       router.push(`/onboarding?${params.toString()}`);
     } catch (err) {
@@ -290,11 +386,33 @@ function DiscoveryStep({ brandName }: { brandName: string }) {
       <CardHeader>
         <CardTitle>Set up discovery</CardTitle>
         <CardDescription>
-          Choose the categories and daily volume for your first creator
-          discovery automation.
+          We matched supported discovery keywords from your site. Refine them if
+          needed, then set the daily volume for your first creator automation.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {suggestedLabels.length > 0 ? (
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-sm font-medium">
+              Suggested from {profileDomain ?? "your website"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              These keywords were auto-selected from your website copy and brand
+              signals. You can remove anything that doesn&apos;t fit.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {suggestedLabels.map((label) => (
+                <span
+                  key={label}
+                  className="rounded-full border bg-background px-3 py-1 text-xs text-foreground/80"
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="space-y-2">
           <Label htmlFor="dailyTarget">Creators per day</Label>
           <Input
@@ -318,10 +436,10 @@ function DiscoveryStep({ brandName }: { brandName: string }) {
         </div>
 
         <div className="space-y-2">
-          <Label>Influencer categories</Label>
+          <Label>Discovery keywords</Label>
           {loadingCategories ? (
             <p className="text-sm text-muted-foreground">
-              Loading category sources…
+              Loading supported keywords…
             </p>
           ) : (
             <GroupedCategoryPicker
@@ -354,57 +472,82 @@ function DiscoveryStep({ brandName }: { brandName: string }) {
   );
 }
 
-function ConnectStep({ brandName }: { brandName: string }) {
+function ConnectStep({
+  brandName,
+  brandId,
+}: {
+  brandName: string;
+  brandId: string;
+}) {
   const router = useRouter();
+  const doneParams = new URLSearchParams({
+    step: "done",
+    ...(brandName ? { brandName } : {}),
+    ...(brandId ? { brandId } : {}),
+  });
+  const discoveryParams = new URLSearchParams({
+    step: "discovery",
+    ...(brandName ? { brandName } : {}),
+    ...(brandId ? { brandId } : {}),
+  });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Connect your channels</CardTitle>
-        <CardDescription>
-          Connect Gmail and Shopify now, or finish onboarding and do it later in
-          Settings.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
-          Your discovery automation is ready. Connections are optional for this
-          step, but adding them next will make outreach and product sync usable
-          immediately.
-        </div>
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() =>
-            router.push(
-              "/settings/connections?returnTo=/onboarding%3Fstep%3Ddone"
-            )
-          }
-        >
-          Open Connections
-        </Button>
-        <div className="flex gap-2 pt-2">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              const params = new URLSearchParams({
-                step: "discovery",
-                ...(brandName ? { brandName } : {}),
-              });
-              router.push(`/onboarding?${params.toString()}`);
-            }}
-          >
-            Back
-          </Button>
-          <Button
-            className="flex-1"
-            onClick={() => router.push("/onboarding?step=done")}
-          >
-            Continue
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Connect your channels</CardTitle>
+          <CardDescription>
+            Connect Gmail, Shopify, Instagram, and Unipile here. Manual setup is
+            available where we support it today, and every provider includes a
+            guided help panel for the credentials or steps you will need.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+            Your discovery automation is ready. Connections are optional for this
+            step, but adding them now will make outreach, DMs, and product sync
+            usable immediately.
+          </div>
+          <ConnectionsContent
+            embedded
+            brandIdOverride={brandId || undefined}
+            initialReturnTo={`/onboarding?${doneParams.toString()}`}
+            showSupportCta
+          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                router.push(
+                  `/settings/connections?${new URLSearchParams({
+                    returnTo: `/onboarding?${doneParams.toString()}`,
+                    ...(brandId ? { brandId } : {}),
+                  }).toString()}`
+                )
+              }
+            >
+              Open full connections page
+            </Button>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                router.push(`/onboarding?${discoveryParams.toString()}`);
+              }}
+            >
+              Back
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => router.push(`/onboarding?${doneParams.toString()}`)}
+            >
+              Continue
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
