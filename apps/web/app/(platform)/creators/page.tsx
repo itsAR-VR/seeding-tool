@@ -66,6 +66,20 @@ type SearchResult = {
   validationError?: string | null;
 };
 
+type SearchJobSummary = {
+  jobId: string;
+  status: string;
+  requestedCount?: number;
+  candidateCount?: number;
+  validatedCount?: number;
+  invalidCount?: number;
+  cachedCount?: number;
+  progressPercent?: number;
+  etaSeconds?: number | null;
+  resultCount?: number;
+  error?: string | null;
+};
+
 type FacetOption = {
   value: string;
   count: number;
@@ -183,6 +197,8 @@ export default function CreatorsPage() {
   const [searchCategoriesLoading, setSearchCategoriesLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
+  const [activeSearchJob, setActiveSearchJob] =
+    useState<SearchJobSummary | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [selectedResults, setSelectedResults] = useState<Set<string>>(
     new Set()
@@ -341,6 +357,38 @@ export default function CreatorsPage() {
 
   // ── Search Creators Logic ──
 
+  async function pollCreatorSearchJob(jobId: string) {
+    try {
+      const pollRes = await fetch(`/api/creators/search/${jobId}`);
+      if (!pollRes.ok) return;
+
+      const pollData = (await pollRes.json()) as SearchJobSummary & {
+        results?: SearchResult[];
+      };
+      setSearchStatus(pollData.status);
+      setActiveSearchJob(pollData);
+
+      if (
+        pollData.status === "completed" ||
+        pollData.status === "completed_with_shortfall" ||
+        pollData.status === "failed"
+      ) {
+        if (pollRef.current) clearInterval(pollRef.current);
+        pollRef.current = null;
+        setSearching(false);
+
+        if (
+          pollData.status === "completed" ||
+          pollData.status === "completed_with_shortfall"
+        ) {
+          setSearchResults(pollData.results || []);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   async function startSearch() {
     const limitState = parsePositiveInteger(searchLimit);
     if (limitState.error) {
@@ -427,39 +475,15 @@ export default function CreatorsPage() {
       }
 
       const data = await res.json();
-      // Start polling
-      pollRef.current = setInterval(async () => {
-        try {
-          const pollRes = await fetch(
-            `/api/creators/search/${data.jobId}`
-          );
-          if (!pollRes.ok) return;
+      const queuedJob = data as SearchJobSummary;
+      setActiveSearchJob(queuedJob);
+      setShowSearchModal(false);
 
-          const pollData = await pollRes.json();
-          setSearchStatus(pollData.status);
-
-          if (
-            pollData.status === "completed" ||
-            pollData.status === "completed_with_shortfall" ||
-            pollData.status === "failed"
-          ) {
-            if (pollRef.current) clearInterval(pollRef.current);
-            pollRef.current = null;
-            setSearching(false);
-
-            if (
-              pollData.status === "completed" ||
-              pollData.status === "completed_with_shortfall"
-            ) {
-              setSearchResults(pollData.results || []);
-            } else {
-              alert(`Search failed: ${pollData.error || "Unknown error"}`);
-            }
-          }
-        } catch {
-          // ignore poll errors
-        }
+      pollRef.current = setInterval(() => {
+        void pollCreatorSearchJob(queuedJob.jobId);
       }, 3000);
+
+      void pollCreatorSearchJob(queuedJob.jobId);
     } catch {
       alert("Failed to start search");
       setSearching(false);
@@ -514,7 +538,7 @@ export default function CreatorsPage() {
       if (res.ok) {
         const data = await res.json();
         alert(
-          `Imported: ${data.created} new, ${data.updated} updated, ${data.skipped} skipped`
+          `Imported: ${data.validImported} valid, ${data.created} new, ${data.updated} updated, ${data.invalidDropped} invalid dropped, ${data.skipped} skipped`
         );
         setShowSearchModal(false);
         resetSearchState();
@@ -533,6 +557,7 @@ export default function CreatorsPage() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = null;
     setSearchStatus(null);
+    setActiveSearchJob(null);
     setSearchResults([]);
     setSelectedResults(new Set());
     setSearching(false);
@@ -639,6 +664,60 @@ export default function CreatorsPage() {
         </div>
       </div>
 
+      {activeSearchJob ? (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="space-y-3 pt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-blue-900">
+                  Background creator search
+                </p>
+                <p className="text-xs text-blue-800">
+                  Job {activeSearchJob.jobId} is running in the background. You
+                  can keep using the platform while it completes.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                {searchResults.length > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowSearchModal(true)}
+                  >
+                    View Results
+                  </Button>
+                ) : null}
+                <Button size="sm" variant="ghost" onClick={resetSearchState}>
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-white/70">
+              <div
+                className="h-full bg-blue-700 transition-all"
+                style={{ width: `${activeSearchJob.progressPercent ?? 0}%` }}
+              />
+            </div>
+            <div className="grid gap-2 text-xs text-blue-900 sm:grid-cols-3 lg:grid-cols-6">
+              <span>Status: {activeSearchJob.status}</span>
+              <span>Requested: {activeSearchJob.requestedCount ?? "—"}</span>
+              <span>Ready: {activeSearchJob.resultCount ?? 0}</span>
+              <span>Validated: {activeSearchJob.validatedCount ?? 0}</span>
+              <span>Invalid: {activeSearchJob.invalidCount ?? 0}</span>
+              <span>
+                ETA:{" "}
+                {typeof activeSearchJob.etaSeconds === "number"
+                  ? `${activeSearchJob.etaSeconds}s`
+                  : "—"}
+              </span>
+            </div>
+            {activeSearchJob.error ? (
+              <p className="text-xs text-red-700">{activeSearchJob.error}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Search & Filters */}
       <Card>
         <CardContent className="pt-6">
@@ -732,6 +811,10 @@ export default function CreatorsPage() {
           <CardTitle className="text-base">
             {loading ? "Loading…" : `${total} Creators`}
           </CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Avg Views means the average of the latest 12 reels/video posts when
+            that enrichment has completed.
+          </p>
         </CardHeader>
         <CardContent>
           {creators.length === 0 && !loading ? (

@@ -184,6 +184,10 @@ export default function CampaignImportPage() {
               </Button>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Avg Views means the average of the latest 12 reels/video posts when
+            that enrichment is available.
+          </p>
         </CardHeader>
         <CardContent>
           {creators.length === 0 ? (

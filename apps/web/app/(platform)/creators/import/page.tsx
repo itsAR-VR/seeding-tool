@@ -57,8 +57,11 @@ export default function CreatorImportPage() {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
+    requested: number;
+    validImported: number;
     created: number;
     updated: number;
+    invalidDropped: number;
     skipped: number;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -166,8 +169,9 @@ export default function CreatorImportPage() {
 
           {result && (
             <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              ✅ Import complete — {result.created} created, {result.updated}{" "}
-              updated, {result.skipped} skipped
+              ✅ Import complete — {result.validImported} valid imported,{" "}
+              {result.created} created, {result.updated} updated,{" "}
+              {result.invalidDropped} invalid dropped, {result.skipped} skipped
             </div>
           )}
         </CardContent>

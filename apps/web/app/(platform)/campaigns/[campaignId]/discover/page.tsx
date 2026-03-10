@@ -22,9 +22,13 @@ type SearchJob = {
   jobId: string;
   status: string;
   requestedCount?: number;
+  validatedCount?: number;
+  invalidCount?: number;
+  cachedCount?: number;
   resultCount?: number;
   progressPercent?: number;
   etaSeconds?: number | null;
+  error?: string | null;
 };
 
 type SearchFilters = {
@@ -455,6 +459,13 @@ export default function DiscoverCreatorsPage() {
               </div>
             </div>
 
+            <div className="h-2 overflow-hidden rounded-full bg-white/70">
+              <div
+                className="h-full bg-blue-700 transition-all"
+                style={{ width: `${job.progressPercent ?? 0}%` }}
+              />
+            </div>
+
             <div className="flex flex-wrap items-center gap-2">
               <Badge className="bg-blue-100 text-blue-800">
                 Background search
@@ -466,6 +477,19 @@ export default function DiscoverCreatorsPage() {
                 <Badge variant="outline">ETA {job.etaSeconds}s</Badge>
               ) : null}
             </div>
+
+            <div className="grid gap-2 text-xs text-green-900 sm:grid-cols-3 lg:grid-cols-6">
+              <span>Validated: {job.validatedCount ?? 0}</span>
+              <span>Invalid: {job.invalidCount ?? 0}</span>
+              <span>Cached: {job.cachedCount ?? 0}</span>
+              <span>Requested: {job.requestedCount ?? "—"}</span>
+              <span>Ready: {job.resultCount ?? 0}</span>
+              <span>Status: {job.status}</span>
+            </div>
+
+            {job.error ? (
+              <p className="text-xs text-red-700">{job.error}</p>
+            ) : null}
 
             <div className="flex justify-end">
               <Button

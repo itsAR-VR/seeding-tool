@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { CreatorSearchJobsTray } from "@/components/creator-search-jobs-tray";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -66,7 +67,10 @@ export default async function PlatformLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <main className="flex-1 overflow-y-auto p-6">
+        {children}
+        <CreatorSearchJobsTray />
+      </main>
     </div>
   );
 }
