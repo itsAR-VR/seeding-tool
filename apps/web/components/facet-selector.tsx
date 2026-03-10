@@ -37,6 +37,7 @@ export function FacetSelector({
   className,
 }: FacetSelectorProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -60,6 +61,18 @@ export function FacetSelector({
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isOpen]);
 
   const filteredOptions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -123,6 +136,7 @@ export function FacetSelector({
           type="button"
           variant="outline"
           className="h-10 w-full justify-between px-3 font-normal"
+          aria-expanded={isOpen}
           onClick={() => setIsOpen((current) => !current)}
         >
           <span className="truncate text-left text-sm text-foreground/80">
@@ -132,8 +146,9 @@ export function FacetSelector({
         </Button>
 
         {isOpen ? (
-          <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-30 rounded-xl border bg-background p-3 shadow-lg">
+          <div className="relative z-30 mt-2 rounded-xl border bg-background p-3 shadow-lg">
             <Input
+              ref={searchInputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={searchPlaceholder}
