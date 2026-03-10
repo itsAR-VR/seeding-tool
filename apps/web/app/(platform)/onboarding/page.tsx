@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ConnectionsContent } from "../settings/connections/page";
 import {
   GroupedCategoryPicker,
   type CategoryGroups,
@@ -66,7 +65,6 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
   const step = searchParams.get("step") ?? "brand";
   const brandName = searchParams.get("brandName") ?? "";
-  const brandId = searchParams.get("brandId") ?? "";
   const stepIndex = getStepIndex(step);
 
   return (
@@ -93,12 +91,8 @@ function OnboardingContent() {
       </div>
 
       {step === "brand" && <BrandStep />}
-      {step === "discovery" && (
-        <DiscoveryStep brandName={brandName} brandId={brandId} />
-      )}
-      {step === "connect" && (
-        <ConnectStep brandName={brandName} brandId={brandId} />
-      )}
+      {step === "discovery" && <DiscoveryStep brandName={brandName} />}
+      {step === "connect" && <ConnectStep brandName={brandName} />}
       {step === "done" && <DoneStep />}
     </div>
   );
@@ -151,11 +145,9 @@ function BrandStep() {
         throw new Error(data.error ?? "Failed to create brand");
       }
 
-      const data = (await response.json()) as { brandId?: string };
       const params = new URLSearchParams({
         step: "discovery",
         brandName: name.trim(),
-        ...(data.brandId ? { brandId: data.brandId } : {}),
       });
       router.push(`/onboarding?${params.toString()}`);
     } catch (err) {
@@ -248,13 +240,7 @@ function BrandStep() {
   );
 }
 
-function DiscoveryStep({
-  brandName,
-  brandId,
-}: {
-  brandName: string;
-  brandId: string;
-}) {
+function DiscoveryStep({ brandName }: { brandName: string }) {
   const router = useRouter();
   const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
   const [selectedCategories, setSelectedCategories] =
@@ -369,7 +355,6 @@ function DiscoveryStep({
       const params = new URLSearchParams({
         step: "connect",
         ...(brandName ? { brandName } : {}),
-        ...(brandId ? { brandId } : {}),
       });
       router.push(`/onboarding?${params.toString()}`);
     } catch (err) {
@@ -472,82 +457,57 @@ function DiscoveryStep({
   );
 }
 
-function ConnectStep({
-  brandName,
-  brandId,
-}: {
-  brandName: string;
-  brandId: string;
-}) {
+function ConnectStep({ brandName }: { brandName: string }) {
   const router = useRouter();
-  const doneParams = new URLSearchParams({
-    step: "done",
-    ...(brandName ? { brandName } : {}),
-    ...(brandId ? { brandId } : {}),
-  });
-  const discoveryParams = new URLSearchParams({
-    step: "discovery",
-    ...(brandName ? { brandName } : {}),
-    ...(brandId ? { brandId } : {}),
-  });
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Connect your channels</CardTitle>
-          <CardDescription>
-            Connect Gmail, Shopify, Instagram, and Unipile here. Manual setup is
-            available where we support it today, and every provider includes a
-            guided help panel for the credentials or steps you will need.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
-            Your discovery automation is ready. Connections are optional for this
-            step, but adding them now will make outreach, DMs, and product sync
-            usable immediately.
-          </div>
-          <ConnectionsContent
-            embedded
-            brandIdOverride={brandId || undefined}
-            initialReturnTo={`/onboarding?${doneParams.toString()}`}
-            showSupportCta
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                router.push(
-                  `/settings/connections?${new URLSearchParams({
-                    returnTo: `/onboarding?${doneParams.toString()}`,
-                    ...(brandId ? { brandId } : {}),
-                  }).toString()}`
-                )
-              }
-            >
-              Open full connections page
-            </Button>
-          </div>
-          <div className="flex gap-2 pt-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                router.push(`/onboarding?${discoveryParams.toString()}`);
-              }}
-            >
-              Back
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={() => router.push(`/onboarding?${doneParams.toString()}`)}
-            >
-              Continue
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Connect your channels</CardTitle>
+        <CardDescription>
+          Connect Gmail and Shopify now, or finish onboarding and do it later in
+          Settings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="rounded-lg border bg-muted/20 p-4 text-sm text-muted-foreground">
+          Your discovery automation is ready. Connections are optional for this
+          step, but adding them next will make outreach and product sync usable
+          immediately.
+        </div>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() =>
+            router.push(
+              "/settings/connections?returnTo=/onboarding%3Fstep%3Ddone"
+            )
+          }
+        >
+          Open Connections
+        </Button>
+        <div className="flex gap-2 pt-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              const params = new URLSearchParams({
+                step: "discovery",
+                ...(brandName ? { brandName } : {}),
+              });
+              router.push(`/onboarding?${params.toString()}`);
+            }}
+          >
+            Back
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => router.push("/onboarding?step=done")}
+          >
+            Continue
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
