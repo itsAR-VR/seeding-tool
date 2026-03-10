@@ -24,6 +24,11 @@ export const registerTrack17Tracking = inngest.createFunction(
   },
   { event: "shopify/order.fulfilled" },
   async ({ event, step }) => {
+    if (!process.env.TRACK17_API_KEY) {
+      log("warn", "track17.register_skipped_missing_key", {});
+      return { status: "skipped", reason: "TRACK17_API_KEY is not set" };
+    }
+
     const { orderId } = event.data as {
       orderId: string;
       shopifyOrderId: string;
@@ -127,142 +132,153 @@ export const pollTrack17Status = inngest.createFunction(
   },
   { cron: "0 */2 * * *" }, // Every 2 hours
   async ({ step }) => {
-    // Fetch active fulfillments with tracking numbers
-    const activeFulfillments = await step.run(
-      "fetch-active-fulfillments",
-      async () => {
-        return prisma.fulfillmentEvent.findMany({
-          where: {
-            trackingNumber: { not: null },
-            status: {
-              notIn: ["delivered", "cancelled", "failure"],
-            },
-          },
-          include: {
-            order: {
-              include: {
-                campaignCreator: true,
-              },
-            },
-          },
-        });
-      }
-    );
-
-    if (activeFulfillments.length === 0) {
-      return { status: "no_active_shipments" };
+    if (!process.env.TRACK17_API_KEY) {
+      log("warn", "track17.poll_skipped_missing_key", {});
+      return { status: "skipped", reason: "TRACK17_API_KEY is not set" };
     }
 
-    log("info", "track17.poll_start", {
-      count: activeFulfillments.length,
-    });
-
-    // Track17 API accepts batches — process in chunks of 40
-    const BATCH_SIZE = 40;
-    const updates: Array<{
-      trackingNumber: string;
-      oldStatus: string;
-      newStatus: string;
-    }> = [];
-
-    for (let i = 0; i < activeFulfillments.length; i += BATCH_SIZE) {
-      const batch = activeFulfillments.slice(i, i + BATCH_SIZE);
-
-      await step.run(`poll-batch-${i}`, async () => {
-        for (const fe of batch) {
-          if (!fe.trackingNumber) continue;
-
-          try {
-            const res = await getTrackingStatus(fe.trackingNumber);
-
-            if (res.data.accepted.length === 0) continue;
-
-            const info = res.data.accepted[0];
-            const newStatus = mapTrack17Status(
-              info.tag,
-              info.track_info?.latest_status?.sub_status
-            );
-
-            if (newStatus === fe.status) continue; // No change
-
-            // Update FulfillmentEvent
-            await prisma.fulfillmentEvent.update({
-              where: { id: fe.id },
-              data: {
-                status: newStatus,
-                ...(info.track_info?.latest_event?.time_iso
-                  ? {
-                      estimatedDelivery: new Date(
-                        info.track_info.latest_event.time_iso
-                      ),
-                    }
-                  : {}),
+    // Fetch active fulfillments with tracking numbers
+    try {
+      const activeFulfillments = await step.run(
+        "fetch-active-fulfillments",
+        async () => {
+          return prisma.fulfillmentEvent.findMany({
+            where: {
+              trackingNumber: { not: null },
+              status: {
+                notIn: ["delivered", "cancelled", "failure"],
               },
-            });
+            },
+            include: {
+              order: {
+                include: {
+                  campaignCreator: true,
+                },
+              },
+            },
+          });
+        }
+      );
 
-            updates.push({
-              trackingNumber: fe.trackingNumber,
-              oldStatus: fe.status,
-              newStatus,
-            });
+      if (activeFulfillments.length === 0) {
+        return { status: "no_active_shipments" };
+      }
 
-            // If delivered, update order and lifecycle
-            if (newStatus === "delivered") {
-              await prisma.shopifyOrder.update({
-                where: { id: fe.orderId },
-                data: { status: "delivered" },
+      log("info", "track17.poll_start", {
+        count: activeFulfillments.length,
+      });
+
+      const BATCH_SIZE = 40;
+      const updates: Array<{
+        trackingNumber: string;
+        oldStatus: string;
+        newStatus: string;
+      }> = [];
+
+      for (let i = 0; i < activeFulfillments.length; i += BATCH_SIZE) {
+        const batch = activeFulfillments.slice(i, i + BATCH_SIZE);
+
+        await step.run(`poll-batch-${i}`, async () => {
+          for (const fe of batch) {
+            if (!fe.trackingNumber) continue;
+
+            try {
+              const res = await getTrackingStatus(fe.trackingNumber);
+
+              if (res.data.accepted.length === 0) continue;
+
+              const info = res.data.accepted[0];
+              const newStatus = mapTrack17Status(
+                info.tag,
+                info.track_info?.latest_status?.sub_status
+              );
+
+              if (newStatus === fe.status) continue;
+
+              await prisma.fulfillmentEvent.update({
+                where: { id: fe.id },
+                data: {
+                  status: newStatus,
+                  ...(info.track_info?.latest_event?.time_iso
+                    ? {
+                        estimatedDelivery: new Date(
+                          info.track_info.latest_event.time_iso
+                        ),
+                      }
+                    : {}),
+                },
               });
 
-              if (
-                fe.order.campaignCreator &&
-                !["posted", "completed", "opted_out"].includes(
-                  fe.order.campaignCreator.lifecycleStatus
-                )
-              ) {
-                await prisma.campaignCreator.update({
-                  where: { id: fe.order.campaignCreatorId },
-                  data: { lifecycleStatus: "delivered" },
+              updates.push({
+                trackingNumber: fe.trackingNumber,
+                oldStatus: fe.status,
+                newStatus,
+              });
+
+              if (newStatus === "delivered") {
+                await prisma.shopifyOrder.update({
+                  where: { id: fe.orderId },
+                  data: { status: "delivered" },
                 });
+
+                if (
+                  fe.order.campaignCreator &&
+                  !["posted", "completed", "opted_out"].includes(
+                    fe.order.campaignCreator.lifecycleStatus
+                  )
+                ) {
+                  await prisma.campaignCreator.update({
+                    where: { id: fe.order.campaignCreatorId },
+                    data: { lifecycleStatus: "delivered" },
+                  });
+                }
+
+                try {
+                  await stopTracking(fe.trackingNumber);
+                } catch {
+                  log("warn", "track17.stop_failed", {
+                    trackingNumber: fe.trackingNumber,
+                  });
+                }
               }
 
-              // Stop tracking delivered shipments
-              try {
-                await stopTracking(fe.trackingNumber);
-              } catch {
-                // Non-critical — log and continue
-                log("warn", "track17.stop_failed", {
-                  trackingNumber: fe.trackingNumber,
-                });
-              }
+              log("info", "track17.status_updated", {
+                trackingNumber: fe.trackingNumber,
+                oldStatus: fe.status,
+                newStatus,
+              });
+            } catch (error) {
+              const errMsg =
+                error instanceof Error ? error.message : "Unknown error";
+              log("error", "track17.poll_error", {
+                trackingNumber: fe.trackingNumber,
+                error: errMsg,
+              });
             }
-
-            log("info", "track17.status_updated", {
-              trackingNumber: fe.trackingNumber,
-              oldStatus: fe.status,
-              newStatus,
-            });
-          } catch (error) {
-            const errMsg =
-              error instanceof Error ? error.message : "Unknown error";
-            log("error", "track17.poll_error", {
-              trackingNumber: fe.trackingNumber,
-              error: errMsg,
-            });
           }
-        }
+        });
+      }
+
+      log("info", "track17.poll_complete", {
+        checked: activeFulfillments.length,
+        updated: updates.length,
       });
+
+      return {
+        status: "completed",
+        checked: activeFulfillments.length,
+        updated: updates.length,
+        updates,
+      };
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Unknown error";
+      log("error", "track17.poll_fatal", { error: errMsg });
+      return {
+        status: "error",
+        checked: 0,
+        updated: 0,
+        error: errMsg,
+      };
     }
-
-    log("info", "track17.poll_complete", {
-      checked: activeFulfillments.length,
-      updated: updates.length,
-    });
-
-    return {
-      status: "completed",
-      checked: activeFulfillments.length,
-      updated: updates.length,
-      updates,
-    };
   }
 );

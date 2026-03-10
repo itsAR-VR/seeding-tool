@@ -20,14 +20,21 @@ export const mentionMediaArchive = inngest.createFunction(
   },
   { event: "mention/media.archive" },
   async ({ event, step }) => {
-    const { mentionAssetId } = event.data;
+    try {
+      const { mentionAssetId } = event.data;
 
-    const result = await step.run("archive-media", async () => {
-      const archivedUrl = await archiveMentionMedia(mentionAssetId);
-      return { mentionAssetId, archivedUrl, archived: !!archivedUrl };
-    });
+      const result = await step.run("archive-media", async () => {
+        const archivedUrl = await archiveMentionMedia(mentionAssetId);
+        return { mentionAssetId, archivedUrl, archived: !!archivedUrl };
+      });
 
-    return result;
+      return result;
+    } catch (error) {
+      return {
+        archived: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 );
 
@@ -46,53 +53,61 @@ export const mentionMediaArchiveCron = inngest.createFunction(
   },
   { cron: "0 4 * * *" }, // Daily at 4 AM
   async ({ step }) => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+    try {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 
-    // Find unarchived mention assets
-    const unarchived = await step.run("find-unarchived", async () => {
-      const assets = await prisma.mentionAsset.findMany({
-        where: {
-          NOT: [
-            { mediaUrl: { contains: supabaseUrl || "supabase.co/storage" } },
-            { mediaUrl: { contains: "res.cloudinary.com" } },
-          ],
-        },
-        select: { id: true },
-        take: 100, // Process in batches to avoid timeouts
+      const unarchived = await step.run("find-unarchived", async () => {
+        const assets = await prisma.mentionAsset.findMany({
+          where: {
+            NOT: [
+              { mediaUrl: { contains: supabaseUrl || "supabase.co/storage" } },
+              { mediaUrl: { contains: "res.cloudinary.com" } },
+            ],
+          },
+          select: { id: true },
+          take: 100,
+        });
+
+        return assets.map((a) => a.id);
       });
 
-      return assets.map((a) => a.id);
-    });
-
-    if (unarchived.length === 0) {
-      return { status: "no_unarchived", count: 0 };
-    }
-
-    // Archive each one
-    let archived = 0;
-    let failed = 0;
-
-    for (const mentionAssetId of unarchived) {
-      const result = await step.run(
-        `archive-${mentionAssetId}`,
-        async () => {
-          const url = await archiveMentionMedia(mentionAssetId);
-          return { success: !!url };
-        }
-      );
-
-      if (result.success) {
-        archived++;
-      } else {
-        failed++;
+      if (unarchived.length === 0) {
+        return { status: "no_unarchived", count: 0 };
       }
-    }
 
-    return {
-      status: "completed",
-      total: unarchived.length,
-      archived,
-      failed,
-    };
+      let archived = 0;
+      let failed = 0;
+
+      for (const mentionAssetId of unarchived) {
+        const result = await step.run(
+          `archive-${mentionAssetId}`,
+          async () => {
+            const url = await archiveMentionMedia(mentionAssetId);
+            return { success: !!url };
+          }
+        );
+
+        if (result.success) {
+          archived++;
+        } else {
+          failed++;
+        }
+      }
+
+      return {
+        status: failed > 0 ? "completed_with_errors" : "completed",
+        total: unarchived.length,
+        archived,
+        failed,
+      };
+    } catch (error) {
+      return {
+        status: "error",
+        total: 0,
+        archived: 0,
+        failed: 1,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 );

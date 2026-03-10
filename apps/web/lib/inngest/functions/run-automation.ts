@@ -30,125 +30,161 @@ export const runAutomations = inngest.createFunction(
   },
   { cron: "*/5 * * * *" }, // every 5 minutes
   async () => {
-    const now = new Date();
+    try {
+      const now = new Date();
 
-    // Find all enabled automations that are due to run
-    const dueAutomations = await prisma.automation.findMany({
-      where: {
-        enabled: true,
-        nextRunAt: { lte: now },
-      },
-    });
+      const dueAutomations = await prisma.automation.findMany({
+        where: {
+          enabled: true,
+          nextRunAt: { lte: now },
+        },
+      });
 
-    if (dueAutomations.length === 0) {
-      return { status: "idle", processed: 0 };
-    }
-
-    let processed = 0;
-
-    for (const automation of dueAutomations) {
-      try {
-        if (automation.type === "creator_discovery") {
-          const config = automation.config as {
-            searchMode?: "hashtag" | "profile";
-            hashtag?: string;
-            usernames?: string[];
-            limit?: number;
-            platform?: string;
-            autoImport?: boolean;
-            query?: Record<string, unknown>;
-            categories?: {
-              apify?: string[];
-              collabstr?: string[];
-            };
-          };
-          const derivedHashtag =
-            config.hashtag ||
-            toHashtag(config.categories?.apify?.[0]) ||
-            toHashtag(config.categories?.collabstr?.[0]);
-
-          // Create a search job
-          const job = await prisma.creatorSearchJob.create({
-            data: {
-              status: "pending",
-              platform: config.platform || "instagram",
-              requestedCount: config.limit || 50,
-              progressPercent: 0,
-              query:
-                config.query && typeof config.query === "object"
-                  ? {
-                      ...(config.query as Record<string, unknown>),
-                      automationId: automation.id,
-                    }
-                  : {
-                      searchMode: config.searchMode || "hashtag",
-                      hashtag: derivedHashtag,
-                      usernames: config.usernames,
-                      limit: config.limit || 50,
-                      categories: config.categories,
-                      automationId: automation.id,
-                    },
-              brandId: automation.brandId,
-            },
-          });
-
-          // Fire Inngest event to run the Apify search
-          await inngest.send({
-            name: "creator-search/requested",
-            data: {
-              jobId: job.id,
-              campaignId: "",
-              brandId: automation.brandId,
-              query: config.query
-                ? (config.query as Record<string, unknown>)
-                : buildUnifiedDiscoveryQueryFromAutomationConfig({
-                    platform: config.platform || "instagram",
-                    searchMode: config.searchMode || "hashtag",
-                    hashtag: derivedHashtag,
-                    usernames: config.usernames,
-                    limit: config.limit || 50,
-                    categories: config.categories,
-                  }),
-            },
-          });
-
-          console.log(
-            `[run-automations] Triggered creator_discovery for automation ${automation.id} (job ${job.id})`
-          );
-        }
-
-        // Update lastRunAt and compute next run
-        await prisma.automation.update({
-          where: { id: automation.id },
-          data: {
-            lastRunAt: now,
-            nextRunAt: computeNextRunAt(automation.schedule),
-          },
-        });
-
-        processed++;
-      } catch (error) {
-        console.error(
-          `[run-automations] Error processing automation ${automation.id}:`,
-          error
-        );
-
-        // Create intervention for failed automation
-        await prisma.interventionCase.create({
-          data: {
-            type: "other",
-            status: "open",
-            priority: "normal",
-            title: `Automation "${automation.name}" failed`,
-            description: `Automation ${automation.id} (${automation.type}) failed: ${
-              error instanceof Error ? error.message : "Unknown error"
-            }`,
-            brandId: automation.brandId,
-          },
-        });
+      if (dueAutomations.length === 0) {
+        return { status: "idle", processed: 0 };
       }
-    }
 
-    return { status: "completed", processed };
+      let processed = 0;
+      let failed = 0;
+
+      for (const automation of dueAutomations) {
+        try {
+          if (automation.type === "creator_discovery") {
+            const config = automation.config as {
+              searchMode?: "hashtag" | "profile";
+              hashtag?: string;
+              usernames?: string[];
+              limit?: number;
+              platform?: string;
+              autoImport?: boolean;
+              query?: Record<string, unknown>;
+              categories?: {
+                apify?: string[];
+                collabstr?: string[];
+              };
+            };
+            const derivedHashtag =
+              config.hashtag ||
+              toHashtag(config.categories?.apify?.[0]) ||
+              toHashtag(config.categories?.collabstr?.[0]);
+
+            const job = await prisma.creatorSearchJob.create({
+              data: {
+                status: "pending",
+                platform: config.platform || "instagram",
+                requestedCount: config.limit || 50,
+                progressPercent: 0,
+                query:
+                  config.query && typeof config.query === "object"
+                    ? {
+                        ...(config.query as Record<string, unknown>),
+                        automationId: automation.id,
+                      }
+                    : {
+                        searchMode: config.searchMode || "hashtag",
+                        hashtag: derivedHashtag,
+                        usernames: config.usernames,
+                        limit: config.limit || 50,
+                        categories: config.categories,
+                        automationId: automation.id,
+                      },
+                brandId: automation.brandId,
+              },
+            });
+
+            try {
+              await inngest.send({
+                name: "creator-search/requested",
+                data: {
+                  jobId: job.id,
+                  campaignId: "",
+                  brandId: automation.brandId,
+                  query: config.query
+                    ? (config.query as Record<string, unknown>)
+                    : buildUnifiedDiscoveryQueryFromAutomationConfig({
+                        platform: config.platform || "instagram",
+                        searchMode: config.searchMode || "hashtag",
+                        hashtag: derivedHashtag,
+                        usernames: config.usernames,
+                        limit: config.limit || 50,
+                        categories: config.categories,
+                      }),
+                },
+              });
+            } catch (dispatchError) {
+              const dispatchMessage =
+                dispatchError instanceof Error
+                  ? dispatchError.message
+                  : "Unknown dispatch error";
+
+              await prisma.creatorSearchJob.update({
+                where: { id: job.id },
+                data: {
+                  status: "failed",
+                  error: dispatchMessage,
+                  finishedAt: new Date(),
+                },
+              });
+
+              throw dispatchError;
+            }
+
+            console.log(
+              `[run-automations] Triggered creator_discovery for automation ${automation.id} (job ${job.id})`
+            );
+          }
+
+          await prisma.automation.update({
+            where: { id: automation.id },
+            data: {
+              lastRunAt: now,
+              nextRunAt: computeNextRunAt(automation.schedule),
+            },
+          });
+
+          processed++;
+        } catch (error) {
+          failed++;
+          console.error(
+            `[run-automations] Error processing automation ${automation.id}:`,
+            error
+          );
+
+          try {
+            await prisma.interventionCase.create({
+              data: {
+                type: "other",
+                status: "open",
+                priority: "normal",
+                title: `Automation "${automation.name}" failed`,
+                description: `Automation ${automation.id} (${automation.type}) failed: ${
+                  error instanceof Error ? error.message : "Unknown error"
+                }`,
+                brandId: automation.brandId,
+              },
+            });
+          } catch (interventionError) {
+            console.error(
+              `[run-automations] Failed to create intervention for automation ${automation.id}:`,
+              interventionError
+            );
+          }
+        }
+      }
+
+      return {
+        status: failed > 0 ? "completed_with_errors" : "completed",
+        processed,
+        failed,
+      };
+    } catch (error) {
+      console.error("[run-automations] Fatal cron failure", error);
+      return {
+        status: "error",
+        processed: 0,
+        failed: 1,
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
   }
 );
