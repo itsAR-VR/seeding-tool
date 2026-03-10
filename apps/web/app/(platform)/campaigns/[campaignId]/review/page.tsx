@@ -36,9 +36,7 @@ export default function ReviewQueuePage() {
 
   async function fetchCreators() {
     try {
-      const res = await fetch(
-        `/api/campaigns/${params.campaignId}/creators?reviewStatus=pending`
-      );
+      const res = await fetch(`/api/campaigns/${params.campaignId}/creators`);
       if (res.ok) {
         const data = (await res.json()) as CampaignCreator[];
         setCreators(data);
@@ -82,6 +80,11 @@ export default function ReviewQueuePage() {
     }
   }
 
+  const pendingCreators = creators.filter((creator) => creator.reviewStatus === "pending");
+  const approvedCount = creators.filter((creator) => creator.reviewStatus === "approved").length;
+  const declinedCount = creators.filter((creator) => creator.reviewStatus === "declined").length;
+  const deferredCount = creators.filter((creator) => creator.reviewStatus === "deferred").length;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -96,7 +99,7 @@ export default function ReviewQueuePage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Review Queue</h1>
           <p className="text-muted-foreground">
-            {creators.length} creator{creators.length !== 1 ? "s" : ""} pending
+            {pendingCreators.length} creator{pendingCreators.length !== 1 ? "s" : ""} pending
             review
           </p>
         </div>
@@ -108,21 +111,48 @@ export default function ReviewQueuePage() {
         </Button>
       </div>
 
-      {creators.length === 0 ? (
+      {pendingCreators.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>All caught up!</CardTitle>
+            <CardTitle>Nothing is waiting for manual review</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              No creators pending review. Check back later or add more
-              creators to this campaign.
+              Pending is empty right now. That usually means this campaign has already been triaged or nothing has been added yet.
             </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { label: "Approved", value: approvedCount },
+                { label: "Declined", value: declinedCount },
+                { label: "Deferred", value: deferredCount },
+              ].map((item) => (
+                <div key={item.label} className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                  <p className="text-2xl font-semibold">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}
+              >
+                Discover more creators
+              </Button>
+              {approvedCount > 0 ? (
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/campaigns/${params.campaignId}/outreach`)}
+                >
+                  Open draft outreach
+                </Button>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4">
-          {creators.map((cc) => {
+          {pendingCreators.map((cc) => {
             const profile = cc.creator.profiles[0];
             const isLoading = actionLoading === cc.creatorId;
 

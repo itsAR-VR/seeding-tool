@@ -3,7 +3,10 @@ import type { Prisma } from "@prisma/client";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
-import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
+import {
+  isPlaceholderFollowerCount,
+  sanitizeFollowerCount,
+} from "@/lib/creators/follower-count";
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 import { inngest } from "@/lib/inngest/client";
@@ -98,6 +101,7 @@ export async function POST(request: NextRequest) {
     let updated = 0;
     let skipped = 0;
     let invalidDropped = 0;
+    let placeholderSanitized = 0;
     const enrichedCreatorIds: string[] = [];
 
     for (const row of normalizedRows) {
@@ -116,10 +120,37 @@ export async function POST(request: NextRequest) {
       const source = validSources.includes(row.discoverySource ?? "")
         ? row.discoverySource!
         : "csv_import";
+      const searchResult = row.searchResultId
+        ? await prisma.creatorSearchResult.findUnique({
+            where: { id: row.searchResultId },
+            select: {
+              id: true,
+              searchJobId: true,
+              primarySource: true,
+              source: true,
+              rawSourceCategory: true,
+              bioCategory: true,
+              email: true,
+              seedCreatorId: true,
+              metadata: true,
+            },
+          })
+        : null;
+      const followerCountSource =
+        searchResult?.primarySource ?? searchResult?.source ?? source;
+      const incomingFollowerCount = validation.followerCount ?? row.followerCount;
       const normalizedFollowerCount = sanitizeFollowerCount(
-        "instagram_html",
-        validation.followerCount ?? row.followerCount
+        followerCountSource,
+        incomingFollowerCount
       );
+
+      if (
+        incomingFollowerCount != null &&
+        normalizedFollowerCount == null &&
+        isPlaceholderFollowerCount(followerCountSource, incomingFollowerCount)
+      ) {
+        placeholderSanitized++;
+      }
 
       // INVARIANT: Creators are deduplicated by instagramHandle on import
       const existing = await prisma.creator.findFirst({
@@ -173,12 +204,6 @@ export async function POST(request: NextRequest) {
             engagementRate: row.engagementRate ?? null,
           },
         });
-
-        const searchResult = row.searchResultId
-          ? await prisma.creatorSearchResult.findUnique({
-              where: { id: row.searchResultId },
-            })
-          : null;
 
         await recordCreatorDiscoveryTouch({
           creatorId: existing.id,
@@ -259,12 +284,6 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          const searchResult = row.searchResultId
-            ? await prisma.creatorSearchResult.findUnique({
-                where: { id: row.searchResultId },
-              })
-            : null;
-
           await recordCreatorDiscoveryTouch({
             creatorId: creator.id,
             searchJobId: searchResult?.searchJobId ?? null,
@@ -306,6 +325,7 @@ export async function POST(request: NextRequest) {
       created,
       updated,
       invalidDropped,
+      placeholderSanitized,
       skipped,
     });
   } catch (error) {

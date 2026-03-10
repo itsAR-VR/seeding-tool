@@ -847,6 +847,9 @@ export function ConnectionsContent({
                     will not work with the admin token flow.
                   </p>
                   <ProviderGuide provider="shopify" />
+                  <p className="text-xs text-muted-foreground">
+                    Tokens are masked in the form and cleared after save. Use a fresh Admin API token, then verify the connection state and product sync result on this card.
+                  </p>
                 </form>
               ) : (
                 <div className="space-y-2">
@@ -1007,6 +1010,9 @@ export function ConnectionsContent({
                     {unipileSaving ? "Saving..." : "Connect Unipile"}
                   </Button>
                   <ProviderGuide provider="unipile" />
+                  <p className="text-xs text-muted-foreground">
+                    API keys stay masked in this form. After save, use the connected state here as your verification signal before enabling DM sending.
+                  </p>
                 </>
               )}
             </CardContent>

@@ -53,6 +53,17 @@ type GeneratedDraft = {
   error: string | null;
 };
 
+type CampaignSetup = {
+  campaignProducts?: Array<{ id: string }>;
+};
+
+type ConnectionsOverview = {
+  providers: Array<{
+    provider: "gmail" | "instagram" | "shopify" | "unipile";
+    connected: boolean;
+  }>;
+};
+
 export default function OutreachPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
 
@@ -66,8 +77,10 @@ export default function OutreachPage() {
   const [editedDrafts, setEditedDrafts] = useState<
     Record<string, { subject?: string; body: string }>
   >({});
-  const [loading, setLoading] = useState(false);
   const [loadingCreators, setLoadingCreators] = useState(true);
+  const [campaignSetup, setCampaignSetup] = useState<CampaignSetup | null>(null);
+  const [connections, setConnections] = useState<ConnectionsOverview | null>(null);
+  const [setupLoading, setSetupLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendProgress, setSendProgress] = useState("");
@@ -108,12 +121,57 @@ export default function OutreachPage() {
     load();
   }, []);
 
+  useEffect(() => {
+    async function loadSetup() {
+      try {
+        const [campaignRes, connectionsRes] = await Promise.all([
+          fetch(`/api/campaigns/${campaignId}`),
+          fetch("/api/connections/overview"),
+        ]);
+
+        if (campaignRes.ok) {
+          setCampaignSetup((await campaignRes.json()) as CampaignSetup);
+        }
+
+        if (connectionsRes.ok) {
+          setConnections((await connectionsRes.json()) as ConnectionsOverview);
+        }
+      } catch (err) {
+        console.error("Failed to load outreach setup:", err);
+      } finally {
+        setSetupLoading(false);
+      }
+    }
+
+    loadSetup();
+  }, [campaignId]);
+
   const MAX_BATCH_SIZE = 20;
 
   // Derive approved list here so all handlers below have access
   const approvedCreators = creators.filter(
     (c) => c.reviewStatus === "approved"
   );
+  const hasProducts = Boolean(campaignSetup?.campaignProducts?.length);
+  const hasGmail =
+    connections?.providers.some(
+      (provider) => provider.provider === "gmail" && provider.connected
+    ) ?? false;
+  const hasUnipile =
+    connections?.providers.some(
+      (provider) => provider.provider === "unipile" && provider.connected
+    ) ?? false;
+  const selectedChannelConnected = channel === "email" ? hasGmail : hasUnipile;
+  const draftBlocker = !hasProducts
+    ? "Attach at least one campaign product before drafting outreach."
+    : null;
+  const sendBlocker = !hasProducts
+    ? "Attach at least one campaign product before sending outreach."
+    : !selectedChannelConnected
+      ? channel === "email"
+        ? "Connect Gmail in Settings → Connections before sending emails."
+        : "Connect Unipile in Settings → Connections before sending Instagram DMs."
+      : null;
 
   const toggleCreator = (id: string) => {
     setSelectedIds((prev) => {
@@ -200,6 +258,93 @@ export default function OutreachPage() {
           Generate AI-powered outreach messages for campaign creators.
         </p>
       </div>
+
+      <Card
+        className={
+          draftBlocker || sendBlocker
+            ? "border-amber-200 bg-amber-50"
+            : "border-green-200 bg-green-50"
+        }
+      >
+        <CardHeader>
+          <CardTitle>Outreach readiness</CardTitle>
+          <CardDescription>
+            Products are required for outreach context. Send actions also require the channel-specific integration to be connected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            {[
+              {
+                label: "Products",
+                ready: hasProducts,
+                helper: hasProducts
+                  ? `${campaignSetup?.campaignProducts?.length ?? 0} attached`
+                  : "Missing",
+              },
+              {
+                label: "Approved creators",
+                ready: approvedCreators.length > 0,
+                helper:
+                  approvedCreators.length > 0
+                    ? `${approvedCreators.length} ready`
+                    : "None approved yet",
+              },
+              {
+                label: "Gmail",
+                ready: hasGmail,
+                helper: hasGmail ? "Email sending ready" : "Not connected",
+              },
+              {
+                label: "Unipile",
+                ready: hasUnipile,
+                helper: hasUnipile ? "DM sending ready" : "Not connected",
+              },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border bg-white p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">{item.label}</span>
+                  <Badge variant={item.ready ? "default" : "secondary"}>
+                    {item.ready ? "Ready" : "Needs setup"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{item.helper}</p>
+              </div>
+            ))}
+          </div>
+
+          {setupLoading ? (
+            <p className="text-sm text-muted-foreground">Checking current setup…</p>
+          ) : draftBlocker || sendBlocker ? (
+            <div className="flex flex-wrap gap-2">
+              {!hasProducts ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = `/campaigns/${campaignId}/products`;
+                  }}
+                >
+                  Add products
+                </Button>
+              ) : null}
+              {!selectedChannelConnected ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = "/settings/connections";
+                  }}
+                >
+                  Open connections
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm text-green-900">
+              This campaign is ready for draft generation and send review.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Configuration */}
       <Card>
@@ -358,6 +503,11 @@ export default function OutreachPage() {
           )}
 
           <div className="mt-4 flex items-center justify-end gap-3">
+            {draftBlocker ? (
+              <span className="text-sm font-medium text-amber-700">
+                {draftBlocker}
+              </span>
+            ) : null}
             {selectedIds.size > MAX_BATCH_SIZE && (
               <span className="text-sm text-red-500 font-medium">
                 Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
@@ -365,7 +515,7 @@ export default function OutreachPage() {
             )}
             <Button
               onClick={generateDrafts}
-              disabled={selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
+              disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
                 ? "Generating..."
@@ -407,7 +557,7 @@ export default function OutreachPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={sending}
+                        disabled={sending || Boolean(sendBlocker)}
                         onClick={async () => {
                           const confirmed = confirm(
                             `Send ${channel === "email" ? "email" : "DM"} to @${draft.creatorHandle}?`
@@ -503,12 +653,22 @@ export default function OutreachPage() {
                         rows={channel === "instagram_dm" ? 3 : 8}
                       />
                     </div>
+                    {sendBlocker ? (
+                      <p className="text-xs font-medium text-amber-700">
+                        {sendBlocker}
+                      </p>
+                    ) : null}
                   </>
                 )}
               </div>
             ))}
 
             <div className="flex justify-end gap-2 pt-4 border-t">
+              {sendBlocker ? (
+                <p className="mr-auto text-sm font-medium text-amber-700">
+                  {sendBlocker}
+                </p>
+              ) : null}
               <Button
                 variant="outline"
                 onClick={() => {
@@ -520,7 +680,9 @@ export default function OutreachPage() {
               </Button>
               <Button
                 disabled={
-                  sending || drafts.filter((d) => !d.error).length === 0
+                  Boolean(sendBlocker) ||
+                  sending ||
+                  drafts.filter((d) => !d.error).length === 0
                 }
                 onClick={async () => {
                   const validDrafts = drafts.filter(

@@ -60,20 +60,45 @@ export default async function CampaignDetailPage({ params }: PageProps) {
 
   if (!membership) return notFound();
 
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, brandId: membership.brandId },
-    include: {
-      campaignProducts: {
-        include: { product: true },
-      },
-      campaignCreators: {
-        include: {
-          creator: { include: { profiles: true } },
+  const [campaign, brandSetup] = await Promise.all([
+    prisma.campaign.findFirst({
+      where: { id: campaignId, brandId: membership.brandId },
+      include: {
+        campaignProducts: {
+          include: { product: true },
         },
-        orderBy: { createdAt: "desc" },
+        campaignCreators: {
+          include: {
+            creator: { include: { profiles: true } },
+          },
+          orderBy: { createdAt: "desc" },
+        },
       },
-    },
-  });
+    }),
+    prisma.brand.findUnique({
+      where: { id: membership.brandId },
+      select: {
+        emailAliases: {
+          where: {
+            isPrimary: true,
+            isPaused: false,
+          },
+          select: { id: true },
+          take: 1,
+        },
+        connections: {
+          where: {
+            provider: "unipile",
+            status: "connected",
+          },
+          select: {
+            id: true,
+            provider: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   if (!campaign) return notFound();
 
@@ -91,6 +116,38 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       (c) => c.lifecycleStatus === "address_confirmed"
     ).length,
   };
+
+  const hasCampaignProducts = campaign.campaignProducts.length > 0;
+  const hasEmailSender = Boolean(brandSetup?.emailAliases.length);
+  const hasDmSender = Boolean(
+    brandSetup?.connections.some((connection) => connection.provider === "unipile")
+  );
+  const hasAnyOutreachChannel = hasEmailSender || hasDmSender;
+  const outreachBlockers = [
+    !hasCampaignProducts
+      ? {
+          label: "Attach at least one product",
+          href: `/campaigns/${campaignId}/products`,
+          cta: "Add products",
+        }
+      : null,
+    stats.approved === 0
+      ? {
+          label: "Approve at least one creator before drafting outreach",
+          href: `/campaigns/${campaignId}/review`,
+          cta: "Open review queue",
+        }
+      : null,
+    !hasAnyOutreachChannel
+      ? {
+          label: "Connect Gmail or Unipile before outreach can be sent",
+          href: "/settings/connections",
+          cta: "Open connections",
+        }
+      : null,
+  ].filter(
+    (value): value is { label: string; href: string; cta: string } => Boolean(value)
+  );
 
   return (
     <div className="space-y-6">
@@ -121,9 +178,15 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             <Button variant="outline">📊 Analytics</Button>
           </Link>
           <TriggerSearchButton campaignId={campaignId} />
-          <Link href={`/campaigns/${campaignId}/outreach`}>
-            <Button variant="outline">✨ Draft Outreach</Button>
-          </Link>
+          {outreachBlockers.length === 0 ? (
+            <Link href={`/campaigns/${campaignId}/outreach`}>
+              <Button variant="outline">✨ Draft Outreach</Button>
+            </Link>
+          ) : (
+            <Button variant="outline" disabled>
+              ✨ Draft Outreach blocked
+            </Button>
+          )}
           <Link href={`/campaigns/${campaignId}/review`}>
             <Button variant="outline">
               Review Queue ({stats.pendingReview})
@@ -131,6 +194,83 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           </Link>
         </div>
       </div>
+
+      <Card
+        className={
+          outreachBlockers.length > 0
+            ? "border-amber-200 bg-amber-50"
+            : "border-green-200 bg-green-50"
+        }
+      >
+        <CardHeader>
+          <CardTitle className="text-base">Operator readiness</CardTitle>
+          <CardDescription>
+            Draft outreach is only enabled once the campaign has products, at least one approved creator, and a live send channel.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-3">
+            {[
+              {
+                label: "Products attached",
+                ready: hasCampaignProducts,
+                helper: hasCampaignProducts
+                  ? `${campaign.campaignProducts.length} product${campaign.campaignProducts.length === 1 ? "" : "s"} linked`
+                  : "No products attached yet",
+              },
+              {
+                label: "Approved creators",
+                ready: stats.approved > 0,
+                helper:
+                  stats.approved > 0
+                    ? `${stats.approved} creator${stats.approved === 1 ? "" : "s"} ready for outreach`
+                    : "No approved creators yet",
+              },
+              {
+                label: "Send channels",
+                ready: hasAnyOutreachChannel,
+                helper: hasAnyOutreachChannel
+                  ? [
+                      hasEmailSender ? "Gmail" : null,
+                      hasDmSender ? "Unipile" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" + ")
+                  : "Connect Gmail or Unipile",
+              },
+            ].map((item) => (
+              <div key={item.label} className="rounded-lg border bg-white p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <Badge variant={item.ready ? "default" : "secondary"}>
+                    {item.ready ? "Ready" : "Needs setup"}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-sm text-muted-foreground">{item.helper}</p>
+              </div>
+            ))}
+          </div>
+
+          {outreachBlockers.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-amber-900">Fix these before outreach:</p>
+              <div className="flex flex-wrap gap-2">
+                {outreachBlockers.map((blocker) => (
+                  <Link key={blocker.label} href={blocker.href}>
+                    <Button variant="outline" size="sm">
+                      {blocker.cta}
+                    </Button>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-green-900">
+              This campaign has the minimum setup needed for draft generation and sending.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
@@ -141,7 +281,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           { label: "Declined", value: stats.declined },
           { label: "Outreach Sent", value: stats.outreachSent },
           { label: "Replied", value: stats.replied },
-          { label: "Address", value: stats.addressConfirmed },
+          { label: "Address Confirmed", value: stats.addressConfirmed },
         ].map((stat) => (
           <Card key={stat.label}>
             <CardContent className="p-4">
