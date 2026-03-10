@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type FormEvent,
+} from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
@@ -20,12 +27,72 @@ import {
 } from "@/lib/integrations/methods";
 import { cn } from "@/lib/utils";
 
+type ConnectionsContentProps = {
+  embedded?: boolean;
+  brandIdOverride?: string;
+  initialReturnTo?: string;
+  showSupportCta?: boolean;
+};
+
 type FlashMessage =
   | {
       tone: "success" | "error";
       text: string;
     }
   | null;
+
+const SUPPORT_MAILTO =
+  "mailto:ar@soramedia.co?subject=Seed%20Scale%20connection%20help";
+
+const PROVIDER_GUIDES: Record<
+  IntegrationProvider,
+  {
+    title: string;
+    summary: string;
+    bullets: string[];
+  }
+> = {
+  gmail: {
+    title: "Need help connecting Gmail?",
+    summary:
+      "Use the Gmail account you want outreach to send from. If Google blocks the flow or your workspace is not approved yet, our team can help complete the setup.",
+    bullets: [
+      "Start with the Gmail account you want to send from.",
+      "If Google shows an approval or test-user warning, contact our team and we will help finish the connection.",
+      "Once OAuth is fully approved, this will collapse down to a standard Google connect button.",
+    ],
+  },
+  shopify: {
+    title: "Need help connecting Shopify?",
+    summary:
+      "This manual setup needs your Shopify admin domain and an Admin API access token from your custom app.",
+    bullets: [
+      "Use your admin domain in the form your-store.myshopify.com.",
+      "Create or open your Shopify custom app and copy the Admin API access token.",
+      "Storefront domains like sleepkalm.com will not work for this admin-token flow.",
+    ],
+  },
+  instagram: {
+    title: "Need help connecting Instagram / Meta?",
+    summary:
+      "Connect the Instagram Business account that is linked to the correct Facebook page. If the Meta flow is not ready for your account, our team can guide you through the remaining steps.",
+    bullets: [
+      "Make sure the Instagram account is a Business or Creator account.",
+      "Confirm that Instagram is linked to the Facebook page you want to monitor.",
+      "If Meta blocks the flow or permissions are missing, contact our team for support.",
+    ],
+  },
+  unipile: {
+    title: "Need help connecting Unipile?",
+    summary:
+      "Use the API key from your Unipile workspace. The account ID is optional, but helps us target the exact mailbox or social account faster.",
+    bullets: [
+      "Copy the API key from your Unipile dashboard.",
+      "Paste the account ID too if you already know which account should handle DMs.",
+      "If you are unsure which account to use, contact our team and we will help map it.",
+    ],
+  },
+};
 
 function FeedbackBanner({ message }: { message: FlashMessage }) {
   if (!message) {
@@ -91,7 +158,38 @@ function MethodSelector({
   );
 }
 
-function ConnectionsContent() {
+function ProviderGuide({ provider }: { provider: IntegrationProvider }) {
+  const guide = PROVIDER_GUIDES[provider];
+
+  return (
+    <details className="rounded-lg border border-dashed border-border/80 bg-muted/10 px-3 py-2 text-sm">
+      <summary className="cursor-pointer list-none font-medium text-foreground">
+        {guide.title}
+      </summary>
+      <div className="mt-2 space-y-2 text-muted-foreground">
+        <p>{guide.summary}</p>
+        <ul className="space-y-1 pl-5 list-disc">
+          {guide.bullets.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+        <a
+          href={SUPPORT_MAILTO}
+          className="inline-flex text-sm font-medium text-foreground underline underline-offset-4"
+        >
+          Contact our team for support
+        </a>
+      </div>
+    </details>
+  );
+}
+
+export function ConnectionsContent({
+  embedded = false,
+  brandIdOverride,
+  initialReturnTo,
+  showSupportCta = false,
+}: ConnectionsContentProps = {}) {
   const searchParams = useSearchParams();
   const [overview, setOverview] = useState<ConnectionsOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,17 +213,46 @@ function ConnectionsContent() {
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
-  const returnTo = searchParams.get("returnTo");
+  const returnTo = initialReturnTo ?? searchParams.get("returnTo");
   const authReturnTo = useMemo(() => {
     if (!returnTo) {
       return undefined;
     }
-    return `/settings/connections?returnTo=${encodeURIComponent(returnTo)}`;
-  }, [returnTo]);
+    const params = new URLSearchParams({
+      returnTo,
+      ...(brandIdOverride ? { brandId: brandIdOverride } : {}),
+    });
+    return `/settings/connections?${params.toString()}`;
+  }, [brandIdOverride, returnTo]);
+
+  const refreshConnectionData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (brandIdOverride) {
+        params.set("brandId", brandIdOverride);
+      }
+      const res = await fetch(
+        params.size > 0
+          ? `/api/connections/overview?${params.toString()}`
+          : "/api/connections/overview"
+      );
+      if (!res.ok) {
+        setOverview(null);
+        return;
+      }
+
+      setOverview((await res.json()) as ConnectionsOverviewResponse);
+    } catch {
+      setOverview(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [brandIdOverride]);
 
   useEffect(() => {
     void refreshConnectionData();
-  }, []);
+  }, [refreshConnectionData]);
 
   useEffect(() => {
     if (!connected) {
@@ -149,23 +276,6 @@ function ConnectionsContent() {
       }));
     }
   }, [connected]);
-
-  async function refreshConnectionData() {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/connections/overview");
-      if (!res.ok) {
-        setOverview(null);
-        return;
-      }
-
-      setOverview((await res.json()) as ConnectionsOverviewResponse);
-    } catch {
-      setOverview(null);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function setProviderMessage(provider: IntegrationProvider, message: FlashMessage) {
     setMessages((current) => ({
@@ -475,21 +585,34 @@ function ConnectionsContent() {
 
   if (!overview) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
+      <div className={embedded ? "space-y-4" : "space-y-6"}>
+        {!embedded && (
+          <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
+        )}
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-muted-foreground">
               No brand found. Complete onboarding first.
             </p>
-            <Button
-              className="mt-4"
-              onClick={() => {
-                window.location.href = "/onboarding";
-              }}
-            >
-              Start Onboarding
-            </Button>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Button
+                onClick={() => {
+                  window.location.href = "/onboarding";
+                }}
+              >
+                Start Onboarding
+              </Button>
+              {returnTo && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    window.location.href = returnTo;
+                  }}
+                >
+                  Back
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -519,15 +642,32 @@ function ConnectionsContent() {
                   : null;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-        <p className="text-muted-foreground">
-          Manage your connected services and choose how each provider authenticates.
-        </p>
-      </div>
+    <div className={embedded ? "space-y-4" : "space-y-6"}>
+      {!embedded && (
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
+          <p className="text-muted-foreground">
+            Manage your connected services and choose how each provider authenticates.
+          </p>
+        </div>
+      )}
 
-      {returnTo && (
+      {showSupportCta && (
+        <div className="flex flex-col gap-3 rounded-xl border bg-muted/10 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Manual setup is still the default for some channels while OAuth approvals
+            and public apps are still being finalized.
+          </p>
+          <a
+            href={SUPPORT_MAILTO}
+            className="inline-flex items-center justify-center rounded-lg border px-3 py-2 font-medium text-foreground"
+          >
+            Contact our team for support
+          </a>
+        </div>
+      )}
+
+      {returnTo && !embedded && (
         <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-4 text-sm">
           <p className="text-muted-foreground">
             Finish connections here, then return to onboarding when you are ready.
@@ -577,7 +717,9 @@ function ConnectionsContent() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    const params = new URLSearchParams({ brandId: overview.brand.id });
+                    const params = new URLSearchParams({
+                      brandId: brandIdOverride ?? overview.brand.id,
+                    });
                     if (authReturnTo) {
                       params.set("returnTo", authReturnTo);
                     }
@@ -587,6 +729,7 @@ function ConnectionsContent() {
                   Connect Gmail
                 </Button>
               )}
+              <ProviderGuide provider="gmail" />
             </CardContent>
           </Card>
         )}
@@ -703,6 +846,7 @@ function ConnectionsContent() {
                     Storefront domains like <code className="font-mono">sleepkalm.com</code>{" "}
                     will not work with the admin token flow.
                   </p>
+                  <ProviderGuide provider="shopify" />
                 </form>
               ) : (
                 <div className="space-y-2">
@@ -721,11 +865,14 @@ function ConnectionsContent() {
                     variant="outline"
                     disabled={!shopifyForm.oauthShop.trim()}
                     onClick={() => {
-                      window.location.href = buildShopifyOAuthUrl(overview.brand.id);
+                      window.location.href = buildShopifyOAuthUrl(
+                        brandIdOverride ?? overview.brand.id
+                      );
                     }}
                   >
                     Connect with Shopify OAuth
                   </Button>
+                  <ProviderGuide provider="shopify" />
                 </div>
               )}
             </CardContent>
@@ -774,7 +921,9 @@ function ConnectionsContent() {
                 <Button
                   variant="outline"
                   onClick={() => {
-                    const params = new URLSearchParams({ brandId: overview.brand.id });
+                    const params = new URLSearchParams({
+                      brandId: brandIdOverride ?? overview.brand.id,
+                    });
                     if (authReturnTo) {
                       params.set("returnTo", authReturnTo);
                     }
@@ -784,6 +933,7 @@ function ConnectionsContent() {
                   Connect Instagram
                 </Button>
               )}
+              <ProviderGuide provider="instagram" />
             </CardContent>
           </Card>
         )}
@@ -856,6 +1006,7 @@ function ConnectionsContent() {
                   >
                     {unipileSaving ? "Saving..." : "Connect Unipile"}
                   </Button>
+                  <ProviderGuide provider="unipile" />
                 </>
               )}
             </CardContent>

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getCurrentBrandMembership } from "@/lib/integrations/brand-access";
+import {
+  assertBrandAccess,
+  getCurrentBrandMembership,
+} from "@/lib/integrations/brand-access";
 import {
   getProviderCapability,
   integrationProviders,
@@ -11,9 +14,12 @@ import { resolveProviderCredential } from "@/lib/integrations/state";
 import { prisma } from "@/lib/prisma";
 import { getShopifyConnectionStatus } from "@/lib/shopify/status";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const membership = await getCurrentBrandMembership();
+    const brandId = new URL(request.url).searchParams.get("brandId");
+    const membership = brandId
+      ? await assertBrandAccess(brandId)
+      : await getCurrentBrandMembership();
 
     const brand = await prisma.brand.findUnique({
       where: { id: membership.brandId },
