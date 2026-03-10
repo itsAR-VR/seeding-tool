@@ -19,6 +19,7 @@ const BusinessDnaResponseSchema = z.object({
   proofSignals: z.array(z.string()),
   keywords: z.array(z.string()),
   visualDirection: z.array(z.string()),
+  imageCandidates: z.array(z.string()),
 });
 
 type ParsedBusinessDna = z.infer<typeof BusinessDnaResponseSchema>;
@@ -229,6 +230,10 @@ export function normalizeBusinessDna(
   profile: BrandProfileSnapshot
 ): BrandBusinessDna {
   const fallbackImages = listBrandImageCandidates(profile);
+  const allowedImages = new Set(fallbackImages);
+  const selectedImages = dedupeStrings(value.imageCandidates)
+    .filter((candidate) => allowedImages.has(candidate))
+    .slice(0, 5);
 
   const targetAudience = cleanNullableString(value.targetAudience);
   const niche =
@@ -253,7 +258,8 @@ export function normalizeBusinessDna(
     proofSignals: dedupeStrings(value.proofSignals).slice(0, 6),
     keywords: dedupeStrings(value.keywords).slice(0, 12),
     visualDirection: dedupeStrings(value.visualDirection).slice(0, 6),
-    imageCandidates: fallbackImages.slice(0, 5),
+    imageCandidates:
+      selectedImages.length > 0 ? selectedImages : fallbackImages.slice(0, 5),
   };
 }
 
@@ -278,6 +284,7 @@ function buildBrandAnalysisPrompt(input: {
     `Hero headings:\n${toBulletList(input.profile.heroHeadings)}`,
     `Text signals:\n${toBulletList(input.profile.textSignals)}`,
     `Body excerpt:\n${input.profile.bodyExcerpt ?? "(none)"}`,
+    `Image candidates:\n${toBulletList(imageCandidates.slice(0, 5))}`,
     "",
     "Return structured Business DNA with:",
     "- a concise brandSummary grounded in the site copy",
@@ -287,6 +294,7 @@ function buildBrandAnalysisPrompt(input: {
     "- proofSignals as short facts or claims visible in the site copy",
     "- keywords as creator/discovery phrases directly supported by the site",
     "- visualDirection as 3-6 short descriptors of the visual language",
+    "- imageCandidates as exact URLs chosen only from the supplied image list",
     "",
     "Hard limits:",
     "- keep brandSummary under 220 characters",
@@ -296,8 +304,8 @@ function buildBrandAnalysisPrompt(input: {
     "- keep proofSignals to 5 items max",
     "- keep keywords to 8 items max",
     "- keep visualDirection to 5 items max",
+    "- keep imageCandidates to 2 items max",
     "- keep every list item short and plain",
-    `Available image candidates are already fixed upstream: ${imageCandidates.length}. Do not spend tokens restating image URLs.`,
   ].join("\n");
 }
 
