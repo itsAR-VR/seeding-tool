@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  isTerminalCreatorSearchStatus,
+  selectSelectableCreatorSearchResults,
+  serializeCreatorSearchJob,
+  serializeCreatorSearchResult,
+} from "@/lib/creator-search/job-payload";
 
 type RouteContext = { params: Promise<{ jobId: string }> };
 
@@ -53,28 +59,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
+    const serializedJob = serializeCreatorSearchJob(job);
+    const selectableResults = selectSelectableCreatorSearchResults(job.results);
+
     return NextResponse.json({
-      jobId: job.id,
-      status: job.status,
-      resultCount: job.resultCount,
-      error: job.error,
-      results:
-        job.status === "completed"
-          ? job.results.map((r) => ({
-              id: r.id,
-              handle: r.handle,
-              name: r.name,
-              followerCount: r.followerCount,
-              engagementRate: r.engagementRate,
-              profileUrl: r.profileUrl,
-              imageUrl: r.imageUrl,
-              bio: r.bio,
-              bioCategory: r.bioCategory,
-              platform: r.platform,
-              fitScore: r.fitScore ?? null,
-              fitReasoning: r.fitReasoning ?? null,
-            }))
-          : [],
+      ...serializedJob,
+      results: isTerminalCreatorSearchStatus(job.status)
+        ? selectableResults.map(serializeCreatorSearchResult)
+        : [],
     });
   } catch (error) {
     console.error("[creators/search/jobId/GET]", error);

@@ -87,14 +87,25 @@ Phase 15d adds the approved-seed graph-traversal lane and the supplemental keywo
   - Added `GET /api/campaigns/[campaignId]/search/[jobId]` polling.
   - Updated creator search, campaign search, and automation dispatch to send the unified query payload.
   - Patched `/creators` import selection to use `primarySource/source` instead of hardcoding `"apify"`.
+  - Merged the overlapping `/creators` discovery modal onto the unified query shape:
+    - grouped category picker
+    - source toggles
+    - keywords + location + follower-range filters
+    - mixed-source result badges
+  - Simplified the campaign page trigger button to route operators into the dedicated discovery screen instead of maintaining a second partially overlapping query dialog.
+  - Rebuilt the campaign discovery page around the unified query shape with category/source selection and background job polling.
+  - Adopted the overlapping validation/job infrastructure that committed discovery code already depended on:
+    - `apps/web/lib/instagram/validator.ts`
+    - `apps/web/app/api/creators/search/jobs/route.ts`
+    - validation-aware creator import/add/list flows
 - Commands run:
-  - `npx vitest run __tests__/creator-search/*.test.ts` — pass
-  - `npx eslint <15c backend files>` — pass with one pre-existing `no-img-element` warning in `apps/web/app/(platform)/creators/page.tsx`
+  - `npx vitest run __tests__/creator-search/*.test.ts __tests__/instagram/profile-html.test.ts` — pass (21 tests)
+  - `npx eslint <15c + validation files>` — pass with one `@next/next/no-img-element` warning in `apps/web/app/(platform)/creators/page.tsx`
   - `set -a && source ../../.env.local && source .env.local && npm run build` — pass
 - Blockers:
-  - The full UI migration is still incomplete. `apps/web/app/(platform)/creators/page.tsx`, `apps/web/app/(platform)/campaigns/[campaignId]/discover/page.tsx`, and `apps/web/app/(platform)/campaigns/[campaignId]/_components/TriggerSearchButton.tsx` already contain uncommitted overlapping work, so those need a careful merge rather than a blind rewrite.
   - Campaign/manual search are now unified at the backend job layer, but fit scoring is still stronger in the legacy `lib/workers/creator-search.ts` path than in the new orchestrator ranking.
+  - The validation infrastructure and jobs route are currently only in the working tree; they need to be committed so the repo remains buildable from git state alone.
 - Next concrete steps:
-  - Merge the overlapping creators/campaign UI changes onto the new backend payload shape and add campaign job polling in the UI.
+  - Commit the merged UI/runtime + validation infrastructure checkpoint.
   - Move shared fit scoring out of `lib/workers/creator-search.ts` so the orchestrator produces one ranking surface for all sources.
   - Add the automation backfill script promised in this subphase for older configs without `config.query`.

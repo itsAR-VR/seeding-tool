@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
+import { validateInstagramCreators } from "@/lib/instagram/validator";
 
 /**
  * POST /api/creators/import — Bulk import creators from CSV data.
@@ -70,14 +71,39 @@ export async function POST(request: NextRequest) {
       "creator_marketplace",
     ];
 
+    const normalizedRows = body.rows.map((row) => ({
+      ...row,
+      username: row.username?.trim()?.replace(/^@/, "") ?? "",
+    }));
+    const handlesToValidate = normalizedRows
+      .map((row) => row.username)
+      .filter(Boolean);
+    const validationResults = await validateInstagramCreators(
+      handlesToValidate.map((handle) => ({ handle })),
+      {
+        concurrency: 1,
+        includeAvgViews: false,
+      }
+    );
+    const validationByHandle = new Map(
+      validationResults.map((result) => [result.handle.toLowerCase(), result])
+    );
+
     let created = 0;
     let updated = 0;
     let skipped = 0;
+    let invalidDropped = 0;
 
-    for (const row of body.rows) {
-      const handle = row.username?.trim()?.replace(/^@/, "");
+    for (const row of normalizedRows) {
+      const handle = row.username;
       if (!handle) {
         skipped++;
+        continue;
+      }
+
+      const validation = validationByHandle.get(handle.toLowerCase());
+      if (!validation || validation.status !== "valid") {
+        invalidDropped++;
         continue;
       }
 
@@ -85,8 +111,8 @@ export async function POST(request: NextRequest) {
         ? row.discoverySource!
         : "csv_import";
       const normalizedFollowerCount = sanitizeFollowerCount(
-        source,
-        row.followerCount
+        "instagram_html",
+        validation.followerCount ?? row.followerCount
       );
 
       // INVARIANT: Creators are deduplicated by instagramHandle on import
@@ -109,9 +135,12 @@ export async function POST(request: NextRequest) {
               normalizedFollowerCount === undefined
                 ? existing.followerCount
                 : normalizedFollowerCount,
-            avgViews: row.avgViews ?? existing.avgViews,
+            avgViews: existing.avgViews,
             bioCategory: row.bioCategory || existing.bioCategory,
             imageUrl: row.imageUrl || existing.imageUrl,
+            validationStatus: "valid",
+            lastValidatedAt: new Date(),
+            lastValidationError: null,
             // Don't overwrite discoverySource if already set to something more specific
           },
         });
@@ -125,7 +154,7 @@ export async function POST(request: NextRequest) {
           },
           update: {
             handle,
-            url: row.profileUrl || undefined,
+            url: validation.url || row.profileUrl || undefined,
             followerCount: normalizedFollowerCount ?? undefined,
             engagementRate: row.engagementRate ?? undefined,
           },
@@ -133,7 +162,7 @@ export async function POST(request: NextRequest) {
             creatorId: existing.id,
             platform: "instagram",
             handle,
-            url: row.profileUrl || `https://instagram.com/${handle}`,
+            url: validation.url || row.profileUrl || `https://instagram.com/${handle}`,
             followerCount: normalizedFollowerCount ?? null,
             engagementRate: row.engagementRate ?? null,
           },
@@ -148,10 +177,13 @@ export async function POST(request: NextRequest) {
             email: row.email || null,
             bio: row.bio || null,
             followerCount: normalizedFollowerCount ?? null,
-            avgViews: row.avgViews ?? null,
+            avgViews: null,
             bioCategory: row.bioCategory || null,
             imageUrl: row.imageUrl || null,
             discoverySource: source,
+            validationStatus: "valid",
+            lastValidatedAt: new Date(),
+            lastValidationError: null,
             brandId: membership.brandId,
           },
         });
@@ -174,7 +206,10 @@ export async function POST(request: NextRequest) {
             },
             update: {
               handle,
-              url: row.profileUrl || `https://instagram.com/${handle}`,
+              url:
+                validation.url ||
+                row.profileUrl ||
+                `https://instagram.com/${handle}`,
               followerCount: normalizedFollowerCount ?? null,
               engagementRate: row.engagementRate ?? null,
             },
@@ -184,7 +219,10 @@ export async function POST(request: NextRequest) {
               handle,
               followerCount: normalizedFollowerCount ?? null,
               engagementRate: row.engagementRate ?? null,
-              url: row.profileUrl || `https://instagram.com/${handle}`,
+              url:
+                validation.url ||
+                row.profileUrl ||
+                `https://instagram.com/${handle}`,
             },
           });
         }
@@ -193,7 +231,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ created, updated, skipped });
+    return NextResponse.json({
+      requested: body.rows.length,
+      validImported: created + updated,
+      created,
+      updated,
+      invalidDropped,
+      skipped,
+    });
   } catch (error) {
     console.error("[creators/import/POST]", error);
     return NextResponse.json(

@@ -3,13 +3,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PlaywrightCrawler, ProxyConfiguration } from "crawlee";
-import { chromium } from "playwright";
 import { Pool } from "pg";
-import {
-  extractInstagramFollowerCountFromHtml,
-  isInstagramProfileBlocked,
-} from "../lib/instagram/profile-html";
+import { validateInstagramCreators } from "../lib/instagram/validator";
 
 type TargetCreator = {
   id: string;
@@ -24,6 +19,10 @@ type RefreshResult = {
   handle: string;
   url: string;
   followerCount: number | null;
+  avgViews: number | null;
+  checkedVideoCount: number;
+  status: "valid" | "invalid";
+  errorCode: string | null;
   blocked: boolean;
   error: string | null;
 };
@@ -72,6 +71,7 @@ function parseArgs() {
     dryRun: args.includes("--dry-run"),
     headful: args.includes("--headful"),
     clearOnFailure: args.includes("--clear-on-failure"),
+    includeAvgViews: args.includes("--include-avg-views"),
   };
 }
 
@@ -146,124 +146,34 @@ async function loadTargets(
   }));
 }
 
-function createProxyConfiguration() {
-  const proxyUrls = process.env.CRAWLEE_PROXY_URLS?.split(",")
-    .map((url) => url.trim())
-    .filter(Boolean);
-
-  if (!proxyUrls || proxyUrls.length === 0) {
-    return undefined;
-  }
-
-  return new ProxyConfiguration({ proxyUrls });
-}
-
 async function refreshFollowerCounts(
   targets: TargetCreator[],
   options: ReturnType<typeof parseArgs>
 ) {
-  const results = new Map<string, RefreshResult>();
-
-  const crawler = new PlaywrightCrawler({
-    maxRequestsPerCrawl: targets.length,
-    maxConcurrency: Math.max(1, options.concurrency),
-    requestHandlerTimeoutSecs: 60,
-    navigationTimeoutSecs: 45,
-    useSessionPool: true,
-    persistCookiesPerSession: true,
-    proxyConfiguration: createProxyConfiguration(),
-    sessionPoolOptions: {
-      maxPoolSize: Math.max(8, options.concurrency * 4),
-    },
-    browserPoolOptions: {
-      useFingerprints: true,
-    },
-    launchContext: {
-      launcher: chromium,
-      launchOptions: {
-        headless: !options.headful,
-      },
-    },
-    preNavigationHooks: [
-      async ({ page }, gotoOptions) => {
-        gotoOptions.waitUntil = "domcontentloaded";
-        await page.setExtraHTTPHeaders({
-          "accept-language": "en-US,en;q=0.9",
-        });
-      },
-    ],
-    async requestHandler({ page, request, session, log }) {
-      const target = request.userData.target as TargetCreator;
-
-      await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(600 + Math.floor(Math.random() * 1_200));
-
-      const html = await page.content();
-      const followerCount = extractInstagramFollowerCountFromHtml(html);
-      const blocked = isInstagramProfileBlocked(html);
-
-      if (followerCount == null) {
-        const title = await page.title().catch(() => "");
-        if (blocked || /instagram/i.test(title) === false) {
-          session?.markBad();
-        }
-
-        results.set(target.id, {
-          creatorId: target.id,
-          handle: target.instagramHandle,
-          url: page.url(),
-          followerCount: null,
-          blocked,
-          error: blocked
-            ? "blocked_or_login_wall"
-            : "follower_count_not_found",
-        });
-        return;
-      }
-
-      log.info(`@${target.instagramHandle} → ${followerCount.toLocaleString()}`);
-      results.set(target.id, {
-        creatorId: target.id,
-        handle: target.instagramHandle,
-        url: page.url(),
-        followerCount,
-        blocked: false,
-        error: null,
-      });
-    },
-    async failedRequestHandler({ request, error }) {
-      const target = request.userData.target as TargetCreator;
-      results.set(target.id, {
-        creatorId: target.id,
-        handle: target.instagramHandle,
-        url: request.url,
-        followerCount: null,
-        blocked: false,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    },
-  });
-
-  await crawler.run(
+  const validationResults = await validateInstagramCreators(
     targets.map((target) => ({
-      url: `https://www.instagram.com/${target.instagramHandle}/`,
-      uniqueKey: target.id,
-      userData: { target },
-    }))
+      creatorId: target.id,
+      handle: target.instagramHandle,
+    })),
+    {
+      concurrency: Math.max(1, options.concurrency),
+      headful: options.headful,
+      includeAvgViews: options.includeAvgViews,
+    }
   );
 
-  return targets.map((target) => {
-    return (
-      results.get(target.id) ?? {
-        creatorId: target.id,
-        handle: target.instagramHandle,
-        url: `https://www.instagram.com/${target.instagramHandle}/`,
-        followerCount: null,
-        blocked: false,
-        error: "no_result",
-      }
-    );
-  });
+  return validationResults.map<RefreshResult>((result) => ({
+    creatorId: result.creatorId ?? result.handle,
+    handle: result.handle,
+    url: result.url,
+    followerCount: result.followerCount,
+    avgViews: result.avgViews,
+    checkedVideoCount: result.checkedVideoCount,
+    status: result.status,
+    errorCode: result.errorCode,
+    blocked: result.blocked,
+    error: result.error,
+  }));
 }
 
 async function persistResults(
@@ -279,15 +189,38 @@ async function persistResults(
     if (result.followerCount == null && !shouldClear) continue;
 
     const nextFollowerCount = shouldClear ? null : result.followerCount;
+    const nextAvgViews = shouldClear
+      ? null
+      : options.includeAvgViews
+        ? result.avgViews
+        : null;
+    const validationStatus =
+      result.status === "valid" ? "valid" : "invalid";
 
     await pool.query(
       `
         update creators
         set follower_count = $2,
+            avg_views = case
+              when $6 then null
+              when $7 then coalesce($3, avg_views)
+              else avg_views
+            end,
+            validation_status = $4,
+            last_validated_at = now(),
+            last_validation_error = $5,
             "updatedAt" = now()
         where id = $1
       `,
-      [result.creatorId, nextFollowerCount]
+      [
+        result.creatorId,
+        nextFollowerCount,
+        nextAvgViews,
+        validationStatus,
+        result.error,
+        shouldClear,
+        options.includeAvgViews,
+      ]
     );
 
     await pool.query(
@@ -307,6 +240,11 @@ async function persistResults(
           lastFollowerSyncSource: "instagram_html",
           lastFollowerSyncUrl: result.url,
           lastFollowerSyncError: result.error,
+          lastFollowerValidationStatus: validationStatus,
+          lastFollowerValidationCode: result.errorCode,
+          lastAvgViewsSyncAt: options.includeAvgViews ? timestamp : null,
+          lastAvgViewsValue: options.includeAvgViews ? nextAvgViews : null,
+          lastAvgViewsVideoCount: result.checkedVideoCount,
         }),
       ]
     );

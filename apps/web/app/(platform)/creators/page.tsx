@@ -7,6 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
+import {
+  GroupedCategoryPicker,
+  type CategoryGroups,
+  type CategorySelection,
+} from "@/components/grouped-category-picker";
 
 type CreatorProfile = {
   platform: string;
@@ -45,14 +50,20 @@ type CampaignOption = {
 type SearchResult = {
   id: string;
   handle: string;
+  source?: string;
+  primarySource?: string;
+  sources?: string[];
   name: string | null;
   followerCount: number | null;
+  avgViews?: number | null;
   engagementRate: number | null;
   profileUrl: string | null;
   imageUrl: string | null;
   bio: string | null;
   bioCategory: string | null;
   platform: string;
+  validationStatus?: string;
+  validationError?: string | null;
 };
 
 type FacetOption = {
@@ -72,6 +83,29 @@ const EMPTY_FACETS: CreatorFacets = {
   keywords: [],
   hashtags: [],
   usernames: [],
+};
+
+const EMPTY_CATEGORY_GROUPS: CategoryGroups = {
+  apify: [],
+  collabstr: [],
+};
+
+const EMPTY_CATEGORY_SELECTION: CategorySelection = {
+  apify: [],
+  collabstr: [],
+};
+
+type SearchSourceKey =
+  | "collabstr"
+  | "apify_search"
+  | "approved_seed_following"
+  | "apify_keyword_email";
+
+const DEFAULT_SEARCH_SOURCES: Record<SearchSourceKey, boolean> = {
+  collabstr: true,
+  apify_search: true,
+  approved_seed_following: false,
+  apify_keyword_email: false,
 };
 
 function appendDelimitedValue(current: string, nextValue: string) {
@@ -134,12 +168,19 @@ export default function CreatorsPage() {
 
   // Search Creators modal state
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchMode, setSearchMode] = useState<"hashtag" | "profile">(
-    "hashtag"
-  );
-  const [searchHashtag, setSearchHashtag] = useState("");
+  const [searchKeywords, setSearchKeywords] = useState("");
   const [searchUsernames, setSearchUsernames] = useState("");
+  const [searchLocation, setSearchLocation] = useState("");
+  const [searchMinFollowers, setSearchMinFollowers] = useState("");
+  const [searchMaxFollowers, setSearchMaxFollowers] = useState("");
   const [searchLimit, setSearchLimit] = useState("50");
+  const [searchSources, setSearchSources] =
+    useState<Record<SearchSourceKey, boolean>>(DEFAULT_SEARCH_SOURCES);
+  const [searchCategories, setSearchCategories] =
+    useState<CategorySelection>(EMPTY_CATEGORY_SELECTION);
+  const [searchCategoryGroups, setSearchCategoryGroups] =
+    useState<CategoryGroups>(EMPTY_CATEGORY_GROUPS);
+  const [searchCategoriesLoading, setSearchCategoriesLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [searchStatus, setSearchStatus] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -214,6 +255,37 @@ export default function CreatorsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!showSearchModal) return;
+
+    let ignore = false;
+
+    async function fetchSearchCategories() {
+      setSearchCategoriesLoading(true);
+      try {
+        const response = await fetch("/api/categories");
+        if (!response.ok) return;
+
+        const data = (await response.json()) as CategoryGroups;
+        if (!ignore) {
+          setSearchCategoryGroups(data);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!ignore) {
+          setSearchCategoriesLoading(false);
+        }
+      }
+    }
+
+    fetchSearchCategories();
+
+    return () => {
+      ignore = true;
+    };
+  }, [showSearchModal]);
+
   async function fetchCampaigns() {
     try {
       const res = await fetch("/api/campaigns");
@@ -276,6 +348,38 @@ export default function CreatorsPage() {
       return;
     }
 
+    const selectedSources = (
+      Object.entries(searchSources) as Array<[SearchSourceKey, boolean]>
+    )
+      .filter(([, enabled]) => enabled)
+      .map(([source]) => source);
+
+    if (selectedSources.length === 0) {
+      alert("Select at least one discovery source.");
+      return;
+    }
+
+    const keywordList = [
+      ...searchKeywords
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+      ...searchCategories.collabstr,
+    ];
+    const usernames = searchUsernames
+      .split(/[\n,]+/)
+      .map((u) => u.trim().replace(/^@/, ""))
+      .filter(Boolean);
+
+    if (
+      keywordList.length === 0 &&
+      searchCategories.apify.length === 0 &&
+      usernames.length === 0
+    ) {
+      alert("Add keywords, categories, or exact usernames before searching.");
+      return;
+    }
+
     setSearching(true);
     setSearchResults([]);
     setSelectedResults(new Set());
@@ -283,19 +387,30 @@ export default function CreatorsPage() {
 
     try {
       const body: Record<string, unknown> = {
-        searchMode,
+        sources: selectedSources,
+        keywords: keywordList,
+        canonicalCategories: searchCategories.apify,
         platform: "instagram",
         limit: limitState.value,
+        filters: {
+          ...(searchMinFollowers.trim()
+            ? { minFollowers: Number(searchMinFollowers) }
+            : {}),
+          ...(searchMaxFollowers.trim()
+            ? { maxFollowers: Number(searchMaxFollowers) }
+            : {}),
+          requireCategory: searchCategories.apify.length > 0,
+          excludeExistingCreators: false,
+        },
+        emailPrefetch: searchSources.apify_keyword_email,
+        seedExpansion: {
+          enabled: searchSources.approved_seed_following,
+          maxSeedsPerRun: 5,
+          maxFollowingPerSeed: 100,
+        },
       };
-
-      if (searchMode === "hashtag") {
-        body.hashtag = searchHashtag;
-      } else {
-        body.usernames = searchUsernames
-          .split(/[\n,]+/)
-          .map((u) => u.trim())
-          .filter(Boolean);
-      }
+      if (searchLocation.trim()) body.location = searchLocation.trim();
+      if (usernames.length > 0) body.usernames = usernames;
 
       const res = await fetch("/api/creators/search", {
         method: "POST",
@@ -325,13 +440,17 @@ export default function CreatorsPage() {
 
           if (
             pollData.status === "completed" ||
+            pollData.status === "completed_with_shortfall" ||
             pollData.status === "failed"
           ) {
             if (pollRef.current) clearInterval(pollRef.current);
             pollRef.current = null;
             setSearching(false);
 
-            if (pollData.status === "completed") {
+            if (
+              pollData.status === "completed" ||
+              pollData.status === "completed_with_shortfall"
+            ) {
               setSearchResults(pollData.results || []);
             } else {
               alert(`Search failed: ${pollData.error || "Unknown error"}`);
@@ -383,7 +502,7 @@ export default function CreatorsPage() {
         imageUrl: r.imageUrl,
         profileUrl: r.profileUrl,
         engagementRate: r.engagementRate,
-        discoverySource: "apify",
+        discoverySource: r.primarySource || r.source || "manual",
       }));
 
       const res = await fetch("/api/creators/import", {
@@ -417,16 +536,15 @@ export default function CreatorsPage() {
     setSearchResults([]);
     setSelectedResults(new Set());
     setSearching(false);
-    setSearchHashtag("");
+    setSearchKeywords("");
     setSearchUsernames("");
+    setSearchLocation("");
+    setSearchMinFollowers("");
+    setSearchMaxFollowers("");
     setSearchLimit("50");
-    setSearchMode("hashtag");
+    setSearchSources(DEFAULT_SEARCH_SOURCES);
+    setSearchCategories(EMPTY_CATEGORY_SELECTION);
   }
-
-  const hashtagSuggestions = useMemo(
-    () => facets.hashtags.slice(0, 12),
-    [facets.hashtags]
-  );
 
   const keywordSuggestions = useMemo(
     () => facets.keywords.slice(0, 16),
@@ -445,10 +563,6 @@ export default function CreatorsPage() {
     searchLimitValidation.value && searchLimitValidation.value > 100
       ? "Values above 100 are allowed, but expect heavier daily discovery volume."
       : null;
-
-  function addHashtagSuggestion(value: string) {
-    setSearchHashtag(value.replace(/^#/, ""));
-  }
 
   function addUsernameSuggestion(value: string) {
     setSearchUsernames((current) => appendDelimitedValue(current, value));
@@ -834,125 +948,154 @@ export default function CreatorsPage() {
               {/* Search Form — only shown before results */}
               {searchResults.length === 0 && !searching && (
                 <>
-                  {/* Search mode toggle */}
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant={
-                        searchMode === "hashtag" ? "default" : "outline"
-                      }
-                      onClick={() => setSearchMode("hashtag")}
-                    >
-                      By Hashtag
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant={
-                        searchMode === "profile" ? "default" : "outline"
-                      }
-                      onClick={() => setSearchMode("profile")}
-                    >
-                      By Username List
-                    </Button>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
+                    Run one background discovery query across Collabstr,
+                    Apify search, and optional approved-seed expansion. Add
+                    exact usernames only when you want to validate specific
+                    handles.
                   </div>
 
-                  {searchMode === "hashtag" ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Sources</label>
+                    <div className="flex flex-wrap gap-2">
+                      {([
+                        ["collabstr", "Collabstr"],
+                        ["apify_search", "Apify Search"],
+                        ["approved_seed_following", "Approved Seed Following"],
+                        ["apify_keyword_email", "Keyword Email"],
+                      ] as Array<[SearchSourceKey, string]>).map(
+                        ([source, label]) => (
+                          <Button
+                            key={source}
+                            type="button"
+                            size="sm"
+                            variant={searchSources[source] ? "default" : "outline"}
+                            onClick={() =>
+                              setSearchSources((current) => ({
+                                ...current,
+                                [source]: !current[source],
+                              }))
+                            }
+                          >
+                            {label}
+                          </Button>
+                        )
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Keywords</label>
+                      <Input
+                        placeholder="e.g. sleep, wellness, skincare"
+                        value={searchKeywords}
+                        onChange={(e) => setSearchKeywords(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Location</label>
+                      <Input
+                        placeholder="e.g. United States"
+                        value={searchLocation}
+                        onChange={(e) => setSearchLocation(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">
+                        Exact usernames{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (optional)
+                        </span>
+                      </label>
+                      <textarea
+                        className="min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
+                        placeholder={"creatorone, creatortwo\ncreatorthree"}
+                        value={searchUsernames}
+                        onChange={(e) => setSearchUsernames(e.target.value)}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {usernameSuggestions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
+                            onClick={() => addUsernameSuggestion(option.value)}
+                          >
+                            @{option.value}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-4">
-                      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                        Hashtag search looks for creators posting under a topic.
-                        Use one of the saved tags below if you want a term that
-                        already appears in your creator data.
-                      </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">Hashtag</label>
-                        <Input
-                          placeholder="e.g. skincare, pilates, supplements"
-                          value={searchHashtag}
-                          onChange={(e) => setSearchHashtag(e.target.value)}
-                        />
+                        <label className="text-sm font-medium">
+                          Follower range
+                        </label>
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Min"
+                            value={searchMinFollowers}
+                            onChange={(e) => setSearchMinFollowers(e.target.value)}
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="Max"
+                            value={searchMaxFollowers}
+                            onChange={(e) => setSearchMaxFollowers(e.target.value)}
+                          />
+                        </div>
                       </div>
+
                       <div className="space-y-2">
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Suggested hashtags
+                          Popular keywords from your database
                         </p>
                         <div className="flex flex-wrap gap-2">
-                          {hashtagSuggestions.map((option) => (
+                          {keywordSuggestions.map((option) => (
                             <button
                               key={option.value}
                               type="button"
                               className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
-                              onClick={() => addHashtagSuggestion(option.value)}
+                              onClick={() =>
+                                setSearchKeywords((current) =>
+                                  appendDelimitedValue(current, option.value)
+                                )
+                              }
                             >
                               {option.value} ({option.count})
                             </button>
                           ))}
-                          {hashtagSuggestions.length === 0 && (
+                          {keywordSuggestions.length === 0 && (
                             <p className="text-xs text-muted-foreground">
-                              No saved hashtag suggestions yet.
+                              No keyword guidance yet.
                             </p>
                           )}
                         </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                        Username list search checks exact Instagram handles.
-                        Paste handles separated by commas or new lines, or click
-                        a saved handle below to avoid typos.
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Usernames
-                        </label>
-                        <textarea
-                          className="min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
-                          placeholder={"creatorone, creatortwo\ncreatorthree"}
-                          value={searchUsernames}
-                          onChange={(e) => setSearchUsernames(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Saved usernames
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {usernameSuggestions.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
-                              onClick={() => addUsernameSuggestion(option.value)}
-                            >
-                              @{option.value}
-                            </button>
-                          ))}
-                          {usernameSuggestions.length === 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              No saved usernames yet.
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
 
                   <div className="space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                      Popular keywords from your database
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {keywordSuggestions.map((option) => (
-                        <Badge key={option.value} variant="outline" className="text-xs">
-                          {option.value} ({option.count})
-                        </Badge>
-                      ))}
-                      {keywordSuggestions.length === 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          No keyword guidance yet.
-                        </p>
-                      )}
-                    </div>
+                    <label className="text-sm font-medium">Categories</label>
+                    {searchCategoriesLoading ? (
+                      <p className="text-sm text-muted-foreground">
+                        Loading category sources…
+                      </p>
+                    ) : (
+                      <GroupedCategoryPicker
+                        categories={searchCategoryGroups}
+                        selected={searchCategories}
+                        onChange={setSearchCategories}
+                      />
+                    )}
                   </div>
 
                   <div className="space-y-2">
@@ -999,7 +1142,7 @@ export default function CreatorsPage() {
                 <div className="py-8 text-center">
                   <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
                   <p className="text-sm text-muted-foreground">
-                    Searching creators via Apify…
+                    Running unified creator discovery…
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Status: {searchStatus || "starting"}
@@ -1041,8 +1184,9 @@ export default function CreatorsPage() {
                             />
                           </th>
                           <th className="p-2 font-medium">Creator</th>
+                          <th className="p-2 font-medium">Sources</th>
                           <th className="p-2 font-medium">Followers</th>
-                          <th className="p-2 font-medium">Engagement</th>
+                          <th className="p-2 font-medium">Avg Views</th>
                           <th className="p-2 font-medium">Bio</th>
                         </tr>
                       </thead>
@@ -1091,16 +1235,29 @@ export default function CreatorsPage() {
                                 </div>
                               </div>
                             </td>
+                            <td className="p-2">
+                              <div className="flex flex-wrap gap-1">
+                                {(result.sources ?? [
+                                  result.primarySource || result.source || "manual",
+                                ]).map((source) => (
+                                  <Badge
+                                    key={`${result.id}-${source}`}
+                                    variant="outline"
+                                    className="text-[10px]"
+                                  >
+                                    {source}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </td>
                             <td className="p-2 text-xs">
                               {result.followerCount?.toLocaleString() ?? "—"}
                             </td>
                             <td className="p-2 text-xs">
-                              {result.engagementRate
-                                ? `${(result.engagementRate * 100).toFixed(1)}%`
-                                : "—"}
+                              {result.avgViews?.toLocaleString() ?? "—"}
                             </td>
                             <td className="p-2 text-xs max-w-[200px] truncate">
-                              {result.bio || "—"}
+                              {result.bio || result.bioCategory || "—"}
                             </td>
                           </tr>
                         ))}
@@ -1126,9 +1283,12 @@ export default function CreatorsPage() {
                   <Button
                     onClick={startSearch}
                     disabled={
-                      (searchMode === "hashtag" && !searchHashtag.trim()) ||
-                      (searchMode === "profile" &&
-                        !searchUsernames.trim()) ||
+                      (
+                        !searchKeywords.trim() &&
+                        searchCategories.apify.length === 0 &&
+                        searchCategories.collabstr.length === 0 &&
+                        !searchUsernames.trim()
+                      ) ||
                       Boolean(searchLimitValidation.error)
                     }
                   >

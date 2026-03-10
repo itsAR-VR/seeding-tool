@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,66 +11,235 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  GroupedCategoryPicker,
+  type CategoryGroups,
+  type CategorySelection,
+} from "@/components/grouped-category-picker";
 
-type SearchResult = {
-  status: string;
+type SearchJob = {
   jobId: string;
-  added: number;
-  analyzed: number;
-  creditsConsumed: number;
-  icpKeywords: string[];
-  usedWorker: boolean;
+  status: string;
+  requestedCount?: number;
+  resultCount?: number;
+  progressPercent?: number;
+  etaSeconds?: number | null;
 };
 
 type SearchFilters = {
-  platform: string;
   keywords: string;
+  location: string;
   minFollowers: string;
   maxFollowers: string;
-  category: string;
-  location: string;
+  limit: string;
 };
+
+type SearchSourceKey =
+  | "collabstr"
+  | "apify_search"
+  | "approved_seed_following"
+  | "apify_keyword_email";
+
+const EMPTY_CATEGORIES: CategoryGroups = {
+  apify: [],
+  collabstr: [],
+};
+
+const EMPTY_SELECTION: CategorySelection = {
+  apify: [],
+  collabstr: [],
+};
+
+const DEFAULT_SOURCES: Record<SearchSourceKey, boolean> = {
+  collabstr: true,
+  apify_search: true,
+  approved_seed_following: false,
+  apify_keyword_email: false,
+};
+
+function parseCsv(value: string) {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function parsePositiveInteger(value: string) {
+  if (!value.trim()) {
+    return { value: null, error: "Creator limit is required." };
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return {
+      value: null,
+      error: "Creator limit must be a positive integer.",
+    };
+  }
+
+  return { value: parsed, error: null };
+}
 
 export default function DiscoverCreatorsPage() {
   const params = useParams<{ campaignId: string }>();
   const router = useRouter();
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const [filters, setFilters] = useState<SearchFilters>({
-    platform: "instagram",
     keywords: "",
+    location: "",
     minFollowers: "",
     maxFollowers: "",
-    category: "",
-    location: "",
+    limit: "20",
   });
+  const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
+  const [selectedCategories, setSelectedCategories] =
+    useState<CategorySelection>(EMPTY_SELECTION);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [sources, setSources] =
+    useState<Record<SearchSourceKey, boolean>>(DEFAULT_SOURCES);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<SearchResult | null>(null);
+  const [job, setJob] = useState<SearchJob | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function handleChange(key: keyof SearchFilters, value: string) {
+  const selectedSourceList = useMemo(
+    () =>
+      (Object.entries(sources) as Array<[SearchSourceKey, boolean]>)
+        .filter(([, enabled]) => enabled)
+        .map(([source]) => source),
+    [sources]
+  );
+
+  const parsedLimit = useMemo(
+    () => parsePositiveInteger(filters.limit),
+    [filters.limit]
+  );
+
+  const limitWarning =
+    parsedLimit.value && parsedLimit.value > 100
+      ? "Values above 100 are allowed, but they increase search volume."
+      : null;
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function fetchCategories() {
+      setCategoriesLoading(true);
+      try {
+        const response = await fetch("/api/categories");
+        if (!response.ok) return;
+
+        const data = (await response.json()) as CategoryGroups;
+        if (!ignore) {
+          setCategories(data);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!ignore) {
+          setCategoriesLoading(false);
+        }
+      }
+    }
+
+    fetchCategories();
+
+    return () => {
+      ignore = true;
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  function handleFilterChange(key: keyof SearchFilters, value: string) {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleSource(source: SearchSourceKey) {
+    setSources((current) => ({
+      ...current,
+      [source]: !current[source],
+    }));
+  }
+
+  async function pollJob(jobId: string) {
+    const response = await fetch(
+      `/api/campaigns/${params.campaignId}/search/${jobId}`
+    );
+    if (!response.ok) {
+      return;
+    }
+
+    const payload = (await response.json()) as SearchJob;
+    setJob(payload);
+
+    if (
+      payload.status === "completed" ||
+      payload.status === "completed_with_shortfall" ||
+      payload.status === "failed"
+    ) {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      setLoading(false);
+    }
+  }
+
   async function handleSearch() {
+    if (parsedLimit.error) {
+      setError(parsedLimit.error);
+      return;
+    }
+
+    if (selectedSourceList.length === 0) {
+      setError("Select at least one discovery source.");
+      return;
+    }
+
+    const keywordList = [
+      ...parseCsv(filters.keywords),
+      ...selectedCategories.collabstr,
+    ];
+
+    if (
+      keywordList.length === 0 &&
+      selectedCategories.apify.length === 0
+    ) {
+      setError("Add keywords or choose at least one category.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
-    setResult(null);
+    setJob(null);
 
     try {
-      const body: Record<string, unknown> = {};
-      if (filters.platform) body.platform = filters.platform;
-      if (filters.keywords.trim()) {
-        body.keywords = filters.keywords
-          .split(",")
-          .map((k) => k.trim())
-          .filter(Boolean);
-      }
-      if (filters.minFollowers) body.minFollowers = Number(filters.minFollowers);
-      if (filters.maxFollowers) body.maxFollowers = Number(filters.maxFollowers);
-      if (filters.category.trim()) body.category = filters.category.trim();
-      if (filters.location.trim()) body.location = filters.location.trim();
+      const body = {
+        sources: selectedSourceList,
+        keywords: keywordList,
+        canonicalCategories: selectedCategories.apify,
+        platform: "instagram",
+        limit: parsedLimit.value,
+        ...(filters.location.trim() ? { location: filters.location.trim() } : {}),
+        filters: {
+          ...(filters.minFollowers.trim()
+            ? { minFollowers: Number(filters.minFollowers) }
+            : {}),
+          ...(filters.maxFollowers.trim()
+            ? { maxFollowers: Number(filters.maxFollowers) }
+            : {}),
+          requireCategory: selectedCategories.apify.length > 0,
+          excludeExistingCreators: true,
+        },
+        emailPrefetch: sources.apify_keyword_email,
+        seedExpansion: {
+          enabled: sources.approved_seed_following,
+          maxSeedsPerRun: 5,
+          maxFollowingPerSeed: 100,
+        },
+      };
 
-      const res = await fetch(
+      const response = await fetch(
         `/api/campaigns/${params.campaignId}/search`,
         {
           method: "POST",
@@ -79,32 +248,38 @@ export default function DiscoverCreatorsPage() {
         }
       );
 
-      const data = (await res.json()) as SearchResult | { error: string };
-
-      if (!res.ok) {
+      const data = (await response.json()) as SearchJob | { error: string };
+      if (!response.ok) {
         setError((data as { error: string }).error ?? "Search failed");
+        setLoading(false);
         return;
       }
 
-      setResult(data as SearchResult);
+      const queuedJob = data as SearchJob;
+      setJob(queuedJob);
+
+      pollRef.current = setInterval(() => {
+        void pollJob(queuedJob.jobId);
+      }, 3000);
+
+      void pollJob(queuedJob.jobId);
     } catch {
       setError("Network error — please try again.");
-    } finally {
       setLoading(false);
     }
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Discover Creators
           </h1>
           <p className="text-muted-foreground">
-            Search the Collabstr dataset and score creators against your brand
-            ICP. Matching creators land in your review queue.
+            Run one background discovery job across Collabstr, Apify search,
+            and optional graph expansion. Matching creators land in your review
+            queue when the job finishes.
           </p>
         </div>
         <Button
@@ -115,180 +290,195 @@ export default function DiscoverCreatorsPage() {
         </Button>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Search Filters</CardTitle>
+          <CardTitle className="text-base">Discovery Query</CardTitle>
           <CardDescription>
-            Leave blank to use your brand&apos;s ICP automatically.
+            Default sources are Collabstr + Apify search. Add approved-seed
+            following or keyword-email enrichment only when you need broader
+            recall.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Platform</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={filters.platform}
-                onChange={(e) => handleChange("platform", e.target.value)}
-              >
-                <option value="instagram">Instagram</option>
-                <option value="tiktok">TikTok</option>
-              </select>
+        <CardContent className="space-y-5">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Sources</p>
+            <div className="flex flex-wrap gap-2">
+              {([
+                ["collabstr", "Collabstr"],
+                ["apify_search", "Apify Search"],
+                ["approved_seed_following", "Approved Seed Following"],
+                ["apify_keyword_email", "Keyword Email"],
+              ] as Array<[SearchSourceKey, string]>).map(([source, label]) => (
+                <Button
+                  key={source}
+                  type="button"
+                  size="sm"
+                  variant={sources[source] ? "default" : "outline"}
+                  onClick={() => toggleSource(source)}
+                >
+                  {label}
+                </Button>
+              ))}
             </div>
+          </div>
 
-            <div className="space-y-1">
-              <label className="text-sm font-medium">
-                Keywords{" "}
-                <span className="text-muted-foreground font-normal">
-                  (comma-separated)
-                </span>
-              </label>
-              <input
-                type="text"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
-                placeholder="e.g. wellness, beauty, fitness"
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Keywords</label>
+              <Input
+                placeholder="e.g. wellness, sleep, skincare"
                 value={filters.keywords}
-                onChange={(e) => handleChange("keywords", e.target.value)}
+                onChange={(event) =>
+                  handleFilterChange("keywords", event.target.value)
+                }
               />
             </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Category / Niche</label>
-              <input
-                type="text"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
-                placeholder="e.g. lifestyle"
-                value={filters.category}
-                onChange={(e) => handleChange("category", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Min Followers</label>
-              <input
-                type="number"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
-                placeholder="e.g. 5000"
-                value={filters.minFollowers}
-                onChange={(e) => handleChange("minFollowers", e.target.value)}
-                min={0}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Max Followers</label>
-              <input
-                type="number"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
-                placeholder="e.g. 500000"
-                value={filters.maxFollowers}
-                onChange={(e) => handleChange("maxFollowers", e.target.value)}
-                min={0}
-              />
-            </div>
-
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="text-sm font-medium">Location</label>
-              <input
-                type="text"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
+              <Input
                 placeholder="e.g. United States"
                 value={filters.location}
-                onChange={(e) => handleChange("location", e.target.value)}
+                onChange={(event) =>
+                  handleFilterChange("location", event.target.value)
+                }
               />
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Min followers</label>
+              <Input
+                type="number"
+                min={0}
+                value={filters.minFollowers}
+                onChange={(event) =>
+                  handleFilterChange("minFollowers", event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Max followers</label>
+              <Input
+                type="number"
+                min={0}
+                value={filters.maxFollowers}
+                onChange={(event) =>
+                  handleFilterChange("maxFollowers", event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Creator limit</label>
+              <Input
+                type="number"
+                min={1}
+                step={1}
+                value={filters.limit}
+                onChange={(event) =>
+                  handleFilterChange("limit", event.target.value)
+                }
+              />
+              {parsedLimit.error ? (
+                <p className="text-sm text-destructive">
+                  {parsedLimit.error}
+                </p>
+              ) : limitWarning ? (
+                <p className="text-sm text-amber-700">{limitWarning}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Categories</label>
+            {categoriesLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Loading category sources…
+              </p>
+            ) : (
+              <GroupedCategoryPicker
+                categories={categories}
+                selected={selectedCategories}
+                onChange={setSelectedCategories}
+              />
+            )}
+          </div>
+
           <div className="flex justify-end">
-            <Button onClick={handleSearch} disabled={loading} className="min-w-[140px]">
-              {loading ? "Searching…" : "🔍 Search Creators"}
+            <Button
+              onClick={handleSearch}
+              disabled={loading || categoriesLoading}
+              className="min-w-[160px]"
+            >
+              {loading ? "Running…" : "Run Discovery"}
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Error */}
-      {error && (
+      {error ? (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-4">
             <p className="text-sm text-red-700">{error}</p>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {/* Result */}
-      {result && (
+      {job ? (
         <Card className="border-green-200 bg-green-50">
           <CardHeader>
-            <CardTitle className="text-base text-green-800">
-              ✅ Search Complete
+            <CardTitle className="text-base text-green-900">
+              Discovery Job
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-2xl font-bold text-green-700">
-                  {result.added}
-                </p>
-                <p className="text-xs text-muted-foreground">Added to Queue</p>
+                <p className="text-xs text-muted-foreground">Job</p>
+                <p className="truncate text-xs font-mono">{job.jobId}</p>
               </div>
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-2xl font-bold">{result.analyzed}</p>
-                <p className="text-xs text-muted-foreground">Analyzed</p>
+                <p className="text-xs text-muted-foreground">Status</p>
+                <p className="text-sm font-semibold">{job.status}</p>
               </div>
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-2xl font-bold">{result.creditsConsumed}</p>
-                <p className="text-xs text-muted-foreground">
-                  Credits Used
+                <p className="text-xs text-muted-foreground">Requested</p>
+                <p className="text-sm font-semibold">
+                  {job.requestedCount ?? "—"}
                 </p>
               </div>
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <Badge
-                  className={
-                    result.usedWorker
-                      ? "bg-blue-100 text-blue-800"
-                      : "bg-gray-100 text-gray-800"
-                  }
-                >
-                  {result.usedWorker ? "Fly Worker" : "Local AI"}
-                </Badge>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Scoring Engine
+                <p className="text-xs text-muted-foreground">Ready</p>
+                <p className="text-sm font-semibold">
+                  {job.resultCount ?? 0}
                 </p>
               </div>
             </div>
 
-            {result.icpKeywords.length > 0 && (
-              <div>
-                <p className="mb-1 text-sm font-medium text-green-800">
-                  ICP Keywords Used
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {result.icpKeywords.map((kw) => (
-                    <Badge key={kw} variant="outline" className="text-xs">
-                      {kw}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="bg-blue-100 text-blue-800">
+                Background search
+              </Badge>
+              {typeof job.progressPercent === "number" ? (
+                <Badge variant="outline">{job.progressPercent}%</Badge>
+              ) : null}
+              {typeof job.etaSeconds === "number" ? (
+                <Badge variant="outline">ETA {job.etaSeconds}s</Badge>
+              ) : null}
+            </div>
 
-            {result.added > 0 && (
-              <div className="flex justify-end">
-                <Button
-                  onClick={() =>
-                    router.push(`/campaigns/${params.campaignId}/review`)
-                  }
-                >
-                  Review {result.added} Creator{result.added !== 1 ? "s" : ""}{" "}
-                  →
-                </Button>
-              </div>
-            )}
+            <div className="flex justify-end">
+              <Button
+                onClick={() =>
+                  router.push(`/campaigns/${params.campaignId}/review`)
+                }
+              >
+                Open Review Queue →
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -73,6 +73,29 @@ function extractMetaContent(html: string, name: string) {
   return null;
 }
 
+function extractNormalizedInstagramUrls(matches: Iterable<string>) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  for (const match of matches) {
+    const normalized = match
+      .replace(/\\\//g, "/")
+      .replace(/^https?:\/\/(www\.)?instagram\.com/i, "https://www.instagram.com")
+      .replace(/^\/+/, "");
+
+    const url = normalized.startsWith("http")
+      ? normalized
+      : `https://www.instagram.com/${normalized}`;
+
+    if (!seen.has(url)) {
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+
+  return urls;
+}
+
 export function extractInstagramFollowerCountFromHtml(html: string) {
   const jsonPatterns = [
     /"edge_followed_by"\s*:\s*\{"count"\s*:\s*(\d+)/i,
@@ -107,8 +130,85 @@ export function extractInstagramFollowerCountFromHtml(html: string) {
   return null;
 }
 
+export function extractInstagramRecentVideoUrlsFromHtml(
+  html: string,
+  limit = 12
+) {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
+  const addUrl = (url: string) => {
+    const normalized = extractNormalizedInstagramUrls([url])[0];
+    if (!normalized || seen.has(normalized)) {
+      return;
+    }
+
+    seen.add(normalized);
+    urls.push(normalized);
+  };
+
+  const videoPostMatches = html.matchAll(
+    /"shortcode":"([^"]+)","is_video":(true|false)/g
+  );
+  for (const match of videoPostMatches) {
+    if (match[2] !== "true") {
+      continue;
+    }
+
+    addUrl(`/p/${match[1]}/`);
+    if (urls.length >= limit) return urls;
+  }
+
+  const reelMatches = html.matchAll(
+    /(?:href=["']|https?:\/\/www\.instagram\.com\/)\/?reel\/([^"'/?#\\]+)\/?/gi
+  );
+  for (const match of reelMatches) {
+    addUrl(`/reel/${match[1]}/`);
+    if (urls.length >= limit) return urls;
+  }
+
+  return urls;
+}
+
+export function extractInstagramViewCountFromHtml(html: string) {
+  const jsonPatterns = [
+    /"video_view_count"\s*:\s*(\d+)/i,
+    /"play_count"\s*:\s*(\d+)/i,
+    /"view_count"\s*:\s*(\d+)/i,
+  ];
+
+  for (const pattern of jsonPatterns) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  const metaDescription =
+    extractMetaContent(html, "og:description") ??
+    extractMetaContent(html, "description");
+
+  if (metaDescription) {
+    const viewsMatch = metaDescription.match(/([\d.,]+(?:[KMB])?)\s+(?:Views|Plays)/i);
+    if (viewsMatch?.[1]) {
+      return parseInstagramCountText(viewsMatch[1]);
+    }
+  }
+
+  return null;
+}
+
 export function isInstagramProfileBlocked(html: string) {
   return /login|accounts\/login|challenge|Please wait a few minutes/i.test(
+    html
+  );
+}
+
+export function isInstagramProfileMissing(html: string) {
+  return /Sorry, this page isn't available|The link you followed may be broken|page isn't available/i.test(
     html
   );
 }

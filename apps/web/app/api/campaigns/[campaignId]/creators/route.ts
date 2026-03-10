@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { validateInstagramCreators } from "@/lib/instagram/validator";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -138,12 +139,58 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     let creatorId = body.creatorId;
 
+    if (creatorId) {
+      const existingCreator = await prisma.creator.findFirst({
+        where: {
+          id: creatorId,
+          brandId: membership.brandId,
+        },
+        select: {
+          id: true,
+          instagramHandle: true,
+          validationStatus: true,
+        },
+      });
+
+      if (!existingCreator) {
+        return NextResponse.json(
+          { error: "Creator not found" },
+          { status: 404 }
+        );
+      }
+
+      if (existingCreator.validationStatus === "invalid") {
+        return NextResponse.json(
+          { error: "Creator failed Instagram validation" },
+          { status: 422 }
+        );
+      }
+    }
+
     // If no existing creator ID, create one
     if (!creatorId) {
-      if (!body.name && !body.handle) {
+      if (!body.handle?.trim()) {
         return NextResponse.json(
-          { error: "Either creatorId or creator details required" },
+          { error: "A valid Instagram handle is required" },
           { status: 400 }
+        );
+      }
+
+      const [validation] = await validateInstagramCreators(
+        [{ handle: body.handle }],
+        {
+          concurrency: 1,
+          includeAvgViews: false,
+        }
+      );
+
+      if (!validation || validation.status !== "valid") {
+        return NextResponse.json(
+          {
+            error: "Instagram handle could not be validated",
+            validationError: validation?.error ?? "missing_profile",
+          },
+          { status: 422 }
         );
       }
 
@@ -151,17 +198,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
         data: {
           name: body.name,
           email: body.email,
+          instagramHandle: body.handle.trim().replace(/^@/, ""),
+          followerCount: validation.followerCount,
+          validationStatus: "valid",
+          lastValidatedAt: new Date(),
+          lastValidationError: null,
           brandId: membership.brandId,
-          profiles: body.handle
-            ? {
-                create: {
-                  platform: body.platform ?? "instagram",
-                  handle: body.handle,
-                  url: body.profileUrl,
-                  followerCount: body.followerCount,
-                },
-              }
-            : undefined,
+          profiles: {
+            create: {
+              platform: body.platform ?? "instagram",
+              handle: body.handle.trim().replace(/^@/, ""),
+              url: validation.url || body.profileUrl,
+              followerCount: validation.followerCount,
+            },
+          },
         },
       });
       creatorId = creator.id;

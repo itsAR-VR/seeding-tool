@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
     const maxViews = searchParams.get("maxViews");
     const category = searchParams.get("category");
     const source = searchParams.get("source");
+    const includeInvalid = searchParams.get("includeInvalid") === "1";
     const page = parseInt(searchParams.get("page") ?? "1", 10);
     const limit = Math.min(
       parseInt(searchParams.get("limit") ?? "50", 10),
@@ -168,6 +169,10 @@ export async function GET(request: NextRequest) {
     const where: Record<string, unknown> = {
       brandId: membership.brandId,
     };
+
+    if (!includeInvalid) {
+      where.validationStatus = { not: "invalid" };
+    }
 
     if (search) {
       where.OR = [
@@ -229,7 +234,12 @@ export async function GET(request: NextRequest) {
       }),
       prisma.creator.count({ where }),
       prisma.creator.findMany({
-        where: { brandId: membership.brandId },
+        where: includeInvalid
+          ? { brandId: membership.brandId }
+          : {
+              brandId: membership.brandId,
+              validationStatus: { not: "invalid" },
+            },
         select: {
           bio: true,
           bioCategory: true,
