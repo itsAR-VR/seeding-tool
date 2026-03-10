@@ -1,9 +1,8 @@
 #!/usr/bin/env npx tsx
 
-import { PrismaClient, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 type AutomationConfig = {
   [key: string]: unknown;

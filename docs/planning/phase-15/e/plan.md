@@ -69,3 +69,23 @@ Phase 15 closes when the on-disk plan, subphase package, and rollout notes are r
 - Assumption: Phase 14 remains on disk as historical context and is NOT deleted or merged into Phase 15 (confidence ~95%).
 - Assumption: Backfill of canonical category for existing creators uses the same rule-first + LLM-fallback classification as new discovery (confidence ~90%).
 - Assumption: `npx prisma db push` is the migration strategy (not `prisma migrate dev`) since this is a planning/development phase, not production migration (confidence ~80%). Production migration strategy should be documented separately.
+
+## Progress This Turn (Terminus Maximus)
+- Work done:
+  - Added `apps/web/scripts/backfill-creator-discovery.ts` to backfill discovery touches and canonical category assignments for existing creators.
+  - Verified the local database migration path with `npx prisma db push`.
+  - Ran the creator backfill in `--dry-run` mode successfully after the local DB schema was pushed.
+  - Verified the automation query backfill script runs against the local DB and updates old creator-discovery automation configs.
+- Commands run:
+  - `set -a && source ../../.env.local && source .env.local && npx prisma db push` — pass
+  - `set -a && source ../../.env.local && source .env.local && npx tsx scripts/backfill-creator-discovery.ts --dry-run` — pass (`38 touches created, 38 creator categories updated`)
+  - `set -a && source ../../.env.local && source .env.local && npx tsx scripts/migrate-automation-discovery-query.ts` — pass (`1 updated, 0 already current`)
+  - `npx eslint apps/web/scripts/backfill-creator-discovery.ts apps/web/scripts/migrate-automation-discovery-query.ts` — pass
+  - `npx vitest run __tests__/creator-search/contracts.test.ts` — pass
+- Blockers:
+  - New unexpected worktree changes appeared in `apps/web/lib/creator-search/orchestrator.ts`, `apps/web/lib/creator-search/orchestrator-types.ts`, `apps/web/lib/creator-search/candidate-merge.ts`, and `apps/web/lib/inngest/functions/creator-search.ts` after the last checkpoint commit. Those are being treated as concurrent changes and are not staged blindly.
+  - Phase review (`review.md`) is still pending because the phase is not yet fully stabilized and the active runtime files above need coordination first.
+- Next concrete steps:
+  - Stage and commit the new backfill scripts/docs without pulling in the concurrent runtime edits.
+  - Reconcile the unexpected orchestrator/runtime changes before attempting final Phase 15 closure and review.
+  - Add explicit evidence mapping from the local verification commands into `review.md` once the runtime worktree is stable.
