@@ -1,6 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { computeNextRunAt } from "@/lib/automations/schedule";
+import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
 
 function toHashtag(value: string | undefined) {
   if (!value) return undefined;
@@ -98,15 +99,16 @@ export const runAutomations = inngest.createFunction(
               jobId: job.id,
               campaignId: "",
               brandId: automation.brandId,
-              discoverySource: "apify",
-              criteria: {
-                platform: config.platform || "instagram",
-                searchMode: config.searchMode || "hashtag",
-                hashtag: derivedHashtag,
-                usernames: config.usernames,
-                limit: config.limit || 50,
-                categories: config.categories,
-              },
+              query: config.query
+                ? (config.query as Record<string, unknown>)
+                : buildUnifiedDiscoveryQueryFromAutomationConfig({
+                    platform: config.platform || "instagram",
+                    searchMode: config.searchMode || "hashtag",
+                    hashtag: derivedHashtag,
+                    usernames: config.usernames,
+                    limit: config.limit || 50,
+                    categories: config.categories,
+                  }),
             },
           });
 

@@ -3,7 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
-import { buildUnifiedDiscoveryQueryFromManualSearch } from "@/lib/creator-search/contracts";
+import {
+  buildUnifiedDiscoveryQueryFromManualSearch,
+  normalizeUnifiedDiscoveryQuery,
+  type UnifiedDiscoveryQuery,
+} from "@/lib/creator-search/contracts";
 
 /**
  * POST /api/creators/search — Start an Apify creator discovery search.
@@ -38,6 +42,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as {
+      sources?: string[];
+      keywords?: string[];
+      canonicalCategories?: string[];
+      filters?: Record<string, unknown>;
+      location?: string;
+      emailPrefetch?: boolean;
+      seedExpansion?: Record<string, unknown>;
       searchMode: "hashtag" | "profile";
       hashtag?: string;
       usernames?: string[];
@@ -53,7 +64,10 @@ export async function POST(request: NextRequest) {
       platform = "instagram",
     } = body;
 
-    const unifiedQuery = buildUnifiedDiscoveryQueryFromManualSearch(body);
+    const unifiedQuery =
+      Array.isArray(body.sources) || Array.isArray(body.keywords)
+        ? normalizeUnifiedDiscoveryQuery(body as Partial<UnifiedDiscoveryQuery>)
+        : buildUnifiedDiscoveryQueryFromManualSearch(body);
 
     // Validate input
     if (searchMode === "hashtag" && !hashtag?.trim()) {
@@ -89,14 +103,7 @@ export async function POST(request: NextRequest) {
         jobId: job.id,
         campaignId: "", // standalone search, not campaign-bound
         brandId: membership.brandId,
-        discoverySource: "apify",
-        criteria: {
-          platform,
-          searchMode,
-          hashtag: hashtag?.replace(/^#/, "").trim(),
-          usernames: usernames?.map((u) => u.trim().replace(/^@/, "")),
-          limit,
-        },
+        query: unifiedQuery,
       },
     });
 

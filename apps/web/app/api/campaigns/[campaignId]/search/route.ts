@@ -85,11 +85,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         jobId: job.id,
         campaignId,
         brandId: membership.brandId,
-        discoverySource: "creator_marketplace",
-        criteria: {
-          ...body,
-          limit: requestedCount,
-        },
+        query: unifiedQuery,
       },
     });
 
