@@ -111,6 +111,8 @@ const EMPTY_CATEGORY_SELECTION: CategorySelection = {
   collabstr: [],
 };
 
+const MAX_KEYWORD_SUGGESTIONS = 8;
+
 type SearchSourceKey =
   | "collabstr"
   | "apify_search"
@@ -594,10 +596,6 @@ export default function CreatorsPage() {
       ? "Values above 100 are allowed, but expect heavier daily discovery volume."
       : null;
 
-  function addUsernameSuggestion(value: string) {
-    setSearchUsernames((current) => appendDelimitedValue(current, value));
-  }
-
   const sourceOptions = [
     { value: "", label: "All Sources" },
     { value: "phantombuster", label: "PhantomBuster" },
@@ -1014,12 +1012,12 @@ export default function CreatorsPage() {
 
       {/* Search Creators Modal */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto py-8">
-          <Card className="w-full max-w-2xl mx-4">
-            <CardHeader>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden">
+            <CardHeader className="shrink-0 border-b pb-4">
               <CardTitle>Search Creators</CardTitle>
               {/* Approval mode context — surfaces the setting operators need without leaving the modal */}
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Discovered creators will use{" "}
                 <span className={`font-medium ${discoveryApprovalMode === "recommend" ? "text-green-700" : "text-yellow-700"}`}>
                   {discoveryApprovalMode === "recommend" ? "Recommend" : "Auto"} mode
@@ -1032,202 +1030,227 @@ export default function CreatorsPage() {
                 </a>
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="flex min-h-0 flex-1 flex-col">
               {/* Search Form — only shown before results */}
               {searchResults.length === 0 && !searching && (
-                <>
-                  <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-                    Run one background discovery query across Collabstr,
-                    Apify search, and optional approved-seed expansion. Add
-                    exact usernames only when you want to validate specific
-                    handles.
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Sources</label>
-                    <div className="flex flex-wrap gap-2">
-                      {([
-                        ["collabstr", "Collabstr"],
-                        ["apify_search", "Apify Search"],
-                        ["approved_seed_following", "Approved Seed Following"],
-                        ["apify_keyword_email", "Keyword Email"],
-                      ] as Array<[SearchSourceKey, string]>).map(
-                        ([source, label]) => (
-                          <Button
-                            key={source}
-                            type="button"
-                            size="sm"
-                            variant={searchSources[source] ? "default" : "outline"}
-                            onClick={() =>
-                              setSearchSources((current) => ({
-                                ...current,
-                                [source]: !current[source],
-                              }))
-                            }
-                          >
-                            {label}
-                          </Button>
-                        )
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Keywords</label>
-                      <Input
-                        placeholder="e.g. sleep, wellness, skincare"
-                        value={searchKeywords}
-                        onChange={(e) => setSearchKeywords(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Location</label>
-                      <Input
-                        placeholder="e.g. United States"
-                        value={searchLocation}
-                        onChange={(e) => setSearchLocation(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">
-                        Exact usernames{" "}
-                        <span className="text-xs font-normal text-muted-foreground">
-                          (optional)
-                        </span>
-                      </label>
-                      <textarea
-                        className="min-h-[96px] w-full rounded-md border px-3 py-2 text-sm"
-                        placeholder={"creatorone, creatortwo\ncreatorthree"}
-                        value={searchUsernames}
-                        onChange={(e) => setSearchUsernames(e.target.value)}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        {usernameSuggestions.map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
-                            onClick={() => addUsernameSuggestion(option.value)}
-                          >
-                            @{option.value}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">
-                          Follower range
-                        </label>
-                        <div className="flex gap-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Min"
-                            value={searchMinFollowers}
-                            onChange={(e) => setSearchMinFollowers(e.target.value)}
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            placeholder="Max"
-                            value={searchMaxFollowers}
-                            onChange={(e) => setSearchMaxFollowers(e.target.value)}
-                          />
-                        </div>
+                <div className="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
+                  <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_320px]">
+                    <div className="space-y-5">
+                      <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
+                        Run one background discovery query across Collabstr,
+                        Apify search, and optional seed expansion. Add exact
+                        usernames only when you already know specific handles
+                        you want to validate.
                       </div>
 
                       <div className="space-y-2">
-                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Popular keywords from your database
-                        </p>
+                        <label className="text-sm font-medium">Sources</label>
                         <div className="flex flex-wrap gap-2">
-                          {keywordSuggestions.map((option) => (
-                            <button
-                              key={option.value}
-                              type="button"
-                              className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
-                              onClick={() =>
-                                setSearchKeywords((current) =>
-                                  appendDelimitedValue(current, option.value)
-                                )
-                              }
-                            >
-                              {option.value} ({option.count})
-                            </button>
-                          ))}
-                          {keywordSuggestions.length === 0 && (
-                            <p className="text-xs text-muted-foreground">
-                              No keyword guidance yet.
-                            </p>
+                          {([
+                            ["collabstr", "Collabstr"],
+                            ["apify_search", "Apify Search"],
+                            ["approved_seed_following", "Approved Seed Following"],
+                            ["apify_keyword_email", "Keyword Email"],
+                          ] as Array<[SearchSourceKey, string]>).map(
+                            ([source, label]) => (
+                              <Button
+                                key={source}
+                                type="button"
+                                size="sm"
+                                variant={searchSources[source] ? "default" : "outline"}
+                                className="rounded-full"
+                                onClick={() =>
+                                  setSearchSources((current) => ({
+                                    ...current,
+                                    [source]: !current[source],
+                                  }))
+                                }
+                              >
+                                {label}
+                              </Button>
+                            )
                           )}
                         </div>
                       </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Keywords</label>
+                          <Input
+                            placeholder="e.g. sleep, wellness, skincare"
+                            value={searchKeywords}
+                            onChange={(e) => setSearchKeywords(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Location</label>
+                          <Input
+                            placeholder="e.g. United States"
+                            value={searchLocation}
+                            onChange={(e) => setSearchLocation(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Exact usernames{" "}
+                            <span className="text-xs font-normal text-muted-foreground">
+                              (optional)
+                            </span>
+                          </label>
+                          <textarea
+                            className="min-h-[108px] w-full rounded-md border px-3 py-2 text-sm"
+                            placeholder={"creatorone, creatortwo\ncreatorthree"}
+                            value={searchUsernames}
+                            onChange={(e) => setSearchUsernames(e.target.value)}
+                          />
+                          {usernameSuggestions.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              Recent handles:{" "}
+                              {usernameSuggestions
+                                .slice(0, 4)
+                                .map((option) => `@${option.value}`)
+                                .join(", ")}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Follower range
+                          </label>
+                          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="Min"
+                              value={searchMinFollowers}
+                              onChange={(e) => setSearchMinFollowers(e.target.value)}
+                            />
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="Max"
+                              value={searchMaxFollowers}
+                              onChange={(e) => setSearchMaxFollowers(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Categories</label>
+                        {searchCategoriesLoading ? (
+                          <p className="text-sm text-muted-foreground">
+                            Loading category sources…
+                          </p>
+                        ) : (
+                          <GroupedCategoryPicker
+                            categories={searchCategoryGroups}
+                            selected={searchCategories}
+                            onChange={setSearchCategories}
+                          />
+                        )}
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">
+                            Creators per day
+                          </label>
+                          <Input
+                            type="number"
+                            min={1}
+                            step={1}
+                            value={searchLimit}
+                            onChange={(e) => setSearchLimit(e.target.value)}
+                          />
+                          {searchLimitValidation.error ? (
+                            <p className="text-sm text-destructive">
+                              {searchLimitValidation.error}
+                            </p>
+                          ) : searchLimitWarning ? (
+                            <p className="text-sm text-amber-700">
+                              {searchLimitWarning}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Use any positive integer. Values above 100 will still
+                              save.
+                            </p>
+                          )}
+                        </div>
+                        <div className="space-y-2 md:pt-7">
+                          <div className="flex flex-wrap gap-2">
+                            <Badge variant="default">Instagram</Badge>
+                            <Badge variant="outline" className="opacity-60">
+                              TikTok later
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Categories</label>
-                    {searchCategoriesLoading ? (
-                      <p className="text-sm text-muted-foreground">
-                        Loading category sources…
-                      </p>
-                    ) : (
-                      <GroupedCategoryPicker
-                        categories={searchCategoryGroups}
-                        selected={searchCategories}
-                        onChange={setSearchCategories}
-                      />
-                    )}
-                  </div>
+                    <aside className="space-y-4">
+                      <div className="rounded-lg border bg-muted/15 p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Popular keywords
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Pull from your existing creator database when you want
+                          a faster starting point.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {keywordSuggestions
+                            .slice(0, MAX_KEYWORD_SUGGESTIONS)
+                            .map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                className="rounded-full border px-3 py-1 text-xs hover:bg-muted"
+                                onClick={() =>
+                                  setSearchKeywords((current) =>
+                                    appendDelimitedValue(current, option.value)
+                                  )
+                                }
+                              >
+                                {option.value} ({option.count})
+                              </button>
+                            ))}
+                        </div>
+                        {keywordSuggestions.length === 0 ? (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            No keyword guidance yet.
+                          </p>
+                        ) : keywordSuggestions.length > MAX_KEYWORD_SUGGESTIONS ? (
+                          <p className="mt-3 text-xs text-muted-foreground">
+                            Showing the strongest {MAX_KEYWORD_SUGGESTIONS}. Start
+                            typing to refine further.
+                          </p>
+                        ) : null}
+                      </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">
-                      Creators per day
-                    </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={searchLimit}
-                      onChange={(e) => setSearchLimit(e.target.value)}
-                    />
-                    {searchLimitValidation.error ? (
-                      <p className="text-sm text-destructive">
-                        {searchLimitValidation.error}
-                      </p>
-                    ) : searchLimitWarning ? (
-                      <p className="text-sm text-amber-700">
-                        {searchLimitWarning}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Use any positive integer. Values above 100 will still
-                        save.
-                      </p>
-                    )}
+                      <div className="rounded-lg border bg-muted/15 p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                          Query shape
+                        </p>
+                        <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
+                          <li>Use keywords for broad discovery.</li>
+                          <li>Add categories to narrow intent.</li>
+                          <li>Exact usernames skip the guesswork.</li>
+                          <li>Seed following is best once you already have approved creators.</li>
+                        </ul>
+                      </div>
+                    </aside>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Platform</label>
-                    <div className="flex gap-2">
-                      <Badge variant="default">Instagram</Badge>
-                      <Badge variant="outline" className="opacity-50">
-                        TikTok (coming soon)
-                      </Badge>
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
 
               {/* Searching state */}
               {searching && (
-                <div className="py-8 text-center">
+                <div className="flex flex-1 items-center justify-center py-8 text-center">
                   <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
                   <p className="text-sm text-muted-foreground">
                     Running unified creator discovery…
@@ -1240,7 +1263,7 @@ export default function CreatorsPage() {
 
               {/* Search Results */}
               {searchResults.length > 0 && !searching && (
-                <div className="space-y-3">
+                <div className="min-h-0 flex-1 space-y-3 py-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-medium">
                       {searchResults.length} creators found
@@ -1356,7 +1379,7 @@ export default function CreatorsPage() {
               )}
 
               {/* Actions */}
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="mt-4 flex shrink-0 justify-end gap-2 border-t pt-4">
                 <Button
                   variant="outline"
                   onClick={() => {
