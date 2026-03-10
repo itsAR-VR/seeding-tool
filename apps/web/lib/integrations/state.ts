@@ -211,6 +211,16 @@ export async function resolveProviderCredential(
     credential?.credentialType
   );
 
+  let decryptedValue: string | null = null;
+  if (credential && matchesMethod) {
+    try {
+      decryptedValue = decrypt(credential.encryptedValue);
+    } catch {
+      // Decryption can fail if APP_ENCRYPTION_KEY is misconfigured.
+      // Return null so callers that only need connection status still work.
+    }
+  }
+
   return {
     provider,
     method,
@@ -218,7 +228,6 @@ export async function resolveProviderCredential(
     credential,
     credentialMatchesMethod: matchesMethod,
     connected: Boolean(matchesMethod && connection?.status === "connected"),
-    decryptedValue:
-      credential && matchesMethod ? decrypt(credential.encryptedValue) : null,
+    decryptedValue,
   };
 }
