@@ -1580,7 +1580,7 @@ Materialize a new canonical discovery-planning phase that unifies Collabstr and 
 ## Context
 - Repo truth confirmed before writing this phase:
   - `phase-13` is complete and already introduced grouped `apify` and `collabstr` category selection in onboarding and automations.
-  - `phase-14` already exists locally as an overlapping untracked draft focused on creator validation and background job UX.
+  - `phase-14` already exists locally as an overlapping completed phase focused on creator validation and background job UX.
   - current runtime is still split:
     - campaign discovery uses the local Collabstr dataset and runs synchronously through `apps/web/lib/workers/creator-search.ts`
     - `/creators` search is Apify-only and async through `POST /api/creators/search`
@@ -1624,7 +1624,7 @@ Materialize a new canonical discovery-planning phase that unifies Collabstr and 
 | Phase | Status | Overlap | Coordination |
 |-------|--------|---------|--------------|
 | Phase 13 | Complete | Grouped category UX, automations, creator discovery surfaces | Treat Phase 13 as the runtime baseline. Build on its grouped category work rather than reintroducing split source logic. |
-| Phase 14 | Untracked draft | Creator discovery, validation, background jobs | Preserve Phase 14 as historical draft context. Phase 15 is the canonical discovery roadmap going forward. |
+| Phase 14 | Complete | Creator discovery, validation, background jobs | Preserve Phase 14 as historical context and compatibility baseline. Phase 15 is the canonical multi-source discovery roadmap going forward. |
 | Phase 9 | Historical | Search worker, campaigns, review/import | Use only as background architecture context. Current repo behavior is the source of truth. |
 
 ## Objectives
@@ -1647,15 +1647,15 @@ Materialize a new canonical discovery-planning phase that unifies Collabstr and 
 - Existing automation `config` Json blobs with `categories: { apify, collabstr }` must be migrated to the unified query shape or have a backward-compat adapter in the orchestrator.
 
 ## Success Criteria
-- `/creators`, campaign search, and automations all accept the same discovery query shape and all run through the same orchestrator.
-- Mixed-source candidate lists dedupe by normalized Instagram handle and obey one final limit after merge.
-- Imported creators retain:
+- [x] `/creators`, campaign search, and automations all accept the same discovery query shape and all run through the same orchestrator.
+- [x] Mixed-source candidate lists dedupe by normalized Instagram handle and obey one final limit after merge.
+- [x] Imported creators retain:
   - one backward-compatible primary `discoverySource`
   - full per-source provenance
   - canonical category
   - raw source category
-- Approved-seed following works as a first-class optional lane using creators already approved in the platform.
-- Category logic for Collabstr and Apify is normalized and no longer treated as separate operator taxonomies with divergent execution behavior.
+- [x] Approved-seed following works as a first-class optional lane using creators already approved in the platform.
+- [x] Category logic for Collabstr and Apify is normalized and no longer treated as separate operator taxonomies with divergent execution behavior.
 
 ## Repo Reality Check
 See **Repo Reality Check (RED TEAM)** section below for the comprehensive verified check.
@@ -1674,7 +1674,7 @@ Summary of critical mismatches:
 - **LOCKED**: `apify~instagram-search-scraper` replaces `apify/instagram-hashtag-scraper`. The `runInstagramHashtagScraper` function in `apps/web/lib/apify/client.ts` is deprecated.
 - **LOCKED**: Both email actors coexist — `express_jet/instagram-email-finder` (per-handle enrichment) and `scraper-mind~instagram-email-scraper` (keyword-email discovery).
 - **LOCKED**: Seed pool = creators with at least one `CampaignCreator` record where `reviewStatus = “approved”`, scoped to campaign context.
-- Phase 15 should coexist with the untracked Phase 14 draft rather than overwrite it.
+- Phase 15 should coexist with the completed Phase 14 validation/background-job work rather than overwrite it.
 
 ## Repo Reality Check (RED TEAM)
 
@@ -1784,3 +1784,21 @@ Summary of critical mismatches:
 - 2026-03-09 23:49 EDT — Completed the main 15c UI/runtime merge in the working tree: the creators search modal and campaign discovery page now send unified-source queries, poll background jobs, and preserve source metadata in result imports; the campaign page trigger routes into the dedicated discovery screen; and the validation/jobs infrastructure already referenced by committed discovery code was verified locally against tests and a full build. (files: `apps/web/app/(platform)/creators/page.tsx`, `apps/web/app/(platform)/campaigns/[campaignId]/discover/page.tsx`, `apps/web/app/(platform)/campaigns/[campaignId]/_components/TriggerSearchButton.tsx`, `apps/web/app/api/creators/import/route.ts`, `apps/web/app/api/campaigns/[campaignId]/creators/route.ts`, `apps/web/app/api/creators/route.ts`, `apps/web/app/api/creators/search/[jobId]/route.ts`, `apps/web/app/api/creators/search/jobs/route.ts`, `apps/web/lib/instagram/profile-html.ts`, `apps/web/lib/instagram/validator.ts`, `apps/web/scripts/refresh-instagram-followers.ts`, `apps/web/__tests__/instagram/profile-html.test.ts`)
 - 2026-03-09 23:50 EDT — Hardened the orchestrator for the remaining 15b/15d requirements: lane failures now time out independently without failing the whole discovery run, approved-seed following is campaign-scoped only, and a one-time automation backfill script now exists to populate `Automation.config.query` for legacy creator-discovery automations. Local creator-search tests and full build continue to pass with repo-root env sourced into the shell. (files: `apps/web/lib/creator-search/orchestrator.ts`, `apps/web/scripts/migrate-automation-discovery-query.ts`, `apps/web/__tests__/creator-search/contracts.test.ts`, `docs/planning/phase-15/b/plan.md`, `docs/planning/phase-15/d/plan.md`, `docs/planning/phase-15/plan.md`)
 - 2026-03-09 23:54 EDT — Added the 15e creator backfill path and verified local schema/application steps: `prisma db push` now succeeds against the local DB, the automation-query migration script updates legacy creator-discovery automations, and the creator discovery backfill dry-run reports expected changes. New unexpected worktree changes appeared in the orchestrator runtime files after the last checkpoint and are being treated as concurrent edits until reconciled. (files: `apps/web/scripts/backfill-creator-discovery.ts`, `apps/web/scripts/migrate-automation-discovery-query.ts`, `docs/planning/phase-15/e/plan.md`, `docs/planning/phase-15/plan.md`)
+- 2026-03-10 00:07 EDT — Verified the Phase 14 overlap as compatible with Phase 15 and adopted it into the Phase 15 path: cache-first validated reuse, jobs tray support, validation policy helpers, and background cleanup/enrichment logic all build and test cleanly alongside the unified discovery work. Manual search-result import now records provenance via `searchResultId`, closing the remaining primary-source-only import gap. (files: `apps/web/lib/inngest/functions/creator-search.ts`, `apps/web/lib/creator-search/orchestrator.ts`, `apps/web/lib/creator-search/orchestrator-types.ts`, `apps/web/lib/creator-search/candidate-merge.ts`, `apps/web/lib/creators/validation-ops.ts`, `apps/web/lib/creators/validation-policy.ts`, `apps/web/lib/creators/validation-sweep.ts`, `apps/web/components/creator-search-jobs-tray.tsx`, `apps/web/app/(platform)/layout.tsx`, `apps/web/app/(platform)/creators/page.tsx`, `apps/web/app/api/creators/import/route.ts`, `docs/planning/phase-15/plan.md`)
+- 2026-03-10 00:12 EDT — Closed Phase 15 review against the combined worktree: full app lint passed with only pre-existing warnings, app build passed with the repo-root `.env.local` sourced into the shell, `prisma db push` confirmed the schema is in sync, and the creator-search/validation test suite passed after the final provenance-import patch. Phase 14 remains intact as historical context, while Phase 15 is now the canonical discovery roadmap. (files: `apps/web/app/(platform)/creators/page.tsx`, `apps/web/app/api/creators/import/route.ts`, `docs/planning/phase-15/c/plan.md`, `docs/planning/phase-15/e/plan.md`, `docs/planning/phase-15/review.md`, `docs/planning/phase-15/plan.md`)
+
+## Phase Summary
+
+- Shipped:
+  - unified discovery contracts, typed Apify actor clients, and provenance storage for mixed-source discovery
+  - one orchestrator-backed discovery runtime across manual search, campaign discovery, and automation dispatch
+  - campaign-scoped approved-seed following, keyword-email enrichment, DB-backed Collabstr reads, and import-time provenance preservation
+  - backfill/migration scripts for legacy automation config and historical creator discovery touches
+- Verified:
+  - `cd apps/web && npm run lint` — pass with 12 pre-existing warnings and no errors
+  - `cd apps/web && npm run build` — pass with repo-root `.env.local` sourced into the shell
+  - `cd apps/web && npm run db:push` — pass; schema already in sync
+  - `cd apps/web && npx vitest run __tests__/creator-search/*.test.ts __tests__/creators/validation-policy.test.ts __tests__/instagram/profile-html.test.ts` — pass (26 tests)
+- Notes:
+  - The repo root does not define `lint` or `build` scripts, so the Phase 15 review used the app-local equivalents from `apps/web`.
+  - Phase 14 was reviewed as compatible concurrent work and remains preserved on disk; its validation/job UX changes are now part of the verified combined state.

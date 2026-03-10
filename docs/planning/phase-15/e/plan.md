@@ -76,16 +76,30 @@ Phase 15 closes when the on-disk plan, subphase package, and rollout notes are r
   - Verified the local database migration path with `npx prisma db push`.
   - Ran the creator backfill in `--dry-run` mode successfully after the local DB schema was pushed.
   - Verified the automation query backfill script runs against the local DB and updates old creator-discovery automation configs.
+  - Verified the previously unexpected Phase 14 overlap is compatible with Phase 15 and can be adopted rather than treated as conflicting drift.
+  - Completed the Phase 15 review artifact and mapped the local lint/build/db/test evidence to the root success criteria.
 - Commands run:
   - `set -a && source ../../.env.local && source .env.local && npx prisma db push` — pass
   - `set -a && source ../../.env.local && source .env.local && npx tsx scripts/backfill-creator-discovery.ts --dry-run` — pass (`38 touches created, 38 creator categories updated`)
   - `set -a && source ../../.env.local && source .env.local && npx tsx scripts/migrate-automation-discovery-query.ts` — pass (`1 updated, 0 already current`)
   - `npx eslint apps/web/scripts/backfill-creator-discovery.ts apps/web/scripts/migrate-automation-discovery-query.ts` — pass
   - `npx vitest run __tests__/creator-search/contracts.test.ts` — pass
+  - `cd apps/web && npm run lint` — pass with pre-existing warnings only
+  - `cd apps/web && npm run build` — pass
+  - `cd apps/web && npx vitest run __tests__/creator-search/*.test.ts __tests__/creators/validation-policy.test.ts __tests__/instagram/profile-html.test.ts` — pass (26 tests)
 - Blockers:
-  - New unexpected worktree changes appeared in `apps/web/lib/creator-search/orchestrator.ts`, `apps/web/lib/creator-search/orchestrator-types.ts`, `apps/web/lib/creator-search/candidate-merge.ts`, and `apps/web/lib/inngest/functions/creator-search.ts` after the last checkpoint commit. Those are being treated as concurrent changes and are not staged blindly.
-  - Phase review (`review.md`) is still pending because the phase is not yet fully stabilized and the active runtime files above need coordination first.
+  - None.
 - Next concrete steps:
-  - Stage and commit the new backfill scripts/docs without pulling in the concurrent runtime edits.
-  - Reconcile the unexpected orchestrator/runtime changes before attempting final Phase 15 closure and review.
-  - Add explicit evidence mapping from the local verification commands into `review.md` once the runtime worktree is stable.
+  - Phase 15 is ready for a follow-on end-to-end test phase if broader local/live workflow validation is requested.
+
+## Review Notes
+
+- Evidence:
+  - `cd apps/web && npm run lint` — no errors; only existing warnings in unrelated pages plus the existing creators-page `<img>` warning
+  - `cd apps/web && npm run build` — pass with repo-root env sourced into the shell
+  - `cd apps/web && npm run db:push` — pass; DB already in sync
+  - `cd apps/web && npx vitest run __tests__/creator-search/*.test.ts __tests__/creators/validation-policy.test.ts __tests__/instagram/profile-html.test.ts` — pass (26 tests)
+- Deviations:
+  - The repo root does not expose `npm run lint` / `npm run build`, so review used the `apps/web` scripts directly.
+- Follow-ups:
+  - If the user wants platform-level or live validation beyond local build/test coverage, create a new end-to-end test phase instead of extending Phase 15 further.

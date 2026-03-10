@@ -98,14 +98,13 @@ Phase 15d adds the approved-seed graph-traversal lane and the supplemental keywo
     - `apps/web/lib/instagram/validator.ts`
     - `apps/web/app/api/creators/search/jobs/route.ts`
     - validation-aware creator import/add/list flows
+  - Search-result import now passes `searchResultId`/source metadata and the import route records discovery touches instead of only writing `discoverySource`.
 - Commands run:
   - `npx vitest run __tests__/creator-search/*.test.ts __tests__/instagram/profile-html.test.ts` — pass (21 tests)
   - `npx eslint <15c + validation files>` — pass with one `@next/next/no-img-element` warning in `apps/web/app/(platform)/creators/page.tsx`
   - `set -a && source ../../.env.local && source .env.local && npm run build` — pass
 - Blockers:
-  - Campaign/manual search are now unified at the backend job layer, but fit scoring is still stronger in the legacy `lib/workers/creator-search.ts` path than in the new orchestrator ranking.
-  - The validation infrastructure and jobs route are currently only in the working tree; they need to be committed so the repo remains buildable from git state alone.
+  - None for the 15c UI/runtime contract itself after the Phase 14 overlap was verified and adopted.
 - Next concrete steps:
-  - Commit the merged UI/runtime + validation infrastructure checkpoint.
-  - Move shared fit scoring out of `lib/workers/creator-search.ts` so the orchestrator produces one ranking surface for all sources.
-  - Add the automation backfill script promised in this subphase for older configs without `config.query`.
+  - Fold the adopted Phase 14 overlap into the final review evidence for Phase 15.
+  - Move shared fit scoring out of `lib/workers/creator-search.ts` if a future phase wants one scoring surface for both campaign review and manual search ranking.
