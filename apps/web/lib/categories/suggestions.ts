@@ -34,6 +34,8 @@ function normalizeText(value: string | null | undefined) {
 function buildProfileHaystack(profile: BrandProfileSnapshot | null) {
   if (!profile) return "";
 
+  const businessDna = profile.businessDna;
+
   return [
     profile.title,
     profile.description,
@@ -43,8 +45,32 @@ function buildProfileHaystack(profile: BrandProfileSnapshot | null) {
     profile.twitterTitle,
     profile.twitterDescription,
     profile.bodyExcerpt,
+    profile.brandSummary,
+    profile.targetAudience,
+    profile.audience,
+    profile.niche,
+    profile.category,
+    profile.industry,
+    profile.tone,
+    profile.brandVoice,
+    businessDna?.brandSummary,
+    businessDna?.targetAudience,
+    businessDna?.audience,
+    businessDna?.niche,
+    businessDna?.category,
+    businessDna?.industry,
+    businessDna?.tone,
+    businessDna?.brandVoice,
     ...profile.heroHeadings,
     ...profile.textSignals,
+    ...(profile.keywords ?? []),
+    ...(profile.keyProducts ?? []),
+    ...(profile.proofSignals ?? []),
+    ...(profile.visualDirection ?? []),
+    ...(businessDna?.keywords ?? []),
+    ...(businessDna?.keyProducts ?? []),
+    ...(businessDna?.proofSignals ?? []),
+    ...(businessDna?.visualDirection ?? []),
   ]
     .filter(Boolean)
     .join(" ")

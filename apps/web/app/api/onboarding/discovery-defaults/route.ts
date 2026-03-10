@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
@@ -6,7 +6,7 @@ import { getGroupedCategories } from "@/lib/categories/catalog";
 import { suggestCategorySelectionFromBrandProfile } from "@/lib/categories/suggestions";
 import type { BrandProfileSnapshot } from "@/lib/brands/profile";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -22,9 +22,13 @@ export async function GET() {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
+    const requestedBrandId = request.nextUrl.searchParams.get("brandId");
+
     const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
+      where: requestedBrandId
+        ? { userId: user.id, brandId: requestedBrandId }
+        : { userId: user.id },
+      ...(requestedBrandId ? {} : { orderBy: { createdAt: "asc" as const } }),
       include: {
         brand: {
           include: {
@@ -39,7 +43,10 @@ export async function GET() {
     });
 
     if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
+      return NextResponse.json(
+        { error: requestedBrandId ? "Brand not found" : "No brand found" },
+        { status: 404 }
+      );
     }
 
     const brandProfile =

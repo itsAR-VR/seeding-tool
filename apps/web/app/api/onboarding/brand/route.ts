@@ -6,6 +6,13 @@ import {
   fetchBrandProfile,
   normalizeBrandWebsiteUrl,
 } from "@/lib/brands/profile";
+import {
+  getBusinessDnaModel,
+  mergeBrandProfileWithBusinessDna,
+  synthesizeBusinessDna,
+} from "@/lib/brands/synthesis";
+
+type OnboardingAnalysisStatus = "complete" | "partial" | "failed" | "skipped";
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,6 +47,8 @@ export async function POST(request: NextRequest) {
 
     let normalizedWebsiteUrl: string | null = null;
     let brandProfile = null;
+    let analysisStatus: OnboardingAnalysisStatus = "skipped";
+    let analysisNote: string | null = null;
 
     try {
       normalizedWebsiteUrl = normalizeBrandWebsiteUrl(websiteUrl);
@@ -56,9 +65,51 @@ export async function POST(request: NextRequest) {
     }
 
     if (normalizedWebsiteUrl) {
+      analysisStatus = "failed";
+
       try {
-        brandProfile = await fetchBrandProfile(normalizedWebsiteUrl);
+        const rawProfile = await fetchBrandProfile(normalizedWebsiteUrl);
+        brandProfile = mergeBrandProfileWithBusinessDna(rawProfile, {
+          status: "partial",
+          note: "Website signals extracted. Structured Business DNA was skipped.",
+        });
+        analysisStatus = "partial";
+
+        if (process.env.OPENAI_API_KEY) {
+          const businessDna = await synthesizeBusinessDna({
+            brandName: name.trim(),
+            websiteUrl: normalizedWebsiteUrl,
+            profile: rawProfile,
+          });
+
+          if (businessDna) {
+            brandProfile = mergeBrandProfileWithBusinessDna(rawProfile, {
+              businessDna,
+              status: "complete",
+              model: getBusinessDnaModel(),
+            });
+            analysisStatus = "complete";
+            analysisNote = null;
+          } else {
+            analysisNote =
+              "We saved the raw website signals, but the structured Business DNA pass did not finish.";
+            brandProfile = mergeBrandProfileWithBusinessDna(rawProfile, {
+              status: "partial",
+              model: getBusinessDnaModel(),
+              note: analysisNote,
+            });
+          }
+        } else {
+          analysisNote =
+            "OPENAI_API_KEY is not configured, so we saved the raw website signals without a Business DNA synthesis pass.";
+          brandProfile = mergeBrandProfileWithBusinessDna(rawProfile, {
+            status: "partial",
+            note: analysisNote,
+          });
+        }
       } catch (error) {
+        analysisNote =
+          "We couldn't reach a usable HTML page from that URL, so the brand was created without website analysis.";
         console.warn("[onboarding/brand] brand profile extraction failed", {
           websiteUrl: normalizedWebsiteUrl,
           error: error instanceof Error ? error.message : String(error),
@@ -108,6 +159,7 @@ export async function POST(request: NextRequest) {
       await tx.brandSettings.create({
         data: {
           brandId: brand.id,
+          brandVoice: brandProfile?.brandVoice ?? undefined,
           brandProfile: brandProfile
             ? JSON.parse(JSON.stringify(brandProfile))
             : undefined,
@@ -129,6 +181,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       brandId: result.id,
       slug: result.slug,
+      brandProfile,
+      analysisStatus,
+      analysisNote,
     });
   } catch (error) {
     console.error("[onboarding/brand]", error);

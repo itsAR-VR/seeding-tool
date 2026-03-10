@@ -442,11 +442,10 @@ Reply JSON ONLY: {"score": 0.0, "reasoning": "2-3 sentences", "approved": false,
 
   try {
     const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
-      max_tokens: 300,
-      temperature: 0.1,
+      max_completion_tokens: 300,
     });
 
     const parsed = JSON.parse(res.choices[0]?.message?.content ?? "{}") as {
@@ -702,7 +701,7 @@ async function storeApprovalArtifact(
           signals: creator.signals,
           agentDecision: approvalMode === "auto" ? (creator.approved ? "approve" : "decline") : "recommend",
         } as Prisma.InputJsonValue,
-        model: creator.analysisSource === "worker" ? "gpt-4o-mini@fly-worker" : "gpt-4o-mini@local",
+        model: creator.analysisSource === "worker" ? "gpt-5-mini@fly-worker" : "gpt-5-mini@local",
       },
     });
   } catch (err) {

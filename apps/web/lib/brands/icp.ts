@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { deriveBrandProfileSignals } from "@/lib/brands/signals";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -111,23 +112,10 @@ export async function deriveBrandICP(
 
   const profile = brand.settings?.brandProfile as Record<string, unknown> | null ?? null;
 
-  const targetAudience =
-    _str(profile?.targetAudience) ??
-    _str(profile?.audience) ??
-    _str(profile?.target_audience) ??
-    null;
-
-  const niche =
-    _str(profile?.niche) ??
-    _str(profile?.category) ??
-    _str(profile?.industry) ??
-    null;
-
-  const brandVoice =
-    brand.settings?.brandVoice ??
-    _str(profile?.tone) ??
-    _str(profile?.brandVoice) ??
-    null;
+  const { targetAudience, niche, brandVoice } = deriveBrandProfileSignals(
+    profile,
+    brand.settings?.brandVoice
+  );
 
   const summary = _buildSummary({
     brandName: brand.name,
@@ -194,13 +182,6 @@ export function icpToSystemPrompt(icp: BrandICP): string {
   ]
     .filter(Boolean)
     .join("\n");
-}
-
-// ─── Internal ──────────────────────────────────────────────────────────────
-
-function _str(v: unknown): string | null {
-  if (typeof v === "string" && v.trim()) return v.trim();
-  return null;
 }
 
 function _buildSummary(parts: {

@@ -125,13 +125,12 @@ ${
   const userPrompt = buildUserPrompt(params);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.8,
-    max_tokens: channel === "instagram_dm" ? 300 : 800,
+    max_completion_tokens: channel === "instagram_dm" ? 300 : 800,
   });
 
   const content = completion.choices[0]?.message?.content ?? "";

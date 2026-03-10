@@ -1,6 +1,27 @@
 const BLOCK_TAGS = /<(\/)?(article|section|div|p|h1|h2|h3|h4|h5|h6|li|br|tr|td|blockquote)[^>]*>/gi;
 const STRIP_TAGS = /<[^>]+>/g;
 const REMOVE_TAG_BLOCKS = /<(script|style|noscript|svg|iframe)[^>]*>[\s\S]*?<\/\1>/gi;
+const IMAGE_TAG = /<img\b[^>]*>/gi;
+const TRACKING_IMAGE_PATTERN =
+  /(pixel|spacer|tracking|analytics|doubleclick|facebook\.com\/tr|google-analytics)/i;
+
+export type BrandProfileAnalysisStatus = "complete" | "partial";
+
+export interface BrandBusinessDna {
+  brandSummary: string | null;
+  targetAudience: string | null;
+  audience: string | null;
+  niche: string | null;
+  category: string | null;
+  industry: string | null;
+  tone: string | null;
+  brandVoice: string | null;
+  keyProducts: string[];
+  proofSignals: string[];
+  keywords: string[];
+  visualDirection: string[];
+  imageCandidates: string[];
+}
 
 export interface BrandProfileSnapshot {
   sourceUrl: string;
@@ -16,8 +37,27 @@ export interface BrandProfileSnapshot {
   twitterDescription: string | null;
   twitterImage: string | null;
   heroHeadings: string[];
+  heroImageCandidates: string[];
   textSignals: string[];
   bodyExcerpt: string | null;
+  businessDna?: BrandBusinessDna | null;
+  analysisStatus?: BrandProfileAnalysisStatus;
+  analysisModel?: string | null;
+  analyzedAt?: string | null;
+  analysisNote?: string | null;
+  brandSummary?: string | null;
+  targetAudience?: string | null;
+  audience?: string | null;
+  niche?: string | null;
+  category?: string | null;
+  industry?: string | null;
+  tone?: string | null;
+  brandVoice?: string | null;
+  keyProducts?: string[];
+  proofSignals?: string[];
+  keywords?: string[];
+  visualDirection?: string[];
+  imageCandidates?: string[];
 }
 
 export function normalizeBrandWebsiteUrl(rawUrl?: string | null): string | null {
@@ -57,6 +97,11 @@ export async function fetchBrandProfile(
     throw new Error(`Website fetch failed with ${response.status}`);
   }
 
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!/(text\/html|application\/xhtml\+xml)/i.test(contentType)) {
+    throw new Error("Website fetch did not return HTML");
+  }
+
   const html = await response.text();
   return extractBrandProfileFromHtml(html, response.url || websiteUrl);
 }
@@ -91,6 +136,7 @@ export function extractBrandProfileFromHtml(
     normalizedUrl,
     extractMetaContent(html, "name", "twitter:image")
   );
+  const heroImageCandidates = extractHeroImageCandidates(html, normalizedUrl);
 
   const heroHeadings = [
     ...extractHeadingTexts(html, "h1", 2),
@@ -115,9 +161,29 @@ export function extractBrandProfileFromHtml(
     twitterDescription,
     twitterImage,
     heroHeadings,
+    heroImageCandidates,
     textSignals,
     bodyExcerpt,
   };
+}
+
+export function listBrandImageCandidates(
+  profile:
+    | Pick<BrandProfileSnapshot, "ogImage" | "twitterImage" | "heroImageCandidates">
+    | null
+    | undefined
+) {
+  if (!profile) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      [profile.ogImage, profile.twitterImage, ...(profile.heroImageCandidates ?? [])]
+        .filter((value): value is string => Boolean(value?.trim()))
+        .map((value) => value.trim())
+    )
+  );
 }
 
 function extractMetaContent(
@@ -189,6 +255,97 @@ function extractVisibleTextSignals(html: string, limit: number): string[] {
   return lines.slice(0, limit);
 }
 
+function extractHeroImageCandidates(html: string, baseUrl: string): string[] {
+  const scopedHtml = extractScopedImageHtml(html);
+  if (!scopedHtml) {
+    return [];
+  }
+
+  const matches = scopedHtml.matchAll(IMAGE_TAG);
+  const candidates: string[] = [];
+
+  for (const match of matches) {
+    const tag = match[0] ?? "";
+    const candidate = resolveMaybeRelativeUrl(
+      baseUrl,
+      extractImageSource(tag)
+    );
+
+    if (!candidate || shouldSkipImageCandidate(tag, candidate)) {
+      continue;
+    }
+
+    if (!candidates.includes(candidate)) {
+      candidates.push(candidate);
+    }
+
+    if (candidates.length >= 5) {
+      break;
+    }
+  }
+
+  return candidates;
+}
+
+function extractScopedImageHtml(html: string): string | null {
+  const mainMatch = html.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+  if (mainMatch?.[1]) {
+    return mainMatch[1];
+  }
+
+  const sectionMatch = html.match(/<section\b[^>]*>([\s\S]*?)<\/section>/i);
+  return sectionMatch?.[1] ?? null;
+}
+
+function extractImageSource(tag: string): string | null {
+  const directSource =
+    extractAttribute(tag, "src") ??
+    extractAttribute(tag, "data-src") ??
+    extractAttribute(tag, "data-lazy-src");
+
+  if (directSource) {
+    return cleanText(directSource);
+  }
+
+  const srcset = extractAttribute(tag, "srcset");
+  if (!srcset) {
+    return null;
+  }
+
+  const firstCandidate = srcset
+    .split(",")
+    .map((entry) => cleanText(entry.split(/\s+/)[0] ?? ""))
+    .find(Boolean);
+
+  return firstCandidate ?? null;
+}
+
+function shouldSkipImageCandidate(tag: string, candidate: string): boolean {
+  if (!candidate.trim()) {
+    return true;
+  }
+
+  if (
+    candidate.startsWith("data:image/svg+xml") ||
+    /\.svg(?:\?|#|$)/i.test(candidate)
+  ) {
+    return true;
+  }
+
+  if (TRACKING_IMAGE_PATTERN.test(candidate)) {
+    return true;
+  }
+
+  const width = parseDimensionAttribute(tag, "width");
+  const height = parseDimensionAttribute(tag, "height");
+
+  if ((width !== null && width < 100) || (height !== null && height < 100)) {
+    return true;
+  }
+
+  return false;
+}
+
 function cleanText(value: string): string {
   return decodeHtmlEntities(value)
     .replace(/\s+/g, " ")
@@ -221,6 +378,27 @@ function resolveMaybeRelativeUrl(
   } catch {
     return candidate;
   }
+}
+
+function extractAttribute(tag: string, attribute: string): string | null {
+  const match = tag.match(
+    new RegExp(`${attribute}=["']([^"']+)["']`, "i")
+  );
+
+  return match?.[1] ? decodeHtmlEntities(match[1]) : null;
+}
+
+function parseDimensionAttribute(
+  tag: string,
+  attribute: "width" | "height"
+): number | null {
+  const value = extractAttribute(tag, attribute);
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function escapeRegExp(value: string): string {

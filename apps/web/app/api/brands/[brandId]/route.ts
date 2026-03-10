@@ -6,7 +6,30 @@ import { prisma } from "@/lib/prisma";
 import {
   fetchBrandProfile,
   normalizeBrandWebsiteUrl,
+  type BrandProfileSnapshot,
 } from "@/lib/brands/profile";
+import { applyBusinessDnaEdits } from "@/lib/brands/synthesis";
+
+function normalizeKeywordsInput(value: unknown) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const entries = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,\n]/)
+      : [];
+
+  return Array.from(
+    new Set(
+      entries
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    )
+  );
+}
 
 export async function GET(
   _request: NextRequest,
@@ -94,17 +117,33 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, websiteUrl, logoUrl, brandVoice, timezone } = body as {
+    const {
+      name,
+      websiteUrl,
+      logoUrl,
+      brandVoice,
+      timezone,
+      brandSummary,
+      targetAudience,
+      tone,
+      keywords,
+    } = body as {
       name?: string;
       websiteUrl?: string;
       logoUrl?: string;
       brandVoice?: string;
       timezone?: string;
+      brandSummary?: string | null;
+      targetAudience?: string | null;
+      tone?: string | null;
+      keywords?: string[] | string;
     };
 
     const existingSettings = await prisma.brandSettings.findUnique({
       where: { brandId },
     });
+    const existingBrandProfile =
+      (existingSettings?.brandProfile as BrandProfileSnapshot | null) ?? null;
 
     let normalizedWebsiteUrl: string | null | undefined;
     if (websiteUrl !== undefined) {
@@ -172,6 +211,40 @@ export async function PATCH(
     }
     if (extractedBrandProfile !== undefined) {
       settingsData.brandProfile = extractedBrandProfile;
+    }
+
+    const normalizedKeywords = normalizeKeywordsInput(keywords);
+    const hasBusinessDnaEdit =
+      brandSummary !== undefined ||
+      targetAudience !== undefined ||
+      tone !== undefined ||
+      brandVoice !== undefined ||
+      normalizedKeywords !== undefined;
+
+    if (hasBusinessDnaEdit) {
+      const baseProfile =
+        extractedBrandProfile &&
+        extractedBrandProfile !== Prisma.JsonNull &&
+        typeof extractedBrandProfile === "object" &&
+        !Array.isArray(extractedBrandProfile)
+          ? (extractedBrandProfile as unknown as BrandProfileSnapshot)
+          : existingBrandProfile;
+
+      settingsData.brandProfile = JSON.parse(
+        JSON.stringify(
+          applyBusinessDnaEdits(baseProfile, {
+            brandSummary,
+            targetAudience,
+            tone,
+            brandVoice,
+            keywords: normalizedKeywords,
+          })
+        )
+      ) as Prisma.InputJsonValue;
+
+      if (brandVoice !== undefined || tone !== undefined) {
+        settingsData.brandVoice = brandVoice?.trim() || tone?.trim() || null;
+      }
     }
 
     if (logoUrl !== undefined) {

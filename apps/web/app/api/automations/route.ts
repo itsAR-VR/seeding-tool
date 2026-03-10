@@ -178,22 +178,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
-
     const body = (await request.json()) as {
+      brandId?: string;
       name: string;
       type: string;
       schedule: string;
       config: Record<string, unknown>;
       enabled?: boolean;
     };
+
+    const requestedBrandId =
+      typeof body.brandId === "string" && body.brandId.trim()
+        ? body.brandId.trim()
+        : null;
+
+    const membership = await prisma.brandMembership.findFirst({
+      where: requestedBrandId
+        ? { userId: user.id, brandId: requestedBrandId }
+        : { userId: user.id },
+      ...(requestedBrandId ? {} : { orderBy: { createdAt: "asc" as const } }),
+    });
+
+    if (!membership) {
+      return NextResponse.json(
+        { error: requestedBrandId ? "Brand not found" : "No brand found" },
+        { status: 404 }
+      );
+    }
 
     if (!body.name?.trim()) {
       return NextResponse.json(

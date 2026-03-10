@@ -32,4 +32,20 @@ describe("brand category suggestions", () => {
     expect(result.selection).toEqual({ apify: [], collabstr: [] });
     expect(result.matchedLabels).toEqual([]);
   });
+
+  it("uses edited Business DNA keywords and audience fields for suggestions", () => {
+    const profile = extractBrandProfileFromHtml(
+      "<html><body><main><h1>Plain brand shell</h1></main></body></html>",
+      "https://example.com"
+    );
+
+    profile.brandSummary = "A premium outdoor camping brand for adventure-led families.";
+    profile.targetAudience = "Families planning outdoor camping trips";
+    profile.keywords = ["camping gear", "outdoor adventure"];
+
+    const result = suggestCategorySelectionFromBrandProfile(profile);
+
+    expect(result.selection.collabstr).toContain("Outdoor & Adventure");
+    expect(result.matchedLabels).toContain("Outdoor & Adventure");
+  });
 });
