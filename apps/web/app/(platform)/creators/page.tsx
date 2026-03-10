@@ -54,6 +54,7 @@ type SearchResult = {
   primarySource?: string;
   sources?: string[];
   name: string | null;
+  email?: string | null;
   followerCount: number | null;
   avgViews?: number | null;
   engagementRate: number | null;
@@ -61,6 +62,7 @@ type SearchResult = {
   imageUrl: string | null;
   bio: string | null;
   bioCategory: string | null;
+  rawSourceCategory?: string | null;
   platform: string;
   validationStatus?: string;
   validationError?: string | null;
@@ -518,11 +520,14 @@ export default function CreatorsPage() {
     try {
       const selected = searchResults.filter((r) => selectedResults.has(r.id));
       const rows = selected.map((r) => ({
+        searchResultId: r.id,
         username: r.handle,
         name: r.name,
+        email: r.email,
         bio: r.bio,
         followerCount: r.followerCount,
         bioCategory: r.bioCategory,
+        rawSourceCategory: r.rawSourceCategory,
         imageUrl: r.imageUrl,
         profileUrl: r.profileUrl,
         engagementRate: r.engagementRate,

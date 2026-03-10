@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
+import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 import { inngest } from "@/lib/inngest/client";
 
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as {
       rows: Array<{
+        searchResultId?: string;
         username: string;
         name?: string;
         email?: string;
@@ -48,6 +51,7 @@ export async function POST(request: NextRequest) {
         followerCount?: number;
         avgViews?: number;
         bioCategory?: string;
+        rawSourceCategory?: string;
         imageUrl?: string;
         profileUrl?: string;
         engagementRate?: number;
@@ -169,6 +173,32 @@ export async function POST(request: NextRequest) {
             engagementRate: row.engagementRate ?? null,
           },
         });
+
+        const searchResult = row.searchResultId
+          ? await prisma.creatorSearchResult.findUnique({
+              where: { id: row.searchResultId },
+            })
+          : null;
+
+        await recordCreatorDiscoveryTouch({
+          creatorId: existing.id,
+          searchJobId: searchResult?.searchJobId ?? null,
+          source:
+            searchResult?.primarySource ??
+            searchResult?.source ??
+            source,
+          externalId: handle,
+          rawSourceCategory:
+            searchResult?.rawSourceCategory ??
+            row.rawSourceCategory ??
+            row.bioCategory ??
+            null,
+          canonicalCategory:
+            searchResult?.bioCategory ?? row.bioCategory ?? null,
+          email: row.email ?? searchResult?.email ?? null,
+          seedCreatorId: searchResult?.seedCreatorId ?? null,
+          metadata: (searchResult?.metadata ?? null) as Prisma.InputJsonValue,
+        });
         enrichedCreatorIds.push(existing.id);
         updated++;
       } else {
@@ -227,6 +257,32 @@ export async function POST(request: NextRequest) {
                 row.profileUrl ||
                 `https://instagram.com/${handle}`,
             },
+          });
+
+          const searchResult = row.searchResultId
+            ? await prisma.creatorSearchResult.findUnique({
+                where: { id: row.searchResultId },
+              })
+            : null;
+
+          await recordCreatorDiscoveryTouch({
+            creatorId: creator.id,
+            searchJobId: searchResult?.searchJobId ?? null,
+            source:
+              searchResult?.primarySource ??
+              searchResult?.source ??
+              source,
+            externalId: handle,
+            rawSourceCategory:
+              searchResult?.rawSourceCategory ??
+              row.rawSourceCategory ??
+              row.bioCategory ??
+              null,
+            canonicalCategory:
+              searchResult?.bioCategory ?? row.bioCategory ?? null,
+            email: row.email ?? searchResult?.email ?? null,
+            seedCreatorId: searchResult?.seedCreatorId ?? null,
+            metadata: (searchResult?.metadata ?? null) as Prisma.InputJsonValue,
           });
           enrichedCreatorIds.push(creator.id);
         }
