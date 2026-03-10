@@ -10,7 +10,7 @@ import {
 } from "@/lib/creator-search/contracts";
 import {
   isLocalCreatorSearchFallbackEnabled,
-  spawnLocalCreatorSearchJob,
+  scheduleLocalCreatorSearchJob,
 } from "@/lib/creator-search/local-fallback";
 
 /**
@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
     if (isLocalCreatorSearchFallbackEnabled()) {
       after(async () => {
         try {
-          spawnLocalCreatorSearchJob({
+          await scheduleLocalCreatorSearchJob({
             jobId: job.id,
             brandId: membership.brandId,
             campaignId: null,

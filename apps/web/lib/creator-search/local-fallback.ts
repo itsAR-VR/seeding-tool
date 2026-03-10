@@ -1,11 +1,14 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { prisma } from "@/lib/prisma";
 
 export type LocalCreatorSearchFallbackInput = {
   jobId: string;
   brandId: string;
   campaignId?: string | null;
 };
+
+export const LOCAL_FALLBACK_RETRY_MS = 15_000;
 
 export function isLocalCreatorSearchFallbackEnabled() {
   return (
@@ -37,4 +40,59 @@ export function spawnLocalCreatorSearchJob(
   child.unref();
 
   return true;
+}
+
+export function shouldAttemptLocalCreatorSearchFallback(
+  startedAt: Date | null,
+  retryMs = LOCAL_FALLBACK_RETRY_MS
+) {
+  return (
+    startedAt == null ||
+    startedAt.getTime() < Date.now() - retryMs
+  );
+}
+
+export async function scheduleLocalCreatorSearchJob(
+  input: LocalCreatorSearchFallbackInput,
+  retryMs = LOCAL_FALLBACK_RETRY_MS
+) {
+  if (!isLocalCreatorSearchFallbackEnabled()) {
+    return false;
+  }
+
+  const reservedAt = new Date();
+  const staleBefore = new Date(reservedAt.getTime() - retryMs);
+  const reservation = await prisma.creatorSearchJob.updateMany({
+    where: {
+      id: input.jobId,
+      brandId: input.brandId,
+      status: "pending",
+      OR: [{ startedAt: null }, { startedAt: { lt: staleBefore } }],
+    },
+    data: {
+      startedAt: reservedAt,
+    },
+  });
+
+  if (reservation.count === 0) {
+    return false;
+  }
+
+  try {
+    return spawnLocalCreatorSearchJob(input);
+  } catch (error) {
+    await prisma.creatorSearchJob.updateMany({
+      where: {
+        id: input.jobId,
+        brandId: input.brandId,
+        status: "pending",
+        startedAt: reservedAt,
+      },
+      data: {
+        startedAt: null,
+      },
+    });
+
+    throw error;
+  }
 }

@@ -237,20 +237,190 @@ async function computeAverageViews(
   }
 }
 
+async function validateInstagramTarget(
+  context: import("playwright").BrowserContext,
+  target: InstagramValidationTarget,
+  options: Required<InstagramValidationOptions>,
+  delayController: AdaptiveDelayController
+): Promise<InstagramValidationResult> {
+  const handle = normalizeHandle(target.handle);
+  let page: import("playwright").Page | null = null;
+
+  try {
+    page = await context.newPage();
+    const activePage = page;
+
+    await activePage.goto(buildValidationUrl(handle), {
+      waitUntil: "domcontentloaded",
+      timeout: options.navigationTimeoutSecs * 1_000,
+    });
+    await activePage.waitForLoadState("domcontentloaded");
+    await activePage.waitForTimeout(delayController.nextDelay());
+
+    const html = await activePage.content();
+
+    if (isInstagramProfileBlocked(html)) {
+      await delayController.noteBlock((ms) => activePage.waitForTimeout(ms));
+      return {
+        creatorId: target.creatorId ?? null,
+        handle,
+        url: activePage.url(),
+        followerCount: null,
+        avgViews: null,
+        checkedVideoCount: 0,
+        blocked: true,
+        status: "invalid",
+        errorCode: "blocked_or_login_wall",
+        error: "blocked_or_login_wall",
+      };
+    }
+
+    if (isInstagramProfileMissing(html)) {
+      return {
+        creatorId: target.creatorId ?? null,
+        handle,
+        url: activePage.url(),
+        followerCount: null,
+        avgViews: null,
+        checkedVideoCount: 0,
+        blocked: false,
+        status: "invalid",
+        errorCode: "missing_profile",
+        error: "missing_profile",
+      };
+    }
+
+    const followerCount = sanitizeFollowerCount(
+      "instagram_html",
+      extractInstagramFollowerCountFromHtml(html)
+    );
+
+    if (followerCount == null) {
+      return {
+        creatorId: target.creatorId ?? null,
+        handle,
+        url: activePage.url(),
+        followerCount: null,
+        avgViews: null,
+        checkedVideoCount: 0,
+        blocked: false,
+        status: "invalid",
+        errorCode: "follower_count_not_found",
+        error: "follower_count_not_found",
+      };
+    }
+
+    if (followerCount <= 0) {
+      return {
+        creatorId: target.creatorId ?? null,
+        handle,
+        url: activePage.url(),
+        followerCount,
+        avgViews: null,
+        checkedVideoCount: 0,
+        blocked: false,
+        status: "invalid",
+        errorCode: "zero_followers",
+        error: "zero_followers",
+      };
+    }
+
+    const followerRangeError = classifyFollowerRange(
+      followerCount,
+      target.minFollowers,
+      target.maxFollowers
+    );
+
+    if (followerRangeError) {
+      return {
+        creatorId: target.creatorId ?? null,
+        handle,
+        url: activePage.url(),
+        followerCount,
+        avgViews: null,
+        checkedVideoCount: 0,
+        blocked: false,
+        status: "invalid",
+        errorCode: followerRangeError.errorCode,
+        error: followerRangeError.error,
+      };
+    }
+
+    let avgViews: number | null = null;
+    let checkedVideoCount = 0;
+
+    if (options.includeAvgViews) {
+      const avgViewResult = await computeAverageViews(
+        activePage,
+        html,
+        options,
+        delayController
+      );
+
+      avgViews = avgViewResult.avgViews;
+      checkedVideoCount = avgViewResult.checkedVideoCount;
+
+      if (avgViewResult.blocked) {
+        return {
+          creatorId: target.creatorId ?? null,
+          handle,
+          url: activePage.url(),
+          followerCount: null,
+          avgViews: null,
+          checkedVideoCount,
+          blocked: true,
+          status: "invalid",
+          errorCode: "blocked_or_login_wall",
+          error: "blocked_or_login_wall",
+        };
+      }
+    }
+
+    delayController.noteSuccess();
+    return {
+      creatorId: target.creatorId ?? null,
+      handle,
+      url: activePage.url(),
+      followerCount,
+      avgViews,
+      checkedVideoCount,
+      blocked: false,
+      status: "valid",
+      errorCode: null,
+      error: null,
+    };
+  } catch (error) {
+    const failure = classifyCrawlerFailure(error);
+
+    return {
+      creatorId: target.creatorId ?? null,
+      handle,
+      url: buildValidationUrl(handle),
+      followerCount: null,
+      avgViews: null,
+      checkedVideoCount: 0,
+      blocked: false,
+      status: "invalid",
+      errorCode: failure.errorCode,
+      error: failure.error,
+    };
+  } finally {
+    await page?.close().catch(() => undefined);
+  }
+}
+
 export async function validateInstagramCreators(
   targets: InstagramValidationTarget[],
   rawOptions: InstagramValidationOptions = {}
 ): Promise<InstagramValidationResult[]> {
+  if (targets.length === 0) {
+    return [];
+  }
+
   const options = {
     ...DEFAULT_OPTIONS,
     ...rawOptions,
   };
-
-  const delayController = new AdaptiveDelayController(
-    options.delayRangeMs,
-    options.blockPauseMs,
-    options.maxPauseCycles
-  );
   const results = new Map<string, InstagramValidationResult>();
   const proxyServer = getProxyServer();
   const browser = await chromium.launch({
@@ -266,179 +436,49 @@ export async function validateInstagramCreators(
   });
 
   try {
-    for (const rawTarget of targets) {
-      const target = {
-        ...rawTarget,
-        handle: normalizeHandle(rawTarget.handle),
-      };
-      const handle = target.handle;
-      const page = await context.newPage();
+    const normalizedTargets = targets.map((target) => ({
+      ...target,
+      handle: normalizeHandle(target.handle),
+    }));
+    const workerCount = Math.max(
+      1,
+      Math.min(
+        normalizedTargets.length,
+        Number.isFinite(options.concurrency)
+          ? Math.floor(options.concurrency)
+          : 1
+      )
+    );
+    let nextIndex = 0;
 
-      try {
-        await page.goto(buildValidationUrl(handle), {
-          waitUntil: "domcontentloaded",
-          timeout: options.navigationTimeoutSecs * 1_000,
-        });
-        await page.waitForLoadState("domcontentloaded");
-        await page.waitForTimeout(delayController.nextDelay());
-
-        const html = await page.content();
-
-        if (isInstagramProfileBlocked(html)) {
-          await delayController.noteBlock((ms) => page.waitForTimeout(ms));
-          results.set(handle, {
-            creatorId: target.creatorId ?? null,
-            handle,
-            url: page.url(),
-            followerCount: null,
-            avgViews: null,
-            checkedVideoCount: 0,
-            blocked: true,
-            status: "invalid",
-            errorCode: "blocked_or_login_wall",
-            error: "blocked_or_login_wall",
-          });
-          continue;
-        }
-
-        if (isInstagramProfileMissing(html)) {
-          results.set(handle, {
-            creatorId: target.creatorId ?? null,
-            handle,
-            url: page.url(),
-            followerCount: null,
-            avgViews: null,
-            checkedVideoCount: 0,
-            blocked: false,
-            status: "invalid",
-            errorCode: "missing_profile",
-            error: "missing_profile",
-          });
-          continue;
-        }
-
-        const followerCount = sanitizeFollowerCount(
-          "instagram_html",
-          extractInstagramFollowerCountFromHtml(html)
+    await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        const delayController = new AdaptiveDelayController(
+          options.delayRangeMs,
+          options.blockPauseMs,
+          options.maxPauseCycles
         );
 
-        if (followerCount == null) {
-          results.set(handle, {
-            creatorId: target.creatorId ?? null,
-            handle,
-            url: page.url(),
-            followerCount: null,
-            avgViews: null,
-            checkedVideoCount: 0,
-            blocked: false,
-            status: "invalid",
-            errorCode: "follower_count_not_found",
-            error: "follower_count_not_found",
-          });
-          continue;
-        }
+        while (true) {
+          const currentIndex = nextIndex;
+          nextIndex += 1;
 
-        if (followerCount <= 0) {
-          results.set(handle, {
-            creatorId: target.creatorId ?? null,
-            handle,
-            url: page.url(),
-            followerCount,
-            avgViews: null,
-            checkedVideoCount: 0,
-            blocked: false,
-            status: "invalid",
-            errorCode: "zero_followers",
-            error: "zero_followers",
-          });
-          continue;
-        }
+          const target = normalizedTargets[currentIndex];
+          if (!target) {
+            break;
+          }
 
-        const followerRangeError = classifyFollowerRange(
-          followerCount,
-          target.minFollowers,
-          target.maxFollowers
-        );
-
-        if (followerRangeError) {
-          results.set(handle, {
-            creatorId: target.creatorId ?? null,
-            handle,
-            url: page.url(),
-            followerCount,
-            avgViews: null,
-            checkedVideoCount: 0,
-            blocked: false,
-            status: "invalid",
-            errorCode: followerRangeError.errorCode,
-            error: followerRangeError.error,
-          });
-          continue;
-        }
-
-        let avgViews: number | null = null;
-        let checkedVideoCount = 0;
-
-        if (options.includeAvgViews) {
-          const avgViewResult = await computeAverageViews(
-            page,
-            html,
+          const result = await validateInstagramTarget(
+            context,
+            target,
             options,
             delayController
           );
 
-          avgViews = avgViewResult.avgViews;
-          checkedVideoCount = avgViewResult.checkedVideoCount;
-
-          if (avgViewResult.blocked) {
-            results.set(handle, {
-              creatorId: target.creatorId ?? null,
-              handle,
-              url: page.url(),
-              followerCount: null,
-              avgViews: null,
-              checkedVideoCount,
-              blocked: true,
-              status: "invalid",
-              errorCode: "blocked_or_login_wall",
-              error: "blocked_or_login_wall",
-            });
-            continue;
-          }
+          results.set(target.handle, result);
         }
-
-        delayController.noteSuccess();
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount,
-          avgViews,
-          checkedVideoCount,
-          blocked: false,
-          status: "valid",
-          errorCode: null,
-          error: null,
-        });
-      } catch (error) {
-        const failure = classifyCrawlerFailure(error);
-
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: buildValidationUrl(handle),
-          followerCount: null,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "invalid",
-          errorCode: failure.errorCode,
-          error: failure.error,
-        });
-      } finally {
-        await page.close().catch(() => undefined);
-      }
-    }
+      })
+    );
   } finally {
     await context.close().catch(() => undefined);
     await browser.close().catch(() => undefined);

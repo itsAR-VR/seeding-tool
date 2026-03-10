@@ -10,7 +10,8 @@ import {
 } from "@/lib/creator-search/job-payload";
 import {
   isLocalCreatorSearchFallbackEnabled,
-  spawnLocalCreatorSearchJob,
+  scheduleLocalCreatorSearchJob,
+  shouldAttemptLocalCreatorSearchFallback,
 } from "@/lib/creator-search/local-fallback";
 
 type RouteContext = { params: Promise<{ campaignId: string; jobId: string }> };
@@ -62,11 +63,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     if (
       isLocalCreatorSearchFallbackEnabled() &&
       job.status === "pending" &&
-      job.requestedCount > 0
+      job.requestedCount > 0 &&
+      shouldAttemptLocalCreatorSearchFallback(job.startedAt)
     ) {
       after(async () => {
         try {
-          spawnLocalCreatorSearchJob({
+          await scheduleLocalCreatorSearchJob({
             jobId: job.id,
             brandId: membership.brandId,
             campaignId: job.campaignId,

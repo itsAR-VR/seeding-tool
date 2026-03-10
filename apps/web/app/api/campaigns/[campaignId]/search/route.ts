@@ -6,7 +6,7 @@ import { inngest } from "@/lib/inngest/client";
 import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
 import {
   isLocalCreatorSearchFallbackEnabled,
-  spawnLocalCreatorSearchJob,
+  scheduleLocalCreatorSearchJob,
 } from "@/lib/creator-search/local-fallback";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
@@ -107,7 +107,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (isLocalCreatorSearchFallbackEnabled()) {
       after(async () => {
         try {
-          spawnLocalCreatorSearchJob({
+          await scheduleLocalCreatorSearchJob({
             jobId: job.id,
             brandId: membership.brandId,
             campaignId,
