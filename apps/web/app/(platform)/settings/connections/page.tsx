@@ -41,6 +41,11 @@ type FlashMessage =
     }
   | null;
 
+type LoadError = {
+  status: number;
+  message: string;
+} | null;
+
 const SUPPORT_MAILTO =
   "mailto:ar@soramedia.co?subject=Seed%20Scale%20connection%20help";
 
@@ -193,6 +198,7 @@ export function ConnectionsContent({
   const searchParams = useSearchParams();
   const [overview, setOverview] = useState<ConnectionsOverviewResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<LoadError>(null);
   const [messages, setMessages] = useState<
     Partial<Record<IntegrationProvider, FlashMessage>>
   >({});
@@ -227,6 +233,7 @@ export function ConnectionsContent({
 
   const refreshConnectionData = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       if (brandIdOverride) {
@@ -238,12 +245,18 @@ export function ConnectionsContent({
           : "/api/connections/overview"
       );
       if (!res.ok) {
+        const body = await res.json().catch(() => null) as { error?: string } | null;
+        setLoadError({
+          status: res.status,
+          message: body?.error ?? "Failed to load connections",
+        });
         setOverview(null);
         return;
       }
 
       setOverview((await res.json()) as ConnectionsOverviewResponse);
     } catch {
+      setLoadError({ status: 0, message: "Network error" });
       setOverview(null);
     } finally {
       setLoading(false);
@@ -584,6 +597,9 @@ export function ConnectionsContent({
   }
 
   if (!overview) {
+    const isAuthError = loadError?.status === 401;
+    const isNotFound = loadError?.status === 404;
+
     return (
       <div className={embedded ? "space-y-4" : "space-y-6"}>
         {!embedded && (
@@ -592,16 +608,30 @@ export function ConnectionsContent({
         <Card>
           <CardContent className="py-8 text-center">
             <p className="text-muted-foreground">
-              No brand found. Complete onboarding first.
+              {isAuthError
+                ? "Your session has expired. Please refresh the page or log in again."
+                : isNotFound
+                  ? "No brand found. Visit the dashboard to get started."
+                  : "Something went wrong loading your connections. Please try again."}
             </p>
             <div className="mt-4 flex flex-wrap justify-center gap-2">
-              <Button
-                onClick={() => {
-                  window.location.href = "/onboarding";
-                }}
-              >
-                Start Onboarding
-              </Button>
+              {isAuthError ? (
+                <Button onClick={() => window.location.reload()}>
+                  Refresh page
+                </Button>
+              ) : isNotFound ? (
+                <Button
+                  onClick={() => {
+                    window.location.href = "/dashboard";
+                  }}
+                >
+                  Go to Dashboard
+                </Button>
+              ) : (
+                <Button onClick={() => void refreshConnectionData()}>
+                  Retry
+                </Button>
+              )}
               {returnTo && (
                 <Button
                   variant="outline"

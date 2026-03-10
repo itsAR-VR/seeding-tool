@@ -232,6 +232,8 @@ function OnboardingContent() {
   const [reentryChecked, setReentryChecked] = useState(false);
 
   // Re-entry guard: if onboarding is already complete, redirect to dashboard
+  // Exception: allow re-entry to the "connect" step so users can add connections
+  // after completing onboarding (avoids circular redirect with /settings/connections)
   useEffect(() => {
     let cancelled = false;
 
@@ -240,7 +242,7 @@ function OnboardingContent() {
         const response = await fetch("/api/onboarding/status");
         if (response.ok) {
           const data = await response.json();
-          if (!cancelled && data.isComplete) {
+          if (!cancelled && data.isComplete && step !== "connect") {
             router.replace("/dashboard");
             return;
           }
@@ -258,7 +260,7 @@ function OnboardingContent() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, step]);
 
   if (!reentryChecked) {
     return (

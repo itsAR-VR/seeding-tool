@@ -134,6 +134,12 @@ export async function GET(request: Request) {
           ? 404
           : 500;
 
+    if (status === 500) {
+      console.error("[connections/overview] Unexpected error:", error);
+    } else {
+      console.warn("[connections/overview]", message);
+    }
+
     return NextResponse.json({ error: message }, { status });
   }
 }
