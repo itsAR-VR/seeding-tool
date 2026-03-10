@@ -404,6 +404,7 @@ async function collectKeywordEmailLane(
       }
 
       const mapped: UnifiedDiscoveryCandidate = {
+        creatorId: null,
         handle,
         name: null,
         bio: null,
@@ -424,6 +425,8 @@ async function collectKeywordEmailLane(
             ? item.emails[0]
             : null),
         seedCreatorId: null,
+        isCached: false,
+        lastValidatedAt: null,
         primarySource: "apify_keyword_email",
         sources: ["apify_keyword_email"],
         sourceMetadata: item,
@@ -538,7 +541,10 @@ async function excludeExistingCreators(
       .filter(Boolean)
   );
 
-  return candidates.filter((candidate) => !existingHandles.has(candidate.handle));
+  return candidates.filter(
+    (candidate) =>
+      candidate.isCached || !existingHandles.has(candidate.handle)
+  );
 }
 
 export async function orchestrateUnifiedDiscovery(
@@ -549,12 +555,10 @@ export async function orchestrateUnifiedDiscovery(
     Promise<{ lane: string; candidates: LaneCandidate[] }>
   > = [];
 
-  if (context.query.sources.includes("collabstr")) {
-    lanePromises.push(
-      withLaneTimeout("collabstr", collectCollabstrLane(context, rawLimit))
-        .then((candidates) => ({ lane: "collabstr", candidates }))
-    );
-  }
+  lanePromises.push(
+    withLaneTimeout("collabstr", collectValidatedCacheLane(context, rawLimit))
+      .then((candidates) => ({ lane: "cache", candidates }))
+  );
 
   if (context.query.sources.includes("apify_search")) {
     lanePromises.push(
@@ -625,7 +629,12 @@ export async function orchestrateUnifiedDiscovery(
     context
   );
 
-  return filtered
-    .sort((left, right) => right.relevanceScore - left.relevanceScore)
-    .slice(0, context.query.limit);
+  const cached = filtered
+    .filter((candidate) => candidate.isCached)
+    .sort((left, right) => right.relevanceScore - left.relevanceScore);
+  const fresh = filtered
+    .filter((candidate) => !candidate.isCached)
+    .sort((left, right) => right.relevanceScore - left.relevanceScore);
+
+  return [...cached, ...fresh].slice(0, rawLimit);
 }

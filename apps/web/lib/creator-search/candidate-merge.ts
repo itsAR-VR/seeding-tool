@@ -6,6 +6,7 @@ export function mergeDiscoveryCandidates(
 ): UnifiedDiscoveryCandidate {
   return {
     ...current,
+    creatorId: current.creatorId ?? incoming.creatorId,
     name: current.name ?? incoming.name,
     bio: current.bio ?? incoming.bio,
     profileDump: current.profileDump ?? incoming.profileDump,
@@ -27,6 +28,8 @@ export function mergeDiscoveryCandidates(
     isVerified: current.isVerified || incoming.isVerified,
     email: incoming.email ?? current.email,
     seedCreatorId: current.seedCreatorId ?? incoming.seedCreatorId,
+    isCached: current.isCached || incoming.isCached,
+    lastValidatedAt: current.lastValidatedAt ?? incoming.lastValidatedAt,
     sources: Array.from(new Set([...current.sources, ...incoming.sources])),
     sourceMetadata: {
       ...current.sourceMetadata,

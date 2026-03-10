@@ -7,12 +7,29 @@ import {
 } from "@/lib/creator-search/contracts";
 import { orchestrateUnifiedDiscovery } from "@/lib/creator-search/orchestrator";
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
+import { applyValidationResultToCreator } from "@/lib/creators/validation-ops";
+import {
+  validateInstagramCreators,
+  type InstagramValidationResult,
+} from "@/lib/instagram/validator";
 
 type CreatorSearchRequestedEvent = {
   jobId: string;
   brandId: string;
   campaignId?: string | null;
   query?: unknown;
+};
+
+type DiscoveryCandidate = Awaited<
+  ReturnType<typeof orchestrateUnifiedDiscovery>
+>[number];
+
+type ValidatedDiscoveryCandidate = DiscoveryCandidate & {
+  validationStatus: "valid" | "invalid";
+  validationError: string | null;
+  validatedFollowerCount: number | null;
+  validatedAvgViews: number | null;
+  validatedProfileUrl: string | null;
 };
 
 function parseJobQuery(value: Prisma.JsonValue | unknown): UnifiedDiscoveryQuery {
@@ -25,13 +42,104 @@ function parseJobQuery(value: Prisma.JsonValue | unknown): UnifiedDiscoveryQuery
   return normalizeUnifiedDiscoveryQuery({});
 }
 
-async function persistCampaignCandidate(
-  brandId: string,
-  campaignId: string,
-  candidate: Awaited<
-    ReturnType<typeof orchestrateUnifiedDiscovery>
-  >[number]
+function toValidatedCandidate(
+  candidate: DiscoveryCandidate,
+  validation: InstagramValidationResult
+): ValidatedDiscoveryCandidate {
+  return {
+    ...candidate,
+    validationStatus: validation.status,
+    validationError: validation.error,
+    validatedFollowerCount: validation.followerCount,
+    validatedAvgViews: validation.avgViews,
+    validatedProfileUrl: validation.url || candidate.profileUrl,
+  };
+}
+
+async function validateDiscoveryCandidates(
+  candidates: DiscoveryCandidate[],
+  query: UnifiedDiscoveryQuery
 ) {
+  const prevalidated = candidates
+    .filter((candidate) => candidate.isCached)
+    .map<ValidatedDiscoveryCandidate>((candidate) => ({
+      ...candidate,
+      validationStatus: "valid",
+      validationError: null,
+      validatedFollowerCount: candidate.followerCount,
+      validatedAvgViews: candidate.avgViews,
+      validatedProfileUrl: candidate.profileUrl,
+    }));
+
+  const targets = candidates
+    .filter((candidate) => !candidate.isCached)
+    .map((candidate) => ({
+      creatorId: candidate.creatorId ?? candidate.handle,
+      handle: candidate.handle,
+      minFollowers: query.filters.minFollowers ?? null,
+      maxFollowers: query.filters.maxFollowers ?? null,
+    }));
+
+  const validationResults =
+    targets.length > 0
+      ? await validateInstagramCreators(targets, {
+          concurrency: 1,
+          includeAvgViews: false,
+        })
+      : [];
+
+  const validationByHandle = new Map(
+    validationResults.map((result) => [result.handle.toLowerCase(), result])
+  );
+
+  const newlyValidated = candidates
+    .filter((candidate) => !candidate.isCached)
+    .map<ValidatedDiscoveryCandidate>((candidate) => {
+      const validation =
+        validationByHandle.get(candidate.handle.toLowerCase()) ??
+        ({
+          creatorId: candidate.creatorId,
+          handle: candidate.handle,
+          url:
+            candidate.profileUrl ??
+            `https://instagram.com/${candidate.handle}`,
+          followerCount: null,
+          avgViews: null,
+          checkedVideoCount: 0,
+          blocked: false,
+          status: "invalid",
+          errorCode: "navigation_failed",
+          error: "navigation_failed",
+        } satisfies InstagramValidationResult);
+
+      return toValidatedCandidate(candidate, validation);
+    });
+
+  const validatedCandidates = [...prevalidated, ...newlyValidated];
+
+  return {
+    valid: validatedCandidates.filter(
+      (candidate) => candidate.validationStatus === "valid"
+    ),
+    invalid: validatedCandidates.filter(
+      (candidate) => candidate.validationStatus === "invalid"
+    ),
+  };
+}
+
+async function persistDiscoveredCandidate({
+  brandId,
+  searchJobId,
+  candidate,
+  campaignId,
+  attachToCampaign,
+}: {
+  brandId: string;
+  searchJobId: string;
+  candidate: ValidatedDiscoveryCandidate;
+  campaignId?: string | null;
+  attachToCampaign: boolean;
+}) {
   const existing = await prisma.creator.findFirst({
     where: {
       brandId,
@@ -49,9 +157,13 @@ async function persistCampaignCandidate(
           bioCategory:
             candidate.canonicalCategory ?? existing.bioCategory,
           imageUrl: candidate.imageUrl ?? existing.imageUrl,
-          followerCount: candidate.followerCount ?? existing.followerCount,
-          avgViews: candidate.avgViews ?? existing.avgViews,
+          followerCount:
+            candidate.validatedFollowerCount ?? existing.followerCount,
+          avgViews: candidate.validatedAvgViews ?? existing.avgViews,
           discoverySource: candidate.primarySource,
+          validationStatus: "valid",
+          lastValidatedAt: new Date(),
+          lastValidationError: null,
         },
       })
     : await prisma.creator.create({
@@ -63,9 +175,12 @@ async function persistCampaignCandidate(
           bio: candidate.bio,
           bioCategory: candidate.canonicalCategory,
           imageUrl: candidate.imageUrl,
-          followerCount: candidate.followerCount,
-          avgViews: candidate.avgViews,
+          followerCount: candidate.validatedFollowerCount,
+          avgViews: candidate.validatedAvgViews,
           discoverySource: candidate.primarySource,
+          validationStatus: "valid",
+          lastValidatedAt: new Date(),
+          lastValidationError: null,
         },
       });
 
@@ -79,28 +194,41 @@ async function persistCampaignCandidate(
     update: {
       handle: candidate.handle,
       url:
-        candidate.profileUrl ?? `https://instagram.com/${candidate.handle}`,
-      followerCount: candidate.followerCount ?? undefined,
+        candidate.validatedProfileUrl ??
+        candidate.profileUrl ??
+        `https://instagram.com/${candidate.handle}`,
+      followerCount: candidate.validatedFollowerCount ?? undefined,
       engagementRate: candidate.engagementRate ?? undefined,
       isVerified: candidate.isVerified,
-      metadata: candidate.sourceMetadata as Prisma.InputJsonValue,
+      metadata: {
+        ...(candidate.sourceMetadata as Record<string, unknown>),
+        validationStatus: candidate.validationStatus,
+        validationError: candidate.validationError,
+      } as Prisma.InputJsonValue,
     },
     create: {
       creatorId: creator.id,
       platform: "instagram",
       handle: candidate.handle,
       url:
-        candidate.profileUrl ?? `https://instagram.com/${candidate.handle}`,
-      followerCount: candidate.followerCount ?? null,
+        candidate.validatedProfileUrl ??
+        candidate.profileUrl ??
+        `https://instagram.com/${candidate.handle}`,
+      followerCount: candidate.validatedFollowerCount ?? null,
       engagementRate: candidate.engagementRate ?? null,
       isVerified: candidate.isVerified,
-      metadata: candidate.sourceMetadata as Prisma.InputJsonValue,
+      metadata: {
+        ...(candidate.sourceMetadata as Record<string, unknown>),
+        validationStatus: candidate.validationStatus,
+        validationError: candidate.validationError,
+      } as Prisma.InputJsonValue,
     },
   });
 
   for (const source of candidate.sources) {
     await recordCreatorDiscoveryTouch({
       creatorId: creator.id,
+      searchJobId,
       source,
       externalId: candidate.handle,
       rawSourceCategory: candidate.rawSourceCategory,
@@ -111,26 +239,31 @@ async function persistCampaignCandidate(
         primarySource: candidate.primarySource,
         sources: candidate.sources,
         relevanceScore: candidate.relevanceScore,
+        isCached: candidate.isCached,
         sourceMetadata: candidate.sourceMetadata,
       } as Prisma.InputJsonValue,
     });
   }
 
-  await prisma.campaignCreator.upsert({
-    where: {
-      campaignId_creatorId: {
+  if (campaignId && attachToCampaign) {
+    await prisma.campaignCreator.upsert({
+      where: {
+        campaignId_creatorId: {
+          campaignId,
+          creatorId: creator.id,
+        },
+      },
+      update: {},
+      create: {
         campaignId,
         creatorId: creator.id,
+        reviewStatus: "pending",
+        lifecycleStatus: "ready",
       },
-    },
-    update: {},
-    create: {
-      campaignId,
-      creatorId: creator.id,
-      reviewStatus: "pending",
-      lifecycleStatus: "ready",
-    },
-  });
+    });
+  }
+
+  return creator.id;
 }
 
 export const handleCreatorSearch = inngest.createFunction(
@@ -179,11 +312,54 @@ export const handleCreatorSearch = inngest.createFunction(
         query: storedQuery,
       });
 
+      await prisma.creatorSearchJob.update({
+        where: { id: jobId },
+        data: {
+          candidateCount: candidates.length,
+          progressPercent: 45,
+          etaSeconds: Math.max(15, candidates.length * 8),
+        },
+      });
+
+      const { valid, invalid } = await validateDiscoveryCandidates(
+        candidates,
+        storedQuery
+      );
+      const selectedValid = valid.slice(0, storedQuery.limit);
+      const overflowValid = valid.slice(storedQuery.limit);
+      const invalidToPersist = invalid.slice(
+        0,
+        Math.max(0, storedQuery.limit * 3 - selectedValid.length)
+      );
+
+      for (const candidate of invalid) {
+        if (candidate.creatorId) {
+          await applyValidationResultToCreator({
+            creatorId: candidate.creatorId,
+            result: {
+              creatorId: candidate.creatorId,
+              handle: candidate.handle,
+              url:
+                candidate.validatedProfileUrl ??
+                candidate.profileUrl ??
+                `https://instagram.com/${candidate.handle}`,
+              followerCount: null,
+              avgViews: null,
+              checkedVideoCount: 0,
+              blocked: false,
+              status: "invalid",
+              errorCode: null,
+              error: candidate.validationError,
+            },
+          });
+        }
+      }
+
       await prisma.creatorSearchResult.deleteMany({
         where: { searchJobId: jobId },
       });
 
-      for (const candidate of candidates) {
+      for (const candidate of [...selectedValid, ...invalidToPersist]) {
         await prisma.creatorSearchResult.create({
           data: {
             searchJobId: jobId,
@@ -207,20 +383,82 @@ export const handleCreatorSearch = inngest.createFunction(
               classificationConfidence: candidate.classificationConfidence,
               matchedCategorySignals: candidate.matchedCategorySignals,
               profileDump: candidate.profileDump,
+              isCached: candidate.isCached,
+              lastValidatedAt: candidate.lastValidatedAt,
               sourceMetadata: candidate.sourceMetadata,
             } as Prisma.InputJsonValue,
+            validationStatus: candidate.validationStatus,
+            validationError: candidate.validationError,
+            validatedFollowerCount: candidate.validatedFollowerCount,
+            validatedAvgViews: candidate.validatedAvgViews,
           },
         });
       }
 
+      await prisma.creatorSearchJob.update({
+        where: { id: jobId },
+        data: {
+          progressPercent: 80,
+          etaSeconds: Math.max(5, selectedValid.length * 2),
+        },
+      });
+
       if (boundCampaignId) {
-        for (const candidate of candidates) {
-          await persistCampaignCandidate(brandId, boundCampaignId, candidate);
+        const creatorIdsToEnrich: string[] = [];
+        for (const candidate of selectedValid) {
+          const creatorId = await persistDiscoveredCandidate({
+            brandId,
+            searchJobId: jobId,
+            candidate,
+            campaignId: boundCampaignId,
+            attachToCampaign: true,
+          });
+          creatorIdsToEnrich.push(creatorId);
+        }
+
+        for (const candidate of overflowValid) {
+          const creatorId = await persistDiscoveredCandidate({
+            brandId,
+            searchJobId: jobId,
+            candidate,
+            campaignId: boundCampaignId,
+            attachToCampaign: false,
+          });
+          creatorIdsToEnrich.push(creatorId);
+        }
+
+        if (creatorIdsToEnrich.length > 0) {
+          await inngest.send({
+            name: "creator-avg-views/requested",
+            data: {
+              creatorIds: creatorIdsToEnrich,
+            },
+          });
+        }
+      } else {
+        const overflowCreatorIds: string[] = [];
+        for (const candidate of overflowValid) {
+          const creatorId = await persistDiscoveredCandidate({
+            brandId,
+            searchJobId: jobId,
+            candidate,
+            attachToCampaign: false,
+          });
+          overflowCreatorIds.push(creatorId);
+        }
+
+        if (overflowCreatorIds.length > 0) {
+          await inngest.send({
+            name: "creator-avg-views/requested",
+            data: {
+              creatorIds: overflowCreatorIds,
+            },
+          });
         }
       }
 
       const finalStatus =
-        candidates.length >= storedQuery.limit
+        selectedValid.length >= storedQuery.limit
           ? "completed"
           : "completed_with_shortfall";
 
@@ -229,9 +467,11 @@ export const handleCreatorSearch = inngest.createFunction(
         data: {
           status: finalStatus,
           candidateCount: candidates.length,
-          validatedCount: candidates.length,
-          invalidCount: 0,
-          resultCount: candidates.length,
+          validatedCount: valid.length,
+          invalidCount: invalid.length,
+          cachedCount: selectedValid.filter((candidate) => candidate.isCached)
+            .length,
+          resultCount: selectedValid.length,
           progressPercent: 100,
           etaSeconds: 0,
           finishedAt: new Date(),
@@ -241,7 +481,7 @@ export const handleCreatorSearch = inngest.createFunction(
       return {
         jobId,
         status: finalStatus,
-        resultCount: candidates.length,
+        resultCount: selectedValid.length,
       };
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : "Unknown error";

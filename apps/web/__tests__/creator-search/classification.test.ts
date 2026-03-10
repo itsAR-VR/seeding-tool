@@ -34,6 +34,7 @@ describe("creator discovery merge", () => {
   it("merges duplicate handles while preserving all sources", () => {
     const merged = mergeDiscoveryCandidates(
       {
+        creatorId: null,
         handle: "creator_handle",
         name: "Creator",
         bio: null,
@@ -50,12 +51,15 @@ describe("creator discovery merge", () => {
         isVerified: false,
         email: null,
         seedCreatorId: null,
+        isCached: true,
+        lastValidatedAt: "2026-03-09T12:00:00.000Z",
         primarySource: "collabstr",
         sources: ["collabstr"],
         sourceMetadata: { origin: "collabstr" },
         relevanceScore: 12,
       },
       {
+        creatorId: null,
         handle: "creator_handle",
         name: "Creator",
         bio: "Beauty creator",
@@ -72,6 +76,8 @@ describe("creator discovery merge", () => {
         isVerified: true,
         email: "creator@example.com",
         seedCreatorId: null,
+        isCached: false,
+        lastValidatedAt: null,
         primarySource: "apify_search",
         sources: ["apify_search"],
         sourceMetadata: { origin: "apify" },

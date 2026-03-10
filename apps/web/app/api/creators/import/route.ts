@@ -4,6 +4,7 @@ import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
+import { inngest } from "@/lib/inngest/client";
 
 /**
  * POST /api/creators/import — Bulk import creators from CSV data.
@@ -93,6 +94,7 @@ export async function POST(request: NextRequest) {
     let updated = 0;
     let skipped = 0;
     let invalidDropped = 0;
+    const enrichedCreatorIds: string[] = [];
 
     for (const row of normalizedRows) {
       const handle = row.username;
@@ -167,6 +169,7 @@ export async function POST(request: NextRequest) {
             engagementRate: row.engagementRate ?? null,
           },
         });
+        enrichedCreatorIds.push(existing.id);
         updated++;
       } else {
         // INVARIANT: discoverySource is always tagged — never null
@@ -225,10 +228,20 @@ export async function POST(request: NextRequest) {
                 `https://instagram.com/${handle}`,
             },
           });
+          enrichedCreatorIds.push(creator.id);
         }
 
         created++;
       }
+    }
+
+    if (enrichedCreatorIds.length > 0) {
+      await inngest.send({
+        name: "creator-avg-views/requested",
+        data: {
+          creatorIds: enrichedCreatorIds,
+        },
+      });
     }
 
     return NextResponse.json({

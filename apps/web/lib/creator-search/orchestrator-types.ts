@@ -5,6 +5,7 @@ import type {
 import type { DiscoveryClassification } from "@/lib/creator-search/classification";
 
 export type UnifiedDiscoveryCandidate = {
+  creatorId: string | null;
   handle: string;
   name: string | null;
   bio: string | null;
@@ -21,6 +22,8 @@ export type UnifiedDiscoveryCandidate = {
   isVerified: boolean;
   email: string | null;
   seedCreatorId: string | null;
+  isCached: boolean;
+  lastValidatedAt: string | null;
   primarySource: UnifiedDiscoverySource;
   sources: UnifiedDiscoverySource[];
   sourceMetadata: Record<string, unknown>;

@@ -60,7 +60,6 @@ export async function POST(request: NextRequest) {
       searchMode,
       hashtag,
       usernames,
-      limit = 50,
       platform = "instagram",
     } = body;
 
@@ -89,7 +88,7 @@ export async function POST(request: NextRequest) {
       data: {
         status: "pending",
         platform,
-        requestedCount: limit,
+        requestedCount: unifiedQuery.limit,
         progressPercent: 0,
         query: unifiedQuery,
         brandId: membership.brandId,

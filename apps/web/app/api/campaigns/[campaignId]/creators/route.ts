@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
+import { inngest } from "@/lib/inngest/client";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -240,6 +241,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
       include: {
         creator: { include: { profiles: true } },
+      },
+    });
+
+    await inngest.send({
+      name: "creator-avg-views/requested",
+      data: {
+        creatorIds: [creatorId],
       },
     });
 

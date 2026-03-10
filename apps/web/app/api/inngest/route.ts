@@ -15,6 +15,8 @@ import {
   mentionMediaArchive,
   mentionMediaArchiveCron,
 } from "@/lib/inngest/functions/mention-media-archive";
+import { creatorValidationCleanup } from "@/lib/inngest/functions/creator-validation-cleanup";
+import { creatorAvgViewsEnrichment } from "@/lib/inngest/functions/creator-avg-views-enrichment";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -29,5 +31,7 @@ export const { GET, POST, PUT } = serve({
     runAutomations,
     mentionMediaArchive,
     mentionMediaArchiveCron,
+    creatorValidationCleanup,
+    creatorAvgViewsEnrichment,
   ],
 });
