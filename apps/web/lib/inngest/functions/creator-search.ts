@@ -1,5 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
+import { runCampaignCreatorSearchJob } from "@/lib/workers/creator-search";
 
 /**
  * Inngest function: Handle creator search requests (Collabstr/marketplace path).
@@ -7,8 +9,9 @@ import { prisma } from "@/lib/prisma";
  * Listens on "creator-search/requested" but ONLY handles non-Apify sources.
  * Apify discovery is handled exclusively by `apify-creator-search`.
  *
- * 1. Creates a CreatorSearchJob record for tracking
- * 2. Creates an InterventionCase so operators can monitor queued searches
+ * 1. Picks up queued campaign discovery jobs
+ * 2. Runs the Collabstr search pipeline off the request thread
+ * 3. Persists validated results back into CreatorSearchJob / CreatorSearchResult
  *
  * Real scoring: the Fly worker (`podhi-seeding-creator-search.fly.dev`)
  * runs Playwright + brand-context-aware OpenAI scoring.
@@ -40,34 +43,48 @@ export const handleCreatorSearch = inngest.createFunction(
       return { status: "skipped", reason: "Apify path handled by apify-creator-search" };
     }
 
-    // Create search job record
-    const searchJob = await prisma.creatorSearchJob.create({
-      data: {
-        id: jobId,
-        status: "pending",
-        platform: (criteria.platform as string) ?? "instagram",
-        query: criteria as Record<string, string | number | string[]>,
-        brandId,
-      },
+    const existingJob = await prisma.creatorSearchJob.findUnique({
+      where: { id: jobId },
+      select: { id: true },
     });
 
-    // Create intervention so operators can track the search
-    await prisma.interventionCase.create({
-      data: {
-        type: "manual_review",
-        status: "open",
-        priority: "normal",
-        title: `Creator search queued for campaign`,
-        description: `Search job ${searchJob.id} queued with criteria: ${JSON.stringify(criteria)}. Campaign: ${campaignId}. Worker: podhi-seeding-creator-search.fly.dev.`,
-        brandId,
-      },
-    });
+    if (!existingJob) {
+      const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignSearch(
+        criteria as {
+          platform?: string;
+          keywords?: string[];
+          minFollowers?: number;
+          maxFollowers?: number;
+          category?: string;
+          location?: string;
+          limit?: number;
+        }
+      );
+      await prisma.creatorSearchJob.create({
+        data: {
+          id: jobId,
+          status: "pending",
+          platform: (criteria.platform as string) ?? "instagram",
+          campaignId: campaignId || null,
+          requestedCount:
+            typeof criteria.limit === "number" ? criteria.limit : 0,
+          progressPercent: 0,
+          query: unifiedQuery,
+          brandId,
+        },
+      });
+    }
 
     console.log(
-      `[creator-search] Job ${jobId} created for campaign ${campaignId}`,
+      `[creator-search] Running queued job ${jobId} for campaign ${campaignId}`,
       criteria
     );
 
-    return { jobId: searchJob.id, status: "pending" };
+    return runCampaignCreatorSearchJob(
+      campaignId,
+      brandId,
+      criteria,
+      { jobId }
+    );
   }
 );

@@ -55,6 +55,7 @@ export const runAutomations = inngest.createFunction(
             limit?: number;
             platform?: string;
             autoImport?: boolean;
+            query?: Record<string, unknown>;
             categories?: {
               apify?: string[];
               collabstr?: string[];
@@ -70,14 +71,22 @@ export const runAutomations = inngest.createFunction(
             data: {
               status: "pending",
               platform: config.platform || "instagram",
-              query: {
-                searchMode: config.searchMode || "hashtag",
-                hashtag: derivedHashtag,
-                usernames: config.usernames,
-                limit: config.limit || 50,
-                categories: config.categories,
-                automationId: automation.id,
-              },
+              requestedCount: config.limit || 50,
+              progressPercent: 0,
+              query:
+                config.query && typeof config.query === "object"
+                  ? {
+                      ...(config.query as Record<string, unknown>),
+                      automationId: automation.id,
+                    }
+                  : {
+                      searchMode: config.searchMode || "hashtag",
+                      hashtag: derivedHashtag,
+                      usernames: config.usernames,
+                      limit: config.limit || 50,
+                      categories: config.categories,
+                      automationId: automation.id,
+                    },
               brandId: automation.brandId,
             },
           });

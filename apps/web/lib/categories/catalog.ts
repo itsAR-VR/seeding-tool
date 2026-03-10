@@ -33,9 +33,23 @@ export const APIFY_CATEGORIES = [
   "Fashion",
 ] as const;
 
+export const CANONICAL_DISCOVERY_CATEGORIES = [
+  ...APIFY_CATEGORIES,
+  "Other",
+] as const;
+
+export type CanonicalDiscoveryCategory =
+  typeof CANONICAL_DISCOVERY_CATEGORIES[number];
+
 // The committed repo does not currently include scripts/collabstr-influencers.jsonl,
 // so this secondary group stays as a conservative fallback until the dataset is restored.
 export const COLLABSTR_CATEGORIES = uniqueSorted(COLLABSTR_FALLBACK_CATEGORIES);
+
+export function isCanonicalDiscoveryCategory(
+  value: string
+): value is CanonicalDiscoveryCategory {
+  return (CANONICAL_DISCOVERY_CATEGORIES as readonly string[]).includes(value);
+}
 
 export function getGroupedCategories() {
   return {

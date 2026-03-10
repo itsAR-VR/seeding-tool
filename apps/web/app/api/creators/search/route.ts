@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
+import { buildUnifiedDiscoveryQueryFromManualSearch } from "@/lib/creator-search/contracts";
 
 /**
  * POST /api/creators/search — Start an Apify creator discovery search.
@@ -44,7 +45,15 @@ export async function POST(request: NextRequest) {
       platform?: string;
     };
 
-    const { searchMode, hashtag, usernames, limit = 50, platform = "instagram" } = body;
+    const {
+      searchMode,
+      hashtag,
+      usernames,
+      limit = 50,
+      platform = "instagram",
+    } = body;
+
+    const unifiedQuery = buildUnifiedDiscoveryQueryFromManualSearch(body);
 
     // Validate input
     if (searchMode === "hashtag" && !hashtag?.trim()) {
@@ -66,12 +75,9 @@ export async function POST(request: NextRequest) {
       data: {
         status: "pending",
         platform,
-        query: {
-          searchMode,
-          hashtag: hashtag?.replace(/^#/, "").trim(),
-          usernames: usernames?.map((u) => u.trim().replace(/^@/, "")),
-          limit,
-        },
+        requestedCount: limit,
+        progressPercent: 0,
+        query: unifiedQuery,
         brandId: membership.brandId,
       },
     });
@@ -94,7 +100,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ jobId: job.id }, { status: 202 });
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        status: "queued",
+        requestedCount: job.requestedCount,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     console.error("[creators/search/POST]", error);
     return NextResponse.json(

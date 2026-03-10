@@ -124,6 +124,25 @@ function buildCollabstrNotesBlock(data: ScrapedInfluencer): string {
   return lines.join("\n").trim();
 }
 
+function buildCollabstrMetadata(data: ScrapedInfluencer) {
+  return {
+    collabstrSlug: data.collabstrSlug,
+    collabstrUrl: data.collabstrUrl,
+    niche: data.niche,
+    profileDump: data.profileDump,
+    location: data.location,
+    website: data.website,
+    instagram: resolveInstagramHandle(data),
+    instagramUrl: cleanNullableString(data.instagramUrl),
+    tiktok: resolveTikTokHandle(data),
+    tiktokUrl: cleanNullableString(data.tiktokUrl),
+    price: data.price,
+    rating: data.rating,
+    reviewCount: data.reviewCount,
+    scrapedAt: new Date().toISOString(),
+  };
+}
+
 function mergeCreatorNotes(
   existingNotes: string | null | undefined,
   data: ScrapedInfluencer
@@ -288,6 +307,17 @@ async function main() {
           },
         });
       }
+
+      await prisma!.creatorDiscoveryTouch.create({
+        data: {
+          creatorId: creator.id,
+          source: "collabstr",
+          externalId: data.collabstrSlug,
+          rawSourceCategory: data.niche,
+          canonicalCategory: data.niche,
+          metadata: buildCollabstrMetadata(data),
+        },
+      });
 
       imported++;
       if (imported % 50 === 0) {

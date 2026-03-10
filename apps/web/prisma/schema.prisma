@@ -429,6 +429,7 @@ model Campaign {
 
   campaignProducts  CampaignProduct[]
   campaignCreators  CampaignCreator[]
+  creatorSearchJobs CreatorSearchJob[]
 
   @@map("campaigns")
 }
@@ -473,6 +474,9 @@ model Creator {
   followerCount Int?    @map("follower_count")
   avgViews      Int?    @map("avg_views")
   bioCategory   String? @map("bio_category")
+  validationStatus   String    @default("unknown") @map("validation_status")
+  lastValidatedAt    DateTime? @map("last_validated_at")
+  lastValidationError String?  @db.Text @map("last_validation_error")
 
   optedOut   Boolean   @default(false)
   optOutDate DateTime?
@@ -486,6 +490,7 @@ model Creator {
 
   profiles          CreatorProfile[]
   campaignCreators  CampaignCreator[]
+  discoveryTouches  CreatorDiscoveryTouch[]
 
   @@unique([brandId, instagramHandle])
   @@map("creators")
@@ -557,21 +562,35 @@ model CampaignCreator {
 model CreatorSearchJob {
   id     String @id @default(uuid())
   status String @default("pending") // pending | running | completed | failed | paused
+  requestedCount Int @default(0) @map("requested_count")
+  candidateCount Int @default(0) @map("candidate_count")
+  validatedCount Int @default(0) @map("validated_count")
+  invalidCount   Int @default(0) @map("invalid_count")
+  cachedCount    Int @default(0) @map("cached_count")
+  progressPercent Int @default(0) @map("progress_percent")
+  etaSeconds     Int? @map("eta_seconds")
+  startedAt      DateTime? @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
 
   platform   String // instagram | meta_creator_marketplace
   query      Json   // search parameters
+  campaignId String? @map("campaign_id")
   resultCount Int   @default(0)
   error       String?
 
   brandId String
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand    Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  results CreatorSearchResult[]
+  results          CreatorSearchResult[]
+  discoveryTouches CreatorDiscoveryTouch[]
 
+  @@index([brandId, status])
+  @@index([campaignId, status])
   @@map("creator_search_jobs")
 }
 
@@ -580,14 +599,24 @@ model CreatorSearchResult {
 
   platform       String
   handle         String
+  source         String @default("unknown")
+  primarySource  String? @map("primary_source")
+  sources        Json?
   name           String?
   followerCount  Int?
   engagementRate Float?
   profileUrl     String?
   imageUrl       String?
   bio            String? @db.Text
+  email          String?
   bioCategory    String? @map("bio_category")
+  rawSourceCategory String? @map("raw_source_category")
+  seedCreatorId  String? @map("seed_creator_id")
   metadata       Json?
+  validationStatus String @default("unknown") @map("validation_status")
+  validationError  String? @db.Text @map("validation_error")
+  validatedFollowerCount Int? @map("validated_follower_count")
+  validatedAvgViews      Int? @map("validated_avg_views")
 
   fitScore    Float? // AI-scored creator fit (0-1)
   fitReasoning String? @db.Text
@@ -599,7 +628,33 @@ model CreatorSearchResult {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([searchJobId, source])
   @@map("creator_search_results")
+}
+
+model CreatorDiscoveryTouch {
+  id String @id @default(uuid())
+
+  source            String
+  externalId        String? @map("external_id")
+  rawSourceCategory String? @map("raw_source_category")
+  canonicalCategory String? @map("canonical_category")
+  email             String?
+  metadata          Json?
+  seedCreatorId     String? @map("seed_creator_id")
+
+  creatorId   String @map("creator_id")
+  searchJobId String? @map("search_job_id")
+
+  creator   Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  searchJob CreatorSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId, source])
+  @@index([searchJobId])
+  @@map("creator_discovery_touches")
 }
 
 // ──────────────────────────────────────────────

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
-import { searchCreatorsForCampaign } from "@/lib/workers/creator-search";
+import { inngest } from "@/lib/inngest/client";
+import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -57,15 +58,49 @@ export async function POST(request: NextRequest, context: RouteContext) {
       maxFollowers?: number;
       category?: string;
       location?: string;
+      limit?: number;
     };
 
-    const result = await searchCreatorsForCampaign(
-      campaignId,
-      membership.brandId,
-      body
-    );
+    const requestedCount = Math.max(1, Math.min(body.limit ?? 20, 25));
+    const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignSearch({
+      ...body,
+      limit: requestedCount,
+    });
 
-    return NextResponse.json(result, { status: 202 });
+    const job = await prisma.creatorSearchJob.create({
+      data: {
+        status: "pending",
+        platform: body.platform ?? "instagram",
+        brandId: membership.brandId,
+        campaignId,
+        requestedCount,
+        progressPercent: 0,
+        query: unifiedQuery,
+      },
+    });
+
+    await inngest.send({
+      name: "creator-search/requested",
+      data: {
+        jobId: job.id,
+        campaignId,
+        brandId: membership.brandId,
+        discoverySource: "creator_marketplace",
+        criteria: {
+          ...body,
+          limit: requestedCount,
+        },
+      },
+    });
+
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        status: "queued",
+        requestedCount,
+      },
+      { status: 202 }
+    );
   } catch (error) {
     console.error("[campaigns/search/POST]", error);
     return NextResponse.json(

@@ -1,7 +1,8 @@
 /**
  * Creator search pipeline.
  *
- * Discovery source: local Collabstr dataset narrowed by brand ICP.
+ * Discovery source: brand-scoped Collabstr creators from the database,
+ * with JSONL fallback during the import cutover.
  * Verification path: Fly worker (real Playwright + OpenAI) with local OpenAI fallback.
  * Approval path: agent-driven via brand context + AI persona (recommend or auto mode).
  *
@@ -19,8 +20,11 @@ import OpenAI from "openai";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveBrandICP, icpToSearchHints, type BrandICP } from "@/lib/brands/icp";
+import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
+import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { CREDIT_COSTS, debit, getBalance } from "@/lib/credits";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
+import { validateInstagramCreators } from "@/lib/instagram/validator";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +70,13 @@ type ScoredCreator = CollabstrRow & {
   analysisSource: "worker" | "local";
 };
 
+type ValidatedScoredCreator = ScoredCreator & {
+  validationStatus: "valid" | "invalid";
+  validationError: string | null;
+  validatedFollowerCount: number | null;
+  validatedAvgViews: number | null;
+};
+
 /** Persona context forwarded to the Fly worker */
 type PersonaContext = {
   name: string;
@@ -107,7 +118,7 @@ type ApprovalMode = "auto" | "recommend";
 
 const WORKER_BASE_URL = process.env.CREATOR_SEARCH_WORKER_BASE_URL?.trim().replace(/\/$/, "");
 const WORKER_TOKEN = process.env.CREATOR_SEARCH_WORKER_TOKEN?.trim();
-const WORKER_MAX_ANALYSIS = 10;
+const WORKER_MAX_ANALYSIS = 75;
 
 /**
  * Default approval threshold — creators at or above are approved.
@@ -134,7 +145,7 @@ function getCollabstrPath(): string {
   return candidates[0];
 }
 
-function loadCollabstrDataset(): CollabstrRow[] {
+function loadCollabstrDatasetFromFile(): CollabstrRow[] {
   const dataPath = getCollabstrPath();
   if (!fs.existsSync(dataPath)) {
     console.warn(`[creator-search] Collabstr dataset not found at ${dataPath}`);
@@ -152,6 +163,109 @@ function loadCollabstrDataset(): CollabstrRow[] {
         return [];
       }
     });
+}
+
+function readJsonString(
+  record: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readJsonNumber(
+  record: Record<string, unknown>,
+  key: string
+): number | null {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+async function loadCollabstrDataset(brandId: string): Promise<CollabstrRow[]> {
+  const creators = await prisma.creator.findMany({
+    where: {
+      brandId,
+      discoverySource: "collabstr",
+    },
+    include: {
+      discoveryTouches: {
+        where: { source: "collabstr" },
+        orderBy: { createdAt: "desc" },
+        take: 1,
+      },
+      profiles: true,
+    },
+  });
+
+  const rows = creators.flatMap((creator) => {
+    const touch = creator.discoveryTouches[0];
+    const metadata =
+      touch?.metadata && typeof touch.metadata === "object" && !Array.isArray(touch.metadata)
+        ? (touch.metadata as Record<string, unknown>)
+        : {};
+    const instagramProfile = creator.profiles.find(
+      (profile) => profile.platform === "instagram"
+    );
+    const tiktokProfile = creator.profiles.find(
+      (profile) => profile.platform === "tiktok"
+    );
+    const collabstrSlug =
+      touch?.externalId ||
+      readJsonString(metadata, "collabstrSlug") ||
+      creator.instagramHandle ||
+      null;
+
+    if (!collabstrSlug) {
+      return [];
+    }
+
+    return [
+      {
+        name: creator.name,
+        instagram: creator.instagramHandle,
+        tiktok: tiktokProfile?.handle ?? readJsonString(metadata, "tiktok"),
+        profileDump: readJsonString(metadata, "profileDump"),
+        collabstrSlug,
+        collabstrUrl:
+          readJsonString(metadata, "collabstrUrl") ||
+          `https://collabstr.com/${collabstrSlug}`,
+        niche:
+          touch?.rawSourceCategory ||
+          creator.bioCategory ||
+          readJsonString(metadata, "niche"),
+        location: readJsonString(metadata, "location"),
+        bio: creator.bio,
+        imageUrl: creator.imageUrl,
+        instagramHandle: creator.instagramHandle,
+        tiktokHandle: tiktokProfile?.handle ?? readJsonString(metadata, "tiktok"),
+        instagramUrl:
+          instagramProfile?.url ??
+          readJsonString(metadata, "instagramUrl") ??
+          (creator.instagramHandle
+            ? `https://instagram.com/${creator.instagramHandle}`
+            : null),
+        tiktokUrl:
+          tiktokProfile?.url ??
+          readJsonString(metadata, "tiktokUrl") ??
+          null,
+        website: readJsonString(metadata, "website"),
+        followerCount: creator.followerCount,
+        price: readJsonString(metadata, "price"),
+        rating: readJsonNumber(metadata, "rating"),
+        reviewCount: readJsonNumber(metadata, "reviewCount"),
+        scrapedAt:
+          readJsonString(metadata, "scrapedAt") ||
+          touch?.createdAt?.toISOString() ||
+          creator.updatedAt.toISOString(),
+      },
+    ];
+  });
+
+  if (rows.length > 0) {
+    return rows;
+  }
+
+  return loadCollabstrDatasetFromFile();
 }
 
 function normalizeText(value: string | null | undefined): string {
@@ -219,7 +333,7 @@ function shortlistCreators(
     .filter((row) => matchesCriteria(row, criteria))
     .filter((row) => matchesIcp(row, mergedKeywords))
     .sort((a, b) => (b.followerCount ?? 0) - (a.followerCount ?? 0))
-    .slice(0, Math.max(limit * 3, limit));
+    .slice(0, limit);
 }
 
 // ─── Brand context helpers ────────────────────────────────────────────────────
@@ -467,9 +581,69 @@ async function scoreLocally(
   return results;
 }
 
+async function validateScoredCreators(
+  scoredCreators: ScoredCreator[],
+  criteria: SearchCriteria
+): Promise<{
+  validCreators: ValidatedScoredCreator[];
+  invalidCreators: ValidatedScoredCreator[];
+}> {
+  const creatorsWithHandles = scoredCreators.filter((creator) => creator.instagram);
+  const validationResults = await validateInstagramCreators(
+    creatorsWithHandles.map((creator) => ({
+      creatorId: creator.collabstrSlug,
+      handle: creator.instagram ?? creator.collabstrSlug,
+      minFollowers: criteria.minFollowers ?? null,
+      maxFollowers: criteria.maxFollowers ?? null,
+    })),
+    {
+      concurrency: 1,
+      includeAvgViews: false,
+    }
+  );
+
+  const validationByHandle = new Map(
+    validationResults.map((result) => [result.handle.toLowerCase(), result])
+  );
+
+  const validatedCreators = scoredCreators.map<ValidatedScoredCreator>((creator) => {
+    const handle = creator.instagram?.toLowerCase();
+    const validation = handle ? validationByHandle.get(handle) : null;
+
+    if (!validation) {
+      return {
+        ...creator,
+        validationStatus: "invalid",
+        validationError: "missing_profile",
+        validatedFollowerCount: null,
+        validatedAvgViews: null,
+      };
+    }
+
+    return {
+      ...creator,
+      validationStatus: validation.status,
+      validationError: validation.error,
+      validatedFollowerCount: validation.followerCount,
+      validatedAvgViews: validation.avgViews,
+    };
+  });
+
+  return {
+    validCreators: validatedCreators.filter(
+      (creator) => creator.validationStatus === "valid"
+    ),
+    invalidCreators: validatedCreators.filter(
+      (creator) => creator.validationStatus === "invalid"
+    ),
+  };
+}
+
 // ─── Persistence ──────────────────────────────────────────────────────────────
 
-function toProfileMetadata(creator: ScoredCreator): Prisma.InputJsonValue {
+function toProfileMetadata(
+  creator: ScoredCreator | ValidatedScoredCreator
+): Prisma.InputJsonValue {
   return JSON.parse(
     JSON.stringify({
       collabstrSlug: creator.collabstrSlug,
@@ -483,6 +657,16 @@ function toProfileMetadata(creator: ScoredCreator): Prisma.InputJsonValue {
       signals: creator.signals,
       analysisSource: creator.analysisSource,
       scrapedAt: creator.scrapedAt,
+      validationStatus:
+        "validationStatus" in creator ? creator.validationStatus : undefined,
+      validationError:
+        "validationError" in creator ? creator.validationError : undefined,
+      validatedFollowerCount:
+        "validatedFollowerCount" in creator
+          ? creator.validatedFollowerCount
+          : undefined,
+      validatedAvgViews:
+        "validatedAvgViews" in creator ? creator.validatedAvgViews : undefined,
     })
   ) as Prisma.InputJsonValue;
 }
@@ -537,18 +721,21 @@ async function storeApprovalArtifact(
 async function persistCreators(
   brandId: string,
   campaignId: string,
-  scoredCreators: ScoredCreator[],
+  jobId: string,
+  scoredCreators: ValidatedScoredCreator[],
   approvalMode: ApprovalMode,
-  approvalThreshold: number
+  approvalThreshold: number,
+  attachLimit: number
 ): Promise<{ added: number; skipped: number }> {
   let added = 0;
   let skipped = 0;
+  let attached = 0;
 
   for (const creatorRow of scoredCreators) {
     try {
       const normalizedFollowerCount = sanitizeFollowerCount(
         "creator_marketplace",
-        creatorRow.followerCount
+        creatorRow.validatedFollowerCount ?? creatorRow.followerCount
       );
       const existingCreator = await prisma.creator.findFirst({
         where: {
@@ -573,10 +760,15 @@ async function persistCreators(
                 normalizedFollowerCount === undefined
                   ? existingCreator.followerCount
                   : normalizedFollowerCount,
+              avgViews:
+                creatorRow.validatedAvgViews ?? existingCreator.avgViews,
               bio: creatorRow.bio ?? existingCreator.bio,
               bioCategory: creatorRow.niche ?? existingCreator.bioCategory,
               imageUrl: creatorRow.imageUrl ?? existingCreator.imageUrl,
               discoverySource: "creator_marketplace",
+              validationStatus: creatorRow.validationStatus,
+              lastValidatedAt: new Date(),
+              lastValidationError: creatorRow.validationError,
             },
           })
         : await prisma.creator.create({
@@ -587,7 +779,11 @@ async function persistCreators(
               bio: creatorRow.bio,
               bioCategory: creatorRow.niche,
               imageUrl: creatorRow.imageUrl,
+              avgViews: creatorRow.validatedAvgViews,
               discoverySource: "creator_marketplace",
+              validationStatus: creatorRow.validationStatus,
+              lastValidatedAt: new Date(),
+              lastValidationError: creatorRow.validationError,
               brandId,
             },
           });
@@ -619,6 +815,20 @@ async function persistCreators(
             metadata: toProfileMetadata(creatorRow),
           },
         });
+      }
+
+      await recordCreatorDiscoveryTouch({
+        creatorId: creator.id,
+        source: "collabstr",
+        externalId: creatorRow.collabstrSlug,
+        searchJobId: jobId,
+        rawSourceCategory: creatorRow.niche,
+        canonicalCategory: creatorRow.niche,
+        metadata: toProfileMetadata(creatorRow),
+      });
+
+      if (attached >= attachLimit) {
+        continue;
       }
 
       const existingCampaignCreator = await prisma.campaignCreator.findUnique({
@@ -699,6 +909,7 @@ async function persistCreators(
       }
 
       added += 1;
+      attached += 1;
     } catch (error) {
       console.error(
         `[creator-search] Failed to persist ${creatorRow.instagram ?? creatorRow.collabstrSlug}`,
@@ -713,7 +924,7 @@ async function persistCreators(
 
 async function recordSearchJobResults(
   jobId: string,
-  results: ScoredCreator[]
+  results: ValidatedScoredCreator[]
 ): Promise<void> {
   for (const result of results) {
     await prisma.creatorSearchResult.create({
@@ -721,6 +932,9 @@ async function recordSearchJobResults(
         searchJobId: jobId,
         platform: "instagram",
         handle: result.instagram ?? result.collabstrSlug,
+        source: "collabstr",
+        primarySource: "collabstr",
+        sources: ["collabstr"] as Prisma.InputJsonValue,
         name: result.name,
         followerCount: sanitizeFollowerCount(
           "creator_marketplace",
@@ -729,10 +943,17 @@ async function recordSearchJobResults(
         profileUrl: result.instagramUrl ?? result.collabstrUrl,
         imageUrl: result.imageUrl,
         bio: result.bio,
+        email: null,
         bioCategory: result.niche,
+        rawSourceCategory: result.niche,
+        seedCreatorId: null,
         metadata: toProfileMetadata(result),
         fitScore: result.fitScore,
         fitReasoning: result.fitReasoning,
+        validationStatus: result.validationStatus,
+        validationError: result.validationError,
+        validatedFollowerCount: result.validatedFollowerCount,
+        validatedAvgViews: result.validatedAvgViews,
       },
     });
   }
@@ -768,23 +989,26 @@ async function debitSearchCredits(
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 
-export async function searchCreatorsForCampaign(
+export async function runCampaignCreatorSearchJob(
   campaignId: string,
   brandId: string,
-  criteria: SearchCriteria
+  criteria: SearchCriteria,
+  options?: { jobId?: string }
 ): Promise<{
-  status: "queued" | "complete";
+  status: "completed" | "completed_with_shortfall";
   jobId: string;
   added?: number;
   analyzed?: number;
+  invalid?: number;
   creditsConsumed?: number;
   icpKeywords?: string[];
   usedWorker?: boolean;
   approvalMode?: ApprovalMode;
   personaUsed?: boolean;
 }> {
-  const jobId = randomUUID();
+  const jobId = options?.jobId ?? randomUUID();
   const limit = Math.max(1, Math.min(criteria.limit ?? 20, 25));
+  const rawCandidateLimit = Math.max(limit, limit * 3);
 
   // Load brand context in parallel
   const [icp, persona, approvalMode, approvalThreshold] = await Promise.all([
@@ -795,11 +1019,15 @@ export async function searchCreatorsForCampaign(
   ]);
 
   const { keywords: icpKeywords } = icpToSearchHints(icp);
+  const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignSearch({
+    ...criteria,
+    limit,
+  });
   const shortlist = shortlistCreators(
-    loadCollabstrDataset(),
+    await loadCollabstrDataset(brandId),
     criteria,
     icpKeywords,
-    limit
+    rawCandidateLimit
   );
 
   // Products for forwarding to worker
@@ -808,15 +1036,41 @@ export async function searchCreatorsForCampaign(
     description: p.description ?? null,
   }));
 
-  await prisma.creatorSearchJob.create({
-    data: {
+  await prisma.creatorSearchJob.upsert({
+    where: { id: jobId },
+    create: {
       id: jobId,
       status: "running",
       platform: criteria.platform ?? "instagram",
       brandId,
+      campaignId,
+      requestedCount: limit,
+      candidateCount: shortlist.length,
+      progressPercent: shortlist.length > 0 ? 25 : 100,
+      startedAt: new Date(),
       query: JSON.parse(
         JSON.stringify({
-          ...criteria,
+          ...unifiedQuery,
+          derivedIcpKeywords: icpKeywords,
+          shortlistCount: shortlist.length,
+          approvalMode,
+          personaUsed: Boolean(persona),
+          approvalThreshold,
+        })
+      ) as Prisma.InputJsonValue,
+    },
+    update: {
+      status: "running",
+      campaignId,
+      requestedCount: limit,
+      candidateCount: shortlist.length,
+      progressPercent: shortlist.length > 0 ? 25 : 100,
+      startedAt: new Date(),
+      finishedAt: null,
+      error: null,
+      query: JSON.parse(
+        JSON.stringify({
+          ...unifiedQuery,
           derivedIcpKeywords: icpKeywords,
           shortlistCount: shortlist.length,
           approvalMode,
@@ -847,7 +1101,7 @@ export async function searchCreatorsForCampaign(
           });
 
           if (workerResults && workerResults.length > 0) {
-            results = workerResults.slice(0, limit);
+            results = workerResults.slice(0, rawCandidateLimit);
             usedWorker = true;
             console.log(
               `[creator-search] Worker scored ${results.length} creators (personaUsed=${Boolean(persona)}, threshold=${approvalThreshold})`
@@ -863,15 +1117,46 @@ export async function searchCreatorsForCampaign(
 
       // ── Local fallback ─────────────────────────────────────────────────
       if (results.length === 0) {
-        results = await scoreLocally(shortlist, icp, persona, approvalThreshold, limit);
+        results = await scoreLocally(
+          shortlist,
+          icp,
+          persona,
+          approvalThreshold,
+          rawCandidateLimit
+        );
         console.log(
           `[creator-search] Local scored ${results.length} creators (personaUsed=${Boolean(persona)}, threshold=${approvalThreshold})`
         );
       }
     }
 
-    const { added, skipped } = await persistCreators(brandId, campaignId, results, approvalMode, approvalThreshold);
-    await recordSearchJobResults(jobId, results);
+    await prisma.creatorSearchJob.update({
+      where: { id: jobId },
+      data: {
+        progressPercent: shortlist.length > 0 ? 60 : 100,
+        etaSeconds:
+          shortlist.length > 0 ? shortlist.length * 12 : 0,
+      },
+    });
+
+    const { validCreators, invalidCreators } = await validateScoredCreators(
+      results,
+      criteria
+    );
+
+    const limitedValidCreators = validCreators.slice(0, limit);
+    const allJobResults = [...validCreators, ...invalidCreators];
+
+    const { added, skipped } = await persistCreators(
+      brandId,
+      campaignId,
+      jobId,
+      validCreators,
+      approvalMode,
+      approvalThreshold,
+      limit
+    );
+    await recordSearchJobResults(jobId, allJobResults);
 
     const creditsConsumed = await debitSearchCredits(
       brandId,
@@ -887,23 +1172,35 @@ export async function searchCreatorsForCampaign(
       }
     );
 
+    const finalStatus =
+      limitedValidCreators.length >= limit
+        ? "completed"
+        : "completed_with_shortfall";
+
     await prisma.creatorSearchJob.update({
       where: { id: jobId },
       data: {
-        status: "completed",
-        resultCount: results.length,
+        status: finalStatus,
+        resultCount: validCreators.length,
+        candidateCount: shortlist.length,
+        validatedCount: validCreators.length,
+        invalidCount: invalidCreators.length,
+        progressPercent: 100,
+        etaSeconds: 0,
+        finishedAt: new Date(),
       },
     });
 
     console.log(
-      `[creator-search] complete campaign=${campaignId} analyzed=${results.length} added=${added} skipped=${skipped} worker=${usedWorker} mode=${approvalMode} persona=${Boolean(persona)}`
+      `[creator-search] complete campaign=${campaignId} analyzed=${results.length} valid=${limitedValidCreators.length} invalid=${invalidCreators.length} added=${added} skipped=${skipped} worker=${usedWorker} mode=${approvalMode} persona=${Boolean(persona)}`
     );
 
     return {
-      status: "complete",
+      status: finalStatus,
       jobId,
       added,
       analyzed: results.length,
+      invalid: invalidCreators.length,
       creditsConsumed,
       icpKeywords,
       usedWorker,
@@ -918,6 +1215,7 @@ export async function searchCreatorsForCampaign(
       data: {
         status: "failed",
         error: message,
+        finishedAt: new Date(),
       },
     });
 

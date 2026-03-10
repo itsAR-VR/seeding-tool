@@ -5,6 +5,7 @@ import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { deriveBrandICP, icpToSearchHints } from "@/lib/brands/icp";
 import { computeNextRunAt } from "@/lib/automations/schedule";
+import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
 
 type CategorySelection = {
   apify?: string[];
@@ -104,6 +105,12 @@ async function buildAutomationConfig(
     ...(limit ? { limit } : {}),
     ...(categories ? { categories } : {}),
     ...(derivedHashtag ? { hashtag: derivedHashtag } : {}),
+    query: buildUnifiedDiscoveryQueryFromAutomationConfig({
+      ...(incomingConfig || {}),
+      ...(limit ? { limit } : {}),
+      ...(categories ? { categories } : {}),
+      ...(derivedHashtag ? { hashtag: derivedHashtag } : {}),
+    }),
   } as Prisma.InputJsonValue;
 }
 
