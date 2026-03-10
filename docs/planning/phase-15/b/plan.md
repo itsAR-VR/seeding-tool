@@ -90,6 +90,7 @@ Phase 15c migrates all product entrypoints and surfaces to this orchestrator so 
     - `apify_keyword_email`
     - shared profile enrichment
   - Added focused tests for classification + merge behavior.
+  - Added lane-level timeout isolation in `apps/web/lib/creator-search/orchestrator.ts` so slow/failing source lanes degrade gracefully instead of failing the whole discovery run.
 - Commands run:
   - `npx vitest run __tests__/creator-search/*.test.ts` — pass (13 tests after 15b additions)
   - `npx eslint <15b files>` — pass

@@ -15,8 +15,12 @@ import {
   classifyDiscoveryText,
 } from "@/lib/creator-search/classification";
 import { mergeDiscoveryCandidates } from "@/lib/creator-search/candidate-merge";
-import type { UnifiedDiscoveryQuery } from "@/lib/creator-search/contracts";
+import type {
+  UnifiedDiscoveryQuery,
+  UnifiedDiscoverySource,
+} from "@/lib/creator-search/contracts";
 import type { UnifiedDiscoveryCandidate } from "@/lib/creator-search/orchestrator-types";
+import { isCreatorValidationFresh } from "@/lib/creators/validation-policy";
 
 type OrchestratorContext = {
   brandId: string;
@@ -25,6 +29,28 @@ type OrchestratorContext = {
 };
 
 type LaneCandidate = UnifiedDiscoveryCandidate;
+
+const LANE_TIMEOUT_MS = {
+  collabstr: 5_000,
+  apify_search: 120_000,
+  profile_enrichment: 180_000,
+  approved_seed_following: 180_000,
+  apify_keyword_email: 120_000,
+} as const;
+
+async function withLaneTimeout<T>(
+  lane: keyof typeof LANE_TIMEOUT_MS,
+  task: Promise<T>
+): Promise<T> {
+  return await Promise.race([
+    task,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`${lane}_timeout`));
+      }, LANE_TIMEOUT_MS[lane]);
+    }),
+  ]);
+}
 
 function normalizeHandle(handle: string | null | undefined) {
   return handle?.trim().replace(/^@/, "").toLowerCase() ?? "";
@@ -78,6 +104,7 @@ function candidateFromMappedCreator(
   });
 
   return {
+    creatorId: null,
     handle: normalizeHandle(mapped.handle),
     name: mapped.name,
     bio: mapped.bio,
@@ -94,6 +121,8 @@ function candidateFromMappedCreator(
     isVerified: mapped.isVerified,
     email: mapped.email,
     seedCreatorId: mapped.seedCreatorId,
+    isCached: false,
+    lastValidatedAt: null,
     primarySource: mapped.primarySource,
     sources: mapped.sources,
     sourceMetadata: mapped.metadata,
@@ -101,21 +130,45 @@ function candidateFromMappedCreator(
   };
 }
 
-async function collectCollabstrLane(
+function mapLegacyDiscoverySource(
+  discoverySource: string | null | undefined
+): UnifiedDiscoverySource | null {
+  switch (discoverySource) {
+    case "apify":
+      return "apify_search";
+    case "collabstr":
+    case "creator_marketplace":
+      return "collabstr";
+    default:
+      return null;
+  }
+}
+
+function isUnifiedDiscoverySource(value: string): value is UnifiedDiscoverySource {
+  return (
+    value === "collabstr" ||
+    value === "apify_search" ||
+    value === "approved_seed_following" ||
+    value === "apify_keyword_email"
+  );
+}
+
+async function collectValidatedCacheLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
   const creators = await prisma.creator.findMany({
     where: {
       brandId: context.brandId,
-      discoverySource: "collabstr",
+      validationStatus: "valid",
+      instagramHandle: { not: null },
+      lastValidatedAt: { not: null },
     },
     include: {
       profiles: true,
       discoveryTouches: {
-        where: { source: "collabstr" },
         orderBy: { createdAt: "desc" },
-        take: 1,
+        take: 5,
       },
     },
     take: rawLimit * 3,
@@ -123,31 +176,67 @@ async function collectCollabstrLane(
 
   return creators
     .map((creator) => {
+      if (!creator.instagramHandle) {
+        return null;
+      }
+
+      if (!isCreatorValidationFresh(creator.lastValidatedAt)) {
+        return null;
+      }
+
+      const relevantTouches = creator.discoveryTouches.filter((touch) =>
+        isUnifiedDiscoverySource(touch.source) &&
+        context.query.sources.includes(touch.source)
+      );
+      const latestTouch = relevantTouches[0] ?? creator.discoveryTouches[0] ?? null;
+      const fallbackSource = mapLegacyDiscoverySource(creator.discoverySource);
+      const primarySource =
+        (latestTouch && isUnifiedDiscoverySource(latestTouch.source)
+          ? latestTouch.source
+          : null) ??
+        fallbackSource;
+
+      if (!primarySource) {
+        return null;
+      }
+
       const metadata =
-        creator.discoveryTouches[0]?.metadata &&
-        typeof creator.discoveryTouches[0]?.metadata === "object" &&
-        !Array.isArray(creator.discoveryTouches[0]?.metadata)
-          ? (creator.discoveryTouches[0]?.metadata as Record<string, unknown>)
+        latestTouch?.metadata &&
+        typeof latestTouch.metadata === "object" &&
+        !Array.isArray(latestTouch.metadata)
+          ? (latestTouch.metadata as Record<string, unknown>)
           : {};
       const instagramProfile = creator.profiles.find(
         (profile) => profile.platform === "instagram"
       );
       const classification = classifyDiscoveryText({
-        rawSourceCategory: creator.discoveryTouches[0]?.rawSourceCategory ?? creator.bioCategory,
+        rawSourceCategory: latestTouch?.rawSourceCategory ?? creator.bioCategory,
         bio: creator.bio,
         name: creator.name,
         profileDump:
           typeof metadata.profileDump === "string" ? metadata.profileDump : null,
       });
 
+      const sources = Array.from(
+        new Set(
+          [
+            primarySource,
+            ...relevantTouches
+              .map((touch) => touch.source)
+              .filter(isUnifiedDiscoverySource),
+          ].filter(Boolean)
+        )
+      );
+
       const candidate: UnifiedDiscoveryCandidate = {
+        creatorId: creator.id,
         handle: normalizeHandle(creator.instagramHandle),
         name: creator.name,
         bio: creator.bio,
         profileDump:
           typeof metadata.profileDump === "string" ? metadata.profileDump : null,
         rawSourceCategory:
-          creator.discoveryTouches[0]?.rawSourceCategory ?? creator.bioCategory,
+          latestTouch?.rawSourceCategory ?? creator.bioCategory,
         canonicalCategory: classification.canonicalCategory,
         classificationConfidence: classification.confidence,
         matchedCategorySignals: classification.matchedKeywords,
@@ -163,8 +252,10 @@ async function collectCollabstrLane(
         isVerified: instagramProfile?.isVerified ?? false,
         email: creator.email,
         seedCreatorId: null,
-        primarySource: "collabstr",
-        sources: ["collabstr"],
+        isCached: true,
+        lastValidatedAt: creator.lastValidatedAt?.toISOString() ?? null,
+        primarySource,
+        sources,
         sourceMetadata: metadata,
         relevanceScore: 0,
       };
@@ -227,7 +318,7 @@ async function collectApprovedSeedFollowingLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
-  if (!context.query.seedExpansion.enabled) {
+  if (!context.query.seedExpansion.enabled || !context.campaignId) {
     return [];
   }
 
@@ -238,7 +329,7 @@ async function collectApprovedSeedFollowingLane(
       campaignCreators: {
         some: {
           reviewStatus: "approved",
-          ...(context.campaignId ? { campaignId: context.campaignId } : {}),
+          campaignId: context.campaignId,
         },
       },
     },
@@ -359,8 +450,14 @@ async function enrichCandidateProfiles(
     return candidates;
   }
 
-  const run = await runInstagramProfileScraper(Array.from(new Set(handles)));
-  const items = await getDatasetItems(run.datasetId);
+  const run = await withLaneTimeout(
+    "profile_enrichment",
+    runInstagramProfileScraper(Array.from(new Set(handles)))
+  );
+  const items = await withLaneTimeout(
+    "profile_enrichment",
+    getDatasetItems(run.datasetId)
+  );
   const enrichedByHandle = new Map(
     items
       .map((item) => mapProfileToCreator(item as Record<string, unknown>))
@@ -448,29 +545,60 @@ export async function orchestrateUnifiedDiscovery(
   context: OrchestratorContext
 ) {
   const rawLimit = Math.max(context.query.limit, context.query.limit * 3);
-  const lanePromises: Array<Promise<LaneCandidate[]>> = [];
+  const lanePromises: Array<
+    Promise<{ lane: string; candidates: LaneCandidate[] }>
+  > = [];
 
   if (context.query.sources.includes("collabstr")) {
-    lanePromises.push(collectCollabstrLane(context, rawLimit));
+    lanePromises.push(
+      withLaneTimeout("collabstr", collectCollabstrLane(context, rawLimit))
+        .then((candidates) => ({ lane: "collabstr", candidates }))
+    );
   }
 
   if (context.query.sources.includes("apify_search")) {
-    lanePromises.push(collectApifySearchLane(context, rawLimit));
+    lanePromises.push(
+      withLaneTimeout(
+        "apify_search",
+        collectApifySearchLane(context, rawLimit)
+      ).then((candidates) => ({ lane: "apify_search", candidates }))
+    );
   }
 
   if (context.query.sources.includes("approved_seed_following")) {
-    lanePromises.push(collectApprovedSeedFollowingLane(context, rawLimit));
+    lanePromises.push(
+      withLaneTimeout(
+        "approved_seed_following",
+        collectApprovedSeedFollowingLane(context, rawLimit)
+      ).then((candidates) => ({
+        lane: "approved_seed_following",
+        candidates,
+      }))
+    );
   }
 
   if (context.query.sources.includes("apify_keyword_email")) {
-    lanePromises.push(collectKeywordEmailLane(context, rawLimit));
+    lanePromises.push(
+      withLaneTimeout(
+        "apify_keyword_email",
+        collectKeywordEmailLane(context, rawLimit)
+      ).then((candidates) => ({
+        lane: "apify_keyword_email",
+        candidates,
+      }))
+    );
   }
 
-  const laneResults = await Promise.all(lanePromises);
+  const laneResults = await Promise.allSettled(lanePromises);
   const mergedByHandle = new Map<string, UnifiedDiscoveryCandidate>();
 
-  for (const lane of laneResults) {
-    for (const candidate of lane) {
+  for (const laneResult of laneResults) {
+    if (laneResult.status !== "fulfilled") {
+      console.warn("[creator-search] lane failed", laneResult.reason);
+      continue;
+    }
+
+    for (const candidate of laneResult.value.candidates) {
       const handle = normalizeHandle(candidate.handle);
       if (!handle) {
         continue;

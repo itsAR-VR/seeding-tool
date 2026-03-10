@@ -63,6 +63,36 @@ describe("creator search contracts", () => {
     });
   });
 
+  it("returns stored unified automation queries unchanged", () => {
+    const query = buildUnifiedDiscoveryQueryFromAutomationConfig({
+      query: {
+        sources: ["collabstr", "apify_search"],
+        keywords: ["sleep creator"],
+        canonicalCategories: ["Beauty"],
+        platform: "instagram",
+        limit: 30,
+        filters: {
+          requireCategory: true,
+          excludeExistingCreators: true,
+        },
+        seedExpansion: {
+          enabled: false,
+          maxSeedsPerRun: 5,
+          maxFollowingPerSeed: 100,
+        },
+        emailPrefetch: false,
+        usernames: [],
+      },
+    });
+
+    expect(query).toMatchObject({
+      sources: ["collabstr", "apify_search"],
+      keywords: ["sleep creator"],
+      canonicalCategories: ["Beauty"],
+      limit: 30,
+    });
+  });
+
   it("applies schema defaults when optional fields are omitted", () => {
     const query = normalizeUnifiedDiscoveryQuery({
       keywords: ["wellness"],

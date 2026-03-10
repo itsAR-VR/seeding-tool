@@ -66,3 +66,22 @@ Phase 15e verifies the combined system, defines rollout rules, and documents how
 - **LOCKED**: "Approved creator" = a `Creator` row that has at least one `CampaignCreator` record with `reviewStatus = "approved"`, scoped to the requesting campaign. This is the seed pool definition.
 - Assumption: `datadoping~instagram-following-scraper` does not require Instagram cookies/authentication (the plan says "no-cookie following actor") (confidence ~85%). If it does require auth, the entire seed following lane needs a credential management strategy.
 - Open question: Is there a cost ceiling for the following scraper? With 5 seeds × 100 followings = 500 handles, each needing profile enrichment, that's 500 Apify profile scraper calls per run (confidence ~70%). Current assumption: the `maxFollowingPerSeed = 100` default is the cost control, but an explicit Apify compute budget should be defined.
+
+## Progress This Turn (Terminus Maximus)
+- Work done:
+  - The approved-seed following lane is now hard-scoped to campaign context in `apps/web/lib/creator-search/orchestrator.ts`; if no `campaignId` is present, the lane is skipped.
+  - The orchestrator already supports the user-requested third-party lanes:
+    - `approved_seed_following`
+    - `apify_keyword_email`
+    - shared profile enrichment after discovery
+  - Keyword-email results continue through profile enrichment before ranking/import because the orchestrator enriches sparse candidates after dedupe.
+- Commands run:
+  - `npx vitest run __tests__/creator-search/*.test.ts __tests__/instagram/profile-html.test.ts` — pass
+  - `npx eslint apps/web/lib/creator-search/orchestrator.ts` — pass
+  - `set -a && source ../../.env.local && source .env.local && npm run build` — pass
+- Blockers:
+  - `seedCreatorId` is still not populated per discovered handle because the following actor output available in-repo does not currently expose enough provenance to map each followed handle back to a specific seed account.
+  - There is still no explicit per-run Apify compute budget ceiling beyond the lane defaults and `maxFollowingPerSeed`.
+- Next concrete steps:
+  - If the following actor output includes source-seed metadata at runtime, persist `seedCreatorId` and per-seed metrics.
+  - Add explicit budget guards/metrics for following expansion and keyword-email enrichment if operational cost becomes an issue.
