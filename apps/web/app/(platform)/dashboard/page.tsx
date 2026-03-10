@@ -73,6 +73,16 @@ export default async function DashboardPage() {
 
   const brandId = membership.brandId;
 
+  // Gate: onboarding must be complete before accessing the dashboard
+  const onboarding = await prisma.brandOnboarding.findUnique({
+    where: { brandId },
+    select: { isComplete: true },
+  });
+
+  if (!onboarding?.isComplete) {
+    redirect("/onboarding");
+  }
+
   // ── Parallel data fetches ────────────────────────────────
 
   const [

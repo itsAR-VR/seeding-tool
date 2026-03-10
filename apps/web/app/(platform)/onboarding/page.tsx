@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { ArrowRight, FlaskConical, Link2, Sparkles, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -223,11 +223,50 @@ function getAnalysisBadge(status: OnboardingAnalysisStatus) {
 
 function OnboardingContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const step = searchParams.get("step") ?? "brand";
   const brandName = searchParams.get("brandName") ?? "";
   const brandId = searchParams.get("brandId") ?? "";
   const stepIndex = getStepIndex(step);
   const isBrandStep = step === "brand";
+  const [reentryChecked, setReentryChecked] = useState(false);
+
+  // Re-entry guard: if onboarding is already complete, redirect to dashboard
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkOnboardingStatus() {
+      try {
+        const response = await fetch("/api/onboarding/status");
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled && data.isComplete) {
+            router.replace("/dashboard");
+            return;
+          }
+        }
+      } catch {
+        // If check fails, let them continue with onboarding
+      }
+      if (!cancelled) {
+        setReentryChecked(true);
+      }
+    }
+
+    checkOnboardingStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  if (!reentryChecked) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="text-muted-foreground">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className={`mx-auto ${isBrandStep ? "max-w-6xl py-6 sm:py-8" : "max-w-2xl py-12"}`}>
@@ -1233,6 +1272,36 @@ function ConnectStep({
 
 function DoneStep() {
   const router = useRouter();
+  const calledRef = useRef(false);
+  const [completing, setCompleting] = useState(true);
+  const [error, setError] = useState("");
+
+  // Mark onboarding complete on mount (idempotent)
+  useEffect(() => {
+    if (calledRef.current) return;
+    calledRef.current = true;
+
+    async function markComplete() {
+      try {
+        const response = await fetch("/api/onboarding/complete", {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error ?? "Failed to complete onboarding");
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : "Failed to complete onboarding"
+        );
+      } finally {
+        setCompleting(false);
+      }
+    }
+
+    markComplete();
+  }, []);
 
   return (
     <Card>
@@ -1243,10 +1312,20 @@ function DoneStep() {
           to start using the platform.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <Button className="w-full" onClick={() => router.push("/dashboard")}>
-          Go to Dashboard
+      <CardContent className="space-y-3">
+        {error ? (
+          <p className="text-sm text-destructive">{error}</p>
+        ) : null}
+        <Button
+          className="w-full"
+          disabled={completing}
+          onClick={() => router.push("/dashboard")}
+        >
+          {completing ? "Finishing setup…" : "Go to Dashboard"}
         </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          You can manage connections anytime from Settings → Connections.
+        </p>
       </CardContent>
     </Card>
   );
