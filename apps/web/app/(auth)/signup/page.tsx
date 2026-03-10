@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getFriendlySignupError } from "./error-utils";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -35,7 +36,7 @@ export default function SignupPage() {
     });
 
     if (authError) {
-      setError(authError.message);
+      setError(getFriendlySignupError(authError.message));
       setLoading(false);
       return;
     }

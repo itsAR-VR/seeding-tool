@@ -4,7 +4,9 @@ import { z } from "zod";
 import type { BrandBusinessDna, BrandProfileSnapshot } from "@/lib/brands/profile";
 import { listBrandImageCandidates } from "@/lib/brands/profile";
 
-const BUSINESS_DNA_MODEL = "gpt-5-mini";
+const BUSINESS_DNA_MODEL = "gpt-4.1-mini";
+const BUSINESS_DNA_TIMEOUT_MS = 35_000;
+const BUSINESS_DNA_MAX_COMPLETION_TOKENS = 1800;
 
 const BusinessDnaResponseSchema = z.object({
   brandSummary: z.string().nullable(),
@@ -17,7 +19,6 @@ const BusinessDnaResponseSchema = z.object({
   proofSignals: z.array(z.string()),
   keywords: z.array(z.string()),
   visualDirection: z.array(z.string()),
-  imageCandidates: z.array(z.string()),
 });
 
 type ParsedBusinessDna = z.infer<typeof BusinessDnaResponseSchema>;
@@ -68,12 +69,12 @@ export async function synthesizeBusinessDna(
     const completion = await client.chat.completions.parse(
       {
         model: BUSINESS_DNA_MODEL,
-        max_completion_tokens: 1800,
+        max_completion_tokens: BUSINESS_DNA_MAX_COMPLETION_TOKENS,
         messages: [
           {
             role: "system",
             content:
-              "You are a brand strategist extracting structured Business DNA from a website scrape. Use only the supplied evidence. If a field is unclear, return null for strings and [] for arrays. Do not invent claims, products, or audiences beyond the provided data. Keep every string concise.",
+              "You are a brand strategist extracting structured Business DNA from a website scrape. Use only the supplied evidence. If a field is unclear, return null for strings and [] for arrays. Do not invent claims, products, or audiences beyond the provided data. Keep every string concise, avoid repetition, and keep arrays tight.",
           },
           {
             role: "user",
@@ -85,7 +86,7 @@ export async function synthesizeBusinessDna(
           "brand_business_dna"
         ),
       },
-      { signal: AbortSignal.timeout(20_000) }
+      { signal: AbortSignal.timeout(BUSINESS_DNA_TIMEOUT_MS) }
     );
 
     const parsed = completion.choices?.[0]?.message?.parsed;
@@ -94,7 +95,14 @@ export async function synthesizeBusinessDna(
     }
 
     return normalizeBusinessDna(parsed, input.profile);
-  } catch {
+  } catch (error) {
+    console.warn("[brands/synthesis] Business DNA synthesis failed", {
+      brandName: input.brandName,
+      websiteUrl: input.websiteUrl,
+      model: BUSINESS_DNA_MODEL,
+      timeoutMs: BUSINESS_DNA_TIMEOUT_MS,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return null;
   }
 }
@@ -221,10 +229,6 @@ export function normalizeBusinessDna(
   profile: BrandProfileSnapshot
 ): BrandBusinessDna {
   const fallbackImages = listBrandImageCandidates(profile);
-  const allowedImages = new Set(fallbackImages);
-  const selectedImages = dedupeStrings(value.imageCandidates)
-    .filter((candidate) => allowedImages.has(candidate))
-    .slice(0, 5);
 
   const targetAudience = cleanNullableString(value.targetAudience);
   const niche =
@@ -249,8 +253,7 @@ export function normalizeBusinessDna(
     proofSignals: dedupeStrings(value.proofSignals).slice(0, 6),
     keywords: dedupeStrings(value.keywords).slice(0, 12),
     visualDirection: dedupeStrings(value.visualDirection).slice(0, 6),
-    imageCandidates:
-      selectedImages.length > 0 ? selectedImages : fallbackImages.slice(0, 5),
+    imageCandidates: fallbackImages.slice(0, 5),
   };
 }
 
@@ -275,7 +278,6 @@ function buildBrandAnalysisPrompt(input: {
     `Hero headings:\n${toBulletList(input.profile.heroHeadings)}`,
     `Text signals:\n${toBulletList(input.profile.textSignals)}`,
     `Body excerpt:\n${input.profile.bodyExcerpt ?? "(none)"}`,
-    `Image candidates:\n${toBulletList(imageCandidates)}`,
     "",
     "Return structured Business DNA with:",
     "- a concise brandSummary grounded in the site copy",
@@ -285,7 +287,17 @@ function buildBrandAnalysisPrompt(input: {
     "- proofSignals as short facts or claims visible in the site copy",
     "- keywords as creator/discovery phrases directly supported by the site",
     "- visualDirection as 3-6 short descriptors of the visual language",
-    "- imageCandidates chosen only from the supplied image URLs",
+    "",
+    "Hard limits:",
+    "- keep brandSummary under 220 characters",
+    "- keep targetAudience under 140 characters",
+    "- keep tone and brandVoice under 80 characters each",
+    "- keep keyProducts to 4 items max",
+    "- keep proofSignals to 5 items max",
+    "- keep keywords to 8 items max",
+    "- keep visualDirection to 5 items max",
+    "- keep every list item short and plain",
+    `Available image candidates are already fixed upstream: ${imageCandidates.length}. Do not spend tokens restating image URLs.`,
   ].join("\n");
 }
 
