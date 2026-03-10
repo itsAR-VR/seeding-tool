@@ -140,6 +140,11 @@ export async function GET(request: Request) {
       console.warn("[connections/overview]", message);
     }
 
-    return NextResponse.json({ error: message }, { status });
+    const body: Record<string, unknown> = { error: message };
+    if (status === 500 && process.env.NODE_ENV !== "production") {
+      body.debug = error instanceof Error ? error.stack : String(error);
+    }
+
+    return NextResponse.json(body, { status });
   }
 }

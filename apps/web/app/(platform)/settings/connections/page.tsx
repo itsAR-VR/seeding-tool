@@ -614,6 +614,11 @@ export function ConnectionsContent({
                   ? "No brand found. Visit the dashboard to get started."
                   : "Something went wrong loading your connections. Please try again."}
             </p>
+            {!isAuthError && !isNotFound && loadError?.message && (
+              <p className="mt-2 text-xs text-muted-foreground/70">
+                Error: {loadError.message}
+              </p>
+            )}
             <div className="mt-4 flex flex-wrap justify-center gap-2">
               {isAuthError ? (
                 <Button onClick={() => window.location.reload()}>
