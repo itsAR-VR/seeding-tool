@@ -7,13 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
-import {
-  GroupedCategoryPicker,
-  type CategoryGroups,
-  type CategorySelection,
-} from "@/components/grouped-category-picker";
-import { FacetSelector } from "@/components/facet-selector";
+import { UnifiedKeywordSelector, type KeywordGroup } from "@/components/unified-keyword-selector";
+import { LocationInput } from "@/components/location-input";
 import type { CreatorFacets } from "@/lib/creators/facets";
+import { isCanonicalDiscoveryCategory } from "@/lib/categories/catalog";
 
 type CreatorProfile = {
   platform: string;
@@ -47,6 +44,11 @@ type Creator = {
 type CampaignOption = {
   id: string;
   name: string;
+};
+
+type CategoryGroups = {
+  apify: string[];
+  collabstr: string[];
 };
 
 type SearchResult = {
@@ -93,11 +95,6 @@ const EMPTY_FACETS: CreatorFacets = {
 };
 
 const EMPTY_CATEGORY_GROUPS: CategoryGroups = {
-  apify: [],
-  collabstr: [],
-};
-
-const EMPTY_CATEGORY_SELECTION: CategorySelection = {
   apify: [],
   collabstr: [],
 };
@@ -159,20 +156,15 @@ export default function CreatorsPage() {
 
   // Search Creators modal state
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [selectedKeywordOptions, setSelectedKeywordOptions] = useState<string[]>(
-    []
-  );
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [searchUsernames, setSearchUsernames] = useState("");
-  const [selectedLocationOptions, setSelectedLocationOptions] = useState<
-    string[]
-  >([]);
+  const [searchLocation, setSearchLocation] = useState("");
   const [searchMinFollowers, setSearchMinFollowers] = useState("");
   const [searchMaxFollowers, setSearchMaxFollowers] = useState("");
   const [searchLimit, setSearchLimit] = useState("50");
   const [searchSources, setSearchSources] =
     useState<Record<SearchSourceKey, boolean>>(DEFAULT_SEARCH_SOURCES);
-  const [searchCategories, setSearchCategories] =
-    useState<CategorySelection>(EMPTY_CATEGORY_SELECTION);
+  const [brandKeywords, setBrandKeywords] = useState<string[]>([]);
   const [searchCategoryGroups, setSearchCategoryGroups] =
     useState<CategoryGroups>(EMPTY_CATEGORY_GROUPS);
   const [searchCategoriesLoading, setSearchCategoriesLoading] = useState(false);
@@ -263,9 +255,10 @@ export default function CreatorsPage() {
         const response = await fetch("/api/categories");
         if (!response.ok) return;
 
-        const data = (await response.json()) as CategoryGroups;
+        const data = (await response.json()) as CategoryGroups & { brandKeywords?: string[] };
         if (!ignore) {
-          setSearchCategoryGroups(data);
+          setSearchCategoryGroups({ apify: data.apify, collabstr: data.collabstr });
+          setBrandKeywords(data.brandKeywords ?? []);
         }
       } catch {
         // ignore
@@ -388,18 +381,15 @@ export default function CreatorsPage() {
       return;
     }
 
-    const keywordList = [
-      ...selectedKeywordOptions,
-      ...searchCategories.collabstr,
-    ];
+    const canonicalCategories = selectedKeywords.filter(isCanonicalDiscoveryCategory);
+    const keywordList = selectedKeywords.filter((k) => !isCanonicalDiscoveryCategory(k));
     const usernames = searchUsernames
       .split(/[\n,]+/)
       .map((u) => u.trim().replace(/^@/, ""))
       .filter(Boolean);
 
     if (
-      keywordList.length === 0 &&
-      searchCategories.apify.length === 0 &&
+      selectedKeywords.length === 0 &&
       usernames.length === 0
     ) {
       alert("Add keywords, categories, or exact usernames before searching.");
@@ -415,7 +405,7 @@ export default function CreatorsPage() {
       const body: Record<string, unknown> = {
         sources: selectedSources,
         keywords: keywordList,
-        canonicalCategories: searchCategories.apify,
+        canonicalCategories,
         platform: "instagram",
         limit: limitState.value,
         filters: {
@@ -425,7 +415,7 @@ export default function CreatorsPage() {
           ...(searchMaxFollowers.trim()
             ? { maxFollowers: Number(searchMaxFollowers) }
             : {}),
-          requireCategory: searchCategories.apify.length > 0,
+          requireCategory: canonicalCategories.length > 0,
           excludeExistingCreators: false,
         },
         emailPrefetch: searchSources.apify_keyword_email,
@@ -435,7 +425,7 @@ export default function CreatorsPage() {
           maxFollowingPerSeed: 100,
         },
       };
-      if (selectedLocationOptions[0]) body.location = selectedLocationOptions[0];
+      if (searchLocation.trim()) body.location = searchLocation.trim();
       if (usernames.length > 0) body.usernames = usernames;
 
       const res = await fetch("/api/creators/search", {
@@ -542,17 +532,35 @@ export default function CreatorsPage() {
     setSearchResults([]);
     setSelectedResults(new Set());
     setSearching(false);
-    setSelectedKeywordOptions([]);
+    setSelectedKeywords([]);
     setSearchUsernames("");
-    setSelectedLocationOptions([]);
+    setSearchLocation("");
     setSearchMinFollowers("");
     setSearchMaxFollowers("");
     setSearchLimit("50");
     setSearchSources(DEFAULT_SEARCH_SOURCES);
-    setSearchCategories(EMPTY_CATEGORY_SELECTION);
   }
 
-  const keywordSuggestions = useMemo(() => facets.keywords, [facets.keywords]);
+  const keywordGroups = useMemo<KeywordGroup[]>(() => {
+    const groups: KeywordGroup[] = [];
+    if (brandKeywords.length > 0) {
+      groups.push({ label: "Brand Keywords", keywords: brandKeywords });
+    }
+    if (facets.keywords.length > 0) {
+      groups.push({
+        label: "From Creators",
+        keywords: facets.keywords.map((f) => f.value),
+      });
+    }
+    const catalog = Array.from(
+      new Set([...searchCategoryGroups.apify, ...searchCategoryGroups.collabstr])
+    ).sort();
+    if (catalog.length > 0) {
+      groups.push({ label: "Categories", keywords: catalog });
+    }
+    return groups;
+  }, [brandKeywords, facets.keywords, searchCategoryGroups]);
+
   const locationSuggestions = useMemo(
     () => facets.locations,
     [facets.locations]
@@ -1048,25 +1056,24 @@ export default function CreatorsPage() {
                         </div>
                       </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <FacetSelector
-                          label="Keywords"
-                          options={keywordSuggestions}
-                          selected={selectedKeywordOptions}
-                          onChange={setSelectedKeywordOptions}
-                          placeholder="Choose keywords"
-                          searchPlaceholder="Filter keywords"
-                          emptyText="No saved keywords yet."
+                      {searchCategoriesLoading ? (
+                        <p className="text-sm text-muted-foreground">
+                          Loading keywords…
+                        </p>
+                      ) : (
+                        <UnifiedKeywordSelector
+                          groups={keywordGroups}
+                          selected={selectedKeywords}
+                          onChange={setSelectedKeywords}
                         />
-                        <FacetSelector
-                          label="Location"
-                          options={locationSuggestions}
-                          selected={selectedLocationOptions}
-                          onChange={setSelectedLocationOptions}
-                          placeholder="Choose location"
-                          searchPlaceholder="Filter locations"
-                          emptyText="No saved locations yet."
-                          multiple={false}
+                      )}
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Location</label>
+                        <LocationInput
+                          value={searchLocation}
+                          onChange={setSearchLocation}
+                          suggestions={locationSuggestions}
                         />
                       </div>
 
@@ -1118,21 +1125,6 @@ export default function CreatorsPage() {
                         </div>
                       </div>
 
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Discovery keywords</label>
-                        {searchCategoriesLoading ? (
-                          <p className="text-sm text-muted-foreground">
-                            Loading category sources…
-                          </p>
-                        ) : (
-                          <GroupedCategoryPicker
-                            categories={searchCategoryGroups}
-                            selected={searchCategories}
-                            onChange={setSearchCategories}
-                          />
-                        )}
-                      </div>
-
                       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
                         <div className="space-y-2">
                           <label className="text-sm font-medium">
@@ -1174,13 +1166,13 @@ export default function CreatorsPage() {
                     <aside className="space-y-4">
                       <div className="rounded-lg border bg-muted/15 p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                          Selector rules
+                          How it works
                         </p>
                         <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-                          <li>Keywords and locations come from your saved creator data.</li>
-                          <li>Categories come from the grouped discovery catalog.</li>
-                          <li>Use the X on selected chips to remove them directly.</li>
-                          <li>Exact usernames stay freeform for known handles only.</li>
+                          <li>Keywords combine your brand profile, creator data, and discovery categories.</li>
+                          <li>Type custom keywords or pick from the suggestions.</li>
+                          <li>Use the X on selected chips to remove them.</li>
+                          <li>Exact usernames are for known handles only.</li>
                         </ul>
                       </div>
                     </aside>
@@ -1335,9 +1327,7 @@ export default function CreatorsPage() {
                     onClick={startSearch}
                     disabled={
                       (
-                        selectedKeywordOptions.length === 0 &&
-                        searchCategories.apify.length === 0 &&
-                        searchCategories.collabstr.length === 0 &&
+                        selectedKeywords.length === 0 &&
                         !searchUsernames.trim()
                       ) ||
                       Boolean(searchLimitValidation.error)
