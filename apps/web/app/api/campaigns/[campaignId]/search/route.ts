@@ -1,9 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
+import {
+  isLocalCreatorSearchFallbackEnabled,
+  spawnLocalCreatorSearchJob,
+} from "@/lib/creator-search/local-fallback";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -79,15 +83,43 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     });
 
-    await inngest.send({
-      name: "creator-search/requested",
-      data: {
-        jobId: job.id,
-        campaignId,
-        brandId: membership.brandId,
-        query: unifiedQuery,
-      },
-    });
+    try {
+      await inngest.send({
+        name: "creator-search/requested",
+        data: {
+          jobId: job.id,
+          campaignId,
+          brandId: membership.brandId,
+          query: unifiedQuery,
+        },
+      });
+    } catch (error) {
+      if (!isLocalCreatorSearchFallbackEnabled()) {
+        throw error;
+      }
+
+      console.warn(
+        "[campaigns/search/POST] Inngest dispatch failed, relying on local fallback",
+        error
+      );
+    }
+
+    if (isLocalCreatorSearchFallbackEnabled()) {
+      after(async () => {
+        try {
+          spawnLocalCreatorSearchJob({
+            jobId: job.id,
+            brandId: membership.brandId,
+            campaignId,
+          });
+        } catch (error) {
+          console.error(
+            "[campaigns/search/POST] local creator search fallback failed",
+            error
+          );
+        }
+      });
+    }
 
     return NextResponse.json(
       {

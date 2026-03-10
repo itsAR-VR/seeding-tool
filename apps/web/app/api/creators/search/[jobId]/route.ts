@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,10 @@ import {
   serializeCreatorSearchJob,
   serializeCreatorSearchResult,
 } from "@/lib/creator-search/job-payload";
+import {
+  isLocalCreatorSearchFallbackEnabled,
+  spawnLocalCreatorSearchJob,
+} from "@/lib/creator-search/local-fallback";
 
 type RouteContext = { params: Promise<{ jobId: string }> };
 
@@ -57,6 +61,27 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    if (
+      isLocalCreatorSearchFallbackEnabled() &&
+      job.status === "pending" &&
+      job.requestedCount > 0
+    ) {
+      after(async () => {
+        try {
+          spawnLocalCreatorSearchJob({
+            jobId: job.id,
+            brandId: membership.brandId,
+            campaignId: job.campaignId,
+          });
+        } catch (error) {
+          console.error(
+            "[creators/search/jobId/GET] local fallback recovery failed",
+            error
+          );
+        }
+      });
     }
 
     const serializedJob = serializeCreatorSearchJob(job);

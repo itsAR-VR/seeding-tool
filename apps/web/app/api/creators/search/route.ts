@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
@@ -8,6 +8,10 @@ import {
   normalizeUnifiedDiscoveryQuery,
   type UnifiedDiscoveryQuery,
 } from "@/lib/creator-search/contracts";
+import {
+  isLocalCreatorSearchFallbackEnabled,
+  spawnLocalCreatorSearchJob,
+} from "@/lib/creator-search/local-fallback";
 
 /**
  * POST /api/creators/search — Start an Apify creator discovery search.
@@ -95,16 +99,43 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Fire Inngest event to run the Apify search
-    await inngest.send({
-      name: "creator-search/requested",
-      data: {
-        jobId: job.id,
-        campaignId: "", // standalone search, not campaign-bound
-        brandId: membership.brandId,
-        query: unifiedQuery,
-      },
-    });
+    try {
+      await inngest.send({
+        name: "creator-search/requested",
+        data: {
+          jobId: job.id,
+          campaignId: "", // standalone search, not campaign-bound
+          brandId: membership.brandId,
+          query: unifiedQuery,
+        },
+      });
+    } catch (error) {
+      if (!isLocalCreatorSearchFallbackEnabled()) {
+        throw error;
+      }
+
+      console.warn(
+        "[creators/search/POST] Inngest dispatch failed, relying on local fallback",
+        error
+      );
+    }
+
+    if (isLocalCreatorSearchFallbackEnabled()) {
+      after(async () => {
+        try {
+          spawnLocalCreatorSearchJob({
+            jobId: job.id,
+            brandId: membership.brandId,
+            campaignId: null,
+          });
+        } catch (error) {
+          console.error(
+            "[creators/search/POST] local creator search fallback failed",
+            error
+          );
+        }
+      });
+    }
 
     return NextResponse.json(
       {

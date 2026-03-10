@@ -1,5 +1,3 @@
-import { ProxyConfiguration } from "@crawlee/core";
-import { PlaywrightCrawler } from "@crawlee/playwright";
 import { chromium } from "playwright";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
 import {
@@ -71,7 +69,7 @@ function normalizeHandle(handle: string) {
   return handle.trim().replace(/^@/, "");
 }
 
-function createProxyConfiguration() {
+function getProxyServer() {
   const proxyUrls = process.env.CRAWLEE_PROXY_URLS?.split(",")
     .map((url) => url.trim())
     .filter(Boolean);
@@ -80,7 +78,7 @@ function createProxyConfiguration() {
     return undefined;
   }
 
-  return new ProxyConfiguration({ proxyUrls });
+  return proxyUrls[0];
 }
 
 function buildValidationUrl(handle: string) {
@@ -254,212 +252,197 @@ export async function validateInstagramCreators(
     options.maxPauseCycles
   );
   const results = new Map<string, InstagramValidationResult>();
+  const proxyServer = getProxyServer();
+  const browser = await chromium.launch({
+    headless: !options.headful,
+    ...(proxyServer ? { proxy: { server: proxyServer } } : {}),
+  });
 
-  const crawler = new PlaywrightCrawler({
-    maxRequestsPerCrawl: targets.length,
-    maxConcurrency: Math.max(1, options.concurrency),
-    requestHandlerTimeoutSecs: options.requestHandlerTimeoutSecs,
-    navigationTimeoutSecs: options.navigationTimeoutSecs,
-    useSessionPool: true,
-    persistCookiesPerSession: true,
-    proxyConfiguration: createProxyConfiguration(),
-    sessionPoolOptions: {
-      maxPoolSize: Math.max(8, options.concurrency * 4),
-      sessionOptions: {
-        maxAgeSecs: options.sessionMaxAgeSecs,
-        maxUsageCount: options.sessionMaxUsageCount,
-      },
-    },
-    browserPoolOptions: {
-      useFingerprints: true,
-    },
-    launchContext: {
-      launcher: chromium,
-      launchOptions: {
-        headless: !options.headful,
-      },
-    },
-    preNavigationHooks: [
-      async ({ page }, gotoOptions) => {
-        gotoOptions.waitUntil = "domcontentloaded";
-        await page.setExtraHTTPHeaders({
-          "accept-language": "en-US,en;q=0.9",
-          referer: "https://www.instagram.com/",
-        });
-      },
-    ],
-    async requestHandler({ page, request, session }) {
-      const target = request.userData.target as InstagramValidationTarget;
-      const handle = normalizeHandle(target.handle);
-
-      await page.waitForLoadState("domcontentloaded");
-      await page.waitForTimeout(delayController.nextDelay());
-
-      const html = await page.content();
-
-      if (isInstagramProfileBlocked(html)) {
-        session?.markBad();
-        await delayController.noteBlock((ms) => page.waitForTimeout(ms));
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount: null,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: true,
-          status: "invalid",
-          errorCode: "blocked_or_login_wall",
-          error: "blocked_or_login_wall",
-        });
-        return;
-      }
-
-      if (isInstagramProfileMissing(html)) {
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount: null,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "invalid",
-          errorCode: "missing_profile",
-          error: "missing_profile",
-        });
-        return;
-      }
-
-      const followerCount = sanitizeFollowerCount(
-        "instagram_html",
-        extractInstagramFollowerCountFromHtml(html)
-      );
-
-      if (followerCount == null) {
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount: null,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "invalid",
-          errorCode: "follower_count_not_found",
-          error: "follower_count_not_found",
-        });
-        return;
-      }
-
-      if (followerCount <= 0) {
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "invalid",
-          errorCode: "zero_followers",
-          error: "zero_followers",
-        });
-        return;
-      }
-
-      const followerRangeError = classifyFollowerRange(
-        followerCount,
-        target.minFollowers,
-        target.maxFollowers
-      );
-
-      if (followerRangeError) {
-        results.set(handle, {
-          creatorId: target.creatorId ?? null,
-          handle,
-          url: page.url(),
-          followerCount,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "invalid",
-          errorCode: followerRangeError.errorCode,
-          error: followerRangeError.error,
-        });
-        return;
-      }
-
-      let avgViews: number | null = null;
-      let checkedVideoCount = 0;
-
-      if (options.includeAvgViews) {
-        const avgViewResult = await computeAverageViews(
-          page,
-          html,
-          options,
-          delayController
-        );
-
-        avgViews = avgViewResult.avgViews;
-        checkedVideoCount = avgViewResult.checkedVideoCount;
-
-        if (avgViewResult.blocked) {
-          session?.markBad();
-        }
-      }
-
-      session?.markGood();
-      delayController.noteSuccess();
-      results.set(handle, {
-        creatorId: target.creatorId ?? null,
-        handle,
-        url: page.url(),
-        followerCount,
-        avgViews,
-        checkedVideoCount,
-        blocked: false,
-        status: "valid",
-        errorCode: null,
-        error: null,
-      });
-    },
-    async failedRequestHandler({ request, error }) {
-      const target = request.userData.target as InstagramValidationTarget;
-      const handle = normalizeHandle(target.handle);
-      const failure = classifyCrawlerFailure(error);
-
-      results.set(handle, {
-        creatorId: target.creatorId ?? null,
-        handle,
-        url: request.url,
-        followerCount: null,
-        avgViews: null,
-        checkedVideoCount: 0,
-        blocked: false,
-        status: "invalid",
-        errorCode: failure.errorCode,
-        error: failure.error,
-      });
+  const context = await browser.newContext({
+    extraHTTPHeaders: {
+      "accept-language": "en-US,en;q=0.9",
+      referer: "https://www.instagram.com/",
     },
   });
 
-  await crawler.run(
-    targets.map((target) => {
-      const handle = normalizeHandle(target.handle);
-
-      return {
-        url: buildValidationUrl(handle),
-        uniqueKey: target.creatorId ?? handle,
-        userData: {
-          target: {
-            ...target,
-            handle,
-          },
-        },
+  try {
+    for (const rawTarget of targets) {
+      const target = {
+        ...rawTarget,
+        handle: normalizeHandle(rawTarget.handle),
       };
-    })
-  );
+      const handle = target.handle;
+      const page = await context.newPage();
+
+      try {
+        await page.goto(buildValidationUrl(handle), {
+          waitUntil: "domcontentloaded",
+          timeout: options.navigationTimeoutSecs * 1_000,
+        });
+        await page.waitForLoadState("domcontentloaded");
+        await page.waitForTimeout(delayController.nextDelay());
+
+        const html = await page.content();
+
+        if (isInstagramProfileBlocked(html)) {
+          await delayController.noteBlock((ms) => page.waitForTimeout(ms));
+          results.set(handle, {
+            creatorId: target.creatorId ?? null,
+            handle,
+            url: page.url(),
+            followerCount: null,
+            avgViews: null,
+            checkedVideoCount: 0,
+            blocked: true,
+            status: "invalid",
+            errorCode: "blocked_or_login_wall",
+            error: "blocked_or_login_wall",
+          });
+          continue;
+        }
+
+        if (isInstagramProfileMissing(html)) {
+          results.set(handle, {
+            creatorId: target.creatorId ?? null,
+            handle,
+            url: page.url(),
+            followerCount: null,
+            avgViews: null,
+            checkedVideoCount: 0,
+            blocked: false,
+            status: "invalid",
+            errorCode: "missing_profile",
+            error: "missing_profile",
+          });
+          continue;
+        }
+
+        const followerCount = sanitizeFollowerCount(
+          "instagram_html",
+          extractInstagramFollowerCountFromHtml(html)
+        );
+
+        if (followerCount == null) {
+          results.set(handle, {
+            creatorId: target.creatorId ?? null,
+            handle,
+            url: page.url(),
+            followerCount: null,
+            avgViews: null,
+            checkedVideoCount: 0,
+            blocked: false,
+            status: "invalid",
+            errorCode: "follower_count_not_found",
+            error: "follower_count_not_found",
+          });
+          continue;
+        }
+
+        if (followerCount <= 0) {
+          results.set(handle, {
+            creatorId: target.creatorId ?? null,
+            handle,
+            url: page.url(),
+            followerCount,
+            avgViews: null,
+            checkedVideoCount: 0,
+            blocked: false,
+            status: "invalid",
+            errorCode: "zero_followers",
+            error: "zero_followers",
+          });
+          continue;
+        }
+
+        const followerRangeError = classifyFollowerRange(
+          followerCount,
+          target.minFollowers,
+          target.maxFollowers
+        );
+
+        if (followerRangeError) {
+          results.set(handle, {
+            creatorId: target.creatorId ?? null,
+            handle,
+            url: page.url(),
+            followerCount,
+            avgViews: null,
+            checkedVideoCount: 0,
+            blocked: false,
+            status: "invalid",
+            errorCode: followerRangeError.errorCode,
+            error: followerRangeError.error,
+          });
+          continue;
+        }
+
+        let avgViews: number | null = null;
+        let checkedVideoCount = 0;
+
+        if (options.includeAvgViews) {
+          const avgViewResult = await computeAverageViews(
+            page,
+            html,
+            options,
+            delayController
+          );
+
+          avgViews = avgViewResult.avgViews;
+          checkedVideoCount = avgViewResult.checkedVideoCount;
+
+          if (avgViewResult.blocked) {
+            results.set(handle, {
+              creatorId: target.creatorId ?? null,
+              handle,
+              url: page.url(),
+              followerCount: null,
+              avgViews: null,
+              checkedVideoCount,
+              blocked: true,
+              status: "invalid",
+              errorCode: "blocked_or_login_wall",
+              error: "blocked_or_login_wall",
+            });
+            continue;
+          }
+        }
+
+        delayController.noteSuccess();
+        results.set(handle, {
+          creatorId: target.creatorId ?? null,
+          handle,
+          url: page.url(),
+          followerCount,
+          avgViews,
+          checkedVideoCount,
+          blocked: false,
+          status: "valid",
+          errorCode: null,
+          error: null,
+        });
+      } catch (error) {
+        const failure = classifyCrawlerFailure(error);
+
+        results.set(handle, {
+          creatorId: target.creatorId ?? null,
+          handle,
+          url: buildValidationUrl(handle),
+          followerCount: null,
+          avgViews: null,
+          checkedVideoCount: 0,
+          blocked: false,
+          status: "invalid",
+          errorCode: failure.errorCode,
+          error: failure.error,
+        });
+      } finally {
+        await page.close().catch(() => undefined);
+      }
+    }
+  } finally {
+    await context.close().catch(() => undefined);
+    await browser.close().catch(() => undefined);
+  }
 
   return targets.map((target) => {
     const handle = normalizeHandle(target.handle);

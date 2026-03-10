@@ -1,15 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import {
-  getDatasetItems,
-  mapInstagramSearchUserToCreator,
-  mapProfileToCreator,
-  runInstagramFollowingScraper,
-  runInstagramKeywordEmailScraper,
-  runInstagramProfileScraper,
-  runInstagramSearchScraper,
-  type ApifyInstagramFollowingResult,
-  type ApifyInstagramKeywordEmailResult,
-  type MappedCreatorData,
+import type {
+  ApifyInstagramFollowingResult,
+  ApifyInstagramKeywordEmailResult,
+  MappedCreatorData,
 } from "@/lib/apify/client";
 import {
   classifyDiscoveryText,
@@ -153,16 +146,14 @@ function isUnifiedDiscoverySource(value: string): value is UnifiedDiscoverySourc
   );
 }
 
-async function collectValidatedCacheLane(
+async function collectStoredCreatorLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
   const creators = await prisma.creator.findMany({
     where: {
       brandId: context.brandId,
-      validationStatus: "valid",
       instagramHandle: { not: null },
-      lastValidatedAt: { not: null },
     },
     include: {
       profiles: true,
@@ -177,10 +168,6 @@ async function collectValidatedCacheLane(
   return creators
     .map((creator) => {
       if (!creator.instagramHandle) {
-        return null;
-      }
-
-      if (!isCreatorValidationFresh(creator.lastValidatedAt)) {
         return null;
       }
 
@@ -252,7 +239,16 @@ async function collectValidatedCacheLane(
         isVerified: instagramProfile?.isVerified ?? false,
         email: creator.email,
         seedCreatorId: null,
-        isCached: true,
+        isCached:
+          (creator.validationStatus === "valid" &&
+            isCreatorValidationFresh(creator.lastValidatedAt)) ||
+          (primarySource === "collabstr" &&
+            Boolean(
+              creator.followerCount ||
+                creator.bio ||
+                instagramProfile?.url ||
+                creator.imageUrl
+            )),
         lastValidatedAt: creator.lastValidatedAt?.toISOString() ?? null,
         primarySource,
         sources,
@@ -270,6 +266,13 @@ async function collectApifySearchLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
+  const {
+    getDatasetItems,
+    mapInstagramSearchUserToCreator,
+    mapProfileToCreator,
+    runInstagramProfileScraper,
+    runInstagramSearchScraper,
+  } = await import("@/lib/apify/client");
   const handles = context.query.usernames;
 
   if (handles.length > 0) {
@@ -318,6 +321,12 @@ async function collectApprovedSeedFollowingLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
+  const {
+    getDatasetItems,
+    mapProfileToCreator,
+    runInstagramFollowingScraper,
+    runInstagramProfileScraper,
+  } = await import("@/lib/apify/client");
   if (!context.query.seedExpansion.enabled || !context.campaignId) {
     return [];
   }
@@ -384,6 +393,8 @@ async function collectKeywordEmailLane(
   context: OrchestratorContext,
   rawLimit: number
 ): Promise<LaneCandidate[]> {
+  const { getDatasetItems, runInstagramKeywordEmailScraper } =
+    await import("@/lib/apify/client");
   if (!context.query.emailPrefetch || context.query.keywords.length === 0) {
     return [];
   }
@@ -442,6 +453,8 @@ async function collectKeywordEmailLane(
 async function enrichCandidateProfiles(
   candidates: UnifiedDiscoveryCandidate[]
 ): Promise<UnifiedDiscoveryCandidate[]> {
+  const { getDatasetItems, mapProfileToCreator, runInstagramProfileScraper } =
+    await import("@/lib/apify/client");
   const handles = candidates
     .filter(
       (candidate) =>
@@ -556,8 +569,8 @@ export async function orchestrateUnifiedDiscovery(
   > = [];
 
   lanePromises.push(
-    withLaneTimeout("collabstr", collectValidatedCacheLane(context, rawLimit))
-      .then((candidates) => ({ lane: "cache", candidates }))
+    withLaneTimeout("collabstr", collectStoredCreatorLane(context, rawLimit))
+      .then((candidates) => ({ lane: "stored", candidates }))
   );
 
   if (context.query.sources.includes("apify_search")) {
