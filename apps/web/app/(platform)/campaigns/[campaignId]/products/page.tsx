@@ -203,6 +203,7 @@ export default function CampaignProductsPage() {
           </CardHeader>
           <CardContent>
             <ProductPicker
+              campaignId={campaignId}
               selectedProductIds={selectedIds}
               onSelectionChange={handleSelectionChange}
             />

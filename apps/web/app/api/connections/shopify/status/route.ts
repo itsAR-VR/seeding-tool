@@ -1,41 +1,30 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  BrandAccessError,
+  getAuthorizedCampaign,
+  getCurrentBrandMembership,
+} from "@/lib/integrations/brand-access";
 import { getShopifyConnectionStatus } from "@/lib/shopify/status";
 
-async function getCurrentBrandId() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+async function getBrandId(request: NextRequest) {
+  const campaignId = request.nextUrl.searchParams.get("campaignId");
 
-  if (!authUser) {
-    throw new Error("Unauthorized");
+  if (campaignId) {
+    return (await getAuthorizedCampaign(campaignId)).brandId;
   }
 
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) {
-    throw new Error("User not found");
-  }
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    throw new Error("No brand found");
-  }
-
-  return membership.brandId;
+  return (await getCurrentBrandMembership()).brandId;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const brandId = await getCurrentBrandId();
+    const brandId = await getBrandId(request);
     return NextResponse.json(await getShopifyConnectionStatus(brandId));
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to load Shopify status";
     const status =

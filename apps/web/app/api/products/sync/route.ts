@@ -1,39 +1,35 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  BrandAccessError,
+  getAuthorizedCampaign,
+  getCurrentBrandMembership,
+} from "@/lib/integrations/brand-access";
 import { syncProducts, getProducts } from "@/lib/shopify/products";
 import { updateShopifyConnectionStatus } from "@/lib/shopify/status";
 
-async function getCurrentBrandId(): Promise<string> {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+async function getBrandId(request: NextRequest): Promise<string> {
+  const campaignId = request.nextUrl.searchParams.get("campaignId");
 
-  if (!authUser) throw new Error("Unauthorized");
+  if (campaignId) {
+    return (await getAuthorizedCampaign(campaignId)).brandId;
+  }
 
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) throw new Error("User not found");
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) throw new Error("No brand found");
-  return membership.brandId;
+  return (await getCurrentBrandMembership()).brandId;
 }
 
 /**
  * GET /api/products/sync — List synced Shopify products for the current brand.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const brandId = await getCurrentBrandId();
+    const brandId = await getBrandId(request);
     const products = await getProducts(brandId);
     return NextResponse.json({ products });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : "Failed to fetch products";
     const status = message === "Unauthorized" ? 401 : message === "No brand found" ? 404 : 500;
     return NextResponse.json({ error: message }, { status });
@@ -43,9 +39,11 @@ export async function GET() {
 /**
  * POST /api/products/sync — Trigger a product sync from Shopify.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  let brandId: string | null = null;
+
   try {
-    const brandId = await getCurrentBrandId();
+    brandId = await getBrandId(request);
     const result = await syncProducts(brandId);
     await updateShopifyConnectionStatus(brandId, {
       lastSyncAt: new Date().toISOString(),
@@ -55,15 +53,28 @@ export async function POST() {
     });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message = error instanceof Error ? error.message : "Product sync failed";
     try {
-      const brandId = await getCurrentBrandId();
-      await updateShopifyConnectionStatus(brandId, {
-        lastSyncAt: new Date().toISOString(),
-        lastSyncError: message,
-        lastSyncedCount: null,
-        truncated: null,
-      });
+      if (brandId) {
+        await updateShopifyConnectionStatus(brandId, {
+          lastSyncAt: new Date().toISOString(),
+          lastSyncError: message,
+          lastSyncedCount: null,
+          truncated: null,
+        });
+      } else {
+        brandId = await getBrandId(request);
+        await updateShopifyConnectionStatus(brandId, {
+          lastSyncAt: new Date().toISOString(),
+          lastSyncError: message,
+          lastSyncedCount: null,
+          truncated: null,
+        });
+      }
     } catch {
       // ignore status update failures
     }

@@ -29,6 +29,10 @@ function normalizeStoreDomain(rawValue: string) {
     .replace(/\/.*$/, "");
 }
 
+function isShopifyAdminDomain(value: string) {
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(value);
+}
+
 async function getErrorText(response: Response) {
   const text = await response.text();
   return text || response.statusText || "Request failed";
@@ -65,6 +69,16 @@ export async function POST(request: NextRequest) {
     if (!storeDomain || !accessToken) {
       return NextResponse.json(
         { error: "Store domain and access token are required" },
+        { status: 400 }
+      );
+    }
+
+    if (!isShopifyAdminDomain(storeDomain)) {
+      return NextResponse.json(
+        {
+          error:
+            "Use your Shopify admin domain in the format your-store.myshopify.com. Storefront domains like sleepkalm.com will not work here.",
+        },
         { status: 400 }
       );
     }

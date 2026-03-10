@@ -281,13 +281,17 @@ function ConnectionsContent() {
         throw new Error(await readErrorMessage(res, "Failed to connect Shopify"));
       }
 
+      const data = (await res.json()) as { storeDomain?: string };
+      const savedStoreDomain = data.storeDomain ?? shopifyForm.storeDomain.trim();
+
       setShopifyForm((current) => ({
         ...current,
+        storeDomain: savedStoreDomain,
         accessToken: "",
       }));
       setProviderMessage("shopify", {
         tone: "success",
-        text: `Shopify connected to ${shopifyForm.storeDomain.trim()}.`,
+        text: `Shopify connected to ${savedStoreDomain}.`,
       });
       await refreshConnectionData();
     } catch (saveError) {
@@ -654,8 +658,12 @@ function ConnectionsContent() {
                 <form className="space-y-2" onSubmit={(event) => void handleSaveShopify(event)}>
                   <Input
                     type="text"
-                    placeholder="Store domain"
+                    placeholder="your-store.myshopify.com"
                     value={shopifyForm.storeDomain}
+                    autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(event) =>
                       setShopifyForm((current) => ({
                         ...current,
@@ -667,6 +675,10 @@ function ConnectionsContent() {
                     type="password"
                     placeholder="Access Token"
                     value={shopifyForm.accessToken}
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     onChange={(event) =>
                       setShopifyForm((current) => ({
                         ...current,
@@ -685,6 +697,12 @@ function ConnectionsContent() {
                   >
                     {shopifySaving ? "Connecting..." : "Connect manually"}
                   </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Use the Shopify admin domain in the form{" "}
+                    <code className="font-mono">your-store.myshopify.com</code>.
+                    Storefront domains like <code className="font-mono">sleepkalm.com</code>{" "}
+                    will not work with the admin token flow.
+                  </p>
                 </form>
               ) : (
                 <div className="space-y-2">

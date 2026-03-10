@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -38,6 +39,7 @@ interface ProductPickerProps {
   onSelectionChange: (productIds: Set<string>) => void;
   /** Show/hide the sync CTA */
   showSyncButton?: boolean;
+  campaignId?: string;
 }
 
 interface ShopifyStatus {
@@ -49,49 +51,72 @@ interface ShopifyStatus {
   truncated?: boolean;
 }
 
+function normalizeErrorMessage(message: string) {
+  if (message.includes("No valid Shopify credential found")) {
+    return "Shopify is not connected for this brand yet.";
+  }
+
+  if (message.includes("No connected Shopify store found")) {
+    return "Shopify is connected without a store domain. Reconnect it from Settings.";
+  }
+
+  return message;
+}
+
 export function ProductPicker({
   selectedProductIds,
   onSelectionChange,
   showSyncButton = true,
+  campaignId,
 }: ProductPickerProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [statusLoading, setStatusLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [shopifyStatus, setShopifyStatus] = useState<ShopifyStatus>({
     connected: false,
   });
+  const queryString = campaignId
+    ? `?campaignId=${encodeURIComponent(campaignId)}`
+    : "";
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/connections/shopify/status");
+      const res = await fetch(`/api/connections/shopify/status${queryString}`);
       if (res.ok) {
         setShopifyStatus((await res.json()) as ShopifyStatus);
       }
     } catch {
       // ignore
+    } finally {
+      setStatusLoading(false);
     }
-  }, []);
+  }, [queryString]);
 
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("/api/products/sync");
+      const res = await fetch(`/api/products/sync${queryString}`);
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Failed to fetch products");
+        throw new Error(
+          normalizeErrorMessage(data.error ?? "Failed to fetch products")
+        );
       }
       const data = (await res.json()) as { products: Product[] };
       setProducts(data.products);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load products");
+      setError(
+        err instanceof Error ? normalizeErrorMessage(err.message) : "Failed to load products"
+      );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [queryString]);
 
   useEffect(() => {
     fetchProducts();
@@ -102,15 +127,19 @@ export function ProductPicker({
     try {
       setSyncing(true);
       setError(null);
-      const res = await fetch("/api/products/sync", { method: "POST" });
+      const res = await fetch(`/api/products/sync${queryString}`, {
+        method: "POST",
+      });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Sync failed");
+        throw new Error(normalizeErrorMessage(data.error ?? "Sync failed"));
       }
       await fetchProducts();
       await fetchStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Sync failed");
+      setError(
+        err instanceof Error ? normalizeErrorMessage(err.message) : "Sync failed"
+      );
       await fetchStatus();
     } finally {
       setSyncing(false);
@@ -170,6 +199,43 @@ export function ProductPicker({
     );
   }
 
+  if (!loading && products.length === 0 && !error && !statusLoading && !shopifyStatus.connected) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex flex-col items-center justify-center py-16">
+          <div className="rounded-full bg-muted p-4 mb-4">
+            <svg
+              className="h-8 w-8 text-muted-foreground"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={1.5}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 7.5h18M6.75 3.75h10.5A2.25 2.25 0 0119.5 6v12A2.25 2.25 0 0117.25 20.25H6.75A2.25 2.25 0 014.5 18V6a2.25 2.25 0 012.25-2.25z"
+              />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold">Shopify not connected</h3>
+          <p className="mt-1 max-w-sm text-center text-sm text-muted-foreground">
+            Connect your Shopify admin domain and access token before syncing
+            products into this campaign.
+          </p>
+          {showSyncButton && (
+            <Link
+              href="/settings/connections"
+              className={buttonVariants({ className: "mt-4" })}
+            >
+              Open Shopify settings
+            </Link>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Empty state — no products synced
   if (products.length === 0 && !error) {
     return (
@@ -195,7 +261,11 @@ export function ProductPicker({
             Sync your Shopify product catalog to select products for this campaign.
           </p>
           {showSyncButton && (
-            <Button onClick={handleSync} disabled={syncing} className="mt-4">
+            <Button
+              onClick={handleSync}
+              disabled={syncing || !shopifyStatus.connected}
+              className="mt-4"
+            >
               {syncing ? (
                 <>
                   <svg
@@ -235,15 +305,24 @@ export function ProductPicker({
         <div className="flex items-center justify-between gap-3 rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
           <span>{error}</span>
           {showSyncButton && (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={handleSync}
-              disabled={syncing}
-            >
-              {syncing ? "Retrying…" : "Retry sync"}
-            </Button>
+            shopifyStatus.connected ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleSync}
+                disabled={syncing}
+              >
+                {syncing ? "Retrying…" : "Retry sync"}
+              </Button>
+            ) : (
+              <Link
+                href="/settings/connections"
+                className={buttonVariants({ size: "sm", variant: "outline" })}
+              >
+                Open Shopify settings
+              </Link>
+            )
           )}
         </div>
       )}
@@ -303,7 +382,7 @@ export function ProductPicker({
             variant="outline"
             size="sm"
             onClick={handleSync}
-            disabled={syncing}
+            disabled={syncing || !shopifyStatus.connected}
           >
             {syncing ? "Syncing…" : "Re-sync"}
           </Button>
