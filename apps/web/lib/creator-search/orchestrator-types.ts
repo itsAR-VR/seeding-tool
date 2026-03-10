@@ -23,6 +23,7 @@ export type UnifiedDiscoveryCandidate = {
   email: string | null;
   seedCreatorId: string | null;
   isCached: boolean;
+  existingValidationStatus: string | null;
   lastValidatedAt: string | null;
   primarySource: UnifiedDiscoverySource;
   sources: UnifiedDiscoverySource[];

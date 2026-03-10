@@ -7,13 +7,13 @@ import type {
 import {
   classifyDiscoveryText,
 } from "@/lib/creator-search/classification";
+import { shouldUseStoredCreatorAsCached } from "@/lib/creator-search/cache-policy";
 import { mergeDiscoveryCandidates } from "@/lib/creator-search/candidate-merge";
 import type {
   UnifiedDiscoveryQuery,
   UnifiedDiscoverySource,
 } from "@/lib/creator-search/contracts";
 import type { UnifiedDiscoveryCandidate } from "@/lib/creator-search/orchestrator-types";
-import { isCreatorValidationFresh } from "@/lib/creators/validation-policy";
 
 type OrchestratorContext = {
   brandId: string;
@@ -115,6 +115,7 @@ function candidateFromMappedCreator(
     email: mapped.email,
     seedCreatorId: mapped.seedCreatorId,
     isCached: false,
+    existingValidationStatus: null,
     lastValidatedAt: null,
     primarySource: mapped.primarySource,
     sources: mapped.sources,
@@ -239,16 +240,16 @@ async function collectStoredCreatorLane(
         isVerified: instagramProfile?.isVerified ?? false,
         email: creator.email,
         seedCreatorId: null,
-        isCached:
-          (creator.validationStatus === "valid" &&
-            isCreatorValidationFresh(creator.lastValidatedAt)) ||
-          (primarySource === "collabstr" &&
-            Boolean(
-              creator.followerCount ||
-                creator.bio ||
-                instagramProfile?.url ||
-                creator.imageUrl
-            )),
+        isCached: shouldUseStoredCreatorAsCached({
+          validationStatus: creator.validationStatus,
+          lastValidatedAt: creator.lastValidatedAt,
+          primarySource,
+          followerCount: creator.followerCount,
+          bio: creator.bio,
+          profileUrl: instagramProfile?.url,
+          imageUrl: creator.imageUrl,
+        }),
+        existingValidationStatus: creator.validationStatus,
         lastValidatedAt: creator.lastValidatedAt?.toISOString() ?? null,
         primarySource,
         sources,
@@ -437,6 +438,7 @@ async function collectKeywordEmailLane(
             : null),
         seedCreatorId: null,
         isCached: false,
+        existingValidationStatus: null,
         lastValidatedAt: null,
         primarySource: "apify_keyword_email",
         sources: ["apify_keyword_email"],

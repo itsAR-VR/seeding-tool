@@ -5,6 +5,7 @@ import {
   normalizeUnifiedDiscoveryQuery,
   type UnifiedDiscoveryQuery,
 } from "@/lib/creator-search/contracts";
+import { shouldBypassDiscoveryValidation } from "@/lib/creator-search/cache-policy";
 import { orchestrateUnifiedDiscovery } from "@/lib/creator-search/orchestrator";
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { applyValidationResultToCreator } from "@/lib/creators/validation-ops";
@@ -61,7 +62,12 @@ async function validateDiscoveryCandidates(
   query: UnifiedDiscoveryQuery
 ) {
   const prevalidated = candidates
-    .filter((candidate) => candidate.isCached)
+    .filter((candidate) =>
+      shouldBypassDiscoveryValidation({
+        isCached: candidate.isCached,
+        existingValidationStatus: candidate.existingValidationStatus,
+      })
+    )
     .map<ValidatedDiscoveryCandidate>((candidate) => ({
       ...candidate,
       validationStatus: "valid",
@@ -72,7 +78,13 @@ async function validateDiscoveryCandidates(
     }));
 
   const targets = candidates
-    .filter((candidate) => !candidate.isCached)
+    .filter(
+      (candidate) =>
+        !shouldBypassDiscoveryValidation({
+          isCached: candidate.isCached,
+          existingValidationStatus: candidate.existingValidationStatus,
+        })
+    )
     .map((candidate) => ({
       creatorId: candidate.creatorId ?? candidate.handle,
       handle: candidate.handle,
@@ -561,17 +573,28 @@ export async function runCreatorSearchJob(
       },
     });
 
-    await prisma.interventionCase.create({
-      data: {
-        type: "other",
-        status: "open",
-        priority: "normal",
-        title: "Unified creator search failed",
-        description: `Search job ${jobId} failed: ${errMsg}`,
-        brandId,
-      },
-    });
+    try {
+      await prisma.interventionCase.create({
+        data: {
+          type: "other",
+          status: "open",
+          priority: "normal",
+          title: "Unified creator search failed",
+          description: `Search job ${jobId} failed: ${errMsg}`,
+          brandId,
+        },
+      });
+    } catch (interventionError) {
+      console.error(
+        `[creator-search] Failed to create intervention for job ${jobId}`,
+        interventionError
+      );
+    }
 
-    throw error;
+    return {
+      jobId,
+      status: "failed",
+      error: errMsg,
+    } as const;
   }
 }

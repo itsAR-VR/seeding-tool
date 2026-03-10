@@ -29,6 +29,8 @@ export function mergeDiscoveryCandidates(
     email: incoming.email ?? current.email,
     seedCreatorId: current.seedCreatorId ?? incoming.seedCreatorId,
     isCached: current.isCached || incoming.isCached,
+    existingValidationStatus:
+      current.existingValidationStatus ?? incoming.existingValidationStatus,
     lastValidatedAt: current.lastValidatedAt ?? incoming.lastValidatedAt,
     sources: Array.from(new Set([...current.sources, ...incoming.sources])),
     sourceMetadata: {
