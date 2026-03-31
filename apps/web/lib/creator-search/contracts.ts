@@ -64,6 +64,9 @@ export type LegacyCampaignSearchRequest = {
   sources?: UnifiedDiscoverySource[];
 };
 
+export type CampaignDiscoveryRequest = LegacyCampaignSearchRequest &
+  Partial<UnifiedDiscoveryQuery>;
+
 export type LegacyAutomationDiscoveryConfig = {
   searchMode?: "hashtag" | "profile";
   hashtag?: string;
@@ -293,6 +296,32 @@ export function buildUnifiedDiscoveryQueryFromCampaignSearch(
     },
     emailPrefetch: false,
   });
+}
+
+function isUnifiedCampaignDiscoveryRequest(
+  body: CampaignDiscoveryRequest
+): body is CampaignDiscoveryRequest & Partial<UnifiedDiscoveryQuery> {
+  return (
+    Array.isArray(body.canonicalCategories) ||
+    Array.isArray(body.usernames) ||
+    (body.filters != null &&
+      typeof body.filters === "object" &&
+      !Array.isArray(body.filters)) ||
+    (body.seedExpansion != null &&
+      typeof body.seedExpansion === "object" &&
+      !Array.isArray(body.seedExpansion)) ||
+    typeof body.emailPrefetch === "boolean"
+  );
+}
+
+export function buildUnifiedDiscoveryQueryFromCampaignRequest(
+  body: CampaignDiscoveryRequest
+): UnifiedDiscoveryQuery {
+  if (isUnifiedCampaignDiscoveryRequest(body)) {
+    return normalizeUnifiedDiscoveryQuery(body);
+  }
+
+  return buildUnifiedDiscoveryQueryFromCampaignSearch(body);
 }
 
 export function buildUnifiedDiscoveryQueryFromAutomationConfig(

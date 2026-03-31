@@ -14,6 +14,11 @@ interface FeatureFlags {
   unipileDmEnabled: boolean;
   shopifyOrderEnabled: boolean;
   reminderEmailEnabled: boolean;
+  identityGraphEnabled: boolean;
+  identityAutoLinkEnabled: boolean;
+  decisionEngineScoringEnabled: boolean;
+  portfolioOptimizerEnabled: boolean;
+  outcomeLearningEnabled: boolean;
 }
 
 const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: string }> = {
@@ -32,6 +37,26 @@ const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: stri
   reminderEmailEnabled: {
     label: "Reminder Emails",
     description: "Enable scheduled reminder emails for post-delivery follow-ups. When disabled, reminders are silently skipped.",
+  },
+  identityGraphEnabled: {
+    label: "Identity Graph",
+    description: "Enable the global internal identity layer and review queue surfaces.",
+  },
+  identityAutoLinkEnabled: {
+    label: "Identity Auto-Link",
+    description: "Allow high-confidence identity matches to merge automatically. Keep this off during review-first rollout.",
+  },
+  decisionEngineScoringEnabled: {
+    label: "Decision Engine Scoring",
+    description: "Enable evidence-rich scoring and score decomposition beside the current discovery ranking.",
+  },
+  portfolioOptimizerEnabled: {
+    label: "Portfolio Optimizer",
+    description: "Enable portfolio preview generation beside the current ranked seed list.",
+  },
+  outcomeLearningEnabled: {
+    label: "Outcome Learning",
+    description: "Enable campaign outcome capture, provenance, and KPI calibration surfaces.",
   },
 };
 

@@ -13,6 +13,11 @@ export interface FeatureFlags {
   unipileDmEnabled: boolean;
   shopifyOrderEnabled: boolean;
   reminderEmailEnabled: boolean;
+  identityGraphEnabled: boolean;
+  identityAutoLinkEnabled: boolean;
+  decisionEngineScoringEnabled: boolean;
+  portfolioOptimizerEnabled: boolean;
+  outcomeLearningEnabled: boolean;
 }
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -20,6 +25,11 @@ const DEFAULT_FLAGS: FeatureFlags = {
   unipileDmEnabled: false,
   shopifyOrderEnabled: false,
   reminderEmailEnabled: false,
+  identityGraphEnabled: false,
+  identityAutoLinkEnabled: false,
+  decisionEngineScoringEnabled: false,
+  portfolioOptimizerEnabled: false,
+  outcomeLearningEnabled: false,
 };
 
 /**
@@ -45,6 +55,11 @@ export async function getFeatureFlags(brandId: string): Promise<FeatureFlags> {
       unipileDmEnabled: flags.unipileDmEnabled === true,
       shopifyOrderEnabled: flags.shopifyOrderEnabled === true,
       reminderEmailEnabled: flags.reminderEmailEnabled === true,
+      identityGraphEnabled: flags.identityGraphEnabled === true,
+      identityAutoLinkEnabled: flags.identityAutoLinkEnabled === true,
+      decisionEngineScoringEnabled: flags.decisionEngineScoringEnabled === true,
+      portfolioOptimizerEnabled: flags.portfolioOptimizerEnabled === true,
+      outcomeLearningEnabled: flags.outcomeLearningEnabled === true,
     };
   } catch (error) {
     // Fail-CLOSED: if anything goes wrong, all flags are disabled
@@ -69,6 +84,11 @@ export async function setFeatureFlag(
     "unipileDmEnabled",
     "shopifyOrderEnabled",
     "reminderEmailEnabled",
+    "identityGraphEnabled",
+    "identityAutoLinkEnabled",
+    "decisionEngineScoringEnabled",
+    "portfolioOptimizerEnabled",
+    "outcomeLearningEnabled",
   ];
 
   if (!validFlags.includes(flag)) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { mapTrack17Status } from "@/lib/track17/client";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Track17 Webhook Handler (Push Notifications)
@@ -131,6 +132,10 @@ export async function POST(request: NextRequest) {
           await prisma.campaignCreator.update({
             where: { id: fe.order.campaignCreatorId },
             data: { lifecycleStatus: "delivered" },
+          });
+          await recordOutcomeEvent({
+            campaignCreatorId: fe.order.campaignCreatorId,
+            event: { type: "delivered" },
           });
         }
 

@@ -24,7 +24,10 @@ import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-sear
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { CREDIT_COSTS, debit, getBalance } from "@/lib/credits";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
-import { validateInstagramCreators } from "@/lib/instagram/validator";
+import {
+  validateInstagramCreators,
+  type InstagramValidationResult,
+} from "@/lib/instagram/validator";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +74,7 @@ type ScoredCreator = CollabstrRow & {
 };
 
 type ValidatedScoredCreator = ScoredCreator & {
-  validationStatus: "valid" | "invalid";
+  validationStatus: InstagramValidationResult["status"];
   validationError: string | null;
   validatedFollowerCount: number | null;
   validatedAvgViews: number | null;

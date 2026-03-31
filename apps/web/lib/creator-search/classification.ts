@@ -8,6 +8,13 @@ export type DiscoveryClassification = {
   rawSourceCategory: string | null;
   confidence: "high" | "medium" | "low";
   matchedKeywords: string[];
+  expandedCategories: string[];
+  languageDetected: string | null;
+  topicSignals: Array<{
+    topic: string;
+    source: "bio" | "caption" | "hashtag" | "category";
+    strength: number;
+  }>;
 };
 
 const CLASSIFICATION_RULES: Array<{
@@ -23,6 +30,10 @@ const CLASSIFICATION_RULES: Array<{
       "cosmetic",
       "haircare",
       "esthetician",
+      "beaute",
+      "belleza",
+      "maquillaje",
+      "maquillage",
     ],
   },
   {
@@ -36,7 +47,30 @@ const CLASSIFICATION_RULES: Array<{
       "pilates",
       "athlete",
       "trainer",
+      "entrenamiento",
+      "deporte",
+      "entrainement",
+    ],
+  },
+  {
+    category: "Health & Wellness",
+    keywords: [
       "wellness",
+      "supplement",
+      "supplements",
+      "sleep",
+      "vitamin",
+      "vitamins",
+      "holistic",
+      "self-care",
+      "self care",
+      "gut health",
+      "functional medicine",
+      "hormone health",
+      "bien etre",
+      "bienestar",
+      "salud",
+      "sante",
     ],
   },
   {
@@ -51,6 +85,9 @@ const CLASSIFICATION_RULES: Array<{
       "restaurant",
       "nutrition",
       "beverage",
+      "receta",
+      "recette",
+      "cocina",
     ],
   },
   {
@@ -64,6 +101,9 @@ const CLASSIFICATION_RULES: Array<{
       "cleaning",
       "organization",
       "house",
+      "hogar",
+      "maison",
+      "deco",
     ],
   },
   {
@@ -76,17 +116,40 @@ const CLASSIFICATION_RULES: Array<{
       "apparel",
       "wardrobe",
       "streetwear",
+      "moda",
+      "mode",
+      "ropa",
     ],
   },
 ];
 
+function normalizeLookupValue(value: string | null | undefined) {
+  return value
+    ?.trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim() ?? "";
+}
+
 const CATEGORY_LOOKUP = new Map(
-  CANONICAL_DISCOVERY_CATEGORIES.map((value) => [value.toLowerCase(), value])
+  CANONICAL_DISCOVERY_CATEGORIES.map((value) => [normalizeLookupValue(value), value])
 );
 
-function normalizeText(value: string | null | undefined) {
-  return value?.trim().toLowerCase() ?? "";
-}
+const CATEGORY_ALIASES = new Map<string, CanonicalDiscoveryCategory>([
+  ["skin care", "Beauty"],
+  ["skincare", "Beauty"],
+  ["cosmetics", "Beauty"],
+  ["health and wellness", "Health & Wellness"],
+  ["wellness", "Health & Wellness"],
+  ["supplement", "Health & Wellness"],
+  ["supplements", "Health & Wellness"],
+  ["vitamins", "Health & Wellness"],
+  ["home decor", "Home & Garden"],
+  ["food and beverage", "Food & Drink"],
+]);
 
 export function classifyDiscoveryText(input: {
   rawSourceCategory?: string | null;
@@ -94,9 +157,33 @@ export function classifyDiscoveryText(input: {
   name?: string | null;
   profileDump?: string | null;
 }): DiscoveryClassification {
-  const normalizedRawCategory = normalizeText(input.rawSourceCategory);
+  const haystack = [
+    input.rawSourceCategory,
+    input.bio,
+    input.name,
+    input.profileDump,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const normalizedHaystack = normalizeLookupValue(haystack);
+  const languageDetected =
+    /[àâçéèêëîïôûùüÿñæœ]/i.test(haystack)
+      ? "fr"
+      : /[áéíóúñ¿¡]/i.test(haystack)
+        ? "es"
+        : /[ãõç]/i.test(haystack)
+          ? "pt"
+          : /\b(maquillaje|belleza|bienestar|salud|receta|cocina|entrenamiento)\b/.test(normalizedHaystack)
+            ? "es"
+            : /\b(maquillage|beaute|bien etre|sante|recette|maison|entrainement)\b/.test(normalizedHaystack)
+              ? "fr"
+              : /\b(beleza|bem estar|saude|receita)\b/.test(normalizedHaystack)
+                ? "pt"
+          : null;
+  const normalizedRawCategory = normalizeLookupValue(input.rawSourceCategory);
   const directCategory = normalizedRawCategory
-    ? CATEGORY_LOOKUP.get(normalizedRawCategory)
+    ? CATEGORY_LOOKUP.get(normalizedRawCategory) ??
+      CATEGORY_ALIASES.get(normalizedRawCategory)
     : undefined;
 
   if (directCategory) {
@@ -105,24 +192,23 @@ export function classifyDiscoveryText(input: {
       rawSourceCategory: input.rawSourceCategory ?? null,
       confidence: "high",
       matchedKeywords: [input.rawSourceCategory ?? directCategory],
+      expandedCategories: [input.rawSourceCategory ?? directCategory],
+      languageDetected,
+      topicSignals: [
+        {
+          topic: normalizedRawCategory,
+          source: "category",
+          strength: 1,
+        },
+      ],
     };
   }
-
-  const haystack = [
-    input.rawSourceCategory,
-    input.bio,
-    input.name,
-    input.profileDump,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
 
   let bestMatch: DiscoveryClassification | null = null;
 
   for (const rule of CLASSIFICATION_RULES) {
     const matchedKeywords = rule.keywords.filter((keyword) =>
-      haystack.includes(keyword)
+      normalizedHaystack.includes(normalizeLookupValue(keyword))
     );
 
     if (matchedKeywords.length === 0) {
@@ -134,6 +220,13 @@ export function classifyDiscoveryText(input: {
       rawSourceCategory: input.rawSourceCategory ?? null,
       confidence: matchedKeywords.length >= 2 ? "high" : "medium",
       matchedKeywords,
+      expandedCategories: matchedKeywords,
+      languageDetected,
+      topicSignals: matchedKeywords.map((keyword) => ({
+        topic: keyword,
+        source: "bio",
+        strength: matchedKeywords.length >= 2 ? 1 : 0.7,
+      })),
     };
 
     if (
@@ -150,6 +243,9 @@ export function classifyDiscoveryText(input: {
       rawSourceCategory: input.rawSourceCategory ?? null,
       confidence: "low",
       matchedKeywords: [],
+      expandedCategories: [],
+      languageDetected,
+      topicSignals: [],
     }
   );
 }

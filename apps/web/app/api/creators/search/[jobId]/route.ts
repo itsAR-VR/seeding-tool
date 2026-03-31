@@ -55,7 +55,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       },
       include: {
         results: {
-          orderBy: { followerCount: "desc" },
+          orderBy: [{ fitScore: "desc" }, { followerCount: "desc" }],
         },
       },
     });

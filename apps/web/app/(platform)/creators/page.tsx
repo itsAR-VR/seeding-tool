@@ -601,6 +601,12 @@ export default function CreatorsPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            onClick={() => router.push("/creators/identity-review")}
+          >
+            Identity Review
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => {
               resetSearchState();
               setShowSearchModal(true);
@@ -903,13 +909,22 @@ export default function CreatorsPage() {
                         )}
                       </td>
                       <td className="py-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAddToCampaign(creator.id)}
-                        >
-                          Add to Campaign
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/creators/${creator.id}`)}
+                          >
+                            Explain
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleAddToCampaign(creator.id)}
+                          >
+                            Add to Campaign
+                          </Button>
+                        </div>
                       </td>
                       </tr>
                     );

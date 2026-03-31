@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Link a MentionAsset to a CampaignCreator and update lifecycle.
@@ -38,6 +39,17 @@ export async function attributeMention(
     await prisma.campaignCreator.update({
       where: { id: campaignCreatorId },
       data: { lifecycleStatus: "posted" },
+    });
+    await recordOutcomeEvent({
+      campaignCreatorId,
+      event: {
+        type: "posted",
+        reach: mention.views ?? undefined,
+        engagement:
+          mention.views && (mention.likes != null || mention.comments != null)
+            ? ((mention.likes ?? 0) + (mention.comments ?? 0)) / Math.max(1, mention.views)
+            : undefined,
+      },
     });
   }
 

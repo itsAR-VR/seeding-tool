@@ -28,6 +28,7 @@ function uniqueSorted(values: readonly string[]) {
 export const APIFY_CATEGORIES = [
   "Beauty",
   "Fitness & Workout",
+  "Health & Wellness",
   "Food & Drink",
   "Home & Garden",
   "Fashion",

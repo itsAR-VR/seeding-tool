@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 type RouteContext = {
   params: Promise<{ campaignId: string; creatorId: string }>;
@@ -105,6 +106,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: updateData,
       include: {
         creator: { include: { profiles: true } },
+      },
+    });
+
+    await recordOutcomeEvent({
+      campaignCreatorId: campaignCreator.id,
+      event: {
+        type: "review",
+        decision:
+          body.action === "approve"
+            ? "approved"
+            : body.action === "decline"
+              ? "declined"
+              : "deferred",
+        reason: body.reason,
+        by: user.id,
       },
     });
 

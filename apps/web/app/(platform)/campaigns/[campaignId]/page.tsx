@@ -192,6 +192,9 @@ export default async function CampaignDetailPage({ params }: PageProps) {
               Review Queue ({stats.pendingReview})
             </Button>
           </Link>
+          <Link href={`/campaigns/${campaignId}/seed-list`}>
+            <Button variant="outline">Portfolio Preview</Button>
+          </Link>
         </div>
       </div>
 

@@ -32,9 +32,10 @@ export type InstagramValidationResult = {
   avgViews: number | null;
   checkedVideoCount: number;
   blocked: boolean;
-  status: "valid" | "invalid";
+  status: "valid" | "unknown" | "retry" | "invalid";
   errorCode: InstagramValidationErrorCode | null;
   error: string | null;
+  attemptCount: number;
 };
 
 export type InstagramValidationOptions = {
@@ -50,6 +51,21 @@ export type InstagramValidationOptions = {
   blockPauseMs?: number;
   maxPauseCycles?: number;
 };
+
+export function mapValidationStatusFromErrorCode(
+  errorCode: InstagramValidationErrorCode | null
+): InstagramValidationResult["status"] {
+  if (errorCode == null) {
+    return "valid";
+  }
+  if (errorCode === "blocked_or_login_wall" || errorCode === "follower_count_not_found") {
+    return "unknown";
+  }
+  if (errorCode === "timeout" || errorCode === "navigation_failed") {
+    return "retry";
+  }
+  return "invalid";
+}
 
 const DEFAULT_OPTIONS: Required<InstagramValidationOptions> = {
   concurrency: 1,
@@ -269,9 +285,10 @@ async function validateInstagramTarget(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: true,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode("blocked_or_login_wall"),
         errorCode: "blocked_or_login_wall",
         error: "blocked_or_login_wall",
+        attemptCount: 1,
       };
     }
 
@@ -284,9 +301,10 @@ async function validateInstagramTarget(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: false,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode("missing_profile"),
         errorCode: "missing_profile",
         error: "missing_profile",
+        attemptCount: 1,
       };
     }
 
@@ -304,9 +322,10 @@ async function validateInstagramTarget(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: false,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode("follower_count_not_found"),
         errorCode: "follower_count_not_found",
         error: "follower_count_not_found",
+        attemptCount: 1,
       };
     }
 
@@ -319,9 +338,10 @@ async function validateInstagramTarget(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: false,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode("zero_followers"),
         errorCode: "zero_followers",
         error: "zero_followers",
+        attemptCount: 1,
       };
     }
 
@@ -340,9 +360,10 @@ async function validateInstagramTarget(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: false,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode(followerRangeError.errorCode),
         errorCode: followerRangeError.errorCode,
         error: followerRangeError.error,
+        attemptCount: 1,
       };
     }
 
@@ -369,9 +390,10 @@ async function validateInstagramTarget(
           avgViews: null,
           checkedVideoCount,
           blocked: true,
-          status: "invalid",
+          status: mapValidationStatusFromErrorCode("blocked_or_login_wall"),
           errorCode: "blocked_or_login_wall",
           error: "blocked_or_login_wall",
+          attemptCount: 1,
         };
       }
     }
@@ -385,9 +407,10 @@ async function validateInstagramTarget(
       avgViews,
       checkedVideoCount,
       blocked: false,
-      status: "valid",
+      status: mapValidationStatusFromErrorCode(null),
       errorCode: null,
       error: null,
+      attemptCount: 1,
     };
   } catch (error) {
     const failure = classifyCrawlerFailure(error);
@@ -400,9 +423,10 @@ async function validateInstagramTarget(
       avgViews: null,
       checkedVideoCount: 0,
       blocked: false,
-      status: "invalid",
+      status: mapValidationStatusFromErrorCode(failure.errorCode),
       errorCode: failure.errorCode,
       error: failure.error,
+      attemptCount: 1,
     };
   } finally {
     await page?.close().catch(() => undefined);
@@ -496,9 +520,10 @@ export async function validateInstagramCreators(
         avgViews: null,
         checkedVideoCount: 0,
         blocked: false,
-        status: "invalid",
+        status: mapValidationStatusFromErrorCode("navigation_failed"),
         errorCode: "navigation_failed",
         error: "no_result",
+        attemptCount: 1,
       }
     );
   });

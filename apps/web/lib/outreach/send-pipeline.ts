@@ -20,6 +20,7 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/gmail/send";
 import { getUnipileClient } from "@/lib/unipile/client";
 import { sendInstagramDM } from "@/lib/unipile/send-dm";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -197,6 +198,10 @@ export async function sendOutreachBatch(
             lastOutreachAt: new Date(),
           },
         });
+        await recordOutcomeEvent({
+          campaignCreatorId: draft.campaignCreatorId,
+          event: { type: "outreach_sent", method: "email" },
+        });
 
         // Activity log
         await prisma.activityLog.create({
@@ -275,6 +280,10 @@ export async function sendOutreachBatch(
             outreachCount: { increment: 1 },
             lastOutreachAt: new Date(),
           },
+        });
+        await recordOutcomeEvent({
+          campaignCreatorId: draft.campaignCreatorId,
+          event: { type: "outreach_sent", method: "instagram_dm" },
         });
 
         // Activity log

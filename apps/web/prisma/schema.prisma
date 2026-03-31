@@ -311,7 +311,7 @@ model BrandProduct {
 
 model ProviderCredential {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | meta_creator_marketplace | unipile
+  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
   label    String?
   credentialType String @default("api_key") // oauth_refresh_token | oauth_access_token | api_key | shopify_admin_token
 
@@ -332,7 +332,7 @@ model ProviderCredential {
 
 model BrandConnection {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | unipile
+  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
   status   String @default("connected") // connected | disconnected | error
   connectionMethod String @default("manual") // oauth | manual
 
@@ -419,6 +419,7 @@ model Campaign {
   name        String
   description String?
   status      String @default("draft") // draft | active | paused | completed | archived
+  portfolioConfig Json? @map("portfolio_config")
 
   brandId String
 
@@ -430,6 +431,7 @@ model Campaign {
   campaignProducts  CampaignProduct[]
   campaignCreators  CampaignCreator[]
   creatorSearchJobs CreatorSearchJob[]
+  outcomes          CampaignOutcome[]
 
   @@map("campaigns")
 }
@@ -475,8 +477,11 @@ model Creator {
   avgViews      Int?    @map("avg_views")
   bioCategory   String? @map("bio_category")
   validationStatus   String    @default("unknown") @map("validation_status")
+  validationErrorCode String?  @map("validation_error_code")
+  validationAttempts  Int      @default(0) @map("validation_attempts")
   lastValidatedAt    DateTime? @map("last_validated_at")
   lastValidationError String?  @db.Text @map("last_validation_error")
+  influencerIdentityId String? @map("influencer_identity_id")
 
   optedOut   Boolean   @default(false)
   optOutDate DateTime?
@@ -484,6 +489,7 @@ model Creator {
   brandId String
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  influencerIdentity InfluencerIdentity? @relation(fields: [influencerIdentityId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -491,8 +497,11 @@ model Creator {
   profiles          CreatorProfile[]
   campaignCreators  CampaignCreator[]
   discoveryTouches  CreatorDiscoveryTouch[]
+  rawPayloads       CreatorRawPayload[]
+  outcomes          CampaignOutcome[]
 
   @@unique([brandId, instagramHandle])
+  @@index([influencerIdentityId])
   @@map("creators")
 }
 
@@ -516,6 +525,110 @@ model CreatorProfile {
 
   @@unique([creatorId, platform])
   @@map("creator_profiles")
+}
+
+model InfluencerIdentity {
+  id              String   @id @default(uuid())
+  displayName     String?  @map("display_name")
+  primaryLanguage String?  @map("primary_language")
+  homeRegion      String?  @map("home_region")
+  mergedIntoId    String?  @map("merged_into_id")
+
+  mergedInto  InfluencerIdentity?  @relation("InfluencerIdentityMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom  InfluencerIdentity[] @relation("InfluencerIdentityMerge")
+  creators    Creator[]
+  profiles    InfluencerPlatformProfile[]
+  outcomes    CampaignOutcome[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mergedIntoId])
+  @@map("influencer_identities")
+}
+
+model InfluencerPlatformProfile {
+  id               String   @id @default(uuid())
+  influencerId     String   @map("influencer_id")
+  platform         String
+  platformUserId   String?  @map("platform_user_id")
+  handle           String
+  normalizedHandle String   @map("normalized_handle")
+  profileUrl       String?  @map("profile_url")
+  profileImageUrl  String?  @map("profile_image_url")
+  websiteUrl       String?  @map("website_url")
+  bioText          String?  @db.Text @map("bio_text")
+  email            String?
+  region           String?
+  languageDetected String?  @map("language_detected")
+  isPrivate        Boolean  @default(false) @map("is_private")
+  isVerified       Boolean  @default(false) @map("is_verified")
+  followerCount    Int?     @map("follower_count")
+  followingCount   Int?     @map("following_count")
+  postCount        Int?     @map("post_count")
+  avgViews         Int?     @map("avg_views")
+  engagementRate   Float?   @map("engagement_rate")
+  metadata         Json?
+  lastFetchedAt    DateTime? @map("last_fetched_at")
+
+  influencer             InfluencerIdentity               @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  edgesFrom              IdentityEdge[]                   @relation("IdentityEdgeFrom")
+  edgesTo                IdentityEdge[]                   @relation("IdentityEdgeTo")
+  contactPoints          ContactPoint[]
+  metricsDaily           InfluencerMetricsDaily[]
+  authenticityAssessments InfluencerAuthenticityAssessment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platform, normalizedHandle])
+  @@index([influencerId])
+  @@index([platform, platformUserId])
+  @@map("influencer_platform_profiles")
+}
+
+model IdentityEdge {
+  id            String   @id @default(uuid())
+  fromProfileId String   @map("from_profile_id")
+  toProfileId   String   @map("to_profile_id")
+  matchScore    Float    @map("match_score")
+  matchBand     String   @map("match_band")
+  evidenceJson  Json     @map("evidence_json")
+  reviewedBy    String?  @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewOutcome String?  @map("review_outcome")
+
+  fromProfile InfluencerPlatformProfile @relation("IdentityEdgeFrom", fields: [fromProfileId], references: [id], onDelete: Cascade)
+  toProfile   InfluencerPlatformProfile @relation("IdentityEdgeTo", fields: [toProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fromProfileId, toProfileId])
+  @@index([matchBand])
+  @@index([reviewOutcome])
+  @@map("identity_edges")
+}
+
+model ContactPoint {
+  id             String   @id @default(uuid())
+  profileId       String   @map("profile_id")
+  contactType     String   @map("contact_type")
+  contactValue    String   @map("contact_value")
+  confidence      Float
+  source          String
+  isStale         Boolean  @default(false) @map("is_stale")
+  lastVerifiedAt  DateTime? @map("last_verified_at")
+  metadata        Json?
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([contactType, confidence])
+  @@map("contact_points")
 }
 
 /// CampaignCreator replaces the Airtable People table.
@@ -554,6 +667,7 @@ model CampaignCreator {
   mentionAssets          MentionAsset[]
   reminderSchedules      ReminderSchedule[]
   aiDrafts               AIDraft[]
+  outcome                CampaignOutcome?
 
   @@unique([campaignId, creatorId])
   @@map("campaign_creators")
@@ -588,6 +702,7 @@ model CreatorSearchJob {
 
   results          CreatorSearchResult[]
   discoveryTouches CreatorDiscoveryTouch[]
+  rawPayloads      CreatorRawPayload[]
 
   @@index([brandId, status])
   @@index([campaignId, status])
@@ -620,6 +735,10 @@ model CreatorSearchResult {
 
   fitScore    Float? // AI-scored creator fit (0-1)
   fitReasoning String? @db.Text
+  scoreComponents Json? @map("score_components")
+  triage         String?
+  sourceConfidence Float? @map("source_confidence")
+  sourceConfidenceTier String? @map("source_confidence_tier")
 
   searchJobId String
 
@@ -655,6 +774,122 @@ model CreatorDiscoveryTouch {
   @@index([creatorId, source])
   @@index([searchJobId])
   @@map("creator_discovery_touches")
+}
+
+model CreatorRawPayload {
+  id          String   @id @default(uuid())
+  creatorId   String?  @map("creator_id")
+  searchJobId String?  @map("search_job_id")
+  source      String
+  eventType   String   @map("event_type")
+  payload     Json
+  payloadHash String?  @map("payload_hash")
+
+  creator   Creator?          @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  searchJob CreatorSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
+  @@index([searchJobId])
+  @@index([source, createdAt])
+  @@map("creator_raw_payloads")
+}
+
+model InfluencerMetricsDaily {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  date             DateTime @db.Date
+  followers        Int?
+  following        Int?
+  posts            Int?
+  avgViews         Int?     @map("avg_views")
+  engagementRate   Float?   @map("engagement_rate")
+  likes            Int?
+  comments         Int?
+  source           String
+  sourceConfidence Float    @default(0) @map("source_confidence")
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([profileId, date])
+  @@index([profileId, date])
+  @@index([date])
+  @@map("influencer_metrics_daily")
+}
+
+model InfluencerAuthenticityAssessment {
+  id                     String   @id @default(uuid())
+  profileId              String   @map("profile_id")
+  authScore              Float    @map("auth_score")
+  botRiskScore           Float    @map("bot_risk_score")
+  growthAnomalyScore     Float    @map("growth_anomaly_score")
+  engagementQualityScore Float    @map("engagement_quality_score")
+  modelVersion           String   @map("model_version")
+  notesJson              Json?    @map("notes_json")
+  inputSnapshotCount     Int      @default(0) @map("input_snapshot_count")
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  computedAt DateTime @default(now()) @map("computed_at")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([profileId, computedAt])
+  @@index([authScore])
+  @@map("influencer_authenticity_assessments")
+}
+
+model CampaignOutcome {
+  id                  String   @id @default(uuid())
+  campaignCreatorId   String   @unique @map("campaign_creator_id")
+  campaignId          String   @map("campaign_id")
+  creatorId           String   @map("creator_id")
+  identityId          String?  @map("identity_id")
+  reviewDecision      String?  @map("review_decision")
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewedBy          String?  @map("reviewed_by")
+  declineReason       String?  @db.Text @map("decline_reason")
+  outreachSentAt      DateTime? @map("outreach_sent_at")
+  outreachMethod      String?  @map("outreach_method")
+  repliedAt           DateTime? @map("replied_at")
+  replyType           String?  @map("reply_type")
+  responseTimeHours   Float?   @map("response_time_hours")
+  acceptedAt          DateTime? @map("accepted_at")
+  addressConfirmedAt  DateTime? @map("address_confirmed_at")
+  shippedAt           DateTime? @map("shipped_at")
+  deliveredAt         DateTime? @map("delivered_at")
+  postedAt            DateTime? @map("posted_at")
+  completedAt         DateTime? @map("completed_at")
+  optedOutAt          DateTime? @map("opted_out_at")
+  stalledAt           DateTime? @map("stalled_at")
+  stallReason         String?  @db.Text @map("stall_reason")
+  contentQuality      String?  @map("content_quality")
+  contentReach        Int?     @map("content_reach")
+  contentEngagement   Float?   @map("content_engagement")
+  costPerCreator      Float?   @map("cost_per_creator")
+  costPerEngagement   Float?   @map("cost_per_engagement")
+  fitScoreAtSeed      Float?   @map("fit_score_at_seed")
+  triageAtSeed        String?  @map("triage_at_seed")
+  scoreComponentsAtSeed Json?  @map("score_components_at_seed")
+
+  campaignCreator CampaignCreator      @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  campaign       Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator        Creator               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  identity       InfluencerIdentity?   @relation(fields: [identityId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([identityId])
+  @@index([reviewDecision])
+  @@map("campaign_outcomes")
 }
 
 // ──────────────────────────────────────────────

@@ -9,6 +9,10 @@ import {
 } from "@/lib/creator-search/classification";
 import { shouldUseStoredCreatorAsCached } from "@/lib/creator-search/cache-policy";
 import { mergeDiscoveryCandidates } from "@/lib/creator-search/candidate-merge";
+import {
+  computeCompositeSourceConfidence,
+  getSourceConfidence,
+} from "@/lib/creator-search/source-confidence";
 import type {
   UnifiedDiscoveryQuery,
   UnifiedDiscoverySource,
@@ -76,13 +80,20 @@ function computeRelevanceScore(
       ? 1
       : 0;
   const sourceAgreement = Math.max(0, candidate.sources.length - 1);
+  const sourceConfidenceBonus = candidate.sourceConfidence * 6;
   const completeness =
     (candidate.followerCount ? 1 : 0) +
     (candidate.bio ? 1 : 0) +
     (candidate.profileUrl ? 1 : 0) +
     (candidate.email ? 1 : 0);
 
-  return keywordMatches * 10 + categoryMatch * 8 + sourceAgreement * 4 + completeness;
+  return (
+    keywordMatches * 10 +
+    categoryMatch * 8 +
+    sourceAgreement * 4 +
+    sourceConfidenceBonus +
+    completeness
+  );
 }
 
 function candidateFromMappedCreator(
@@ -106,6 +117,9 @@ function candidateFromMappedCreator(
     canonicalCategory: classification.canonicalCategory,
     classificationConfidence: classification.confidence,
     matchedCategorySignals: classification.matchedKeywords,
+    expandedCategories: classification.expandedCategories,
+    languageDetected: classification.languageDetected,
+    topicSignals: classification.topicSignals,
     followerCount: mapped.followerCount,
     avgViews: null,
     engagementRate: mapped.engagementRate,
@@ -119,6 +133,8 @@ function candidateFromMappedCreator(
     lastValidatedAt: null,
     primarySource: mapped.primarySource,
     sources: mapped.sources,
+    sourceConfidence: computeCompositeSourceConfidence(mapped.sources),
+    sourceConfidenceTier: getSourceConfidence(mapped.primarySource).tier,
     sourceMetadata: mapped.metadata,
     relevanceScore: 0,
   };
@@ -228,6 +244,9 @@ async function collectStoredCreatorLane(
         canonicalCategory: classification.canonicalCategory,
         classificationConfidence: classification.confidence,
         matchedCategorySignals: classification.matchedKeywords,
+        expandedCategories: classification.expandedCategories,
+        languageDetected: classification.languageDetected,
+        topicSignals: classification.topicSignals,
         followerCount: creator.followerCount,
         avgViews: creator.avgViews,
         engagementRate: instagramProfile?.engagementRate ?? null,
@@ -253,6 +272,8 @@ async function collectStoredCreatorLane(
         lastValidatedAt: creator.lastValidatedAt?.toISOString() ?? null,
         primarySource,
         sources,
+        sourceConfidence: computeCompositeSourceConfidence(sources),
+        sourceConfidenceTier: getSourceConfidence(primarySource).tier,
         sourceMetadata: metadata,
         relevanceScore: 0,
       };
@@ -425,6 +446,9 @@ async function collectKeywordEmailLane(
         canonicalCategory: null,
         classificationConfidence: null,
         matchedCategorySignals: [],
+        expandedCategories: [],
+        languageDetected: null,
+        topicSignals: [],
         followerCount: null,
         avgViews: null,
         engagementRate: null,
@@ -442,6 +466,8 @@ async function collectKeywordEmailLane(
         lastValidatedAt: null,
         primarySource: "apify_keyword_email",
         sources: ["apify_keyword_email"],
+        sourceConfidence: computeCompositeSourceConfidence(["apify_keyword_email"]),
+        sourceConfidenceTier: getSourceConfidence("apify_keyword_email").tier,
         sourceMetadata: item,
         relevanceScore: 0,
       };

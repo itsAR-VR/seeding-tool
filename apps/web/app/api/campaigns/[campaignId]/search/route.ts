@@ -3,7 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
-import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
+import {
+  buildUnifiedDiscoveryQueryFromCampaignRequest,
+  type CampaignDiscoveryRequest,
+} from "@/lib/creator-search/contracts";
 import {
   isLocalCreatorSearchFallbackEnabled,
   scheduleLocalCreatorSearchJob,
@@ -55,21 +58,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const body = (await request.json()) as {
-      platform?: string;
-      keywords?: string[];
-      minFollowers?: number;
-      maxFollowers?: number;
-      category?: string;
-      location?: string;
-      limit?: number;
-    };
-
-    const requestedCount = Math.max(1, Math.min(body.limit ?? 20, 25));
-    const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignSearch({
-      ...body,
-      limit: requestedCount,
-    });
+    const body = (await request.json()) as CampaignDiscoveryRequest;
+    const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignRequest(body);
+    const requestedCount = unifiedQuery.limit;
 
     const job = await prisma.creatorSearchJob.create({
       data: {

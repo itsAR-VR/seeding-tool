@@ -126,9 +126,11 @@ export async function applyValidationResultToCreator({
     ...asMetadataRecord(profile?.metadata),
     ...asMetadataRecord(metadata),
     validationStatus: result.status,
+    validationErrorCode: result.errorCode,
     validationError: result.error,
     lastValidationUrl: result.url,
     lastValidatedAt: new Date().toISOString(),
+    validationAttempts: (creator.validationAttempts ?? 0) + result.attemptCount,
   };
 
   await prisma.creator.update({
@@ -137,6 +139,8 @@ export async function applyValidationResultToCreator({
       followerCount: nextFollowerCount,
       avgViews: nextAvgViews,
       validationStatus: result.status,
+      validationErrorCode: result.errorCode,
+      validationAttempts: { increment: result.attemptCount },
       lastValidatedAt: new Date(),
       lastValidationError: result.error,
     },

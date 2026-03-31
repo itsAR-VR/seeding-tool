@@ -93,6 +93,11 @@ export async function PATCH(request: NextRequest) {
       "unipileDmEnabled",
       "shopifyOrderEnabled",
       "reminderEmailEnabled",
+      "identityGraphEnabled",
+      "identityAutoLinkEnabled",
+      "decisionEngineScoringEnabled",
+      "portfolioOptimizerEnabled",
+      "outcomeLearningEnabled",
     ];
 
     if (!validFlags.includes(body.flag as keyof FeatureFlags)) {

@@ -5,6 +5,7 @@ import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
 import { fetchNewMessages, resolveThreadByExternalId, resolveBrandByEmail } from "@/lib/gmail/ingest";
 import { classifyReply, extractAddress, generateDraft } from "@/lib/inbox/ai";
 import { inngest } from "@/lib/inngest/client";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * POST /api/gmail/webhook
@@ -78,8 +79,6 @@ export async function POST(request: NextRequest) {
       const thread = await resolveThreadByExternalId(raw.threadId);
 
       if (!thread) {
-        // Could be an unknown thread — skip if we can't resolve it
-        // In future phases we might handle unsolicited inbound
         continue;
       }
 
@@ -167,6 +166,10 @@ export async function POST(request: NextRequest) {
               where: { id: campaignCreatorId },
               data: { lifecycleStatus: "address_confirmed", lastReplyAt: new Date() },
             });
+            await recordOutcomeEvent({
+              campaignCreatorId,
+              event: { type: "address_confirmed" },
+            });
           }
         } else if (
           classification.intent === "positive" ||
@@ -242,6 +245,10 @@ export async function POST(request: NextRequest) {
             where: { id: campaignCreatorId },
             data: { lifecycleStatus: "replied", lastReplyAt: new Date() },
           });
+          await recordOutcomeEvent({
+            campaignCreatorId,
+            event: { type: "reply_received", replyType: classification.intent },
+          });
         } else if (classification.intent === "negative") {
           await prisma.interventionCase.create({
             data: {
@@ -257,6 +264,10 @@ export async function POST(request: NextRequest) {
           await prisma.campaignCreator.update({
             where: { id: campaignCreatorId },
             data: { lifecycleStatus: "replied", lastReplyAt: new Date() },
+          });
+          await recordOutcomeEvent({
+            campaignCreatorId,
+            event: { type: "reply_received", replyType: classification.intent },
           });
         }
       }

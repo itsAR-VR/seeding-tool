@@ -4,7 +4,11 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Pool } from "pg";
-import { validateInstagramCreators } from "../lib/instagram/validator";
+import {
+  validateInstagramCreators,
+  type InstagramValidationErrorCode,
+  type InstagramValidationResult,
+} from "../lib/instagram/validator";
 
 type TargetCreator = {
   id: string;
@@ -21,8 +25,8 @@ type RefreshResult = {
   followerCount: number | null;
   avgViews: number | null;
   checkedVideoCount: number;
-  status: "valid" | "invalid";
-  errorCode: string | null;
+  status: InstagramValidationResult["status"];
+  errorCode: InstagramValidationErrorCode | null;
   blocked: boolean;
   error: string | null;
 };
@@ -194,8 +198,7 @@ async function persistResults(
       : options.includeAvgViews
         ? result.avgViews
         : null;
-    const validationStatus =
-      result.status === "valid" ? "valid" : "invalid";
+    const validationStatus = result.status;
 
     await pool.query(
       `

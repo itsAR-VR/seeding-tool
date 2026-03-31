@@ -44,6 +44,10 @@ type CreatorSearchResultRecord = {
   validationError: string | null;
   validatedFollowerCount: number | null;
   validatedAvgViews: number | null;
+  scoreComponents?: Prisma.JsonValue | null;
+  triage?: string | null;
+  sourceConfidence?: number | null;
+  sourceConfidenceTier?: string | null;
 };
 
 function clampProgressPercent(value: number) {
@@ -103,6 +107,10 @@ export function serializeCreatorSearchResult(result: CreatorSearchResultRecord) 
     platform: result.platform,
     fitScore: result.fitScore,
     fitReasoning: result.fitReasoning,
+    scoreComponents: result.scoreComponents ?? null,
+    triage: result.triage ?? null,
+    sourceConfidence: result.sourceConfidence ?? null,
+    sourceConfidenceTier: result.sourceConfidenceTier ?? null,
     validationStatus: result.validationStatus,
     validationError: result.validationError,
     validatedFollowerCount: result.validatedFollowerCount,
