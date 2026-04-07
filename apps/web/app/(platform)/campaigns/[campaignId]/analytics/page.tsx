@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
   Card,
   CardContent,
@@ -45,22 +44,13 @@ function formatNumber(n: number): string {
 export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const { campaignId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) return null;
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) return null;
+    return null;
+  }
 
   const campaign = await prisma.campaign.findFirst({
     where: { id: campaignId, brandId: membership.brandId },

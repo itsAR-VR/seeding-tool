@@ -1,6 +1,4 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
 import {
@@ -12,6 +10,19 @@ import {
   isLocalCreatorSearchFallbackEnabled,
   scheduleLocalCreatorSearchJob,
 } from "@/lib/creator-search/local-fallback";
+import {
+  ensureCredits,
+  debit,
+  mint,
+  CREDIT_COSTS,
+  CreditInsufficientError,
+  isCreditEnforcementEnabled,
+} from "@/lib/credits";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 /**
  * POST /api/creators/search — Start an Apify creator discovery search.
@@ -22,29 +33,10 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
-
+    // 1. Parse and validate request body BEFORE debiting credits
     const body = (await request.json()) as {
       sources?: string[];
       keywords?: string[];
@@ -87,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create a search job record
+    // 2. Create search job record BEFORE debiting (so debit only happens for valid requests)
     const job = await prisma.creatorSearchJob.create({
       data: {
         status: "pending",
@@ -99,6 +91,34 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 3. Credit enforcement: debit AFTER validation and job creation
+    if (isCreditEnforcementEnabled()) {
+      const estimatedCost = CREDIT_COSTS.creator_search;
+      try {
+        await ensureCredits(membership.brandId, estimatedCost);
+        await debit(
+          membership.brandId,
+          estimatedCost,
+          "creator_search_reservation",
+          { type: "reservation", jobId: job.id }
+        );
+      } catch (error) {
+        if (error instanceof CreditInsufficientError) {
+          // Clean up the job since we can't pay for it
+          await prisma.creatorSearchJob.delete({ where: { id: job.id } });
+          return NextResponse.json(
+            {
+              error: "Insufficient credits for search",
+              required: error.required,
+              available: error.available,
+            },
+            { status: 402 }
+          );
+        }
+        throw error;
+      }
+    }
+
     try {
       await inngest.send({
         name: "creator-search/requested",
@@ -109,14 +129,33 @@ export async function POST(request: NextRequest) {
           query: unifiedQuery,
         },
       });
-    } catch (error) {
+    } catch (dispatchError) {
       if (!isLocalCreatorSearchFallbackEnabled()) {
-        throw error;
+        // Dispatch failed with no fallback — refund credits and fail the job
+        if (isCreditEnforcementEnabled()) {
+          await mint(
+            membership.brandId,
+            CREDIT_COSTS.creator_search,
+            "creator_search_dispatch_refund",
+            { refund: true, jobId: job.id }
+          ).catch((refundErr) =>
+            console.error("[creators/search/POST] refund failed", refundErr)
+          );
+        }
+        await prisma.creatorSearchJob.update({
+          where: { id: job.id },
+          data: { status: "failed" },
+        });
+        console.error("[creators/search/POST] dispatch failed", dispatchError);
+        return NextResponse.json(
+          { error: "Failed to dispatch search job" },
+          { status: 500 }
+        );
       }
 
       console.warn(
         "[creators/search/POST] Inngest dispatch failed, relying on local fallback",
-        error
+        dispatchError
       );
     }
 
@@ -146,6 +185,9 @@ export async function POST(request: NextRequest) {
       { status: 202 }
     );
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[creators/search/POST]", error);
     return NextResponse.json(
       { error: "Failed to start search" },

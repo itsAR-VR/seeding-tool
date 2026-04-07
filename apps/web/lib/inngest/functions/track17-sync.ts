@@ -29,11 +29,7 @@ export const registerTrack17Tracking = inngest.createFunction(
       return { status: "skipped", reason: "TRACK17_API_KEY is not set" };
     }
 
-    const { orderId } = event.data as {
-      orderId: string;
-      shopifyOrderId: string;
-      campaignCreatorId: string;
-    };
+    const { orderId } = event.data;
 
     // Find FulfillmentEvents with tracking numbers for this order
     const fulfillmentEvents = await step.run(

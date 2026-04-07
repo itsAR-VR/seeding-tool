@@ -1,34 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { resolveIntervention } from "@/lib/interventions/service";
+import {
+  assertBrandAccess,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
+const VALID_STATUSES = ["open", "in_progress", "resolved", "reopened"];
+
 /**
  * PATCH /api/interventions/[id]
  *
  * Resolve or update an intervention.
+ * Write access required + status validation.
  */
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     const { id } = await context.params;
 
     const body = (await request.json()) as {
@@ -36,7 +28,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       status?: string;
     };
 
-    // Verify the intervention belongs to the user's brand
+    // Verify the intervention exists
     const intervention = await prisma.interventionCase.findUnique({
       where: { id },
     });
@@ -48,31 +40,28 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const membership = await prisma.brandMembership.findFirst({
-      where: {
-        userId: user.id,
-        brandId: intervention.brandId,
-      },
-    });
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: "Not authorized" },
-        { status: 403 }
-      );
-    }
+    // Verify user is a member of the intervention's brand + write access
+    const membership = await assertBrandAccess(intervention.brandId);
+    requireWriteAccess(membership);
 
     if (body.resolution) {
       const updated = await resolveIntervention(
         id,
         body.resolution,
-        user.id
+        membership.userId
       );
       return NextResponse.json(updated);
     }
 
-    // Generic status update
+    // Generic status update with validation
     if (body.status) {
+      if (!VALID_STATUSES.includes(body.status)) {
+        return NextResponse.json(
+          { error: `Invalid status. Must be one of: ${VALID_STATUSES.join(", ")}` },
+          { status: 400 }
+        );
+      }
+
       const updated = await prisma.interventionCase.update({
         where: { id },
         data: { status: body.status },
@@ -85,6 +74,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       { status: 400 }
     );
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[interventions/PATCH]", error);
     return NextResponse.json(
       { error: "Failed to update intervention" },

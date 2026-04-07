@@ -1,36 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  getCurrentBrandMembership,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
-
-async function authorize(campaignId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) throw new Error("Unauthorized");
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) throw new Error("User not found");
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) throw new Error("No brand found");
-
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, brandId: membership.brandId },
-  });
-
-  if (!campaign) throw new Error("Campaign not found");
-
-  return { brandId: membership.brandId, campaign };
-}
 
 const LIFECYCLE_STAGES = [
   "ready",
@@ -49,16 +24,20 @@ const LIFECYCLE_STAGES = [
 /**
  * GET /api/campaigns/:campaignId/analytics
  *
- * Returns aggregated campaign analytics:
- * - total creators
- * - lifecycle stage breakdown
- * - mention count + engagement metrics
- * - order and shipping stats
+ * Returns aggregated campaign analytics.
  */
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-    await authorize(campaignId);
+    const membership = await getCurrentBrandMembership();
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, brandId: membership.brandId },
+    });
+
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
 
     // --- Lifecycle stage breakdown ---
     const campaignCreators = await prisma.campaignCreator.findMany({
@@ -191,14 +170,13 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       },
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to fetch analytics";
-    const status =
-      message === "Unauthorized"
-        ? 401
-        : message === "Campaign not found"
-          ? 404
-          : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[campaigns/analytics/GET]", error);
+    return NextResponse.json(
+      { error: "Failed to fetch analytics" },
+      { status: 500 }
+    );
   }
 }

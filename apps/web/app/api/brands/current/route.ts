@@ -1,67 +1,55 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  getCurrentBrandMembership,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 /**
  * GET /api/brands/current
- * Returns the first brand the current user has membership in.
+ * Returns the active brand for the current user (cookie-aware).
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
+    const membership = await getCurrentBrandMembership();
 
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
+    const brand = await prisma.brand.findUnique({
+      where: { id: membership.brandId },
       include: {
-        brand: {
-          include: {
-            settings: true,
-            onboarding: true,
-            connections: true,
-            providerCredentials: {
-              select: {
-                provider: true,
-                credentialType: true,
-                isValid: true,
-              },
-            },
-            emailAliases: {
-              select: {
-                id: true,
-                address: true,
-                displayName: true,
-                isPrimary: true,
-              },
-              orderBy: [
-                { isPrimary: "desc" },
-                { updatedAt: "desc" },
-              ],
-            },
+        settings: true,
+        onboarding: true,
+        connections: true,
+        providerCredentials: {
+          select: {
+            provider: true,
+            credentialType: true,
+            isValid: true,
           },
         },
+        emailAliases: {
+          select: {
+            id: true,
+            address: true,
+            displayName: true,
+            isPrimary: true,
+          },
+          orderBy: [
+            { isPrimary: "desc" },
+            { updatedAt: "desc" },
+          ],
+        },
       },
-      orderBy: { createdAt: "asc" },
     });
 
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
+    if (!brand) {
+      return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    return NextResponse.json(membership.brand);
+    return NextResponse.json(brand);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[brands/current]", error);
     return NextResponse.json(
       { error: "Failed to fetch brand" },

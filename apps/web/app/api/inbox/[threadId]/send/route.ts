@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/gmail/send";
+import {
+  DailyLimitExceededError,
+  CrossBrandAliasError,
+} from "@/lib/outreach/errors";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -13,34 +20,12 @@ type RouteContext = { params: Promise<{ threadId: string }> };
  * Confirms and sends a draft, marks AIDraft.status = "sent".
  *
  * // INVARIANT: AI drafts are NEVER auto-sent. Send only fires on explicit human action.
- * This endpoint is the ONLY path through which drafts become sent messages.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { threadId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Verify thread belongs to brand
     const thread = await prisma.conversationThread.findFirst({
@@ -98,8 +83,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // INVARIANT: AI drafts are NEVER auto-sent. Send only fires on explicit human action.
-    // This is the explicit human action path.
+    // INVARIANT: AI drafts are NEVER auto-sent.
     const result = await sendEmail({
       aliasId: body.aliasId,
       to: recipientEmail,
@@ -107,6 +91,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       body: draft.body,
       threadId: thread.id,
       externalThreadId: thread.externalThreadId ?? undefined,
+      senderBrandId: membership.brandId,
     });
 
     // Mark draft as sent
@@ -115,7 +100,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       data: {
         status: "sent",
         approvedAt: new Date(),
-        approvedBy: user.id,
+        approvedBy: membership.userId,
       },
     });
 
@@ -126,7 +111,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         entityType: "ConversationThread",
         entityId: thread.id,
         metadata: { draftId: draft.id, gmailMessageId: result.gmailMessageId },
-        userId: user.id,
+        userId: membership.userId,
         brandId: membership.brandId,
       },
     });
@@ -137,6 +122,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
       gmailThreadId: result.gmailThreadId,
     });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
+    if (error instanceof CrossBrandAliasError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 403 }
+      );
+    }
+
+    if (error instanceof DailyLimitExceededError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 429 }
+      );
+    }
+
     console.error("[inbox/send/POST]", error);
     return NextResponse.json(
       {

@@ -1,8 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  assertBrandAccess,
+  requireOwnerAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 import {
   fetchBrandProfile,
   normalizeBrandWebsiteUrl,
@@ -37,30 +40,7 @@ export async function GET(
 ) {
   try {
     const { brandId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Verify user has access to this brand
-    const membership = await prisma.brandMembership.findUnique({
-      where: {
-        userId_brandId: { userId: user.id, brandId },
-      },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await assertBrandAccess(brandId);
 
     const brand = await prisma.brand.findUnique({
       where: { id: brandId },
@@ -77,6 +57,9 @@ export async function GET(
 
     return NextResponse.json(brand);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[brands/GET]", error);
     return NextResponse.json(
       { error: "Failed to fetch brand" },
@@ -91,30 +74,8 @@ export async function PATCH(
 ) {
   try {
     const { brandId } = await params;
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    // Verify user has access
-    const membership = await prisma.brandMembership.findUnique({
-      where: {
-        userId_brandId: { userId: user.id, brandId },
-      },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const membership = await assertBrandAccess(brandId);
+    requireOwnerAccess(membership);
 
     const body = await request.json();
     const {
@@ -273,6 +234,9 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[brands/PATCH]", error);
     return NextResponse.json(
       { error: "Failed to update brand" },

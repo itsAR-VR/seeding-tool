@@ -21,6 +21,7 @@ import { sendEmail } from "@/lib/gmail/send";
 import { getUnipileClient } from "@/lib/unipile/client";
 import { sendInstagramDM } from "@/lib/unipile/send-dm";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
+import { DailyLimitExceededError } from "@/lib/outreach/errors";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -34,7 +35,7 @@ export type SendResult = {
   campaignCreatorId: string;
   creatorId: string;
   channel: string;
-  status: "sent" | "failed" | "no_contact_info" | "skipped";
+  status: "sent" | "failed" | "no_contact_info" | "skipped" | "daily_limit_reached";
   error?: string;
 };
 
@@ -136,15 +137,31 @@ export async function sendOutreachBatch(
       continue;
     }
 
-    // ── RC-2: Idempotency — skip if a ConversationThread already exists ───────
-    // This prevents double-sends on UI retry, double-click, or pipeline re-run.
+    // ── RC-2: Idempotency — check thread + outbound message ────────────────
+    // Thread exists AND has outbound message → already sent → skip.
+    // Thread exists but NO outbound message → prior attempt failed before
+    //   sending → delete the empty thread and retry.
+    // No thread → new send.
     if (campaignCreator.conversationThread) {
-      results.push({
-        ...draft,
-        status: "skipped",
-        error: `Already messaged: ConversationThread ${campaignCreator.conversationThread.id} already exists for this creator. Skipping to prevent duplicate send.`,
+      const existingThread = campaignCreator.conversationThread;
+      const hasOutboundMessage = await prisma.message.findFirst({
+        where: { threadId: existingThread.id, direction: "outbound" },
+        select: { id: true },
       });
-      continue;
+
+      if (hasOutboundMessage) {
+        results.push({
+          ...draft,
+          status: "skipped",
+          error: `Already messaged: ConversationThread ${existingThread.id} already has an outbound message. Skipping to prevent duplicate send.`,
+        });
+        continue;
+      }
+
+      // Empty thread from a failed prior attempt — clean up so we can retry
+      await prisma.conversationThread.delete({
+        where: { id: existingThread.id },
+      });
     }
 
     const creator = campaignCreator.creator;
@@ -170,7 +187,8 @@ export async function sendOutreachBatch(
       }
 
       try {
-        // Create conversation thread
+        // Create thread BEFORE send — the unique campaignCreatorId constraint
+        // acts as the idempotency guard against concurrent duplicate sends.
         const thread = await prisma.conversationThread.create({
           data: {
             brandId,
@@ -181,12 +199,32 @@ export async function sendOutreachBatch(
         });
 
         // Send via Gmail
-        await sendEmail({
+        const emailResult = await sendEmail({
           aliasId: emailAliasId,
           to: creator.email,
           subject: draft.subject || "Collaboration opportunity",
           body: draft.body,
-          threadId: thread.id,
+        });
+
+        // Store gmailThreadId on the ConversationThread for reply ingestion
+        if (emailResult.gmailThreadId) {
+          await prisma.conversationThread.update({
+            where: { id: thread.id },
+            data: { externalThreadId: emailResult.gmailThreadId },
+          });
+        }
+
+        // Persist outbound message linked to the thread
+        await prisma.message.create({
+          data: {
+            threadId: thread.id,
+            direction: "outbound",
+            channel: "email",
+            fromAddress: fromAddress!,
+            toAddress: creator.email,
+            subject: draft.subject || "Collaboration opportunity",
+            body: draft.body,
+          },
         });
 
         // Update lifecycle
@@ -216,11 +254,19 @@ export async function sendOutreachBatch(
 
         results.push({ ...draft, status: "sent" });
       } catch (err) {
-        results.push({
-          ...draft,
-          status: "failed",
-          error: err instanceof Error ? err.message : "Email send failed",
-        });
+        if (err instanceof DailyLimitExceededError) {
+          results.push({
+            ...draft,
+            status: "daily_limit_reached",
+            error: err.message,
+          });
+        } else {
+          results.push({
+            ...draft,
+            status: "failed",
+            error: err instanceof Error ? err.message : "Email send failed",
+          });
+        }
       }
     } else if (draft.channel === "instagram_dm") {
       // --- Instagram DM channel ---

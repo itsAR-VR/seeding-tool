@@ -1,4 +1,4 @@
-const SHOPIFY_API_VERSION = "2024-01";
+import { SHOPIFY_API_VERSION } from "@/lib/shopify/config";
 
 interface WebhookEntry {
   id: number;

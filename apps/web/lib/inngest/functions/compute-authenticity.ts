@@ -12,7 +12,7 @@ export const computeAuthenticity = inngest.createFunction(
   { event: "metrics/snapshots-collected" },
   async ({ event }) => {
     const profileIds = Array.isArray(event.data?.profileIds)
-      ? (event.data.profileIds as string[])
+      ? event.data.profileIds
       : [];
 
     let computed = 0;

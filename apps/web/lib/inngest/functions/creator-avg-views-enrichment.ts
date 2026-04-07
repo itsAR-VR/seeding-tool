@@ -3,10 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { applyValidationResultToCreator } from "@/lib/creators/validation-ops";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 
-type CreatorAvgViewsRequestedEvent = {
-  creatorIds: string[];
-};
-
 export const creatorAvgViewsEnrichment = inngest.createFunction(
   {
     id: "creator-avg-views-enrichment",
@@ -16,7 +12,7 @@ export const creatorAvgViewsEnrichment = inngest.createFunction(
   },
   { event: "creator-avg-views/requested" },
   async ({ event }) => {
-    const { creatorIds } = event.data as CreatorAvgViewsRequestedEvent;
+    const { creatorIds } = event.data;
 
     if (!Array.isArray(creatorIds) || creatorIds.length === 0) {
       return { processed: 0 };

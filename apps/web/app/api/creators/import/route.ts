@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import {
   isPlaceholderFollowerCount,
@@ -10,39 +8,19 @@ import {
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 import { inngest } from "@/lib/inngest/client";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 /**
  * POST /api/creators/import — Bulk import creators from CSV data.
- *
- * Body: { rows: Array<{ username, name?, email?, bio?, followerCount?, avgViews?, bioCategory?, imageUrl?, profileUrl?, engagementRate?, discoverySource? }> }
- *
- * // INVARIANT: Creators are deduplicated by instagramHandle on import
- * // INVARIANT: discoverySource is always tagged — never null
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     const body = (await request.json()) as {
       rows: Array<{
@@ -178,7 +156,6 @@ export async function POST(request: NextRequest) {
             validationStatus: "valid",
             lastValidatedAt: new Date(),
             lastValidationError: null,
-            // Don't overwrite discoverySource if already set to something more specific
           },
         });
 
@@ -246,7 +223,6 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Also create CreatorProfile for instagram
         const creator = await prisma.creator.findFirst({
           where: {
             brandId: membership.brandId,
@@ -329,6 +305,9 @@ export async function POST(request: NextRequest) {
       skipped,
     });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[creators/import/POST]", error);
     return NextResponse.json(
       { error: "Failed to import creators" },

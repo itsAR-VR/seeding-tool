@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import OpenAI from "openai";
+import { AI_MODEL } from "@/lib/ai/config";
 
 type ClassificationResult = {
   intent: "positive" | "negative" | "address" | "question" | "other";
@@ -72,7 +73,7 @@ export async function classifyReply(
   try {
     log("info", "ai.classify.attempt", { brandId, campaignCreatorId });
     const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -107,7 +108,7 @@ Respond with JSON: { "intent": string, "confidence": number (0-1) }`,
         type: "classification",
         input: { subject: message.subject, body: message.body.slice(0, 500) },
         output: parsed,
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
       },
     });
@@ -152,7 +153,7 @@ export async function extractAddress(
 
   try {
     const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -181,7 +182,7 @@ If no address is found, return all null values.`,
         type: "extraction",
         input: { body: messageBody.slice(0, 500) },
         output: parsed,
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
       },
     });
@@ -239,7 +240,7 @@ export async function generateDraft(
       .join("\n\n---\n\n");
 
     const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       messages: [
         {
           role: "system",
@@ -269,7 +270,7 @@ Do NOT include subject lines. Only output the email body text.`,
         type: "draft",
         input: { messageCount: thread.messages.length },
         output: { draft: draft.slice(0, 500) },
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
         threadId: undefined, // filled by caller if needed
       },

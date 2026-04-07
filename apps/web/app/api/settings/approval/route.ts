@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
+import {
+  getCurrentBrandMembership,
+  requireOwnerAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 /**
  * Approval settings API — controls how the AI-driven creator discovery
@@ -52,41 +55,19 @@ async function getApprovalSettings(brandId: string): Promise<ApprovalSettings> {
   return { approvalMode: mode, approvalThreshold: threshold };
 }
 
-async function getBrandMembership(authUserId: string) {
-  const user = await getUserBySupabaseId(authUserId);
-  if (!user) return null;
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  return membership;
-}
-
 /**
  * GET /api/settings/approval
  * Returns current approval settings for the brand.
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const membership = await getBrandMembership(authUser.id);
-    if (!membership) {
-      return NextResponse.json({ error: "No brand access" }, { status: 403 });
-    }
-
+    const membership = await getCurrentBrandMembership();
     const settings = await getApprovalSettings(membership.brandId);
     return NextResponse.json(settings);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[approval] GET error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
@@ -98,23 +79,8 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const membership = await getBrandMembership(authUser.id);
-    if (!membership) {
-      return NextResponse.json({ error: "No brand access" }, { status: 403 });
-    }
-
-    if (membership.role !== "owner" && membership.role !== "editor") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireOwnerAccess(membership);
 
     const body = (await request.json()) as {
       approvalMode?: string;
@@ -173,6 +139,9 @@ export async function PATCH(request: NextRequest) {
     const updated = await getApprovalSettings(membership.brandId);
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[approval] PATCH error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

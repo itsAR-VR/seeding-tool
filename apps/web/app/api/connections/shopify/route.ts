@@ -12,8 +12,7 @@ import {
   getShopifyConnectionStatus,
   updateShopifyConnectionStatus,
 } from "@/lib/shopify/status";
-
-const SHOPIFY_API_VERSION = "2024-01";
+import { SHOPIFY_API_VERSION } from "@/lib/shopify/config";
 
 async function getCurrentBrandId() {
   const membership = await getCurrentBrandMembership({ requireAdmin: true });

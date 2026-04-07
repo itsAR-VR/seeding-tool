@@ -19,10 +19,11 @@ import { fileURLToPath } from "node:url";
 import OpenAI from "openai";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { AI_MODEL } from "@/lib/ai/config";
 import { deriveBrandICP, icpToSearchHints, type BrandICP } from "@/lib/brands/icp";
 import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
 import { recordCreatorDiscoveryTouch } from "@/lib/creator-search/provenance";
-import { CREDIT_COSTS, debit, getBalance } from "@/lib/credits";
+import { CREDIT_COSTS, debit, getBalance, isCreditEnforcementEnabled } from "@/lib/credits";
 import { sanitizeFollowerCount } from "@/lib/creators/follower-count";
 import {
   validateInstagramCreators,
@@ -445,7 +446,7 @@ Reply JSON ONLY: {"score": 0.0, "reasoning": "2-3 sentences", "approved": false,
 
   try {
     const res = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
       max_completion_tokens: 300,
@@ -704,7 +705,7 @@ async function storeApprovalArtifact(
           signals: creator.signals,
           agentDecision: approvalMode === "auto" ? (creator.approved ? "approve" : "decline") : "recommend",
         } as Prisma.InputJsonValue,
-        model: creator.analysisSource === "worker" ? "gpt-5-mini@fly-worker" : "gpt-5-mini@local",
+        model: creator.analysisSource === "worker" ? `${AI_MODEL}@fly-worker` : `${AI_MODEL}@local`,
       },
     });
   } catch (err) {
@@ -967,6 +968,13 @@ async function debitSearchCredits(
   usedWorker: boolean,
   metadata: Record<string, unknown>
 ): Promise<number> {
+  // When credit enforcement is enabled, the route already debited a reservation
+  // before dispatching. Skip the worker-level debit to avoid double-charging.
+  if (isCreditEnforcementEnabled()) {
+    return 0;
+  }
+
+  // Legacy soft-fail path: debit best-effort when enforcement is OFF
   const cost =
     CREDIT_COSTS.collabstr_search +
     analyzedCount * CREDIT_COSTS.ai_fit_score +

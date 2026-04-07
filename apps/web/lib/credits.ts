@@ -9,6 +9,24 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Credit amounts granted per billing period, keyed by plan name.
+ * Plans not listed here receive 0 credits on invoice.paid.
+ */
+export const CREDITS_PER_PLAN: Record<string, number> = {
+  Starter: 100,
+  Growth: 500,
+  Enterprise: 2000,
+};
+
+/**
+ * Returns true when credit enforcement is enabled via env var.
+ * Default: false (safe rollout — no enforcement until toggled on).
+ */
+export function isCreditEnforcementEnabled(): boolean {
+  return process.env.CREDIT_ENFORCEMENT_ENABLED === "true";
+}
+
 export const CREDIT_COSTS = {
   creator_search: 5,
   collabstr_search: 1,

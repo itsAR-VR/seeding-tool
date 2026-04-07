@@ -1,11 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { deriveBrandICP, icpToSearchHints } from "@/lib/brands/icp";
 import { computeNextRunAt } from "@/lib/automations/schedule";
 import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type CategorySelection = {
   apify?: string[];
@@ -119,28 +122,7 @@ async function buildAutomationConfig(
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
 
     const automations = await prisma.automation.findMany({
       where: { brandId: membership.brandId },
@@ -149,6 +131,9 @@ export async function GET() {
 
     return NextResponse.json({ automations });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[automations/GET]", error);
     return NextResponse.json(
       { error: "Failed to fetch automations" },
@@ -159,52 +144,19 @@ export async function GET() {
 
 /**
  * POST /api/automations — Create a new automation.
- *
- * Body: { name, type, schedule, config, enabled? }
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     const body = (await request.json()) as {
-      brandId?: string;
       name: string;
       type: string;
       schedule: string;
       config: Record<string, unknown>;
       enabled?: boolean;
     };
-
-    const requestedBrandId =
-      typeof body.brandId === "string" && body.brandId.trim()
-        ? body.brandId.trim()
-        : null;
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: requestedBrandId
-        ? { userId: user.id, brandId: requestedBrandId }
-        : { userId: user.id },
-      ...(requestedBrandId ? {} : { orderBy: { createdAt: "asc" as const } }),
-    });
-
-    if (!membership) {
-      return NextResponse.json(
-        { error: requestedBrandId ? "Brand not found" : "No brand found" },
-        { status: 404 }
-      );
-    }
 
     if (!body.name?.trim()) {
       return NextResponse.json(
@@ -261,6 +213,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ automation }, { status: 201 });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[automations/POST]", error);
     return NextResponse.json(
       { error: "Failed to create automation" },

@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -50,25 +49,14 @@ const typeLabels: Record<string, string> = {
 // ── Dashboard page ───────────────────────────────────────────
 
 export default async function DashboardPage() {
-  // Auth
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  // Get brand membership (follows existing pattern)
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    redirect("/onboarding");
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      redirect("/onboarding");
+    }
+    return null;
   }
 
   const brandId = membership.brandId;

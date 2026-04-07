@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { createDraftOrder } from "@/lib/shopify/orders";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = {
   params: Promise<{ campaignId: string; creatorId: string }>;
@@ -15,32 +18,11 @@ type RouteContext = {
  * Triggers Shopify order creation for a creator with confirmed address.
  * Human-initiated only.
  */
-export async function POST(request: NextRequest, context: RouteContext) {
+export async function POST(_request: NextRequest, context: RouteContext) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
     const { campaignId, creatorId } = await context.params;
-
-    // Verify brand membership
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Feature flag guard: Shopify order creation must be enabled
     const flags = await getFeatureFlags(membership.brandId);
@@ -73,6 +55,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
       orderId: result.orderId,
     });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to create order";
     console.error("[order/POST]", message);

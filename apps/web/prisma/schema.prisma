@@ -393,6 +393,17 @@ model SendingMetric {
   @@map("sending_metrics")
 }
 
+model EmailSuppression {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  reason       String   // UNSUBSCRIBE | BOUNCE | COMPLAINT | MANUAL
+  suppressedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@map("email_suppressions")
+}
+
 model DiscoverySeed {
   id       String @id @default(uuid())
   platform String // instagram | tiktok

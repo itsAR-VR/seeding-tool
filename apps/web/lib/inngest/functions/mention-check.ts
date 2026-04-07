@@ -2,6 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { isSuppressed } from "@/lib/compliance/suppression";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { DailyLimitExceededError } from "@/lib/outreach/errors";
 
 /**
  * Inngest function: Handle reminder/send events.
@@ -21,12 +22,7 @@ export const handleReminderSend = inngest.createFunction(
   },
   { event: "reminder/send" },
   async ({ event }) => {
-    const { campaignCreatorId, brandId, reminderNumber } = event.data as {
-      campaignCreatorId: string;
-      brandId: string;
-      reminderNumber: number;
-      orderId: string;
-    };
+    const { campaignCreatorId, brandId, reminderNumber } = event.data;
 
     // Feature flag guard: reminder emails must be enabled
     const flags = await getFeatureFlags(brandId);
@@ -198,6 +194,27 @@ export const handleReminderSend = inngest.createFunction(
 
       return { status: "sent", reminderNumber };
     } catch (error) {
+      // Daily limit reached — create intervention and reschedule for next day
+      if (error instanceof DailyLimitExceededError) {
+        await prisma.interventionCase.create({
+          data: {
+            type: "manual_review",
+            status: "open",
+            priority: "normal",
+            title: "Reminder deferred: daily send limit reached",
+            description: `Reminder #${reminderNumber} for ${creatorEmail} deferred — alias has sent ${error.sent}/${error.dailyLimit} today.`,
+            brandId,
+            campaignCreatorId,
+          },
+        });
+
+        return {
+          status: "deferred",
+          reason: "daily_limit_reached",
+          retryAfter: "next_day",
+        };
+      }
+
       const errMsg =
         error instanceof Error ? error.message : "Unknown error";
 
@@ -207,7 +224,7 @@ export const handleReminderSend = inngest.createFunction(
           type: "auth_failure",
           status: "open",
           priority: "high",
-          title: `Reminder email send failed`,
+          title: "Reminder email send failed",
           description: `Reminder #${reminderNumber} for ${creatorEmail} failed: ${errMsg}`,
           brandId,
           campaignCreatorId,

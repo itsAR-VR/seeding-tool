@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import {
   attributeMention,
   createAndAttributeMention,
 } from "@/lib/mentions/attribution";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 /**
  * GET /api/mentions?campaignId=xxx
@@ -14,34 +17,13 @@ import {
  */
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
 
     const campaignId = request.nextUrl.searchParams.get("campaignId");
 
     const where: Record<string, unknown> = {};
 
     if (campaignId) {
-      // Get all campaign creators for this campaign
       const campaignCreators = await prisma.campaignCreator.findMany({
         where: {
           campaignId,
@@ -74,6 +56,9 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(mentions);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[mentions/GET]", error);
     return NextResponse.json(
       { error: "Failed to fetch mentions" },
@@ -86,26 +71,11 @@ export async function GET(request: NextRequest) {
  * POST /api/mentions
  *
  * Manual mention attribution or creation.
- *
- * Body options:
- * 1. { mentionAssetId, campaignCreatorId } — attribute existing mention
- * 2. { platform, mediaUrl, type?, caption?, campaignCreatorId } — create + attribute
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     const body = (await request.json()) as Record<string, unknown>;
 
@@ -147,6 +117,9 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     const message =
       error instanceof Error ? error.message : "Failed to process mention";
     console.error("[mentions/POST]", message);

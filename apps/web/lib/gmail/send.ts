@@ -3,7 +3,13 @@ import { resolveProviderCredential } from "@/lib/integrations/state";
 import {
   isSuppressed,
   SuppressedRecipientError,
+  generateUnsubscribeToken,
 } from "@/lib/compliance/suppression";
+import {
+  DailyLimitExceededError,
+  AliasPausedError,
+  CrossBrandAliasError,
+} from "@/lib/outreach/errors";
 
 /**
  * Exchange a refresh token for a fresh access token via Google OAuth2.
@@ -30,7 +36,7 @@ async function getAccessToken(refreshToken: string): Promise<string> {
 }
 
 /**
- * Build RFC 2822 formatted email message.
+ * Build RFC 2822 formatted email message with List-Unsubscribe headers.
  */
 function buildRawEmail(params: {
   from: string;
@@ -47,6 +53,13 @@ function buildRawEmail(params: {
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
   ];
+
+  // List-Unsubscribe header (CAN-SPAM + RFC 8058 one-click)
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seedscale.io";
+  const token = generateUnsubscribeToken(params.to);
+  const unsubUrl = `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(params.to)}&token=${token}`;
+  lines.push(`List-Unsubscribe: <${unsubUrl}>`);
+  lines.push("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
 
   if (params.inReplyTo) {
     lines.push(`In-Reply-To: ${params.inReplyTo}`);
@@ -78,6 +91,8 @@ type SendEmailParams = {
   body: string;
   threadId?: string; // ConversationThread ID for persisting
   externalThreadId?: string; // Gmail thread ID for threading
+  /** Brand ID of the sender — used for cross-brand alias validation. */
+  senderBrandId?: string;
 };
 
 /**
@@ -98,7 +113,7 @@ export async function sendEmail(params: SendEmailParams) {
     throw new SuppressedRecipientError(params.to);
   }
 
-  // 1. Look up alias and brand credential
+  // 1. Look up alias with pause/limit fields
   const alias = await prisma.emailAlias.findUnique({
     where: { id: params.aliasId },
     select: {
@@ -106,11 +121,47 @@ export async function sendEmail(params: SendEmailParams) {
       address: true,
       displayName: true,
       brandId: true,
+      isPaused: true,
+      dailyLimit: true,
     },
   });
 
   if (!alias) {
     throw new Error("Email alias not found");
+  }
+
+  // Safety: reject paused aliases
+  if (alias.isPaused) {
+    throw new AliasPausedError(params.aliasId);
+  }
+
+  // Safety: prevent cross-brand alias use
+  if (params.senderBrandId && alias.brandId !== params.senderBrandId) {
+    throw new CrossBrandAliasError(
+      params.aliasId,
+      alias.brandId,
+      params.senderBrandId
+    );
+  }
+
+  // Daily limit enforcement: check current day's send count
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const todayMetric = await prisma.sendingMetric.findUnique({
+    where: {
+      aliasId_date: { aliasId: params.aliasId, date: today },
+    },
+    select: { sent: true },
+  });
+
+  const currentSent = todayMetric?.sent ?? 0;
+  if (currentSent >= alias.dailyLimit) {
+    throw new DailyLimitExceededError(
+      params.aliasId,
+      currentSent,
+      alias.dailyLimit
+    );
   }
 
   const resolved = await resolveProviderCredential(alias.brandId, "gmail");
@@ -190,10 +241,7 @@ export async function sendEmail(params: SendEmailParams) {
     });
   }
 
-  // Update sending metrics
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
+  // Update sending metrics (today already defined above for limit check)
   await prisma.sendingMetric.upsert({
     where: {
       aliasId_date: { aliasId: params.aliasId, date: today },

@@ -19,6 +19,8 @@ const mockPrisma = {
   webhookEvent: {
     create: vi.fn().mockResolvedValue({ id: "we-1" }),
     findUnique: vi.fn().mockResolvedValue(null),
+    update: vi.fn().mockResolvedValue({}),
+    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
   },
   organization: {
     update: vi.fn().mockResolvedValue({}),
@@ -197,14 +199,23 @@ describe("Stripe webhook handler", () => {
       const event = checkoutSessionCompletedEvent();
       await callStripeWebhook(event);
 
+      // Idempotency guard: event is created with "processing" status first
       expect(mockPrisma.webhookEvent.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             provider: "stripe",
             eventType: "checkout.session.completed",
             externalEventId: "evt_checkout_1",
-            status: "processed",
+            status: "processing",
           }),
+        })
+      );
+
+      // Then updated to "processed" after success
+      expect(mockPrisma.webhookEvent.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "we-1" },
+          data: expect.objectContaining({ status: "processed" }),
         })
       );
     });
@@ -268,16 +279,76 @@ describe("Stripe webhook handler", () => {
   });
 
   describe("idempotency", () => {
-    it("duplicate event ID still creates webhook log (Stripe handler does not dedupe by event ID)", async () => {
+    it("returns 200 and skips processing when event was already processed", async () => {
       const event = checkoutSessionCompletedEvent();
 
-      // First call
-      await callStripeWebhook(event);
-      // Second call (same event)
-      await callStripeWebhook(event);
+      // Simulate: findUnique returns an existing record (already processed)
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue({
+        id: "we-existing",
+        status: "processed",
+      });
 
-      // Both calls should log webhookEvent.create
-      expect(mockPrisma.webhookEvent.create).toHaveBeenCalledTimes(2);
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.deduplicated).toBe(true);
+
+      // Should NOT have created a new webhookEvent or processed the event
+      expect(mockPrisma.webhookEvent.create).not.toHaveBeenCalled();
+      expect(mockPrisma.organization.update).not.toHaveBeenCalled();
+    });
+
+    it("returns 200 and skips when event is currently processing", async () => {
+      const event = checkoutSessionCompletedEvent();
+
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue({
+        id: "we-inflight",
+        status: "processing",
+      });
+
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.deduplicated).toBe(true);
+
+      expect(mockPrisma.webhookEvent.create).not.toHaveBeenCalled();
+    });
+
+    it("re-processes a previously failed event", async () => {
+      const event = checkoutSessionCompletedEvent();
+
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue({
+        id: "we-failed",
+        status: "failed",
+      });
+
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      // Should NOT create a new record — re-uses the existing one
+      expect(mockPrisma.webhookEvent.create).not.toHaveBeenCalled();
+      // Should update the failed record to "processing" then "processed"
+      expect(mockPrisma.webhookEvent.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "we-failed" },
+          data: expect.objectContaining({ status: "processing" }),
+        })
+      );
+    });
+
+    it("processes event normally when not yet seen", async () => {
+      const event = checkoutSessionCompletedEvent();
+
+      // Default mock: findUnique returns null (new event)
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue(null);
+
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      // Should claim the event by creating a "processing" record
+      expect(mockPrisma.webhookEvent.create).toHaveBeenCalledTimes(1);
     });
   });
 

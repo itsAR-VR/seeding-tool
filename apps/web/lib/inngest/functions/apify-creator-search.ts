@@ -39,31 +39,23 @@ export const apifyCreatorSearch = inngest.createFunction(
   },
   { event: "creator-search/requested" },
   async ({ event }) => {
-    const {
-      jobId,
-      campaignId,
-      brandId,
-      criteria,
-      discoverySource,
-    } = event.data as {
-      jobId: string;
-      campaignId: string;
-      brandId: string;
-      discoverySource?: string;
-      criteria: {
-        platform?: string;
-        searchMode?: "profile" | "hashtag";
-        usernames?: string[];
-        hashtag?: string;
-        limit?: number;
-        [key: string]: unknown;
-      };
-    };
+    const { jobId, brandId, discoverySource } = event.data;
+    const campaignId = event.data.campaignId ?? "";
 
     // Only handle Apify discovery source
     if (discoverySource !== "apify") {
       return { status: "skipped", reason: "Not an Apify search" };
     }
+
+    // Narrow criteria from Record<string, unknown> to the Apify-specific shape
+    const criteria = (event.data.criteria ?? {}) as {
+      platform?: string;
+      searchMode?: "profile" | "hashtag";
+      usernames?: string[];
+      hashtag?: string;
+      limit?: number;
+      [key: string]: unknown;
+    };
 
     // Mark job as running
     await prisma.creatorSearchJob.update({
