@@ -11,6 +11,7 @@ export type OutcomeEvent =
   | { type: "delivered" }
   | { type: "posted"; reach?: number; engagement?: number }
   | { type: "completed"; contentQuality?: string; costPerCreator?: number }
+  | { type: "order_created" }
   | { type: "opted_out" }
   | { type: "stalled"; reason: string };
 
@@ -47,6 +48,8 @@ function buildOutcomePatch(
       return { acceptedAt: now };
     case "address_confirmed":
       return { addressConfirmedAt: now };
+    case "order_created":
+      return { orderCreatedAt: now };
     case "shipped":
       return { shippedAt: now };
     case "delivered":
@@ -98,6 +101,8 @@ function buildOutcomeCreatePatch(
       return { acceptedAt: now };
     case "address_confirmed":
       return { addressConfirmedAt: now };
+    case "order_created":
+      return { orderCreatedAt: now };
     case "shipped":
       return { shippedAt: now };
     case "delivered":

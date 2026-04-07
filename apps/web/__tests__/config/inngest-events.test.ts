@@ -5,7 +5,7 @@ import type { AppEventPayloads } from "@/lib/inngest/events";
  * Compile-time type safety tests for the Inngest event catalog.
  *
  * These tests verify that:
- * 1. All 10 declared events exist in the type
+ * 1. All 11 declared events exist in the type
  * 2. Event payloads have the correct shape
  * 3. The type system catches missing required fields
  */
@@ -19,7 +19,7 @@ function assertEventShape<K extends keyof AppEventPayloads>(
 }
 
 describe("AppEventPayloads type catalog", () => {
-  it("declares exactly 10 events", () => {
+  it("declares exactly 11 events", () => {
     // Enumerate all expected event names at the type level
     const expectedEvents: Array<keyof AppEventPayloads> = [
       "app/ping",
@@ -32,9 +32,10 @@ describe("AppEventPayloads type catalog", () => {
       "shopify/fulfillment.updated",
       "unipile/message.received",
       "metrics/snapshots-collected",
+      "shipping/address.approved",
     ];
 
-    expect(expectedEvents).toHaveLength(10);
+    expect(expectedEvents).toHaveLength(11);
   });
 
   it("app/ping has correct shape", () => {
@@ -117,6 +118,15 @@ describe("AppEventPayloads type catalog", () => {
   it("metrics/snapshots-collected has correct shape", () => {
     assertEventShape("metrics/snapshots-collected", {
       profileIds: ["p1", "p2"],
+    });
+  });
+
+  it("shipping/address.approved has correct shape", () => {
+    assertEventShape("shipping/address.approved", {
+      snapshotId: "s1",
+      campaignCreatorId: "cc1",
+      brandId: "b1",
+      campaignId: "c1",
     });
   });
 });

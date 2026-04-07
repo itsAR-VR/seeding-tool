@@ -19,6 +19,7 @@ import { creatorValidationCleanup } from "@/lib/inngest/functions/creator-valida
 import { creatorAvgViewsEnrichment } from "@/lib/inngest/functions/creator-avg-views-enrichment";
 import { collectDailySnapshots } from "@/lib/inngest/functions/collect-daily-snapshots";
 import { computeAuthenticity } from "@/lib/inngest/functions/compute-authenticity";
+import { createOrderFromAddress } from "@/lib/inngest/functions/create-order-from-address";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -37,5 +38,6 @@ export const { GET, POST, PUT } = serve({
     creatorAvgViewsEnrichment,
     collectDailySnapshots,
     computeAuthenticity,
+    createOrderFromAddress,
   ],
 });

@@ -10,30 +10,10 @@ import {
   AliasPausedError,
   CrossBrandAliasError,
 } from "@/lib/outreach/errors";
-
-/**
- * Exchange a refresh token for a fresh access token via Google OAuth2.
- */
-async function getAccessToken(refreshToken: string): Promise<string> {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Token refresh failed: ${errText}`);
-  }
-
-  const data = (await response.json()) as { access_token: string };
-  return data.access_token;
-}
+import {
+  getGmailAccessToken,
+  invalidateGmailAccessToken,
+} from "@/lib/gmail/token";
 
 /**
  * Build RFC 2822 formatted email message with List-Unsubscribe headers.
@@ -94,6 +74,53 @@ type SendEmailParams = {
   /** Brand ID of the sender — used for cross-brand alias validation. */
   senderBrandId?: string;
 };
+
+type GmailSendResult = { id: string; threadId: string };
+
+/**
+ * Send via Gmail API, retrying once on 401 with a fresh token.
+ */
+async function sendWithRetryOn401(
+  refreshToken: string,
+  accessToken: string,
+  sendBody: Record<string, string>
+): Promise<GmailSendResult> {
+  const attempt = async (token: string) =>
+    fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(sendBody),
+      }
+    );
+
+  const firstResponse = await attempt(accessToken);
+
+  if (firstResponse.ok) {
+    return (await firstResponse.json()) as GmailSendResult;
+  }
+
+  // Retry once on 401: invalidate cache, get fresh token, retry
+  if (firstResponse.status === 401) {
+    invalidateGmailAccessToken(refreshToken);
+    const freshToken = await getGmailAccessToken(refreshToken);
+    const retryResponse = await attempt(freshToken);
+
+    if (retryResponse.ok) {
+      return (await retryResponse.json()) as GmailSendResult;
+    }
+
+    const errText = await retryResponse.text();
+    throw new Error(`Gmail send failed after 401 retry: ${errText}`);
+  }
+
+  const errText = await firstResponse.text();
+  throw new Error(`Gmail send failed: ${errText}`);
+}
 
 /**
  * Send an email via Gmail API.
@@ -171,7 +198,7 @@ export async function sendEmail(params: SendEmailParams) {
 
   // 2. Decrypt refresh token and get access token
   const refreshToken = resolved.decryptedValue;
-  const accessToken = await getAccessToken(refreshToken);
+  const accessToken = await getGmailAccessToken(refreshToken);
 
   // 3. Build and send email
   const fromAddress = alias.displayName
@@ -193,27 +220,11 @@ export async function sendEmail(params: SendEmailParams) {
     sendBody.threadId = params.externalThreadId;
   }
 
-  const sendResponse = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(sendBody),
-    }
+  const sentMessage = await sendWithRetryOn401(
+    refreshToken,
+    accessToken,
+    sendBody
   );
-
-  if (!sendResponse.ok) {
-    const errText = await sendResponse.text();
-    throw new Error(`Gmail send failed: ${errText}`);
-  }
-
-  const sentMessage = (await sendResponse.json()) as {
-    id: string;
-    threadId: string;
-  };
 
   // 4. Persist outbound message
   // INVARIANT: Message dedupe on externalId prevents replay duplicates.

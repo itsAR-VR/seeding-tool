@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
+import { getGmailAccessToken } from "@/lib/gmail/token";
 
 type GmailMessageHeader = {
   name: string;
@@ -23,28 +24,6 @@ type GmailMessage = {
     parts?: GmailMessagePart[];
   };
 };
-
-/**
- * Exchange a refresh token for a fresh access token.
- */
-async function getAccessToken(refreshToken: string): Promise<string> {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Token refresh failed: ${await response.text()}`);
-  }
-
-  return ((await response.json()) as { access_token: string }).access_token;
-}
 
 /**
  * Decode base64url-encoded string.
@@ -113,7 +92,7 @@ export async function fetchNewMessages(brandId: string) {
   }
 
   const refreshToken = resolved.decryptedValue;
-  const accessToken = await getAccessToken(refreshToken);
+  const accessToken = await getGmailAccessToken(refreshToken);
 
   // List recent messages (last 24 hours of unread)
   const listResponse = await fetch(

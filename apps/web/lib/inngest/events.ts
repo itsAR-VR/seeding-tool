@@ -92,4 +92,13 @@ export type AppEventPayloads = {
       profileIds: string[];
     };
   };
+
+  "shipping/address.approved": {
+    data: {
+      snapshotId: string;
+      campaignCreatorId: string;
+      brandId: string;
+      campaignId: string;
+    };
+  };
 };
