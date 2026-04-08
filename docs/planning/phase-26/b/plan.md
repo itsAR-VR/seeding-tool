@@ -180,7 +180,25 @@ The scoring functions (`computeScaleFit`, `computeEngagementQuality`) already ac
 
 ## Output
 
-(empty — to be filled after implementation)
+Implementation complete. All 25 tests pass. No new TypeScript errors introduced.
+
+### Files Created
+- `apps/web/lib/validation/types.ts` — PlatformValidator interface, ValidationTarget, ValidationResult, PlatformValidationOptions
+- `apps/web/lib/validation/instagram-validator.ts` — Adapter wrapping existing validateInstagramCreators()
+- `apps/web/lib/validation/tiktok-validator.ts` — TikTok validator using Apify clockworks/tiktok-scraper
+- `apps/web/lib/validation/registry.ts` — Platform validator registry with getValidator(), registerValidator()
+- `apps/web/lib/validation/multi-platform.ts` — selectBestPlatformMetrics() for multi-platform scoring
+- `apps/web/__tests__/validation/platform-validation.test.ts` — 21 tests
+- `apps/web/__tests__/validation/tiktok-mapper.test.ts` — 4 tests
+
+### Files Modified
+- `apps/web/lib/creator-search/contracts.ts` — UnifiedDiscoveryPlatform union, Zod enum, apify_tiktok source
+- `apps/web/prisma/schema.prisma` — tiktokHandle field + unique constraint on Creator model
+- `apps/web/lib/apify/client.ts` — TikTok actor ID, types, runTikTokProfileScraper(), mapTikTokProfileToCreator()
+- `apps/web/lib/creators/validation-ops.ts` — platform parameter on applyValidationResultToCreator()
+- `apps/web/lib/creator-search/job-runner.ts` — platform parameter on persistDiscoveredCandidate()
+- `apps/web/lib/inngest/functions/creator-avg-views-enrichment.ts` — validator registry dispatch for non-Instagram
+- `apps/web/lib/inngest/functions/creator-validation-cleanup.ts` — queries all platforms (OR instagramHandle/tiktokHandle)
 
 ## Handoff
 

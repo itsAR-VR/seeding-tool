@@ -480,6 +480,7 @@ model Creator {
   notes    String? @db.Text
 
   instagramHandle String? @map("instagram_handle")
+  tiktokHandle    String? @map("tiktok_handle")
 
   /// Source of discovery: phantombuster | apify | csv_import | manual | creator_marketplace
   // INVARIANT: discoverySource is always tagged — never null
@@ -513,6 +514,7 @@ model Creator {
   outcomes          CampaignOutcome[]
 
   @@unique([brandId, instagramHandle])
+  @@unique([brandId, tiktokHandle])
   @@index([influencerIdentityId])
   @@map("creators")
 }

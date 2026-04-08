@@ -12,11 +12,12 @@ export const UNIFIED_DISCOVERY_SOURCES = [
   "apify_search",
   "approved_seed_following",
   "apify_keyword_email",
+  "apify_tiktok",
 ] as const;
 
 export type UnifiedDiscoverySource = typeof UNIFIED_DISCOVERY_SOURCES[number];
 
-export type UnifiedDiscoveryPlatform = "instagram";
+export type UnifiedDiscoveryPlatform = "instagram" | "tiktok";
 
 export type UnifiedDiscoveryFilters = {
   minFollowers?: number;
@@ -111,7 +112,7 @@ export const unifiedDiscoveryQuerySchema = z.object({
     .default(["collabstr", "apify_search"]),
   keywords: z.array(z.string()).default([]),
   canonicalCategories: z.array(canonicalDiscoveryCategorySchema).default([]),
-  platform: z.literal("instagram").default("instagram"),
+  platform: z.enum(["instagram", "tiktok"]).default("instagram"),
   limit: positiveInt.max(250).default(25),
   location: z.string().trim().min(1).optional(),
   filters: unifiedDiscoveryFiltersSchema.default({

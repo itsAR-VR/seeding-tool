@@ -227,6 +227,7 @@ async function persistDiscoveredCandidate({
   campaignId,
   attachToCampaign,
   featureFlags,
+  platform = "instagram",
 }: {
   brandId: string;
   searchJobId: string;
@@ -234,14 +235,33 @@ async function persistDiscoveredCandidate({
   campaignId?: string | null;
   attachToCampaign: boolean;
   featureFlags: FeatureFlags;
+  platform?: "instagram" | "tiktok";
 }) {
   const scoredCandidate = isScoredCandidate(candidate) ? candidate : null;
+
+  // Platform-aware dedup: look up by the correct handle field
+  const handleWhereClause =
+    platform === "tiktok"
+      ? { tiktokHandle: candidate.handle }
+      : { instagramHandle: candidate.handle };
+
   const existing = await prisma.creator.findFirst({
     where: {
       brandId,
-      instagramHandle: candidate.handle,
+      ...handleWhereClause,
     },
   });
+
+  // Platform-aware handle fields for create
+  const handleCreateData =
+    platform === "tiktok"
+      ? { tiktokHandle: candidate.handle }
+      : { instagramHandle: candidate.handle };
+
+  const defaultProfileUrl =
+    platform === "tiktok"
+      ? `https://tiktok.com/@${candidate.handle}`
+      : `https://instagram.com/${candidate.handle}`;
 
   const creator = existing
     ? await prisma.creator.update({
@@ -269,7 +289,7 @@ async function persistDiscoveredCandidate({
     : await prisma.creator.create({
         data: {
           brandId,
-          instagramHandle: candidate.handle,
+          ...handleCreateData,
           name: candidate.name ?? candidate.handle,
           email: candidate.email,
           bio: candidate.bio,
@@ -290,7 +310,7 @@ async function persistDiscoveredCandidate({
     where: {
       creatorId_platform: {
         creatorId: creator.id,
-        platform: "instagram",
+        platform,
       },
     },
     update: {
@@ -298,7 +318,7 @@ async function persistDiscoveredCandidate({
       url:
         candidate.validatedProfileUrl ??
         candidate.profileUrl ??
-        `https://instagram.com/${candidate.handle}`,
+        defaultProfileUrl,
       followerCount: candidate.validatedFollowerCount ?? undefined,
       engagementRate: candidate.engagementRate ?? undefined,
       isVerified: candidate.isVerified,
@@ -314,12 +334,12 @@ async function persistDiscoveredCandidate({
     },
     create: {
       creatorId: creator.id,
-      platform: "instagram",
+      platform,
       handle: candidate.handle,
       url:
         candidate.validatedProfileUrl ??
         candidate.profileUrl ??
-        `https://instagram.com/${candidate.handle}`,
+        defaultProfileUrl,
       followerCount: candidate.validatedFollowerCount ?? null,
       engagementRate: candidate.engagementRate ?? null,
       isVerified: candidate.isVerified,
@@ -392,12 +412,12 @@ async function persistDiscoveredCandidate({
     ? await syncIdentityForCreator({
         creatorId: creator.id,
         displayName: candidate.name,
-        platform: "instagram",
+        platform,
         handle: candidate.handle,
         profileUrl:
           candidate.validatedProfileUrl ??
           candidate.profileUrl ??
-          `https://instagram.com/${candidate.handle}`,
+          defaultProfileUrl,
         profileImageUrl: candidate.imageUrl,
         websiteUrl:
           typeof candidate.sourceMetadata.website === "string"
@@ -422,8 +442,8 @@ async function persistDiscoveredCandidate({
   if (candidate.validatedFollowerCount != null || candidate.validatedAvgViews != null) {
     await recordOpportunisticSnapshot({
       handle: candidate.handle,
-      platform: "instagram",
-      source: "instagram_validated",
+      platform,
+      source: `${platform}_validated`,
       metrics: {
         followers: candidate.validatedFollowerCount,
         avgViews: candidate.validatedAvgViews,
