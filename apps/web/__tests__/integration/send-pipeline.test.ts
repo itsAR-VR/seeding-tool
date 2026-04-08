@@ -33,6 +33,7 @@ vi.mock("@/lib/prisma", () => ({ prisma: mocks.prisma }));
 
 vi.mock("@/lib/gmail/send", () => ({
   sendEmail: mocks.sendEmail,
+  buildUnsubscribeUrl: vi.fn().mockReturnValue("https://example.com/unsubscribe?token=test"),
 }));
 
 vi.mock("@/lib/seeding/outcome-recorder", () => ({
@@ -87,6 +88,8 @@ function setupEmailAlias() {
     isPrimary: true,
     isPaused: false,
     dailyLimit: 100,
+    isWarmedUp: true,
+    warmupStartedAt: new Date("2025-01-01"),
   });
 }
 
