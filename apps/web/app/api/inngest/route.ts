@@ -20,6 +20,8 @@ import { creatorAvgViewsEnrichment } from "@/lib/inngest/functions/creator-avg-v
 import { collectDailySnapshots } from "@/lib/inngest/functions/collect-daily-snapshots";
 import { computeAuthenticity } from "@/lib/inngest/functions/compute-authenticity";
 import { createOrderFromAddress } from "@/lib/inngest/functions/create-order-from-address";
+import { warmupCheck } from "@/lib/inngest/functions/warmup-check";
+import { weeklyCalibration } from "@/lib/inngest/functions/weekly-calibration";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
@@ -39,5 +41,7 @@ export const { GET, POST, PUT } = serve({
     collectDailySnapshots,
     computeAuthenticity,
     createOrderFromAddress,
+    warmupCheck,
+    weeklyCalibration,
   ],
 });

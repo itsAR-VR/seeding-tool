@@ -355,9 +355,10 @@ model EmailAlias {
   address     String
   displayName String?
   isPrimary   Boolean @default(false)
-  isWarmedUp  Boolean @default(false)
-  isPaused    Boolean @default(false)
-  dailyLimit  Int     @default(50)
+  isWarmedUp      Boolean   @default(false)
+  warmupStartedAt DateTime?
+  isPaused        Boolean   @default(false)
+  dailyLimit      Int       @default(50)
 
   brandId String
 
@@ -1272,6 +1273,24 @@ model Automation {
   updatedAt DateTime @updatedAt
 
   @@map("automations")
+}
+
+// ──────────────────────────────────────────────
+// Shopify Product Catalog
+// ──────────────────────────────────────────────
+
+model CalibrationSnapshot {
+  id                 String   @id @default(uuid())
+  createdAt          DateTime @default(now())
+  brandId            String?  @map("brand_id")
+  outcomeCount       Int      @map("outcome_count")
+  reportJson         Json     @map("report_json")
+  adjustmentsApplied Boolean  @default(false) @map("adjustments_applied")
+  weightsBefore      Json     @map("weights_before")
+  suggestedWeights   Json     @map("suggested_weights")
+
+  @@index([brandId])
+  @@map("calibration_snapshots")
 }
 
 // ──────────────────────────────────────────────

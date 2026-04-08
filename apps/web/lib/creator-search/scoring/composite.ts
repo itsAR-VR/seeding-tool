@@ -35,6 +35,18 @@ export type ScoredCandidate = {
   components: Record<keyof ScoreWeights, ComponentScore & { weight: number }>;
 };
 
+/**
+ * Re-normalize weights so they sum to 1.0.
+ * Returns the input unchanged if all weights sum to zero.
+ */
+export function normalizeWeights(weights: ScoreWeights): ScoreWeights {
+  const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+  if (sum === 0) return { ...weights };
+  return Object.fromEntries(
+    Object.entries(weights).map(([k, v]) => [k, v / sum])
+  ) as unknown as ScoreWeights;
+}
+
 export function computeCompositeScore(input: {
   candidateHandle: string;
   components: Record<keyof ScoreWeights, ComponentScore>;

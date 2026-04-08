@@ -6,7 +6,9 @@ import type {
 } from "@/lib/apify/client";
 import {
   classifyDiscoveryText,
+  type DiscoveryClassification,
 } from "@/lib/creator-search/classification";
+import { classifyBatchWithLLM } from "@/lib/creator-search/classification-llm";
 import { shouldUseStoredCreatorAsCached } from "@/lib/creator-search/cache-policy";
 import { mergeDiscoveryCandidates } from "@/lib/creator-search/candidate-merge";
 import {
@@ -588,6 +590,51 @@ async function excludeExistingCreators(
   );
 }
 
+async function reclassifyLowConfidenceCandidates(
+  candidates: UnifiedDiscoveryCandidate[],
+): Promise<UnifiedDiscoveryCandidate[]> {
+  const lowIndices: number[] = [];
+  const bios: string[] = [];
+  const keywordResults: DiscoveryClassification[] = [];
+
+  for (let i = 0; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (c.classificationConfidence === "low" && c.bio) {
+      lowIndices.push(i);
+      bios.push(c.bio);
+      keywordResults.push({
+        canonicalCategory: c.canonicalCategory ?? "Other",
+        rawSourceCategory: c.rawSourceCategory,
+        confidence: "low",
+        matchedKeywords: c.matchedCategorySignals,
+        expandedCategories: c.expandedCategories,
+        languageDetected: c.languageDetected,
+        topicSignals: c.topicSignals,
+      });
+    }
+  }
+
+  if (lowIndices.length === 0) {
+    return candidates;
+  }
+
+  const llmResults = await classifyBatchWithLLM(bios, keywordResults);
+  const updated = [...candidates];
+
+  for (let i = 0; i < lowIndices.length; i++) {
+    const idx = lowIndices[i];
+    const result = llmResults[i];
+    updated[idx] = {
+      ...candidates[idx],
+      canonicalCategory: result.canonicalCategory,
+      classificationConfidence: result.confidence,
+      matchedCategorySignals: result.matchedKeywords,
+    };
+  }
+
+  return updated;
+}
+
 export async function orchestrateUnifiedDiscovery(
   context: OrchestratorContext
 ) {
@@ -659,9 +706,10 @@ export async function orchestrateUnifiedDiscovery(
   }
 
   const enriched = await enrichCandidateProfiles(Array.from(mergedByHandle.values()));
+  const reclassified = await reclassifyLowConfidenceCandidates(enriched);
   const filtered = await excludeExistingCreators(
     applyCandidateFilters(
-      enriched.map((candidate) => ({
+      reclassified.map((candidate) => ({
         ...candidate,
         relevanceScore: computeRelevanceScore(candidate, context.query),
       })),

@@ -10,6 +10,7 @@ import {
   AliasPausedError,
   CrossBrandAliasError,
 } from "@/lib/outreach/errors";
+import { getEffectiveDailyLimit } from "@/lib/outreach/warmup";
 import {
   getGmailAccessToken,
   invalidateGmailAccessToken,
@@ -150,6 +151,8 @@ export async function sendEmail(params: SendEmailParams) {
       brandId: true,
       isPaused: true,
       dailyLimit: true,
+      isWarmedUp: true,
+      warmupStartedAt: true,
     },
   });
 
@@ -183,11 +186,12 @@ export async function sendEmail(params: SendEmailParams) {
   });
 
   const currentSent = todayMetric?.sent ?? 0;
-  if (currentSent >= alias.dailyLimit) {
+  const effectiveLimit = getEffectiveDailyLimit(alias);
+  if (currentSent >= effectiveLimit) {
     throw new DailyLimitExceededError(
       params.aliasId,
       currentSent,
-      alias.dailyLimit
+      effectiveLimit
     );
   }
 

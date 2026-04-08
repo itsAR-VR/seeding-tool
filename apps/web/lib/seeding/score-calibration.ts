@@ -27,42 +27,82 @@ function bucketForScore(score: number) {
   return "<0.60";
 }
 
-export async function generateCalibrationReport(campaignId?: string): Promise<CalibrationReport> {
-  const outcomes = await prisma.campaignOutcome.findMany({
-    where: campaignId ? { campaignId } : undefined,
-    select: {
-      reviewDecision: true,
-      completedAt: true,
-      fitScoreAtSeed: true,
-      scoreComponentsAtSeed: true,
-    },
-  });
+/** Clamp a value to +/- 0.05 */
+function clampAdjustment(value: number): number {
+  return Math.max(-0.05, Math.min(0.05, value));
+}
+
+/**
+ * Extract numeric score from a component value that may be a raw number
+ * or an object with a `score` property (handles retrievalRelevance shape mismatch).
+ */
+function extractComponentScore(value: unknown): number | null {
+  if (typeof value === "number") return value;
+  if (value && typeof value === "object" && "score" in value) {
+    const score = (value as { score?: unknown }).score;
+    return typeof score === "number" ? score : null;
+  }
+  return null;
+}
+
+export type OutcomeRow = {
+  reviewDecision: string | null;
+  completedAt: Date | null;
+  fitScoreAtSeed: number | null;
+  scoreComponentsAtSeed: unknown;
+};
+
+export async function generateCalibrationReport(
+  campaignId?: string,
+  preloadedOutcomes?: OutcomeRow[]
+): Promise<CalibrationReport> {
+  const outcomes =
+    preloadedOutcomes ??
+    (await prisma.campaignOutcome.findMany({
+      where: campaignId ? { campaignId } : undefined,
+      select: {
+        reviewDecision: true,
+        completedAt: true,
+        fitScoreAtSeed: true,
+        scoreComponentsAtSeed: true,
+      },
+    }));
 
   const buckets = new Map<string, { approved: number; total: number }>();
   const components = new Map<string, { approval: number[]; completion: number[] }>();
 
   for (const outcome of outcomes) {
-    const score = outcome.fitScoreAtSeed ?? 0;
-    const bucket = bucketForScore(score);
-    const bucketState = buckets.get(bucket) ?? { approved: 0, total: 0 };
-    bucketState.total += 1;
-    if (outcome.reviewDecision === "approved") {
-      bucketState.approved += 1;
-    }
-    buckets.set(bucket, bucketState);
+    // FIX: Filter out null fitScoreAtSeed — don't bucket as <0.60
+    if (outcome.fitScoreAtSeed == null) continue;
 
+    const score = outcome.fitScoreAtSeed;
+    const bucket = bucketForScore(score);
+    const existing = buckets.get(bucket) ?? { approved: 0, total: 0 };
+    const updated = {
+      approved: existing.approved + (outcome.reviewDecision === "approved" ? 1 : 0),
+      total: existing.total + 1,
+    };
+    buckets.set(bucket, updated);
+
+    const raw = outcome.scoreComponentsAtSeed;
     const scoreComponents =
-      outcome.scoreComponentsAtSeed &&
-      typeof outcome.scoreComponentsAtSeed === "object" &&
-      !Array.isArray(outcome.scoreComponentsAtSeed)
-        ? (outcome.scoreComponentsAtSeed as Record<string, { score?: number }>)
+      raw && typeof raw === "object" && !Array.isArray(raw)
+        ? (raw as Record<string, unknown>)
         : {};
 
     for (const [key, value] of Object.entries(scoreComponents)) {
+      // FIX: Handle shape mismatch — extractComponentScore handles both
+      // raw numbers (retrievalRelevance) and {score} objects
+      const numericScore = extractComponentScore(value);
+      if (numericScore == null) continue;
+
       const entry = components.get(key) ?? { approval: [], completion: [] };
-      entry.approval.push(outcome.reviewDecision === "approved" ? value?.score ?? 0 : 0);
-      entry.completion.push(outcome.completedAt ? value?.score ?? 0 : 0);
-      components.set(key, entry);
+      const approvalScore = outcome.reviewDecision === "approved" ? numericScore : 0;
+      const completionScore = outcome.completedAt ? numericScore : 0;
+      components.set(key, {
+        approval: [...entry.approval, approvalScore],
+        completion: [...entry.completion, completionScore],
+      });
     }
   }
 
@@ -71,8 +111,10 @@ export async function generateCalibrationReport(campaignId?: string): Promise<Ca
       const avgApproval =
         value.approval.reduce((sum, item) => sum + item, 0) / Math.max(1, value.approval.length);
       const avgCompletion =
-        value.completion.reduce((sum, item) => sum + item, 0) / Math.max(1, value.completion.length);
-      const suggestedWeightAdjustment = avgCompletion - avgApproval;
+        value.completion.reduce((sum, item) => sum + item, 0) /
+        Math.max(1, value.completion.length);
+      // FIX: Clamp suggestedWeightAdjustment to +/- 0.05
+      const suggestedWeightAdjustment = clampAdjustment(avgCompletion - avgApproval);
       return [
         key,
         {

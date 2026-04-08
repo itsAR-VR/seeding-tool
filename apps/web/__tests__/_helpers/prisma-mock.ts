@@ -50,6 +50,8 @@ export function createMockPrisma() {
     emailAlias: {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
+      findMany: vi.fn(),
+      update: vi.fn(),
     },
     sendingMetric: {
       findUnique: vi.fn(),
@@ -191,6 +193,8 @@ export function makeEmailAlias(overrides: Record<string, unknown> = {}) {
     isPrimary: true,
     isPaused: false,
     dailyLimit: 100,
+    isWarmedUp: true,
+    warmupStartedAt: null,
     ...overrides,
   };
 }

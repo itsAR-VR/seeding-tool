@@ -139,6 +139,8 @@ export async function GET(request: NextRequest) {
           address: emailAddress,
           displayName: emailAddress.split("@")[0],
           isPrimary: true,
+          isWarmedUp: false,
+          warmupStartedAt: new Date(),
         },
         update: {
           displayName: emailAddress.split("@")[0],
