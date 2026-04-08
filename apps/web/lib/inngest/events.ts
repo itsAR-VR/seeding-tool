@@ -101,4 +101,12 @@ export type AppEventPayloads = {
       campaignId: string;
     };
   };
+
+  "mention/attributed": {
+    data: {
+      mentionAssetId: string;
+      campaignCreatorId: string;
+      attributionConfidence: string;
+    };
+  };
 };

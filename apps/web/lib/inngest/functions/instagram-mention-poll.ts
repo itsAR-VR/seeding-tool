@@ -1,8 +1,18 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
-import { getTaggedMedia, InstagramApiError } from "@/lib/instagram/client";
+import {
+  getTaggedMedia,
+  fetchNextPage,
+  InstagramApiError,
+  type InstagramMedia,
+  type InstagramPaginatedResponse,
+} from "@/lib/instagram/client";
 import { createAndAttributeMention } from "@/lib/mentions/attribution";
+import { getFeatureFlags } from "@/lib/feature-flags";
+
+/** Max pages to follow per brand per poll cycle (safety cap). */
+const MAX_PAGES = 5;
 
 /**
  * Map Instagram media_type to our internal type.
@@ -24,11 +34,12 @@ function mapMediaType(igType?: string): string | undefined {
  * Inngest cron function: Poll Instagram Graph API for new tagged media.
  *
  * Runs every 15 minutes. For each brand with a connected Instagram account:
- * 1. Decrypt the stored access token
- * 2. Call getTaggedMedia() to find new tags
- * 3. For each new tag, try to match to an active CampaignCreator
- * 4. Create MentionAsset and call attributeMention()
- * 5. Deduplicates via the platform+mediaUrl unique constraint
+ * 1. Check feature flag — skip if disabled
+ * 2. Decrypt the stored access token
+ * 3. Call getTaggedMedia() and follow pagination (up to MAX_PAGES)
+ * 4. For each new tag, try to match to an active CampaignCreator
+ * 5. Create MentionAsset and call attributeMention()
+ * 6. Deduplicates via the platform+mediaUrl unique constraint
  */
 export const instagramMentionPoll = inngest.createFunction(
   {
@@ -84,6 +95,7 @@ export const instagramMentionPoll = inngest.createFunction(
       const results: Array<{
         brandId: string;
         newMentions: number;
+        pagesFetched?: number;
         error?: string;
       }> = [];
 
@@ -92,6 +104,17 @@ export const instagramMentionPoll = inngest.createFunction(
           `poll-brand-${cred.brandId}`,
           async () => {
             try {
+              // Check feature flag — skip if disabled
+              const flags = await getFeatureFlags(cred.brandId);
+              if (!flags.instagramMentionPollEnabled) {
+                return {
+                  brandId: cred.brandId,
+                  newMentions: 0,
+                  pagesFetched: 0,
+                  skipped: "feature_disabled",
+                };
+              }
+
               const decrypted = decrypt(cred.encryptedValue);
               const payload = JSON.parse(decrypted) as {
                 accessToken: string;
@@ -105,73 +128,115 @@ export const instagramMentionPoll = inngest.createFunction(
                 return {
                   brandId: cred.brandId,
                   newMentions: 0,
+                  pagesFetched: 0,
                   error: "Missing igUserId or accessToken",
                 };
               }
 
-              const tagged = await getTaggedMedia(
-                igUserId,
-                payload.accessToken
-              );
-
-              if (!tagged.data || tagged.data.length === 0) {
-                return { brandId: cred.brandId, newMentions: 0 };
-              }
+              // Fetch first page
+              let page: InstagramPaginatedResponse<InstagramMedia> =
+                await getTaggedMedia(igUserId, payload.accessToken);
 
               let newMentions = 0;
+              let pagesFetched = 1;
+              let stopPagination = false;
 
-              for (const media of tagged.data) {
-                if (!media.permalink) continue;
+              // Process pages (up to MAX_PAGES)
+              while (!stopPagination) {
+                if (!page.data || page.data.length === 0) {
+                  break;
+                }
 
-                const existing = await prisma.mentionAsset.findUnique({
-                  where: {
-                    platform_mediaUrl: {
-                      platform: "instagram",
-                      mediaUrl: media.permalink,
+                for (const media of page.data) {
+                  if (!media.permalink) continue;
+
+                  const existing = await prisma.mentionAsset.findUnique({
+                    where: {
+                      platform_mediaUrl: {
+                        platform: "instagram",
+                        mediaUrl: media.permalink,
+                      },
                     },
-                  },
-                });
-
-                if (existing) continue;
-
-                const campaignCreator = await findMatchingCampaignCreator(
-                  cred.brandId,
-                  media.caption
-                );
-
-                if (!campaignCreator) {
-                  continue;
-                }
-
-                const mentionId = await createAndAttributeMention({
-                  platform: "instagram",
-                  mediaUrl: media.permalink,
-                  type: mapMediaType(media.media_type),
-                  caption: media.caption,
-                  likes: media.like_count,
-                  comments: media.comments_count,
-                  postedAt: media.timestamp
-                    ? new Date(media.timestamp)
-                    : undefined,
-                  campaignCreatorId: campaignCreator.id,
-                });
-
-                try {
-                  await inngest.send({
-                    name: "mention/media.archive",
-                    data: { mentionAssetId: mentionId },
                   });
-                } catch (dispatchError) {
-                  console.error(
-                    `[instagram-mention-poll] Failed to queue archive for mention ${mentionId}:`,
-                    dispatchError
+
+                  if (existing) {
+                    // Previously seen — stop paginating (older content follows)
+                    stopPagination = true;
+                    break;
+                  }
+
+                  const matchResult = await findMatchingCampaignCreator(
+                    cred.brandId,
+                    media.caption
                   );
+
+                  if (!matchResult) {
+                    continue;
+                  }
+
+                  const mentionId = await createAndAttributeMention({
+                    platform: "instagram",
+                    mediaUrl: media.permalink,
+                    type: mapMediaType(media.media_type),
+                    caption: media.caption,
+                    likes: media.like_count,
+                    comments: media.comments_count,
+                    postedAt: media.timestamp
+                      ? new Date(media.timestamp)
+                      : undefined,
+                    campaignCreatorId: matchResult.id,
+                    attributionConfidence: matchResult.confidence,
+                  });
+
+                  try {
+                    await inngest.send({
+                      name: "mention/media.archive",
+                      data: { mentionAssetId: mentionId },
+                    });
+                  } catch (dispatchError) {
+                    console.error(
+                      `[instagram-mention-poll] Failed to queue archive for mention ${mentionId}:`,
+                      dispatchError
+                    );
+                  }
+
+                  try {
+                    await inngest.send({
+                      name: "mention/attributed",
+                      data: {
+                        mentionAssetId: mentionId,
+                        campaignCreatorId: matchResult.id,
+                        attributionConfidence: matchResult.confidence,
+                      },
+                    });
+                  } catch (eventError) {
+                    console.error(
+                      `[instagram-mention-poll] Failed to emit mention/attributed for ${mentionId}:`,
+                      eventError
+                    );
+                  }
+
+                  newMentions++;
                 }
 
-                newMentions++;
+                // Follow pagination if more pages exist and we haven't hit the cap
+                if (
+                  stopPagination ||
+                  !page.paging?.next ||
+                  pagesFetched >= MAX_PAGES
+                ) {
+                  break;
+                }
+
+                page = await fetchNextPage<InstagramMedia>(page.paging.next);
+                pagesFetched++;
               }
 
-              return { brandId: cred.brandId, newMentions };
+              console.error(
+                `[instagram-mention-poll] Brand ${cred.brandId}: ${pagesFetched} pages fetched, ${newMentions} new mentions`
+              );
+
+              return { brandId: cred.brandId, newMentions, pagesFetched };
             } catch (error) {
               const errMsg =
                 error instanceof InstagramApiError
@@ -206,6 +271,7 @@ export const instagramMentionPoll = inngest.createFunction(
               return {
                 brandId: cred.brandId,
                 newMentions: 0,
+                pagesFetched: 0,
                 error: errMsg,
               };
             }
@@ -243,18 +309,22 @@ export const instagramMentionPoll = inngest.createFunction(
  * Looks for active CampaignCreators whose Instagram handle appears
  * in the caption, or who are in the "shipped" or "delivered" lifecycle
  * status (waiting for a post).
+ *
+ * Returns the match along with attribution confidence:
+ * - "high": single candidate, or handle matched in caption
+ * - "low": multiple candidates, no handle match (attributed to most recent)
  */
 async function findMatchingCampaignCreator(
   brandId: string,
   caption?: string
-): Promise<{ id: string } | null> {
-  // First, find all active campaign creators for this brand
+): Promise<{ id: string; confidence: string } | null> {
+  // Find all active campaign creators for this brand
   // that are in a lifecycle state where we'd expect a mention
   const candidates = await prisma.campaignCreator.findMany({
     where: {
       campaign: { brandId },
       lifecycleStatus: {
-        in: ["shipped", "delivered", "reminded"],
+        in: ["shipped", "delivered"],
       },
     },
     include: {
@@ -266,12 +336,17 @@ async function findMatchingCampaignCreator(
         },
       },
     },
+    orderBy: {
+      createdAt: "desc",
+    },
   });
 
   if (candidates.length === 0) return null;
 
-  // If there's only one candidate, return it
-  if (candidates.length === 1) return { id: candidates[0].id };
+  // If there's only one candidate, return it with high confidence
+  if (candidates.length === 1) {
+    return { id: candidates[0].id, confidence: "high" };
+  }
 
   // Try to match by Instagram handle in caption
   if (caption) {
@@ -282,14 +357,21 @@ async function findMatchingCampaignCreator(
         const normalizedHandle = handle
           .toLowerCase()
           .replace(/^@/, "");
-        if (normalizedCaption.includes(`@${normalizedHandle}`)) {
-          return { id: cc.id };
+        // Word-boundary check: ensure handle isn't a prefix of a longer username
+        const handlePattern = `@${normalizedHandle}`;
+        const idx = normalizedCaption.indexOf(handlePattern);
+        if (idx !== -1) {
+          const afterChar = normalizedCaption[idx + handlePattern.length];
+          // Match if end of string or next char is not alphanumeric/underscore
+          if (!afterChar || /[^a-z0-9_]/.test(afterChar)) {
+            return { id: cc.id, confidence: "high" };
+          }
         }
       }
     }
   }
 
-  // No strong match — return the most recent candidate
-  // (sorted by campaign created at, desc)
-  return { id: candidates[0].id };
+  // Multiple candidates, no handle match — low confidence attribution
+  // Use first candidate (most recently created, per orderBy above)
+  return { id: candidates[0].id, confidence: "low" };
 }

@@ -17,11 +17,14 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/gmail/send";
+import { sendEmail, buildUnsubscribeUrl } from "@/lib/gmail/send";
 import { getUnipileClient } from "@/lib/unipile/client";
 import { sendInstagramDM } from "@/lib/unipile/send-dm";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { DailyLimitExceededError } from "@/lib/outreach/errors";
+import { isInEarlyWarmup } from "@/lib/outreach/warmup";
+import { escapeHtml } from "@/lib/outreach/html-escape";
+import { renderBaseTemplate } from "@/lib/outreach/templates/base";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -29,6 +32,7 @@ export type DraftToSend = {
   channel: "email" | "instagram_dm";
   subject?: string;
   body: string;
+  bodyHtml?: string;
 };
 
 export type SendResult = {
@@ -198,12 +202,34 @@ export async function sendOutreachBatch(
           },
         });
 
+        // Resolve HTML body: use provided, or wrap plain text in base template
+        let resolvedBodyHtml = draft.bodyHtml;
+        if (!resolvedBodyHtml) {
+          const unsubUrl = buildUnsubscribeUrl(creator.email);
+          resolvedBodyHtml = renderBaseTemplate({
+            bodyContent: `<p>${escapeHtml(draft.body).replace(/\n/g, "<br/>")}</p>`,
+            brandName: "Our Team",
+            unsubscribeUrl: unsubUrl,
+          });
+        }
+
+        // Warmup gate: days 1-3 send plain text only (strip HTML)
+        const senderAlias = await prisma.emailAlias.findUnique({
+          where: { id: emailAliasId! },
+          select: { isWarmedUp: true, warmupStartedAt: true, dailyLimit: true },
+        });
+        const effectiveBodyHtml =
+          senderAlias && isInEarlyWarmup(senderAlias)
+            ? undefined
+            : resolvedBodyHtml;
+
         // Send via Gmail
         const emailResult = await sendEmail({
           aliasId: emailAliasId,
           to: creator.email,
           subject: draft.subject || "Collaboration opportunity",
           body: draft.body,
+          bodyHtml: effectiveBodyHtml,
         });
 
         // Store gmailThreadId on the ConversationThread for reply ingestion
@@ -224,6 +250,7 @@ export async function sendOutreachBatch(
             toAddress: creator.email,
             subject: draft.subject || "Collaboration opportunity",
             body: draft.body,
+            bodyHtml: effectiveBodyHtml ?? null,
           },
         });
 

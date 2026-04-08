@@ -18,6 +18,7 @@ export interface FeatureFlags {
   decisionEngineScoringEnabled: boolean;
   portfolioOptimizerEnabled: boolean;
   outcomeLearningEnabled: boolean;
+  instagramMentionPollEnabled: boolean;
 }
 
 const DEFAULT_FLAGS: FeatureFlags = {
@@ -30,6 +31,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   decisionEngineScoringEnabled: false,
   portfolioOptimizerEnabled: false,
   outcomeLearningEnabled: false,
+  instagramMentionPollEnabled: true,
 };
 
 /**
@@ -60,6 +62,7 @@ export async function getFeatureFlags(brandId: string): Promise<FeatureFlags> {
       decisionEngineScoringEnabled: flags.decisionEngineScoringEnabled === true,
       portfolioOptimizerEnabled: flags.portfolioOptimizerEnabled === true,
       outcomeLearningEnabled: flags.outcomeLearningEnabled === true,
+      instagramMentionPollEnabled: flags.instagramMentionPollEnabled === true,
     };
   } catch (error) {
     // Fail-CLOSED: if anything goes wrong, all flags are disabled
@@ -89,6 +92,7 @@ export async function setFeatureFlag(
     "decisionEngineScoringEnabled",
     "portfolioOptimizerEnabled",
     "outcomeLearningEnabled",
+    "instagramMentionPollEnabled",
   ];
 
   if (!validFlags.includes(flag)) {

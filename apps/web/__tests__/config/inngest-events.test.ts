@@ -19,7 +19,7 @@ function assertEventShape<K extends keyof AppEventPayloads>(
 }
 
 describe("AppEventPayloads type catalog", () => {
-  it("declares exactly 11 events", () => {
+  it("declares exactly 12 events", () => {
     // Enumerate all expected event names at the type level
     const expectedEvents: Array<keyof AppEventPayloads> = [
       "app/ping",
@@ -33,9 +33,10 @@ describe("AppEventPayloads type catalog", () => {
       "unipile/message.received",
       "metrics/snapshots-collected",
       "shipping/address.approved",
+      "mention/attributed",
     ];
 
-    expect(expectedEvents).toHaveLength(11);
+    expect(expectedEvents).toHaveLength(12);
   });
 
   it("app/ping has correct shape", () => {
@@ -127,6 +128,14 @@ describe("AppEventPayloads type catalog", () => {
       campaignCreatorId: "cc1",
       brandId: "b1",
       campaignId: "c1",
+    });
+  });
+
+  it("mention/attributed has correct shape", () => {
+    assertEventShape("mention/attributed", {
+      mentionAssetId: "ma1",
+      campaignCreatorId: "cc1",
+      attributionConfidence: "high",
     });
   });
 });

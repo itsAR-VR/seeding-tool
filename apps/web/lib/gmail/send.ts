@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import {
@@ -16,42 +17,95 @@ import {
   invalidateGmailAccessToken,
 } from "@/lib/gmail/token";
 
+/** Gmail clips messages longer than 102KB. Warn at 100KB to leave headroom. */
+const GMAIL_SIZE_WARN_BYTES = 100 * 1024;
+
+/**
+ * Build the unsubscribe URL for a given recipient email.
+ * Shared by both the List-Unsubscribe MIME header and the visible HTML footer link.
+ */
+export function buildUnsubscribeUrl(recipientEmail: string): string {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seedscale.io";
+  const token = generateUnsubscribeToken(recipientEmail);
+  return `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
+}
+
 /**
  * Build RFC 2822 formatted email message with List-Unsubscribe headers.
+ *
+ * When `bodyHtml` is provided, emits a multipart/alternative message with
+ * both text/plain and text/html parts. Otherwise emits text/plain only
+ * (backward-compatible).
  */
-function buildRawEmail(params: {
+export function buildRawEmail(params: {
   from: string;
   to: string;
   subject: string;
   body: string;
+  bodyHtml?: string;
   inReplyTo?: string;
   references?: string;
 }): string {
-  const lines = [
-    `From: ${params.from}`,
-    `To: ${params.to}`,
-    `Subject: ${params.subject}`,
+  const unsubUrl = buildUnsubscribeUrl(params.to);
+
+  // Sanitize header values to prevent CRLF injection
+  const sanitize = (v: string) => v.replace(/[\r\n]/g, "");
+
+  const headers = [
+    `From: ${sanitize(params.from)}`,
+    `To: ${sanitize(params.to)}`,
+    `Subject: ${sanitize(params.subject)}`,
     "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
   ];
 
   // List-Unsubscribe header (CAN-SPAM + RFC 8058 one-click)
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seedscale.io";
-  const token = generateUnsubscribeToken(params.to);
-  const unsubUrl = `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(params.to)}&token=${token}`;
-  lines.push(`List-Unsubscribe: <${unsubUrl}>`);
-  lines.push("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
+  headers.push(`List-Unsubscribe: <${unsubUrl}>`);
+  headers.push("List-Unsubscribe-Post: List-Unsubscribe=One-Click");
 
   if (params.inReplyTo) {
-    lines.push(`In-Reply-To: ${params.inReplyTo}`);
+    headers.push(`In-Reply-To: ${sanitize(params.inReplyTo)}`);
   }
   if (params.references) {
-    lines.push(`References: ${params.references}`);
+    headers.push(`References: ${sanitize(params.references)}`);
   }
 
-  lines.push("", params.body);
+  let messageBody: string;
 
-  return lines.join("\r\n");
+  if (params.bodyHtml) {
+    // Multipart/alternative: text/plain + text/html
+    const boundary = `boundary-${randomUUID()}`;
+    headers.push(
+      `Content-Type: multipart/alternative; boundary="${boundary}"`
+    );
+
+    messageBody = [
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      "",
+      params.body,
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      "",
+      params.bodyHtml,
+      `--${boundary}--`,
+    ].join("\r\n");
+  } else {
+    // Plain text only (backward-compatible)
+    headers.push('Content-Type: text/plain; charset="UTF-8"');
+    messageBody = params.body;
+  }
+
+  const raw = [...headers, "", messageBody].join("\r\n");
+
+  // Warn if email exceeds Gmail clipping threshold
+  const sizeBytes = Buffer.byteLength(raw, "utf-8");
+  if (sizeBytes > GMAIL_SIZE_WARN_BYTES) {
+    console.warn(
+      `[buildRawEmail] Email to ${params.to} is ${sizeBytes} bytes — may be clipped by Gmail (limit ~102KB)`
+    );
+  }
+
+  return raw;
 }
 
 /**
@@ -70,6 +124,7 @@ type SendEmailParams = {
   to: string;
   subject: string;
   body: string;
+  bodyHtml?: string;
   threadId?: string; // ConversationThread ID for persisting
   externalThreadId?: string; // Gmail thread ID for threading
   /** Brand ID of the sender — used for cross-brand alias validation. */
@@ -214,6 +269,7 @@ export async function sendEmail(params: SendEmailParams) {
     to: params.to,
     subject: params.subject,
     body: params.body,
+    bodyHtml: params.bodyHtml,
   });
 
   const sendBody: Record<string, string> = {
@@ -242,6 +298,7 @@ export async function sendEmail(params: SendEmailParams) {
         toAddress: params.to,
         subject: params.subject,
         body: params.body,
+        bodyHtml: params.bodyHtml ?? null,
         externalMessageId: sentMessage.id,
       },
     });

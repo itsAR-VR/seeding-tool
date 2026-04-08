@@ -89,6 +89,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       to: recipientEmail,
       subject: draft.subject ?? "Re: Collaboration",
       body: draft.body,
+      bodyHtml: draft.bodyHtml ?? undefined,
       threadId: thread.id,
       externalThreadId: thread.externalThreadId ?? undefined,
       senderBrandId: membership.brandId,

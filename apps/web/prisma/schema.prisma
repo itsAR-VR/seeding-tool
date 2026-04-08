@@ -983,8 +983,9 @@ model AIDraft {
   type    String // reply | outreach | follow_up | reminder
   status  String @default("draft") // draft | approved | sent | discarded
 
-  subject String?
-  body    String  @db.Text
+  subject  String?
+  body     String  @db.Text
+  bodyHtml String? @db.Text @map("body_html")
 
   approvedAt DateTime?
   approvedBy String?
@@ -1098,6 +1099,8 @@ model MentionAsset {
   comments Int?
   views    Int?
   postedAt DateTime? @map("posted_at")
+
+  attributionConfidence String? @map("attribution_confidence") // "high" | "low"
 
   campaignCreatorId String @map("campaign_creator_id")
 

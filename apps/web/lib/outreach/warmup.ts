@@ -37,6 +37,20 @@ export function getEffectiveDailyLimit(alias: WarmupAlias): number {
 }
 
 /**
+ * Return true if the alias is in its initial warmup phase (days 1-3).
+ * Used by the send pipeline to gate HTML emails during early warmup.
+ */
+export function isInEarlyWarmup(alias: WarmupAlias): boolean {
+  if (alias.isWarmedUp) return false;
+  if (!alias.warmupStartedAt) return true; // No start date = cannot send at all
+
+  const daysSinceStart =
+    Math.floor((Date.now() - alias.warmupStartedAt.getTime()) / MS_PER_DAY) + 1;
+
+  return daysSinceStart <= 3;
+}
+
+/**
  * Check whether an alias has completed its 14-day warmup period.
  */
 export function isWarmupComplete(alias: {

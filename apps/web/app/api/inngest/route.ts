@@ -6,6 +6,7 @@ import { scheduleReminders } from "@/lib/inngest/functions/reminders";
 import { handleReminderSend } from "@/lib/inngest/functions/mention-check";
 import { handleCreatorSearch } from "@/lib/inngest/functions/creator-search";
 import { instagramMentionPoll } from "@/lib/inngest/functions/instagram-mention-poll";
+import { instagramTokenRefresh } from "@/lib/inngest/functions/instagram-token-refresh";
 import {
   registerTrack17Tracking,
   pollTrack17Status,
@@ -31,6 +32,7 @@ export const { GET, POST, PUT } = serve({
     handleReminderSend,
     handleCreatorSearch,
     instagramMentionPoll,
+    instagramTokenRefresh,
     registerTrack17Tracking,
     pollTrack17Status,
     runAutomations,

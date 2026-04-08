@@ -8,10 +8,10 @@ Models: Opus 4.6 (5 combined deep analysis + RED TEAM agents)
 | Phase | Before | After | Key Risk |
 |-------|--------|-------|----------|
 | 24b Warmup | 55% | **78%** | Data migration breaks all sending; bounce data never written |
-| 24c HTML | 80% | **70%** | Two send paths (only one addressed); no warmup gate |
+| 24c HTML | 70% | **88%** | Three send paths (all addressed); bodyHtml through entire chain; warmup gate added |
 | 25a Categories | 92% | **72%** | Return type change breaks 6+ consumers; catalog/Zod not updated |
 | 25b Calibration | 82% | **78%** | suggestedWeightAdjustment unbounded; weight normalization missing |
-| 25c Embeddings | 45% | **35%** | Score distribution shift; no calibration mapping; AIArtifact mismatch |
+| 25c Embeddings | 35% | **32%** | DEFERRED — score distribution shift, calibration contamination, no vector infrastructure |
 
 ---
 

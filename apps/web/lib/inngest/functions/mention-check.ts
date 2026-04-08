@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { isSuppressed } from "@/lib/compliance/suppression";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { DailyLimitExceededError } from "@/lib/outreach/errors";
+import { isInEarlyWarmup } from "@/lib/outreach/warmup";
+import { escapeHtml } from "@/lib/outreach/html-escape";
+import { renderBaseTemplate } from "@/lib/outreach/templates/base";
+import { buildUnsubscribeUrl } from "@/lib/gmail/send";
 
 /**
  * Inngest function: Handle reminder/send events.
@@ -161,20 +165,47 @@ export const handleReminderSend = inngest.createFunction(
     try {
       const { sendEmail } = await import("@/lib/gmail/send");
 
+      const creatorName = campaignCreator.creator.name || "there";
+      const campaignName = campaignCreator.campaign.name;
+
       const subject = template.subject
-        .replace("{{creator_name}}", campaignCreator.creator.name || "there")
-        .replace("{{campaign_name}}", campaignCreator.campaign.name);
+        .replace("{{creator_name}}", creatorName)
+        .replace("{{campaign_name}}", campaignName);
 
       const body = template.body
-        .replace("{{creator_name}}", campaignCreator.creator.name || "there")
-        .replace("{{campaign_name}}", campaignCreator.campaign.name)
+        .replace("{{creator_name}}", creatorName)
+        .replace("{{campaign_name}}", campaignName)
         .replace("{{reminder_number}}", String(reminderNumber));
+
+      // Wrap plain-text reminder body in HTML base template
+      const unsubUrl = buildUnsubscribeUrl(creatorEmail);
+      const safeCreatorName = escapeHtml(creatorName);
+      const safeCampaignName = escapeHtml(campaignName);
+      const htmlBody = template.body
+        .replace("{{creator_name}}", safeCreatorName)
+        .replace("{{campaign_name}}", safeCampaignName)
+        .replace("{{reminder_number}}", String(reminderNumber));
+
+      const brandName = campaignCreator.campaign.brand.name ?? "Our Team";
+
+      // htmlBody already has escaped variables — don't double-escape
+      const wrappedHtml = renderBaseTemplate({
+        bodyContent: `<p>${htmlBody.replace(/\n/g, "<br/>")}</p>`,
+        brandName,
+        unsubscribeUrl: unsubUrl,
+      });
+
+      // Warmup gate: days 1-3 send plain text only
+      const effectiveBodyHtml = isInEarlyWarmup(alias)
+        ? undefined
+        : wrappedHtml;
 
       await sendEmail({
         aliasId: alias.id,
         to: creatorEmail,
         subject,
         body,
+        bodyHtml: effectiveBodyHtml,
         threadId: campaignCreator.conversationThread?.id,
         externalThreadId:
           campaignCreator.conversationThread?.externalThreadId || undefined,

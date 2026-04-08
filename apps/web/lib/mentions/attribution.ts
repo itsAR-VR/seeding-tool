@@ -79,6 +79,7 @@ export async function createAndAttributeMention(params: {
   views?: number;
   postedAt?: Date;
   campaignCreatorId: string;
+  attributionConfidence?: string;
 }): Promise<string> {
   // Dedupe: check if mention already exists for this platform + mediaUrl
   const existing = await prisma.mentionAsset.findUnique({
@@ -109,6 +110,7 @@ export async function createAndAttributeMention(params: {
       views: params.views,
       postedAt: params.postedAt,
       campaignCreatorId: params.campaignCreatorId,
+      attributionConfidence: params.attributionConfidence,
     },
   });
 

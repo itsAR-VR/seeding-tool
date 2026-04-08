@@ -42,6 +42,7 @@ export type GenerateDraftParams = {
 export type GeneratedDraft = {
   subject?: string;
   body: string;
+  bodyHtml?: string;
   tokens: number;
 };
 
