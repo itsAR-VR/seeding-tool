@@ -12,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CampaignHealthWidget } from "./components/campaign-health";
+import type { HealthSnapshotData } from "@/lib/health/types";
 
 // ── Status badge color maps ──────────────────────────────────
 
@@ -45,6 +47,45 @@ const typeLabels: Record<string, string> = {
   manual_review: "👀 Review",
   other: "📋 Other",
 };
+
+// ── Health snapshot fetcher ──────────────────────────────────
+
+async function fetchHealthSnapshots(
+  brandId: string
+): Promise<HealthSnapshotData[]> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { brandId, status: { in: ["active", "paused"] } },
+    select: { id: true, name: true },
+  });
+
+  if (campaigns.length === 0) return [];
+
+  const campaignIds = campaigns.map((c) => c.id);
+  const campaignNames = new Map(campaigns.map((c) => [c.id, c.name]));
+
+  const snapshots = await prisma.campaignHealthSnapshot.findMany({
+    where: { campaignId: { in: campaignIds } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Keep only the latest snapshot per campaign
+  const latestByCampaign = new Map<string, (typeof snapshots)[number]>();
+  for (const snap of snapshots) {
+    if (!latestByCampaign.has(snap.campaignId)) {
+      latestByCampaign.set(snap.campaignId, snap);
+    }
+  }
+
+  return Array.from(latestByCampaign.values()).map((snap) => ({
+    id: snap.id,
+    createdAt: snap.createdAt.toISOString(),
+    campaignId: snap.campaignId,
+    campaignName: campaignNames.get(snap.campaignId) ?? "Unknown",
+    status: snap.status as HealthSnapshotData["status"],
+    metrics: snap.metrics as unknown as HealthSnapshotData["metrics"],
+    alerts: snap.alerts as unknown as HealthSnapshotData["alerts"],
+  }));
+}
 
 // ── Dashboard page ───────────────────────────────────────────
 
@@ -82,6 +123,7 @@ export default async function DashboardPage() {
     openInterventions,
     recentMentions,
     totalCampaigns,
+    healthSnapshots,
   ] = await Promise.all([
     // Metric 1: Active campaigns
     prisma.campaign.count({
@@ -154,6 +196,9 @@ export default async function DashboardPage() {
     prisma.campaign.count({
       where: { brandId },
     }),
+
+    // Campaign health snapshots — latest per active/paused campaign
+    fetchHealthSnapshots(brandId),
   ]);
 
   return (
@@ -194,6 +239,9 @@ export default async function DashboardPage() {
           icon="📦"
         />
       </div>
+
+      {/* ── Section 1b: Campaign Health ──────────────────────── */}
+      <CampaignHealthWidget snapshots={healthSnapshots} />
 
       {/* ── Section 2: Two-column layout ────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-5">

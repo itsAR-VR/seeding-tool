@@ -2,6 +2,7 @@ import { serve } from "inngest/next";
 
 import { inngest } from "@/lib/inngest/client";
 import { processReply } from "@/lib/inngest/functions/process-reply";
+import { processDmReply } from "@/lib/inngest/functions/process-dm-reply";
 import { scheduleReminders } from "@/lib/inngest/functions/reminders";
 import { handleReminderSend } from "@/lib/inngest/functions/mention-check";
 import { handleCreatorSearch } from "@/lib/inngest/functions/creator-search";
@@ -23,11 +24,15 @@ import { computeAuthenticity } from "@/lib/inngest/functions/compute-authenticit
 import { createOrderFromAddress } from "@/lib/inngest/functions/create-order-from-address";
 import { warmupCheck } from "@/lib/inngest/functions/warmup-check";
 import { weeklyCalibration } from "@/lib/inngest/functions/weekly-calibration";
+import { stalledDetection } from "@/lib/inngest/functions/stalled-detection";
+import { confirmPosted } from "@/lib/inngest/functions/confirm-posted";
+import { campaignHealthCheck } from "@/lib/inngest/functions/campaign-health-check";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
     processReply,
+    processDmReply,
     scheduleReminders,
     handleReminderSend,
     handleCreatorSearch,
@@ -45,5 +50,8 @@ export const { GET, POST, PUT } = serve({
     createOrderFromAddress,
     warmupCheck,
     weeklyCalibration,
+    stalledDetection,
+    confirmPosted,
+    campaignHealthCheck,
   ],
 });

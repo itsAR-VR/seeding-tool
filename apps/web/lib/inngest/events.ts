@@ -76,7 +76,7 @@ export type AppEventPayloads = {
     };
   };
 
-  /** Fire-and-forget — no consumer yet. TODO: add consumer when needed. */
+  /** Consumed by process-dm-reply — classifies DM, extracts address, generates draft. */
   "unipile/message.received": {
     data: {
       threadId: string;
@@ -107,6 +107,13 @@ export type AppEventPayloads = {
       mentionAssetId: string;
       campaignCreatorId: string;
       attributionConfidence: string;
+    };
+  };
+
+  "mention/posted.confirm": {
+    data: {
+      campaignCreatorId: string;
+      mentionAssetId: string;
     };
   };
 };

@@ -53,6 +53,20 @@ export async function attributeMention(
     });
   }
 
+  // Emit confirm event for 7-day completion check
+  try {
+    const { inngest } = await import("@/lib/inngest/client");
+    await inngest.send({
+      name: "mention/posted.confirm",
+      data: {
+        campaignCreatorId,
+        mentionAssetId,
+      },
+    });
+  } catch {
+    // Inngest may not be configured — log and continue
+  }
+
   // Cancel any pending reminders
   await prisma.reminderSchedule.updateMany({
     where: {

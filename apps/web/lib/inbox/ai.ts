@@ -55,7 +55,8 @@ async function createAIIntervention(
 export async function classifyReply(
   message: { body: string; subject?: string | null },
   brandId: string,
-  campaignCreatorId?: string
+  campaignCreatorId?: string,
+  channel: "email" | "instagram_dm" = "email"
 ): Promise<ClassificationResult> {
   const client = getOpenAIClient();
 
@@ -71,14 +72,22 @@ export async function classifyReply(
   }
 
   try {
-    log("info", "ai.classify.attempt", { brandId, campaignCreatorId });
-    const response = await client.chat.completions.create({
-      model: AI_MODEL,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are an email classifier for a creator seeding platform. 
+    log("info", "ai.classify.attempt", { brandId, campaignCreatorId, channel });
+
+    const systemPrompt =
+      channel === "instagram_dm"
+        ? `You are a message classifier for a creator seeding platform.
+Classify the creator's Instagram DM reply into one of these intents:
+- "positive": Creator is interested, willing to participate
+- "negative": Creator declines, not interested, opts out
+- "address": Creator is providing their shipping address (may be terse — just an address with no greeting, e.g. "123 Main St NYC 10001")
+- "question": Creator has questions about the campaign/product
+- "other": Anything else (auto-replies, irrelevant content)
+
+Note: DMs are typically shorter than emails, may contain emoji/slang, and address-only messages are common.
+
+Respond with JSON: { "intent": string, "confidence": number (0-1) }`
+        : `You are an email classifier for a creator seeding platform.
 Classify the creator's reply into one of these intents:
 - "positive": Creator is interested, willing to participate
 - "negative": Creator declines, not interested, opts out
@@ -86,11 +95,24 @@ Classify the creator's reply into one of these intents:
 - "question": Creator has questions about the campaign/product
 - "other": Anything else (auto-replies, irrelevant content)
 
-Respond with JSON: { "intent": string, "confidence": number (0-1) }`,
+Respond with JSON: { "intent": string, "confidence": number (0-1) }`;
+
+    const userContent =
+      channel === "instagram_dm"
+        ? `Message:\n${message.body}`
+        : `Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`;
+
+    const response = await client.chat.completions.create({
+      model: AI_MODEL,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
         },
         {
           role: "user",
-          content: `Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
+          content: userContent,
         },
       ],
     });

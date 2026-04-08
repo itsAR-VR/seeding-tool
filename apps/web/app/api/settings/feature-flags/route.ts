@@ -4,7 +4,12 @@ import {
   requireOwnerAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
-import { getFeatureFlags, setFeatureFlag, type FeatureFlags } from "@/lib/feature-flags";
+import {
+  getFeatureFlags,
+  setFeatureFlag,
+  VALID_FLAG_NAMES,
+  type FeatureFlags,
+} from "@/lib/feature-flags";
 
 /**
  * GET /api/settings/feature-flags — returns current flags for brand
@@ -43,19 +48,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const validFlags: Array<keyof FeatureFlags> = [
-      "aiReplyEnabled",
-      "unipileDmEnabled",
-      "shopifyOrderEnabled",
-      "reminderEmailEnabled",
-      "identityGraphEnabled",
-      "identityAutoLinkEnabled",
-      "decisionEngineScoringEnabled",
-      "portfolioOptimizerEnabled",
-      "outcomeLearningEnabled",
-    ];
-
-    if (!validFlags.includes(body.flag as keyof FeatureFlags)) {
+    if (!VALID_FLAG_NAMES.includes(body.flag as keyof FeatureFlags)) {
       return NextResponse.json(
         { error: `Invalid flag: ${body.flag}` },
         { status: 400 }

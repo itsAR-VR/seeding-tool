@@ -7,6 +7,7 @@ import {
   stopTracking,
 } from "@/lib/track17/client";
 import { log } from "@/lib/logger";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Inngest function: Register tracking number with Track17 when a Shopify
@@ -212,21 +213,40 @@ export const pollTrack17Status = inngest.createFunction(
               });
 
               if (newStatus === "delivered") {
-                await prisma.shopifyOrder.update({
-                  where: { id: fe.orderId },
-                  data: { status: "delivered" },
+                const cc = fe.order.campaignCreator;
+                const shouldUpdateLifecycle =
+                  cc &&
+                  !["posted", "completed", "opted_out"].includes(
+                    cc.lifecycleStatus
+                  );
+
+                await prisma.$transaction(async (tx) => {
+                  await tx.shopifyOrder.update({
+                    where: { id: fe.orderId },
+                    data: { status: "delivered" },
+                  });
+
+                  if (shouldUpdateLifecycle) {
+                    await tx.campaignCreator.update({
+                      where: { id: fe.order.campaignCreatorId },
+                      data: { lifecycleStatus: "delivered" },
+                    });
+                  }
                 });
 
-                if (
-                  fe.order.campaignCreator &&
-                  !["posted", "completed", "opted_out"].includes(
-                    fe.order.campaignCreator.lifecycleStatus
-                  )
-                ) {
-                  await prisma.campaignCreator.update({
-                    where: { id: fe.order.campaignCreatorId },
-                    data: { lifecycleStatus: "delivered" },
-                  });
+                if (shouldUpdateLifecycle && fe.order.campaignCreatorId) {
+                  try {
+                    await recordOutcomeEvent({
+                      campaignCreatorId: fe.order.campaignCreatorId,
+                      event: { type: "delivered" },
+                    });
+                  } catch (err) {
+                    log("error", "track17.outcome_event_failed", {
+                      campaignCreatorId: fe.order.campaignCreatorId,
+                      error:
+                        err instanceof Error ? err.message : "Unknown error",
+                    });
+                  }
                 }
 
                 try {

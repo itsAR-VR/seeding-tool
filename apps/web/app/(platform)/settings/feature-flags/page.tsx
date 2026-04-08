@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import type { FeatureFlags } from "@/lib/feature-flags";
 
 /**
  * Feature Flags Settings Page
@@ -8,18 +9,6 @@ import { useState, useEffect, useCallback } from "react";
  * Admin-only toggles for per-brand feature flags.
  * Flags fail-CLOSED: if the flag system breaks, everything is disabled.
  */
-
-interface FeatureFlags {
-  aiReplyEnabled: boolean;
-  unipileDmEnabled: boolean;
-  shopifyOrderEnabled: boolean;
-  reminderEmailEnabled: boolean;
-  identityGraphEnabled: boolean;
-  identityAutoLinkEnabled: boolean;
-  decisionEngineScoringEnabled: boolean;
-  portfolioOptimizerEnabled: boolean;
-  outcomeLearningEnabled: boolean;
-}
 
 const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: string }> = {
   aiReplyEnabled: {
@@ -57,6 +46,10 @@ const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: stri
   outcomeLearningEnabled: {
     label: "Outcome Learning",
     description: "Enable campaign outcome capture, provenance, and KPI calibration surfaces.",
+  },
+  instagramMentionPollEnabled: {
+    label: "Instagram Mention Polling",
+    description: "Poll for @-mentions on Instagram. Defaults ON (fail-open). Turning this off stops all mention detection.",
   },
 };
 

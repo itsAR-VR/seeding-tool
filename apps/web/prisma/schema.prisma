@@ -444,6 +444,7 @@ model Campaign {
   campaignCreators  CampaignCreator[]
   creatorSearchJobs CreatorSearchJob[]
   outcomes          CampaignOutcome[]
+  healthSnapshots   CampaignHealthSnapshot[]
 
   @@map("campaigns")
 }
@@ -1343,4 +1344,21 @@ model ShopifyVariant {
 
   @@unique([productId, shopifyVariantId])
   @@map("shopify_variants")
+}
+
+// ──────────────────────────────────────────────
+// Campaign Health Monitoring
+// ──────────────────────────────────────────────
+
+model CampaignHealthSnapshot {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  status     String   // "healthy" | "warning" | "critical"
+  metrics    Json     // HealthMetrics (typed in application code)
+  alerts     Json     // HealthAlert[] (typed in application code)
+
+  @@index([campaignId, createdAt])
+  @@map("campaign_health_snapshots")
 }
