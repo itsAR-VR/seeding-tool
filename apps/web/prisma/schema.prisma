@@ -49,6 +49,7 @@ model Organization {
   @@map("organizations")
 }
 
+// ACTIVE — used by lib/tenancy.ts, scripts/seed-phase18-fixtures.ts
 model OrganizationMembership {
   id     String @id @default(uuid())
   role   String @default("member") // owner | admin | member
@@ -135,9 +136,11 @@ model BrandMembership {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, brandId])
+  @@index([brandId])
   @@map("brand_memberships")
 }
 
+// ACTIVE — used by app/api/billing/webhook/route.ts
 model SubscriptionPlan {
   id          String @id @default(uuid())
   name        String // Free | Starter | Growth | Enterprise
@@ -154,6 +157,7 @@ model SubscriptionPlan {
   @@map("subscription_plans")
 }
 
+// ACTIVE — used by app/api/billing/webhook/route.ts (via SubscriptionPlan relation)
 model SubscriptionEntitlement {
   id    String @id @default(uuid())
   key   String // max_brands | max_creators_per_campaign | max_campaigns | etc.
@@ -194,6 +198,7 @@ model Subscription {
 // Brand Configuration
 // ──────────────────────────────────────────────
 
+// ACTIVE — used by app/api/onboarding/status/route.ts, app/api/onboarding/complete/route.ts
 model BrandOnboarding {
   id            String  @id @default(uuid())
   currentStep   Int     @default(0)
@@ -236,6 +241,7 @@ model BrandSettings {
 // Credit System
 // ──────────────────────────────────────────────
 
+// ACTIVE — used by lib/credits.ts, app/api/billing/balance/route.ts
 model BrandCreditBalance {
   id      String @id @default(uuid())
   credits Int    @default(0)
@@ -251,6 +257,7 @@ model BrandCreditBalance {
   @@map("brand_credit_balances")
 }
 
+// ACTIVE — used by lib/credits.ts
 model BrandCreditTransaction {
   id        String  @id @default(uuid())
   type      String  // "mint" | "debit"
@@ -269,6 +276,7 @@ model BrandCreditTransaction {
   @@map("brand_credit_transactions")
 }
 
+// ACTIVE — used by lib/inngest/functions/mention-check.ts
 model OutreachTemplate {
   id        String @id @default(uuid())
   name      String
@@ -284,6 +292,7 @@ model OutreachTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("outreach_templates")
 }
 
@@ -306,6 +315,7 @@ model BrandProduct {
 
   campaignProducts CampaignProduct[]
 
+  @@index([brandId])
   @@map("brand_products")
 }
 
@@ -347,6 +357,7 @@ model BrandConnection {
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, provider])
+  @@index([status])
   @@map("brand_connections")
 }
 
@@ -391,6 +402,7 @@ model SendingMetric {
   updatedAt DateTime @updatedAt
 
   @@unique([aliasId, date])
+  @@index([brandId])
   @@map("sending_metrics")
 }
 
@@ -405,6 +417,7 @@ model EmailSuppression {
   @@map("email_suppressions")
 }
 
+// UNUSED — candidate for removal (no prisma.discoverySeed calls found in codebase)
 model DiscoverySeed {
   id       String @id @default(uuid())
   platform String // instagram | tiktok
@@ -446,6 +459,8 @@ model Campaign {
   outcomes          CampaignOutcome[]
   healthSnapshots   CampaignHealthSnapshot[]
 
+  @@index([brandId])
+  @@index([status])
   @@map("campaigns")
 }
 
@@ -542,6 +557,7 @@ model CreatorProfile {
   @@map("creator_profiles")
 }
 
+// ACTIVE — used by lib/identity/matching.ts, lib/creator-search/job-runner.ts, lib/seeding/outcome-recorder.ts, and 4+ other files
 model InfluencerIdentity {
   id              String   @id @default(uuid())
   displayName     String?  @map("display_name")
@@ -837,6 +853,7 @@ model InfluencerMetricsDaily {
   @@map("influencer_metrics_daily")
 }
 
+// ACTIVE — used by app/api/creators/[creatorId]/provenance/route.ts, lib/creator-search/decision-engine.ts
 model InfluencerAuthenticityAssessment {
   id                     String   @id @default(uuid())
   profileId              String   @map("profile_id")
@@ -933,6 +950,8 @@ model ConversationThread {
   messages    Message[]
   aiArtifacts AIArtifact[]
 
+  @@index([brandId])
+  @@index([status])
   @@map("conversation_threads")
 }
 
@@ -1000,6 +1019,7 @@ model AIDraft {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("ai_drafts")
 }
 
@@ -1074,6 +1094,7 @@ model FulfillmentEvent {
   @@map("fulfillment_events")
 }
 
+// ACTIVE — used by app/api/campaigns/[campaignId]/analytics/route.ts, lib/creators/validation-ops.ts
 model CostRecord {
   id       String @id @default(uuid())
   type     String // product | shipping | platform_fee | other
@@ -1133,6 +1154,7 @@ model ReminderSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("reminder_schedules")
 }
 
@@ -1158,6 +1180,8 @@ model InterventionCase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
+  @@index([status])
   @@map("intervention_cases")
 }
 
@@ -1180,10 +1204,12 @@ model WebhookEvent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@index([provider, status])
   @@map("webhook_events")
 }
 
+// PLANNED — behind feature flags (no prisma.backgroundJob calls found; schema-only for future job queue)
 model BackgroundJob {
   id        String @id @default(uuid())
   type      String // outreach | follow_up | reply_process | order_create | fulfillment_sync | reminder_send | mention_process | search_dispatch | billing_sync | alias_warmup | health_check
@@ -1207,11 +1233,13 @@ model BackgroundJob {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@index([type, status])
   @@index([scheduledFor])
   @@map("background_jobs")
 }
 
+// ACTIVE — used by lib/outreach/send-pipeline.ts, app/api/inbox/[threadId]/send/route.ts, app/api/campaigns/[campaignId]/creators/[creatorId]/review/route.ts
 model ActivityLog {
   id     String @id @default(uuid())
   action String // e.g. creator.approved, outreach.sent, order.created, etc.
@@ -1253,6 +1281,7 @@ model AiPersona {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("ai_personas")
 }
 
@@ -1278,6 +1307,7 @@ model Automation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("automations")
 }
 
@@ -1285,6 +1315,7 @@ model Automation {
 // Shopify Product Catalog
 // ──────────────────────────────────────────────
 
+// ACTIVE — used by lib/inngest/functions/weekly-calibration.ts, app/api/analytics/calibration/route.ts
 model CalibrationSnapshot {
   id                 String   @id @default(uuid())
   createdAt          DateTime @default(now())

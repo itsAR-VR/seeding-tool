@@ -66,16 +66,6 @@ export type AppEventPayloads = {
     };
   };
 
-  /** Fire-and-forget — no consumer yet. TODO: add consumer when needed. */
-  "shopify/fulfillment.updated": {
-    data: {
-      orderId: string;
-      shopifyOrderId: string;
-      campaignCreatorId: string;
-      status: string;
-    };
-  };
-
   /** Consumed by process-dm-reply — classifies DM, extracts address, generates draft. */
   "unipile/message.received": {
     data: {

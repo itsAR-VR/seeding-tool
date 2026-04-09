@@ -1,5 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 import type { Prisma } from "@prisma/client";
 import {
   runInstagramProfileScraper,
@@ -291,9 +292,13 @@ export const apifyCreatorSearch = inngest.createFunction(
         },
       });
 
-      console.log(
-        `[apify-creator-search] Job ${jobId}: ${mapped.length} candidates, ${validMapped.length} valid, ${invalidMapped.length} invalid, ${created} new creators`
-      );
+      log("info", "apify-creator-search.complete", {
+        jobId,
+        candidates: mapped.length,
+        valid: validMapped.length,
+        invalid: invalidMapped.length,
+        newCreators: created,
+      });
 
       return {
         jobId,

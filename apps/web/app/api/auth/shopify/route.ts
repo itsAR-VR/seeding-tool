@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { APP_URL } from "@/lib/config";
 import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
 import { encodeIntegrationOAuthState } from "@/lib/integrations/oauth-state";
 
@@ -21,7 +22,7 @@ function isValidShopDomain(shop: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = APP_URL;
   const { searchParams } = new URL(request.url);
 
   const brandId = searchParams.get("brandId");

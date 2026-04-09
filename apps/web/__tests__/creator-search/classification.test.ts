@@ -85,6 +85,11 @@ describe("creator discovery merge", () => {
         sources: ["collabstr"],
         sourceMetadata: { origin: "collabstr" },
         existingValidationStatus: null,
+        expandedCategories: [],
+        languageDetected: "en",
+        topicSignals: [],
+        sourceConfidence: 0.8,
+        sourceConfidenceTier: "official",
         relevanceScore: 12,
       },
       {
@@ -110,6 +115,11 @@ describe("creator discovery merge", () => {
         primarySource: "apify_search",
         sources: ["apify_search"],
         sourceMetadata: { origin: "apify" },
+        expandedCategories: [],
+        languageDetected: "en",
+        topicSignals: [],
+        sourceConfidence: 0.8,
+        sourceConfidenceTier: "official",
         existingValidationStatus: null,
         relevanceScore: 28,
       }

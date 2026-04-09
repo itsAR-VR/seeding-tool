@@ -354,21 +354,6 @@ async function handleFulfillmentUpdate(payload: Record<string, unknown>) {
       }
     }
 
-    // Emit fulfillment updated event for reminder system
-    try {
-      const { inngest } = await import("@/lib/inngest/client");
-      await inngest.send({
-        name: "shopify/fulfillment.updated",
-        data: {
-          orderId: order.id,
-          shopifyOrderId: order.shopifyOrderId,
-          campaignCreatorId: order.campaignCreatorId,
-          status: "delivered",
-        },
-      });
-    } catch {
-      console.warn("[shopify-webhook] Failed to emit Inngest event for delivery");
-    }
   }
 }
 

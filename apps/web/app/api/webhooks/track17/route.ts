@@ -139,23 +139,6 @@ export async function POST(request: NextRequest) {
           });
         }
 
-        // Emit Inngest event for downstream processing (e.g. reminders)
-        try {
-          const { inngest } = await import("@/lib/inngest/client");
-          await inngest.send({
-            name: "shopify/fulfillment.updated",
-            data: {
-              orderId: fe.orderId,
-              shopifyOrderId: fe.order.shopifyOrderId,
-              campaignCreatorId: fe.order.campaignCreatorId,
-              status: "delivered",
-            },
-          });
-        } catch {
-          console.warn(
-            "[track17-webhook] Failed to emit Inngest event for delivery"
-          );
-        }
       }
     }
 

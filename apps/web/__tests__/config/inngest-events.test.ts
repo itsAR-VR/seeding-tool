@@ -19,7 +19,7 @@ function assertEventShape<K extends keyof AppEventPayloads>(
 }
 
 describe("AppEventPayloads type catalog", () => {
-  it("declares exactly 12 events", () => {
+  it("declares exactly 11 events", () => {
     // Enumerate all expected event names at the type level
     const expectedEvents: Array<keyof AppEventPayloads> = [
       "app/ping",
@@ -29,14 +29,13 @@ describe("AppEventPayloads type catalog", () => {
       "creator-avg-views/requested",
       "reminder/send",
       "shopify/order.fulfilled",
-      "shopify/fulfillment.updated",
       "unipile/message.received",
       "metrics/snapshots-collected",
       "shipping/address.approved",
       "mention/attributed",
     ];
 
-    expect(expectedEvents).toHaveLength(12);
+    expect(expectedEvents).toHaveLength(11);
   });
 
   it("app/ping has correct shape", () => {
@@ -94,15 +93,6 @@ describe("AppEventPayloads type catalog", () => {
       orderId: "o1",
       shopifyOrderId: "so1",
       campaignCreatorId: "cc1",
-    });
-  });
-
-  it("shopify/fulfillment.updated has correct shape", () => {
-    assertEventShape("shopify/fulfillment.updated", {
-      orderId: "o1",
-      shopifyOrderId: "so1",
-      campaignCreatorId: "cc1",
-      status: "in_transit",
     });
   });
 

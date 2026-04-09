@@ -1,5 +1,6 @@
 import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 import { computeNextRunAt } from "@/lib/automations/schedule";
 import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
 
@@ -129,9 +130,10 @@ export const runAutomations = inngest.createFunction(
               throw dispatchError;
             }
 
-            console.log(
-              `[run-automations] Triggered creator_discovery for automation ${automation.id} (job ${job.id})`
-            );
+            log("info", "run-automations.triggered", {
+              automationId: automation.id,
+              jobId: job.id,
+            });
           }
 
           await prisma.automation.update({

@@ -1,5 +1,18 @@
 /**
- * Send Instagram DMs via Unipile API.
+ * Outreach Pipeline DM Module — pre-resolved client abstraction.
+ *
+ * Use this module for sending DMs as part of the outreach pipeline where
+ * the caller has already resolved the Unipile client and accountId. It
+ * performs fuzzy handle search with exact-match verification before sending.
+ *
+ * Key differences from `dms.ts`:
+ * - Takes a pre-resolved `UnipileClient` + `accountId` (caller manages resolution)
+ * - Uses fuzzy search endpoint (`/api/v1/users/search`) with exact handle verification
+ * - FAIL-CLOSED: aborts on any recipient identity ambiguity
+ * - Designed for outreach pipeline DM sending to new recipients
+ *
+ * For inbox/reply DM sending (brandId-based, existing chat context), use
+ * `dms.ts` instead.
  *
  * SAFETY INVARIANTS (enforced in this file):
  * 1. Exact handle match required — Unipile /users/search is fuzzy; we verify

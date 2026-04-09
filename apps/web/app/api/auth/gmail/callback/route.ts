@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { APP_URL } from "@/lib/config";
 import { encrypt } from "@/lib/encryption";
 import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
@@ -9,7 +10,7 @@ import { upsertBrandConnection, upsertProviderCredential } from "@/lib/integrati
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = APP_URL;
   let state: ReturnType<typeof decodeIntegrationOAuthState> | null = null;
 
   try {

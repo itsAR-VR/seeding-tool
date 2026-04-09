@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
 import { mint, CREDITS_PER_PLAN } from "@/lib/credits";
 import type Stripe from "stripe";
 
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
+        log("info", "stripe-webhook.unhandled", { eventType: event.type });
     }
 
     // Mark as processed
