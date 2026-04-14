@@ -107,6 +107,15 @@ describe("scheduleReminders", () => {
         orderId: "order-1",
       },
     });
+    expect(mocks.send).toHaveBeenNthCalledWith(2, {
+      name: "reminder/send",
+      data: {
+        campaignCreatorId: "cc-1",
+        brandId: "brand-1",
+        reminderNumber: 2,
+        orderId: "order-1",
+      },
+    });
   });
 
   it("marks the creator as posted and cancels remaining reminders when a mention appears", async () => {

@@ -121,12 +121,24 @@ describe("shopify products", () => {
         }),
       }),
     );
+    expect(mocks.productUpsert).toHaveBeenCalledTimes(2);
     expect(mocks.variantUpsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           shopifyVariantId: "100",
           imageUrl: "https://cdn.example.com/variant-1.jpg",
         }),
+      }),
+    );
+    expect(mocks.variantUpsert).toHaveBeenCalledTimes(2);
+    expect(mocks.productUpsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: {
+          brandId_shopifyId: {
+            brandId: "brand-1",
+            shopifyId: "2",
+          },
+        },
       }),
     );
   });

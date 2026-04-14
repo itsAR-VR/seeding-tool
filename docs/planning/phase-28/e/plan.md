@@ -95,6 +95,10 @@ Target: 80%+ coverage on all priority 1 files, 60%+ on priority 2-3.
   - reminder scheduling cadence, mention short-circuit, terminal lifecycle cancellation
   - reminder send gating for feature flags, suppression, mention detection, and warmup-mode plain text
   - Shopify product sync pagination/upserts, stale cleanup, and UI flattening
+- Review-driven hardening applied after the first pass:
+  - `apps/web/lib/inngest/functions/mention-check.ts` now marks only the earliest pending reminder as `sent` instead of bulk-updating all pending reminders for the creator
+  - reminder emission assertions now verify both reminder payloads
+  - Shopify pagination coverage now asserts second-page persistence via upsert counts and final call inspection
 - Focused verification:
   - `cd apps/web && ./node_modules/.bin/vitest run __tests__/creator-search/orchestrator.test.ts __tests__/creator-search/decision-engine.test.ts __tests__/creator-search/classification-llm.test.ts __tests__/creator-search/classification-llm-extended.test.ts __tests__/ai/outreach-drafter.test.ts __tests__/creators/validation-ops.test.ts __tests__/shopify/orders.test.ts __tests__/shopify/products.test.ts __tests__/inngest/reminders.test.ts __tests__/inngest/mention-check.test.ts`
   - Result: `10` files passed, `71` tests passed

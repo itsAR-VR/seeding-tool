@@ -211,17 +211,24 @@ export const handleReminderSend = inngest.createFunction(
           campaignCreator.conversationThread?.externalThreadId || undefined,
       });
 
-      // Update reminder schedule
-      await prisma.reminderSchedule.updateMany({
+      const nextPendingReminder = await prisma.reminderSchedule.findFirst({
         where: {
           campaignCreatorId,
           status: "pending",
         },
-        data: {
-          status: "sent",
-          sentAt: new Date(),
-        },
+        orderBy: { scheduledFor: "asc" },
+        select: { id: true },
       });
+
+      if (nextPendingReminder) {
+        await prisma.reminderSchedule.update({
+          where: { id: nextPendingReminder.id },
+          data: {
+            status: "sent",
+            sentAt: new Date(),
+          },
+        });
+      }
 
       return { status: "sent", reminderNumber };
     } catch (error) {

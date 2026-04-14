@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => {
     ),
     campaignCreatorFindUnique: vi.fn(),
     mentionAssetFindFirst: vi.fn(),
+    reminderScheduleFindFirst: vi.fn(),
+    reminderScheduleUpdate: vi.fn(),
     reminderScheduleUpdateMany: vi.fn(),
     campaignCreatorUpdate: vi.fn(),
     outreachTemplateFindFirst: vi.fn(),
@@ -42,6 +44,8 @@ vi.mock("@/lib/prisma", () => ({
       findFirst: mocks.mentionAssetFindFirst,
     },
     reminderSchedule: {
+      findFirst: mocks.reminderScheduleFindFirst,
+      update: mocks.reminderScheduleUpdate,
       updateMany: mocks.reminderScheduleUpdateMany,
     },
     outreachTemplate: {
@@ -113,6 +117,7 @@ describe("handleReminderSend", () => {
     mocks.getFeatureFlags.mockResolvedValue({ reminderEmailEnabled: true });
     mocks.campaignCreatorFindUnique.mockResolvedValue(makeCampaignCreator());
     mocks.mentionAssetFindFirst.mockResolvedValue(null);
+    mocks.reminderScheduleFindFirst.mockResolvedValue({ id: "reminder-1" });
     mocks.isSuppressed.mockResolvedValue(false);
     mocks.isInEarlyWarmup.mockReturnValue(false);
     mocks.outreachTemplateFindFirst.mockResolvedValue({
@@ -203,12 +208,18 @@ describe("handleReminderSend", () => {
       threadId: "thread-1",
       externalThreadId: "gmail-thread-1",
     });
-    expect(mocks.reminderScheduleUpdateMany).toHaveBeenCalledWith({
+    expect(mocks.reminderScheduleFindFirst).toHaveBeenCalledWith({
       where: { campaignCreatorId: "cc-1", status: "pending" },
+      orderBy: { scheduledFor: "asc" },
+      select: { id: true },
+    });
+    expect(mocks.reminderScheduleUpdate).toHaveBeenCalledWith({
+      where: { id: "reminder-1" },
       data: {
         status: "sent",
         sentAt: expect.any(Date),
       },
     });
+    expect(mocks.reminderScheduleUpdateMany).not.toHaveBeenCalled();
   });
 });
