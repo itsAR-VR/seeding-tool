@@ -62,4 +62,9 @@ brandId index list updated to exactly 11 models. Status index list updated to ex
 
 ## Output
 
-(empty — to be filled after implementation)
+- Validated that the required `brandId` and `status` indexes from this lane are already present in `apps/web/prisma/schema.prisma`.
+- Confirmed the schema is currently healthy without further index edits:
+  - `BrandMembership`, `OutreachTemplate`, `BrandProduct`, `SendingMetric`, `Campaign`, `ConversationThread`, `InterventionCase`, `WebhookEvent`, `BackgroundJob`, `AiPersona`, and `Automation` already have `@@index([brandId])`
+  - `BrandConnection`, `Campaign`, `ConversationThread`, `AIDraft`, `ReminderSchedule`, and `InterventionCase` already have `@@index([status])`
+- Verification:
+  - `cd apps/web && npx prisma validate`

@@ -85,4 +85,17 @@ Target: 80%+ coverage on all priority 1 files, 60%+ on priority 2-3.
 
 ## Output
 
-(empty — to be filled after implementation)
+- Added the missing focused coverage files for the still-uncovered Phase 28e surfaces:
+  - `apps/web/__tests__/creator-search/orchestrator.test.ts`
+  - `apps/web/__tests__/inngest/reminders.test.ts`
+  - `apps/web/__tests__/inngest/mention-check.test.ts`
+  - `apps/web/__tests__/shopify/products.test.ts`
+- Runtime behaviors now covered in this lane:
+  - orchestrator dedup + enrichment, low-confidence reclassification, graceful lane failure
+  - reminder scheduling cadence, mention short-circuit, terminal lifecycle cancellation
+  - reminder send gating for feature flags, suppression, mention detection, and warmup-mode plain text
+  - Shopify product sync pagination/upserts, stale cleanup, and UI flattening
+- Focused verification:
+  - `cd apps/web && ./node_modules/.bin/vitest run __tests__/creator-search/orchestrator.test.ts __tests__/creator-search/decision-engine.test.ts __tests__/creator-search/classification-llm.test.ts __tests__/creator-search/classification-llm-extended.test.ts __tests__/ai/outreach-drafter.test.ts __tests__/creators/validation-ops.test.ts __tests__/shopify/orders.test.ts __tests__/shopify/products.test.ts __tests__/inngest/reminders.test.ts __tests__/inngest/mention-check.test.ts`
+  - Result: `10` files passed, `71` tests passed
+  - `cd apps/web && npx tsc --noEmit`

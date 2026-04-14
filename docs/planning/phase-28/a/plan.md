@@ -110,4 +110,14 @@ Deletion list updated from 6 to 3 truly dead modules, plus 2 with cleanup requir
 
 ## Output
 
-(empty — to be filled after implementation)
+- Validated that the planned quick wins were already satisfied in the current repo before this lane started:
+  - `apps/web/__tests__/webhooks/gmail.test.ts` already mocked `recordOutcomeEvent` and passes `7/7`
+  - `apps/web/__tests__/creator-search/classification.test.ts` already contains the missing fixture fields
+  - `apps/web/lib/config.ts` already exports `APP_URL`
+  - production `console.log` usage in `apps/web/app` + `apps/web/lib` is reduced to `lib/logger.ts` only
+  - the dead-module paths named in the plan are already deleted, while `apps/web/lib/sentry.ts` remains
+  - `shopify/fulfillment.updated` has zero remaining references
+- Verification:
+  - `cd apps/web && ./node_modules/.bin/vitest run __tests__/webhooks/gmail.test.ts`
+  - `cd apps/web && npx tsc --noEmit`
+  - `rg -n "console\\.log" apps/web/{app,lib} --glob '!**/__tests__/**' --glob '!**/graphify-out/**'`
