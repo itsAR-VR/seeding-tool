@@ -1,5 +1,15 @@
+import { randomUUID } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getShopifyClient } from "./client";
+
+/** Thrown when an order already exists (or is being created) for the campaign creator. */
+export class OrderAlreadyExistsError extends Error {
+  constructor(campaignCreatorId: string) {
+    super(`Order already exists for campaign creator ${campaignCreatorId}`);
+    this.name = "OrderAlreadyExistsError";
+  }
+}
 
 /**
  * Create a Shopify draft order for a creator gift, complete it, and persist.
@@ -7,12 +17,12 @@ import { getShopifyClient } from "./client";
  * Flow:
  * 1. Fetch confirmed ShippingAddressSnapshot
  * 2. Fetch gifted product/variant from campaign
- * 3. POST draft order with 100% discount ($0)
- * 4. Complete the draft order
- * 5. Persist ShopifyOrder row
- * 6. Update CampaignCreator.lifecycleStatus = "order_created"
- *
- * // INVARIANT: One-order-per-campaign-creator guard — checked before creation
+ * 3. CLAIM: insert a pending ShopifyOrder row — the unique campaignCreatorId
+ *    makes this the atomic idempotency key, claimed BEFORE any Shopify call
+ * 4. POST draft order with 100% discount ($0)
+ * 5. Complete the draft order
+ * 6. Update the claimed row with the real Shopify ids (released on failure)
+ * 7. Update CampaignCreator.lifecycleStatus = "order_created"
  */
 export async function createDraftOrder(
   brandId: string,
@@ -34,11 +44,9 @@ export async function createDraftOrder(
     throw new Error("CampaignCreator not found");
   }
 
-  // INVARIANT: One-order-per-campaign-creator guard — checked before creation
+  // INVARIANT: One-order-per-campaign-creator — fast-path read guard
   if (campaignCreator.shopifyOrder) {
-    throw new Error(
-      `Order already exists for campaign creator ${campaignCreator.id}: ${campaignCreator.shopifyOrder.shopifyOrderId}`
-    );
+    throw new OrderAlreadyExistsError(campaignCreator.id);
   }
 
   // 1. Fetch confirmed shipping address
@@ -75,8 +83,34 @@ export async function createDraftOrder(
     );
   }
 
-  // 3. Create draft order via Shopify API
-  const client = await getShopifyClient(brandId);
+  // 3. Claim the order slot atomically BEFORE any Shopify call. The unique
+  // campaignCreatorId constraint means a concurrent execution loses the
+  // insert instead of completing an untracked duplicate order.
+  let claimId: string;
+  try {
+    const claim = await prisma.shopifyOrder.create({
+      data: {
+        shopifyOrderId: `pending:${randomUUID()}`,
+        status: "pending",
+        currency: "USD",
+        campaignCreatorId: campaignCreator.id,
+      },
+      select: { id: true },
+    });
+    claimId = claim.id;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      throw new OrderAlreadyExistsError(campaignCreator.id);
+    }
+    throw error;
+  }
+
+  try {
+    // 4. Create draft order via Shopify API
+    const client = await getShopifyClient(brandId);
 
   const draftOrderPayload = {
     draft_order: {
@@ -142,23 +176,32 @@ export async function createDraftOrder(
   const shopifyOrderId = String(completeData.draft_order.order_id);
   const shopifyOrderNumber = completeData.draft_order.name;
 
-  // 5. Persist ShopifyOrder row
-  const order = await prisma.shopifyOrder.create({
+  // 6. Fill in the claimed row with the real Shopify ids
+  const order = await prisma.shopifyOrder.update({
+    where: { id: claimId },
     data: {
       shopifyOrderId,
       shopifyOrderNumber,
       status: "created",
       totalPrice: 0, // 100% discount
       currency: "USD",
-      campaignCreatorId: campaignCreator.id,
     },
   });
 
-  // 6. Update lifecycle status
+  // 7. Update lifecycle status
   await prisma.campaignCreator.update({
     where: { id: campaignCreator.id },
     data: { lifecycleStatus: "order_created" },
   });
 
   return { shopifyOrderId, orderId: order.id };
+  } catch (error) {
+    // Release the claim so a failed attempt can be retried (best-effort).
+    try {
+      await prisma.shopifyOrder.delete({ where: { id: claimId } });
+    } catch {
+      // claim row may already be gone; the original error takes precedence
+    }
+    throw error;
+  }
 }

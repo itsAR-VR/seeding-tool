@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   addressFindFirst: vi.fn(),
   campaignProductFindFirst: vi.fn(),
   shopifyOrderCreate: vi.fn(),
+  shopifyOrderUpdate: vi.fn(),
+  shopifyOrderDelete: vi.fn(),
   campaignCreatorUpdate: vi.fn(),
   getShopifyClient: vi.fn(),
   clientFetch: vi.fn(),
@@ -25,6 +27,8 @@ vi.mock("@/lib/prisma", () => ({
     },
     shopifyOrder: {
       create: mocks.shopifyOrderCreate,
+      update: mocks.shopifyOrderUpdate,
+      delete: mocks.shopifyOrderDelete,
     },
   },
 }));
@@ -90,7 +94,9 @@ function setupHappyPath() {
     fetch: mocks.clientFetch,
   });
 
+  // Claim-first flow: create = pending claim row, update = real Shopify ids
   mocks.shopifyOrderCreate.mockResolvedValue({ id: "order-db-1" });
+  mocks.shopifyOrderUpdate.mockResolvedValue({ id: "order-db-1" });
   mocks.campaignCreatorUpdate.mockResolvedValue({});
 }
 
@@ -138,14 +144,27 @@ describe("createDraftOrder", () => {
     const { createDraftOrder } = await import("@/lib/shopify/orders");
     await createDraftOrder("brand-1", "creator-1", "camp-1");
 
+    // Claim row is created pending with the atomic idempotency key
     expect(mocks.shopifyOrderCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: "pending",
+        campaignCreatorId: "cc-1",
+      }),
+      select: { id: true },
+    });
+    expect(
+      mocks.shopifyOrderCreate.mock.calls[0][0].data.shopifyOrderId
+    ).toMatch(/^pending:/);
+
+    // Claim row is then updated with the real Shopify ids
+    expect(mocks.shopifyOrderUpdate).toHaveBeenCalledWith({
+      where: { id: "order-db-1" },
       data: {
         shopifyOrderId: "5001",
         shopifyOrderNumber: "#1001",
         status: "created",
         totalPrice: 0,
         currency: "USD",
-        campaignCreatorId: "cc-1",
       },
     });
   });
@@ -269,6 +288,7 @@ describe("createDraftOrder", () => {
     mocks.campaignProductFindFirst.mockResolvedValue({
       product: { id: "prod-1", shopifyVariantId: "12345" },
     });
+    mocks.shopifyOrderCreate.mockResolvedValue({ id: "claim-1" });
     mocks.getShopifyClient.mockResolvedValue({
       fetch: vi.fn().mockResolvedValue({
         ok: false,
@@ -301,6 +321,7 @@ describe("createDraftOrder", () => {
     mocks.campaignProductFindFirst.mockResolvedValue({
       product: { id: "prod-1", shopifyVariantId: "12345" },
     });
+    mocks.shopifyOrderCreate.mockResolvedValue({ id: "claim-1" });
 
     const clientFetch = vi.fn();
     // Draft creation succeeds

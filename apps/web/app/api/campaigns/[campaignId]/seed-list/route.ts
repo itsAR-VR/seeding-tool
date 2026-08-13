@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import {
   BrandAccessError,
   getAuthorizedCampaign,
+  getCurrentBrandMembership,
+  requireWriteAccess,
 } from "@/lib/integrations/brand-access";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { generatePortfolioExplanation } from "@/lib/seeding/portfolio-explanation";
@@ -161,6 +163,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
     const { brandId } = await getAuthorizedCampaign(campaignId);
+    // This POST overwrites campaign.portfolioConfig — membership alone is
+    // not enough, viewers must not mutate campaign configuration.
+    requireWriteAccess(await getCurrentBrandMembership());
     const body = (await request.json()) as {
       targetSize?: number;
       qualityWeight?: number;

@@ -112,14 +112,22 @@ function marginalDiversityGain<T extends PortfolioCandidateLike>(
 
 function deduplicateByIdentity<T extends CandidateWithScore>(candidates: T[]) {
   const seen = new Map<string, T>();
+  const out: T[] = [];
   for (const candidate of candidates) {
-    const key = candidate.influencerIdentityId ?? `${candidate.compositeScore}:${candidate.followerCount}`;
+    // Candidates without an identity stay distinct — score/follower count
+    // are not identity attributes, and keying on them collapses unrelated
+    // creators (e.g. every "0:null" candidate) into one entry.
+    if (!candidate.influencerIdentityId) {
+      out.push(candidate);
+      continue;
+    }
+    const key = candidate.influencerIdentityId;
     const existing = seen.get(key);
     if (!existing || candidate.compositeScore > existing.compositeScore) {
       seen.set(key, candidate);
     }
   }
-  return [...seen.values()];
+  return [...seen.values(), ...out];
 }
 
 function buildMetrics<T extends CandidateWithScore>(

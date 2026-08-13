@@ -374,16 +374,18 @@ export async function sendEmail(params: SendEmailParams) {
     // Gmail accepted it, capacity stays consumed even if local
     // persistence afterwards failed.
     if (!sentExternally) {
-      await prisma.sendingMetric
-        .updateMany({
+      try {
+        await prisma.sendingMetric.updateMany({
           where: {
             aliasId: params.aliasId,
             date: today,
             sent: { gt: 0 },
           },
           data: { sent: { decrement: 1 } },
-        })
-        .catch(() => undefined);
+        });
+      } catch {
+        // best-effort compensation; the original send error takes precedence
+      }
     }
     throw error;
   }

@@ -62,8 +62,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Identity edge not found" }, { status: 404 });
     }
 
+    // Confirming a merge mutates the global identity graph, so BOTH
+    // endpoints must belong to this brand — OR-visibility would let one
+    // tenant confirm merges touching another tenant's creators.
     const brandVisible =
-      edge.fromProfile.influencer.creators.length > 0 ||
+      edge.fromProfile.influencer.creators.length > 0 &&
       edge.toProfile.influencer.creators.length > 0;
     if (!brandVisible) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
