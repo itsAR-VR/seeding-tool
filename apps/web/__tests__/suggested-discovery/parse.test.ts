@@ -26,6 +26,14 @@ describe("normalizeIgHandle", () => {
     expect(normalizeIgHandle(null)).toBeNull();
     expect(normalizeIgHandle("a".repeat(31))).toBeNull();
   });
+
+  it("rejects non-profile Instagram routes and lookalike hosts", () => {
+    expect(normalizeIgHandle("https://www.instagram.com/p/ABC123/")).toBeNull();
+    expect(normalizeIgHandle("https://www.instagram.com/explore/")).toBeNull();
+    expect(normalizeIgHandle("https://www.instagram.com/reels/")).toBeNull();
+    expect(normalizeIgHandle("https://evil.example/?next=instagram.com/victim")).toBeNull();
+    expect(normalizeIgHandle("https://instagram.com.evil.com/victim")).toBeNull();
+  });
 });
 
 describe("parseHeaderCounts", () => {

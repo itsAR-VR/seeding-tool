@@ -40,21 +40,46 @@ export interface ParsedProfileHeader extends HeaderCounts {
   bio: string | null;
 }
 
+/** Instagram routes that look like handles but are not profiles. */
+const RESERVED_SEGMENTS = new Set([
+  "p",
+  "reel",
+  "reels",
+  "explore",
+  "accounts",
+  "direct",
+  "stories",
+  "tv",
+  "legal",
+  "developer",
+]);
+
 /**
- * Normalize any user-supplied handle form ("@name", full URLs,
- * trailing slashes) into a bare lowercase handle, or null if invalid.
+ * Normalize any user-supplied handle form ("@name", profile URLs) into a
+ * bare lowercase handle, or null if invalid. URLs are parsed explicitly:
+ * the hostname must be Instagram and the path must be a bare profile
+ * segment — "/p/…" posts, "/explore", and lookalike hosts are rejected.
  */
 export function normalizeIgHandle(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let value = raw.trim();
   if (!value) return null;
 
-  const urlMatch = value.match(/instagram\.com\/([^/?#]+)/i);
-  if (urlMatch) {
-    value = urlMatch[1];
+  if (/instagram\.com/i.test(value) || /^https?:\/\//i.test(value)) {
+    let url: URL;
+    try {
+      url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    } catch {
+      return null;
+    }
+    const host = url.hostname.toLowerCase();
+    if (host !== "instagram.com" && host !== "www.instagram.com") return null;
+    value = url.pathname.split("/").filter(Boolean)[0] ?? "";
   }
+
   value = value.replace(/^@+/, "").replace(/\/+$/, "").toLowerCase();
 
+  if (RESERVED_SEGMENTS.has(value)) return null;
   if (!HANDLE_PATTERN.test(value)) return null;
   return value;
 }

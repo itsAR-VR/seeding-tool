@@ -57,6 +57,23 @@ export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRu
       });
   if (!run) throw new Error(`Run not found: ${input.runId}`);
 
+  // Attaching to a pre-created run (the API path): the stored record owns
+  // the audit trail, so the execution inputs must match it exactly —
+  // otherwise candidates would be scraped/classified with one seed and
+  // niche while run.json claims another.
+  if (input.runId) {
+    if (
+      run.seedHandle !== seed ||
+      run.niche !== input.niche ||
+      run.mode !== "live" ||
+      run.maxProfiles !== maxProfiles
+    ) {
+      throw new Error(
+        `Run ${input.runId} does not match the supplied seed/niche/limit — refusing to attach`
+      );
+    }
+  }
+
   patchRun(run.id, { status: "running", startedAt: new Date().toISOString() });
 
   try {
