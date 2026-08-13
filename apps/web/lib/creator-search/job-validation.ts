@@ -113,7 +113,13 @@ export async function validateDiscoveryCandidates(
   );
 
   const newlyValidated = candidates
-    .filter((candidate) => !candidate.isCached)
+    .filter(
+      (candidate) =>
+        !shouldBypassDiscoveryValidation({
+          isCached: candidate.isCached,
+          existingValidationStatus: candidate.existingValidationStatus,
+        })
+    )
     .map<ValidatedDiscoveryCandidate>((candidate) => {
       const validation =
         validationByHandle.get(candidate.handle.toLowerCase()) ??

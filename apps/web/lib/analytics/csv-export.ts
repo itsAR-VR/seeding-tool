@@ -8,10 +8,10 @@ import type { AnalyticsResponse } from "./types";
 function escapeCSVField(value: string | number | null | undefined): string {
   if (value == null) return "";
   let str = String(value);
-  // Neutralize spreadsheet formulas: externally sourced values (creator
-  // names, handles) starting with =, +, -, @ would otherwise execute as
-  // formulas when an operator opens the export.
-  if (/^[\t\r ]*[=+\-@]/.test(str)) {
+  // Neutralize spreadsheet formula injection: prefix string cells whose first
+  // non-whitespace character is a formula trigger (=, +, -, @) with an
+  // apostrophe. Numbers are exempt so negative values stay numeric.
+  if (typeof value === "string" && /^[\t\r ]*[=+\-@]/.test(str)) {
     str = `'${str}`;
   }
   if (str.includes(",") || str.includes('"') || str.includes("\n")) {

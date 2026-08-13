@@ -117,6 +117,7 @@ export async function sendOutreachBatch(
             id: true,
             unipileChatId: true,
             channel: true,
+            status: true,
             externalThreadId: true,
           },
         },
@@ -148,8 +149,11 @@ export async function sendOutreachBatch(
 
     // ── RC-2: Idempotency — check thread + outbound message ────────────────
     // Thread exists AND has outbound message → already sent → skip.
-    // Thread exists but NO outbound message → prior attempt failed before
-    //   sending → delete the empty thread and retry.
+    // Thread exists, no outbound message, status "preparing" → prior attempt
+    //   died BEFORE the provider call → safe to delete and retry.
+    // Thread exists, no outbound message, any other status → the provider may
+    //   have accepted the send before local persistence failed (thread is
+    //   marked "sending" just before the Gmail call). NOT safe to resend.
     // No thread → new send.
     if (campaignCreator.conversationThread) {
       const existingThread = campaignCreator.conversationThread;
@@ -168,20 +172,24 @@ export async function sendOutreachBatch(
       }
 
       // Thread has no outbound message — but if Gmail assigned an external
-      // thread id, a prior attempt DID reach Gmail and only the local
-      // persist failed. Resending would duplicate the external email, so
-      // flag for manual reconciliation instead of delete-and-retry.
-      if (existingThread.externalThreadId) {
+      // thread id, or the thread ever left "preparing", a prior attempt may
+      // have reached the provider with only the local persist failing.
+      // Resending would duplicate the external email, so flag for manual
+      // reconciliation instead of delete-and-retry.
+      if (existingThread.externalThreadId || existingThread.status !== "preparing") {
+        const gmailNote = existingThread.externalThreadId
+          ? `, Gmail thread ${existingThread.externalThreadId}`
+          : "";
         results.push({
           ...draft,
           status: "failed",
-          error: `Ambiguous prior send: thread has Gmail id ${existingThread.externalThreadId} but no recorded outbound message. Not auto-resending — reconcile manually.`,
+          error: `Ambiguous prior send: ConversationThread ${existingThread.id} (status "${existingThread.status}"${gmailNote}) has no recorded outbound message. The provider may have accepted the send. Reconcile manually before retrying.`,
         });
         continue;
       }
 
-      // Empty thread with no external id: the prior attempt failed before
-      // sending — clean up so we can retry
+      // Empty "preparing" thread with no external id: the prior attempt
+      // failed before reaching the provider — clean up so we can retry.
       await prisma.conversationThread.delete({
         where: { id: existingThread.id },
       });
@@ -212,12 +220,15 @@ export async function sendOutreachBatch(
       try {
         // Create thread BEFORE send — the unique campaignCreatorId constraint
         // acts as the idempotency guard against concurrent duplicate sends.
+        // Status lifecycle: "preparing" → "sending" (just before the Gmail
+        // call) → "open" (after the outbound message is persisted). The retry
+        // path above only deletes empty threads still in "preparing".
         const thread = await prisma.conversationThread.create({
           data: {
             brandId,
             campaignCreatorId: draft.campaignCreatorId,
             channel: "email",
-            status: "open",
+            status: "preparing",
           },
         });
 
@@ -241,6 +252,14 @@ export async function sendOutreachBatch(
           senderAlias && isInEarlyWarmup(senderAlias)
             ? undefined
             : resolvedBodyHtml;
+
+        // Mark "sending" right before the external call: a thread found in
+        // this state later means the Gmail send outcome is unknown, so the
+        // retry path must NOT delete it (a duplicate send could result).
+        await prisma.conversationThread.update({
+          where: { id: thread.id },
+          data: { status: "sending" },
+        });
 
         // Send via Gmail
         const emailResult = await sendEmail({
@@ -271,6 +290,12 @@ export async function sendOutreachBatch(
             body: draft.body,
             bodyHtml: effectiveBodyHtml ?? null,
           },
+        });
+
+        // Send + persist succeeded — thread is now a real open conversation.
+        await prisma.conversationThread.update({
+          where: { id: thread.id },
+          data: { status: "open" },
         });
 
         // Update lifecycle

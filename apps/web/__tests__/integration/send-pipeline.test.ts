@@ -324,6 +324,7 @@ describe("sendOutreachBatch — integration", () => {
         conversationThread: {
           id: "empty-thread-1",
           channel: "email",
+          status: "preparing",
           unipileChatId: null,
         },
       });

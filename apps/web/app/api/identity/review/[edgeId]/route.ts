@@ -69,6 +69,24 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    // Merges reassign every profile/creator on the source identity globally.
+    // Only allow review when both identities are exclusively owned by this
+    // brand — no creator on either identity may belong to another tenant.
+    const foreignCreatorCount = await prisma.creator.count({
+      where: {
+        influencerIdentityId: {
+          in: [edge.fromProfile.influencerId, edge.toProfile.influencerId],
+        },
+        brandId: { not: membership.brandId },
+      },
+    });
+    if (foreignCreatorCount > 0) {
+      return NextResponse.json(
+        { error: "Identity is shared with another brand and cannot be reviewed here" },
+        { status: 403 }
+      );
+    }
+
     const updated = await resolveIdentityEdge(
       edgeId,
       body.action,
