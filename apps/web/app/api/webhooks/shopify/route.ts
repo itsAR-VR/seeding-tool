@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Shopify Webhook Handler
@@ -344,23 +345,15 @@ async function handleFulfillmentUpdate(payload: Record<string, unknown>) {
         where: { id: order.campaignCreatorId },
         data: { lifecycleStatus: "delivered" },
       });
+
+      if (order.campaignCreatorId) {
+        await recordOutcomeEvent({
+          campaignCreatorId: order.campaignCreatorId,
+          event: { type: "delivered" },
+        });
+      }
     }
 
-    // Emit fulfillment updated event for reminder system
-    try {
-      const { inngest } = await import("@/lib/inngest/client");
-      await inngest.send({
-        name: "shopify/fulfillment.updated",
-        data: {
-          orderId: order.id,
-          shopifyOrderId: order.shopifyOrderId,
-          campaignCreatorId: order.campaignCreatorId,
-          status: "delivered",
-        },
-      });
-    } catch {
-      console.warn("[shopify-webhook] Failed to emit Inngest event for delivery");
-    }
   }
 }
 

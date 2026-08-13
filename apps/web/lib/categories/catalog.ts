@@ -26,11 +26,22 @@ function uniqueSorted(values: readonly string[]) {
 // Source: docs/n8n-audit-2026-03-01/-AC-1-Instagram-Following-PROD-.json
 // Analyze Bio node primary_category prompt on 2026-03-01.
 export const APIFY_CATEGORIES = [
+  "Automotive",
   "Beauty",
+  "Education",
+  "Entertainment",
+  "Fashion",
+  "Finance",
   "Fitness & Workout",
   "Food & Drink",
+  "Gaming",
+  "Health & Wellness",
   "Home & Garden",
-  "Fashion",
+  "Parenting",
+  "Pets",
+  "Sports",
+  "Tech",
+  "Travel",
 ] as const;
 
 export const CANONICAL_DISCOVERY_CATEGORIES = [

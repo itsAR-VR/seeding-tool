@@ -1,36 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
-
-async function authorize(campaignId: string) {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) throw new Error("Unauthorized");
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) throw new Error("User not found");
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) throw new Error("No brand found");
-
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, brandId: membership.brandId },
-  });
-
-  if (!campaign) throw new Error("Campaign not found");
-
-  return { brandId: membership.brandId, campaign };
-}
 
 /**
  * GET /api/campaigns/:campaignId/products — List products for this campaign.
@@ -38,7 +14,15 @@ async function authorize(campaignId: string) {
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-    await authorize(campaignId);
+    const membership = await getCurrentBrandMembership();
+
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, brandId: membership.brandId },
+    });
+
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
 
     const campaignProducts = await prisma.campaignProduct.findMany({
       where: { campaignId },
@@ -53,27 +37,36 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ products: campaignProducts });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to fetch products";
-    const status =
-      message === "Unauthorized" ? 401 :
-      message === "Campaign not found" ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[campaigns/products/GET]", error);
+    return NextResponse.json(
+      { error: "Failed to fetch products" },
+      { status: 500 }
+    );
   }
 }
 
 /**
  * PUT /api/campaigns/:campaignId/products — Update product selection.
  * Body: { shopifyProductIds: string[] }
- *
- * Replaces the campaign's Shopify product associations.
- * For each Shopify product, auto-creates/reuses a BrandProduct to satisfy the
- * existing CampaignProduct -> BrandProduct FK.
  */
 export async function PUT(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-    const { brandId } = await authorize(campaignId);
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
+    const campaign = await prisma.campaign.findFirst({
+      where: { id: campaignId, brandId: membership.brandId },
+    });
+
+    if (!campaign) {
+      return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
+    }
+
+    const brandId = membership.brandId;
     const body = (await request.json()) as { shopifyProductIds?: string[] };
     const shopifyProductIds = body.shopifyProductIds ?? [];
 
@@ -89,7 +82,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
     // Ensure BrandProduct exists for each Shopify product
     const brandProductMap = new Map<string, string>();
     for (const sp of shopifyProducts) {
-      // Try to find existing BrandProduct linked to this Shopify product
       let brandProduct = await prisma.brandProduct.findFirst({
         where: {
           brandId,
@@ -98,7 +90,6 @@ export async function PUT(request: NextRequest, context: RouteContext) {
       });
 
       if (!brandProduct) {
-        // Create a BrandProduct from the Shopify product data
         const firstVariant = sp.variants[0];
         brandProduct = await prisma.brandProduct.create({
           data: {
@@ -145,11 +136,13 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ products: updated });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to update products";
-    const status =
-      message === "Unauthorized" ? 401 :
-      message === "Campaign not found" ? 404 : 500;
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/products/PUT]", error);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      { error: "Failed to update products" },
+      { status: 500 }
+    );
   }
 }

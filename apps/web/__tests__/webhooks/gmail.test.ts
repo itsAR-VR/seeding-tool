@@ -61,9 +61,6 @@ vi.mock("@/lib/inbox/messages", () => ({
   normalizeInboundMessage: (...args: unknown[]) => mockNormalizeInboundMessage(...args),
   persistMessage: (...args: unknown[]) => mockPersistMessage(...args),
 }));
-vi.mock("@/lib/inbox/threads", () => ({
-  getOrCreateThread: (...args: unknown[]) => mockGetOrCreateThread(...args),
-}));
 vi.mock("@/lib/gmail/ingest", () => ({
   fetchNewMessages: (...args: unknown[]) => mockFetchNewMessages(...args),
   resolveThreadByExternalId: (...args: unknown[]) => mockResolveThreadByExternalId(...args),
@@ -84,6 +81,9 @@ vi.mock("@/lib/feature-flags", () => ({
     shopifyOrderEnabled: true,
     reminderEmailEnabled: true,
   }),
+}));
+vi.mock("@/lib/seeding/outcome-recorder", () => ({
+  recordOutcomeEvent: vi.fn(),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────

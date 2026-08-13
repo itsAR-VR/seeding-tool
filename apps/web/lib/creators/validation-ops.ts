@@ -87,6 +87,7 @@ export async function applyValidationResultToCreator({
   isVerified,
   metadata,
   cleanupInvalidLinks = true,
+  platform = "instagram",
 }: {
   creatorId: string;
   result: InstagramValidationResult;
@@ -95,12 +96,13 @@ export async function applyValidationResultToCreator({
   isVerified?: boolean;
   metadata?: Prisma.JsonValue | Prisma.InputJsonValue | null;
   cleanupInvalidLinks?: boolean;
+  platform?: "instagram" | "tiktok";
 }) {
   const creator = await prisma.creator.findUnique({
     where: { id: creatorId },
     include: {
       profiles: {
-        where: { platform: "instagram" },
+        where: { platform },
         take: 1,
       },
     },
@@ -115,20 +117,26 @@ export async function applyValidationResultToCreator({
     result.status === "valid" ? result.followerCount : null;
   const nextAvgViews =
     result.status === "valid" ? result.avgViews ?? creator.avgViews : null;
+
+  const handleForPlatform =
+    platform === "tiktok" ? creator.tiktokHandle : creator.instagramHandle;
+  const defaultProfileUrl =
+    platform === "tiktok"
+      ? (handleForPlatform ? `https://tiktok.com/@${handleForPlatform}` : null)
+      : (handleForPlatform ? `https://instagram.com/${handleForPlatform}` : null);
+
   const nextProfileUrl =
-    profileUrl ??
-    profile?.url ??
-    result.url ??
-    (creator.instagramHandle
-      ? `https://instagram.com/${creator.instagramHandle}`
-      : null);
+    profileUrl ?? profile?.url ?? result.url ?? defaultProfileUrl;
+
   const mergedMetadata = {
     ...asMetadataRecord(profile?.metadata),
     ...asMetadataRecord(metadata),
     validationStatus: result.status,
+    validationErrorCode: result.errorCode,
     validationError: result.error,
     lastValidationUrl: result.url,
     lastValidatedAt: new Date().toISOString(),
+    validationAttempts: (creator.validationAttempts ?? 0) + result.attemptCount,
   };
 
   await prisma.creator.update({
@@ -137,21 +145,23 @@ export async function applyValidationResultToCreator({
       followerCount: nextFollowerCount,
       avgViews: nextAvgViews,
       validationStatus: result.status,
+      validationErrorCode: result.errorCode,
+      validationAttempts: { increment: result.attemptCount },
       lastValidatedAt: new Date(),
       lastValidationError: result.error,
     },
   });
 
-  if (creator.instagramHandle) {
+  if (handleForPlatform) {
     await prisma.creatorProfile.upsert({
       where: {
         creatorId_platform: {
           creatorId,
-          platform: "instagram",
+          platform,
         },
       },
       update: {
-        handle: creator.instagramHandle,
+        handle: handleForPlatform,
         url: nextProfileUrl ?? undefined,
         followerCount: nextFollowerCount ?? undefined,
         engagementRate: engagementRate ?? profile?.engagementRate ?? undefined,
@@ -160,8 +170,8 @@ export async function applyValidationResultToCreator({
       },
       create: {
         creatorId,
-        platform: "instagram",
-        handle: creator.instagramHandle,
+        platform,
+        handle: handleForPlatform,
         url: nextProfileUrl,
         followerCount: nextFollowerCount,
         engagementRate: engagementRate ?? profile?.engagementRate ?? null,

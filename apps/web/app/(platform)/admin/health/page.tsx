@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 
 /**
  * Admin Health Dashboard — Server Component
@@ -14,28 +13,15 @@ import { prisma } from "@/lib/prisma";
  * - AIDrafts in "draft" status older than 48h (pending human review)
  */
 export default async function AdminHealthPage() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) {
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      if (error.status === 401) redirect("/login");
+      redirect("/onboarding");
+    }
     redirect("/login");
-  }
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) {
-    redirect("/login");
-  }
-
-  // Get the user's brand
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    redirect("/onboarding");
   }
 
   const brandId = membership.brandId;

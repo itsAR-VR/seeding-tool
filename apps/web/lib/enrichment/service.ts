@@ -7,6 +7,9 @@
 
 import { prisma } from "@/lib/prisma";
 import { findEmailsByInstagramHandles } from "./providers/apify-email";
+import { getFeatureFlags } from "@/lib/feature-flags";
+import { syncIdentityForCreator } from "@/lib/identity/matching";
+import { recordCreatorRawPayload } from "@/lib/creator-search/raw-payload";
 
 export type EnrichmentStatus =
   | "found"
@@ -47,11 +50,15 @@ export async function enrichCreatorEmails(
       id: true,
       email: true,
       instagramHandle: true,
+      name: true,
+      bio: true,
+      imageUrl: true,
     },
   });
 
   const results: EnrichmentResult[] = [];
   const toEnrich: Array<{ id: string; handle: string }> = [];
+  const flags = await getFeatureFlags(brandId);
 
   for (const creator of creators) {
     if (creator.email) {
@@ -113,6 +120,31 @@ export async function enrichCreatorEmails(
           where: { id: creator.id },
           data: { email: foundEmail },
         });
+        await recordCreatorRawPayload({
+          creatorId: creator.id,
+          source: "apify_keyword_email",
+          eventType: "enrichment",
+          payload: {
+            handle: creator.handle,
+            email: foundEmail,
+          },
+        });
+        if (flags.identityGraphEnabled) {
+          await syncIdentityForCreator({
+            creatorId: creator.id,
+            displayName: creators.find((item) => item.id === creator.id)?.name ?? null,
+            platform: "instagram",
+            handle: creator.handle,
+            profileUrl: `https://instagram.com/${creator.handle}`,
+            profileImageUrl:
+              creators.find((item) => item.id === creator.id)?.imageUrl ?? null,
+            websiteUrl: null,
+            bioText: creators.find((item) => item.id === creator.id)?.bio ?? null,
+            email: foundEmail,
+            sources: ["apify_keyword_email"],
+            autoLinkEnabled: flags.identityAutoLinkEnabled,
+          });
+        }
         results.push({
           creatorId: creator.id,
           handle: creator.handle,

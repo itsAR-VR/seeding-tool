@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 import { inngest } from "@/lib/inngest/client";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -14,32 +17,7 @@ type RouteContext = { params: Promise<{ campaignId: string }> };
 export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-    const { searchParams } = new URL(request.url);
-    const reviewStatus = searchParams.get("reviewStatus");
-    const lifecycleStatus = searchParams.get("lifecycleStatus");
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
 
     // Verify campaign access
     const campaign = await prisma.campaign.findFirst({
@@ -52,6 +30,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
+
+    const { searchParams } = new URL(request.url);
+    const reviewStatus = searchParams.get("reviewStatus");
+    const lifecycleStatus = searchParams.get("lifecycleStatus");
 
     const where: Record<string, unknown> = { campaignId };
     if (reviewStatus) where.reviewStatus = reviewStatus;
@@ -77,6 +59,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(creators);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/creators/GET]", error);
     return NextResponse.json(
       { error: "Failed to fetch creators" },
@@ -91,29 +76,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Verify campaign access
     const campaign = await prisma.campaign.findFirst({
@@ -129,7 +93,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const body = (await request.json()) as {
       creatorId?: string;
-      // Or create a new creator inline
       name?: string;
       email?: string;
       handle?: string;
@@ -253,6 +216,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(campaignCreator, { status: 201 });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/creators/POST]", error);
     return NextResponse.json(
       { error: "Failed to add creator" },

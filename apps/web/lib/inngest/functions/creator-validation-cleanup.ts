@@ -10,9 +10,13 @@ export const creatorValidationCleanup = inngest.createFunction(
   },
   { cron: "0 3 * * *" },
   async () => {
+    // Query brands with creators on ANY platform (not just Instagram)
     const brands = await prisma.creator.findMany({
       where: {
-        instagramHandle: { not: null },
+        OR: [
+          { instagramHandle: { not: null } },
+          { tiktokHandle: { not: null } },
+        ],
       },
       distinct: ["brandId"],
       select: { brandId: true },

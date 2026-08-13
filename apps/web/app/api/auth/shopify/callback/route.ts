@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 import { NextRequest, NextResponse } from "next/server";
 
+import { APP_URL, WEBHOOK_CALLBACK_URL } from "@/lib/config";
 import { encrypt } from "@/lib/encryption";
 import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
@@ -53,7 +54,7 @@ function verifyShopifyCallbackHmac(
 }
 
 export async function GET(request: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = APP_URL;
   const apiKey = process.env.SHOPIFY_API_KEY;
   const apiSecret = process.env.SHOPIFY_API_SECRET;
   const requestUrl = new URL(request.url);

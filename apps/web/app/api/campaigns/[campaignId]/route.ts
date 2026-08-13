@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -11,29 +14,7 @@ type RouteContext = { params: Promise<{ campaignId: string }> };
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
 
     const campaign = await prisma.campaign.findFirst({
       where: { id: campaignId, brandId: membership.brandId },
@@ -78,6 +59,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     return NextResponse.json({ ...campaign, stats });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/GET:id]", error);
     return NextResponse.json(
       { error: "Failed to fetch campaign" },
@@ -92,29 +76,8 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 export async function PATCH(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Verify campaign belongs to brand
     const existing = await prisma.campaign.findFirst({
@@ -145,6 +108,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
     return NextResponse.json(campaign);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/PATCH]", error);
     return NextResponse.json(
       { error: "Failed to update campaign" },

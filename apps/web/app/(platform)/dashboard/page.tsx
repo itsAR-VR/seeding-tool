@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -13,6 +12,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { CampaignHealthWidget } from "./components/campaign-health";
+import type { HealthSnapshotData } from "@/lib/health/types";
 
 // ── Status badge color maps ──────────────────────────────────
 
@@ -47,28 +48,56 @@ const typeLabels: Record<string, string> = {
   other: "📋 Other",
 };
 
+// ── Health snapshot fetcher ──────────────────────────────────
+
+async function fetchHealthSnapshots(
+  brandId: string
+): Promise<HealthSnapshotData[]> {
+  const campaigns = await prisma.campaign.findMany({
+    where: { brandId, status: { in: ["active", "paused"] } },
+    select: { id: true, name: true },
+  });
+
+  if (campaigns.length === 0) return [];
+
+  const campaignIds = campaigns.map((c) => c.id);
+  const campaignNames = new Map(campaigns.map((c) => [c.id, c.name]));
+
+  const snapshots = await prisma.campaignHealthSnapshot.findMany({
+    where: { campaignId: { in: campaignIds } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // Keep only the latest snapshot per campaign
+  const latestByCampaign = new Map<string, (typeof snapshots)[number]>();
+  for (const snap of snapshots) {
+    if (!latestByCampaign.has(snap.campaignId)) {
+      latestByCampaign.set(snap.campaignId, snap);
+    }
+  }
+
+  return Array.from(latestByCampaign.values()).map((snap) => ({
+    id: snap.id,
+    createdAt: snap.createdAt.toISOString(),
+    campaignId: snap.campaignId,
+    campaignName: campaignNames.get(snap.campaignId) ?? "Unknown",
+    status: snap.status as HealthSnapshotData["status"],
+    metrics: snap.metrics as unknown as HealthSnapshotData["metrics"],
+    alerts: snap.alerts as unknown as HealthSnapshotData["alerts"],
+  }));
+}
+
 // ── Dashboard page ───────────────────────────────────────────
 
 export default async function DashboardPage() {
-  // Auth
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  // Get brand membership (follows existing pattern)
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    redirect("/onboarding");
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      redirect("/onboarding");
+    }
+    return null;
   }
 
   const brandId = membership.brandId;
@@ -94,6 +123,7 @@ export default async function DashboardPage() {
     openInterventions,
     recentMentions,
     totalCampaigns,
+    healthSnapshots,
   ] = await Promise.all([
     // Metric 1: Active campaigns
     prisma.campaign.count({
@@ -166,6 +196,9 @@ export default async function DashboardPage() {
     prisma.campaign.count({
       where: { brandId },
     }),
+
+    // Campaign health snapshots — latest per active/paused campaign
+    fetchHealthSnapshots(brandId),
   ]);
 
   return (
@@ -206,6 +239,9 @@ export default async function DashboardPage() {
           icon="📦"
         />
       </div>
+
+      {/* ── Section 1b: Campaign Health ──────────────────────── */}
+      <CampaignHealthWidget snapshots={healthSnapshots} />
 
       {/* ── Section 2: Two-column layout ────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-5">

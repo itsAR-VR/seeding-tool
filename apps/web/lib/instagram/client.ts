@@ -333,6 +333,16 @@ export async function getInstagramAccountFromPage(
 }
 
 /**
+ * Fetch a paginated response by its full `paging.next` URL.
+ * Used to follow pagination cursors returned by getTaggedMedia() etc.
+ */
+export async function fetchNextPage<T>(
+  nextUrl: string
+): Promise<InstagramPaginatedResponse<T>> {
+  return graphFetch<InstagramPaginatedResponse<T>>(nextUrl);
+}
+
+/**
  * Get all Facebook Pages the user manages (used during OAuth to find linked IG accounts).
  */
 export async function getUserPages(

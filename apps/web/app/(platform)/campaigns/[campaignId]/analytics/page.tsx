@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
   Card,
   CardContent,
@@ -12,6 +11,15 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  computeConversionRates,
+  computeTimeToPost,
+} from "@/lib/analytics/conversion";
+import type {
+  AnalyticsResponse,
+  CreatorLeaderboardEntry,
+} from "@/lib/analytics/types";
+import { AnalyticsDashboard } from "./components/analytics-dashboard";
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
@@ -45,22 +53,13 @@ function formatNumber(n: number): string {
 export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const { campaignId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) return null;
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) return null;
+    return null;
+  }
 
   const campaign = await prisma.campaign.findFirst({
     where: { id: campaignId, brandId: membership.brandId },
@@ -75,6 +74,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       id: true,
       lifecycleStatus: true,
       reviewStatus: true,
+      creatorId: true,
     },
   });
 
@@ -90,16 +90,19 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   }
 
   // Mention assets
-  const mentionAssets = await prisma.mentionAsset.findMany({
-    where: { campaignCreatorId: { in: campaignCreatorIds } },
-    select: {
-      id: true,
-      platform: true,
-      likes: true,
-      comments: true,
-      views: true,
-    },
-  });
+  const mentionAssets = campaignCreatorIds.length > 0
+    ? await prisma.mentionAsset.findMany({
+        where: { campaignCreatorId: { in: campaignCreatorIds } },
+        select: {
+          id: true,
+          platform: true,
+          likes: true,
+          comments: true,
+          views: true,
+          campaignCreatorId: true,
+        },
+      })
+    : [];
 
   const totalMentions = mentionAssets.length;
   const totalLikes = mentionAssets.reduce((sum, m) => sum + (m.likes ?? 0), 0);
@@ -110,10 +113,12 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const totalViews = mentionAssets.reduce((sum, m) => sum + (m.views ?? 0), 0);
 
   // Orders
-  const orders = await prisma.shopifyOrder.findMany({
-    where: { campaignCreatorId: { in: campaignCreatorIds } },
-    select: { id: true, status: true, totalPrice: true },
-  });
+  const orders = campaignCreatorIds.length > 0
+    ? await prisma.shopifyOrder.findMany({
+        where: { campaignCreatorId: { in: campaignCreatorIds } },
+        select: { id: true, status: true, totalPrice: true },
+      })
+    : [];
 
   const totalOrders = orders.length;
   const totalProductValueCents = orders.reduce(
@@ -122,10 +127,12 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   );
 
   // Cost records
-  const costRecords = await prisma.costRecord.findMany({
-    where: { campaignCreatorId: { in: campaignCreatorIds } },
-    select: { amount: true },
-  });
+  const costRecords = campaignCreatorIds.length > 0
+    ? await prisma.costRecord.findMany({
+        where: { campaignCreatorId: { in: campaignCreatorIds } },
+        select: { amount: true, type: true },
+      })
+    : [];
 
   const totalCostCents = costRecords.reduce((sum, c) => sum + c.amount, 0);
 
@@ -133,6 +140,147 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const postedCount =
     (lifecycleBreakdown["posted"] ?? 0) +
     (lifecycleBreakdown["completed"] ?? 0);
+
+  // --- Conversion rates ---
+  const conversionRates = computeConversionRates(lifecycleBreakdown);
+
+  // --- Time to post ---
+  const outcomes = campaignCreatorIds.length > 0
+    ? await prisma.campaignOutcome.findMany({
+        where: { campaignCreatorId: { in: campaignCreatorIds } },
+        select: { outreachSentAt: true, postedAt: true },
+      })
+    : [];
+
+  const timeToPost = computeTimeToPost(outcomes);
+
+  // --- Creator leaderboard ---
+  const creatorIds = [...new Set(campaignCreators.map((cc) => cc.creatorId))];
+
+  const creators = creatorIds.length > 0
+    ? await prisma.creator.findMany({
+        where: { id: { in: creatorIds } },
+        select: {
+          id: true,
+          name: true,
+          instagramHandle: true,
+          tiktokHandle: true,
+        },
+      })
+    : [];
+
+  const creatorsById = new Map(creators.map((c) => [c.id, c]));
+  const ccToCreator = new Map(
+    campaignCreators.map((cc) => [cc.id, cc.creatorId])
+  );
+
+  const mentionsByCreator = new Map<
+    string,
+    { likes: number; comments: number; views: number; count: number }
+  >();
+  for (const m of mentionAssets) {
+    const creatorId = ccToCreator.get(m.campaignCreatorId);
+    if (!creatorId) continue;
+    const existing = mentionsByCreator.get(creatorId) ?? {
+      likes: 0,
+      comments: 0,
+      views: 0,
+      count: 0,
+    };
+    mentionsByCreator.set(creatorId, {
+      likes: existing.likes + (m.likes ?? 0),
+      comments: existing.comments + (m.comments ?? 0),
+      views: existing.views + (m.views ?? 0),
+      count: existing.count + 1,
+    });
+  }
+
+  const creatorLeaderboard: CreatorLeaderboardEntry[] = Array.from(
+    mentionsByCreator.entries()
+  )
+    .map(([creatorId, stats]) => {
+      const creator = creatorsById.get(creatorId);
+      const handle = creator?.instagramHandle ?? creator?.tiktokHandle ?? "";
+      const platform = creator?.instagramHandle ? "instagram" : "tiktok";
+      return {
+        creatorId,
+        creatorName: creator?.name ?? "Unknown",
+        handle,
+        platform,
+        totalLikes: stats.likes,
+        totalComments: stats.comments,
+        totalViews: stats.views,
+        mentionCount: stats.count,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.totalLikes +
+        b.totalComments +
+        b.totalViews -
+        (a.totalLikes + a.totalComments + a.totalViews)
+    )
+    .slice(0, 20);
+
+  // --- Costs by type ---
+  const costsByType = costRecords.reduce<Record<string, number>>(
+    (acc, c) => ({
+      ...acc,
+      [c.type]: (acc[c.type] ?? 0) + c.amount,
+    }),
+    {}
+  );
+
+  // --- Build initial data for client components ---
+  const mentionsByPlatform = mentionAssets.reduce<Record<string, number>>(
+    (acc, m) => ({
+      ...acc,
+      [m.platform]: (acc[m.platform] ?? 0) + 1,
+    }),
+    {}
+  );
+
+  const orderStatusBreakdown = orders.reduce<Record<string, number>>(
+    (acc, o) => ({
+      ...acc,
+      [o.status]: (acc[o.status] ?? 0) + 1,
+    }),
+    {}
+  );
+
+  const initialData: AnalyticsResponse = {
+    campaignId,
+    summary: {
+      totalCreators,
+      totalMentions,
+      totalOrders,
+      totalLikes,
+      totalComments,
+      totalViews,
+      totalProductValueCents,
+      totalCostCents,
+    },
+    lifecycle: lifecycleBreakdown,
+    review: {
+      pending: campaignCreators.filter((cc) => cc.reviewStatus === "pending").length,
+      approved: campaignCreators.filter((cc) => cc.reviewStatus === "approved").length,
+      declined: campaignCreators.filter((cc) => cc.reviewStatus === "declined").length,
+      deferred: campaignCreators.filter((cc) => cc.reviewStatus === "deferred").length,
+    },
+    mentions: {
+      total: totalMentions,
+      byPlatform: mentionsByPlatform,
+      engagement: { likes: totalLikes, comments: totalComments, views: totalViews },
+    },
+    orders: {
+      total: totalOrders,
+      byStatus: orderStatusBreakdown,
+    },
+    conversionRates,
+    timeToPost,
+    creatorLeaderboard,
+    costsByType,
+  };
 
   return (
     <div className="container mx-auto max-w-5xl py-8 px-4 space-y-6">
@@ -153,7 +301,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
           <h1 className="text-2xl font-bold">{campaign.name} — Analytics</h1>
         </div>
         <Link href={`/campaigns/${campaignId}`}>
-          <Button variant="outline">← Back to Campaign</Button>
+          <Button variant="outline">&larr; Back to Campaign</Button>
         </Link>
       </div>
 
@@ -173,7 +321,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
           <CardContent className="text-xs text-muted-foreground">
             {totalCreators > 0
               ? `${Math.round((postedCount / totalCreators) * 100)}% conversion`
-              : "—"}
+              : "\u2014"}
           </CardContent>
         </Card>
         <Card>
@@ -190,12 +338,12 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
           <CardContent className="text-xs text-muted-foreground">
             {totalProductValueCents > 0
               ? formatCurrency(totalProductValueCents) + " product value"
-              : "—"}
+              : "\u2014"}
           </CardContent>
         </Card>
       </div>
 
-      {/* Lifecycle Funnel */}
+      {/* Lifecycle Funnel (static server-rendered view) */}
       <Card>
         <CardHeader>
           <CardTitle>Creator Lifecycle Funnel</CardTitle>
@@ -251,21 +399,21 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
               <div className="text-3xl font-bold">
                 {formatNumber(totalLikes)}
               </div>
-              <div className="text-sm text-muted-foreground mt-1">❤️ Likes</div>
+              <div className="text-sm text-muted-foreground mt-1">Likes</div>
             </div>
             <div>
               <div className="text-3xl font-bold">
                 {formatNumber(totalComments)}
               </div>
               <div className="text-sm text-muted-foreground mt-1">
-                💬 Comments
+                Comments
               </div>
             </div>
             <div>
               <div className="text-3xl font-bold">
                 {formatNumber(totalViews)}
               </div>
-              <div className="text-sm text-muted-foreground mt-1">👁 Views</div>
+              <div className="text-sm text-muted-foreground mt-1">Views</div>
             </div>
           </div>
           {totalMentions === 0 && (
@@ -294,18 +442,24 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
               <div className="text-2xl font-bold mt-1">
                 {totalProductValueCents > 0
                   ? formatCurrency(totalProductValueCents)
-                  : "—"}
+                  : "\u2014"}
               </div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Total Cost</div>
               <div className="text-2xl font-bold mt-1">
-                {totalCostCents > 0 ? formatCurrency(totalCostCents) : "—"}
+                {totalCostCents > 0 ? formatCurrency(totalCostCents) : "\u2014"}
               </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Interactive Dashboard (Client Components) */}
+      <AnalyticsDashboard
+        initialData={initialData}
+        campaignName={campaign.name}
+      />
     </div>
   );
 }

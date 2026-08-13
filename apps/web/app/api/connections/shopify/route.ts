@@ -12,8 +12,9 @@ import {
   getShopifyConnectionStatus,
   updateShopifyConnectionStatus,
 } from "@/lib/shopify/status";
-
-const SHOPIFY_API_VERSION = "2024-01";
+import { SHOPIFY_API_VERSION } from "@/lib/shopify/config";
+import { WEBHOOK_CALLBACK_URL } from "@/lib/config";
+import { log } from "@/lib/logger";
 
 async function getCurrentBrandId() {
   const membership = await getCurrentBrandMembership({ requireAdmin: true });
@@ -123,11 +124,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Register webhooks (non-blocking — warn on failure)
-    const callbackBaseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000");
+    const callbackBaseUrl = WEBHOOK_CALLBACK_URL;
 
     try {
       const whResult = await registerWebhooks(
@@ -135,10 +132,7 @@ export async function POST(request: NextRequest) {
         accessToken,
         callbackBaseUrl
       );
-      console.log(
-        "[connections/shopify/POST] Webhooks registered:",
-        JSON.stringify(whResult)
-      );
+      log("info", "connections.shopify.webhooks.registered", { result: whResult });
     } catch (whErr) {
       console.warn(
         "[connections/shopify/POST] Webhook registration failed (non-fatal):",
@@ -155,7 +149,7 @@ export async function POST(request: NextRequest) {
         lastSyncedCount: result.synced,
         truncated: result.truncated,
       });
-      console.log("[connections/shopify/POST] Initial product sync completed");
+      log("info", "connections.shopify.sync.completed");
     } catch (syncErr) {
       const message =
         syncErr instanceof Error ? syncErr.message : "Initial product sync failed";
@@ -208,10 +202,7 @@ export async function DELETE() {
           resolved.decryptedValue,
           callbackBaseUrl
         );
-        console.log(
-          "[connections/shopify/DELETE] Webhooks cleaned up:",
-          JSON.stringify(result)
-        );
+        log("info", "connections.shopify.webhooks.cleaned", { result });
       } catch (cleanupErr) {
         console.warn(
           "[connections/shopify/DELETE] Webhook cleanup failed (non-fatal):",

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = {
   params: Promise<{ campaignId: string; creatorId: string }>;
@@ -10,38 +14,12 @@ type RouteContext = {
 /**
  * POST /api/campaigns/:campaignId/creators/:creatorId/review
  * Body: { action: "approve" | "decline" | "defer", reason?: string }
- *
- * Mutates both reviewStatus and lifecycleStatus correctly:
- * - approve → reviewStatus: "approved", lifecycleStatus: "ready"
- * - decline → reviewStatus: "declined", lifecycleStatus stays unchanged
- * - defer   → reviewStatus: "deferred", lifecycleStatus stays unchanged
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId, creatorId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Verify campaign belongs to brand
     const campaign = await prisma.campaign.findFirst({
@@ -83,7 +61,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const updateData: Record<string, unknown> = {
       reviewedAt: new Date(),
-      reviewedBy: user.id,
+      reviewedBy: membership.userId,
     };
 
     switch (body.action) {
@@ -108,6 +86,21 @@ export async function POST(request: NextRequest, context: RouteContext) {
       },
     });
 
+    await recordOutcomeEvent({
+      campaignCreatorId: campaignCreator.id,
+      event: {
+        type: "review",
+        decision:
+          body.action === "approve"
+            ? "approved"
+            : body.action === "decline"
+              ? "declined"
+              : "deferred",
+        reason: body.reason,
+        by: membership.userId,
+      },
+    });
+
     // Log activity
     await prisma.activityLog.create({
       data: {
@@ -115,13 +108,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
         entityType: "CampaignCreator",
         entityId: campaignCreator.id,
         metadata: { reason: body.reason },
-        userId: user.id,
+        userId: membership.userId,
         brandId: membership.brandId,
       },
     });
 
     return NextResponse.json(updated);
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[creators/review/POST]", error);
     return NextResponse.json(
       { error: "Failed to review creator" },

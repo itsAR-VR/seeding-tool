@@ -1,47 +1,38 @@
 import { after, NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { inngest } from "@/lib/inngest/client";
-import { buildUnifiedDiscoveryQueryFromCampaignSearch } from "@/lib/creator-search/contracts";
+import {
+  buildUnifiedDiscoveryQueryFromCampaignRequest,
+  type CampaignDiscoveryRequest,
+} from "@/lib/creator-search/contracts";
 import {
   isLocalCreatorSearchFallbackEnabled,
   scheduleLocalCreatorSearchJob,
 } from "@/lib/creator-search/local-fallback";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
+import {
+  ensureCredits,
+  debit,
+  mint,
+  CREDIT_COSTS,
+  CreditInsufficientError,
+  isCreditEnforcementEnabled,
+} from "@/lib/credits";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
 /**
  * POST /api/campaigns/:campaignId/search — Trigger a creator search for a campaign.
- *
- * Body: { platform?, keywords?, minFollowers?, maxFollowers?, category?, location? }
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Verify campaign access
     const campaign = await prisma.campaign.findFirst({
@@ -55,21 +46,35 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    const body = (await request.json()) as {
-      platform?: string;
-      keywords?: string[];
-      minFollowers?: number;
-      maxFollowers?: number;
-      category?: string;
-      location?: string;
-      limit?: number;
-    };
+    const body = (await request.json()) as CampaignDiscoveryRequest;
+    const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignRequest(body);
+    const requestedCount = unifiedQuery.limit;
 
-    const requestedCount = Math.max(1, Math.min(body.limit ?? 20, 25));
-    const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignSearch({
-      ...body,
-      limit: requestedCount,
-    });
+    // Credit enforcement: reserve estimated cost before starting search
+    if (isCreditEnforcementEnabled()) {
+      const estimatedCost = CREDIT_COSTS.creator_search;
+      try {
+        await ensureCredits(membership.brandId, estimatedCost);
+        await debit(
+          membership.brandId,
+          estimatedCost,
+          "creator_search_reservation",
+          { type: "reservation", campaignId }
+        );
+      } catch (error) {
+        if (error instanceof CreditInsufficientError) {
+          return NextResponse.json(
+            {
+              error: "Insufficient credits for search",
+              required: error.required,
+              available: error.available,
+            },
+            { status: 402 }
+          );
+        }
+        throw error;
+      }
+    }
 
     const job = await prisma.creatorSearchJob.create({
       data: {
@@ -93,14 +98,33 @@ export async function POST(request: NextRequest, context: RouteContext) {
           query: unifiedQuery,
         },
       });
-    } catch (error) {
+    } catch (dispatchError) {
       if (!isLocalCreatorSearchFallbackEnabled()) {
-        throw error;
+        // Dispatch failed with no fallback — refund credits and fail the job
+        if (isCreditEnforcementEnabled()) {
+          await mint(
+            membership.brandId,
+            CREDIT_COSTS.creator_search,
+            "creator_search_dispatch_refund",
+            { refund: true, jobId: job.id }
+          ).catch((refundErr) =>
+            console.error("[campaigns/search/POST] refund failed", refundErr)
+          );
+        }
+        await prisma.creatorSearchJob.update({
+          where: { id: job.id },
+          data: { status: "failed" },
+        });
+        console.error("[campaigns/search/POST] dispatch failed", dispatchError);
+        return NextResponse.json(
+          { error: "Failed to dispatch search job" },
+          { status: 500 }
+        );
       }
 
       console.warn(
         "[campaigns/search/POST] Inngest dispatch failed, relying on local fallback",
-        error
+        dispatchError
       );
     }
 
@@ -130,6 +154,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       { status: 202 }
     );
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[campaigns/search/POST]", error);
     return NextResponse.json(
       { error: "Failed to trigger search" },

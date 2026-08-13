@@ -1,45 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
-import { prisma } from "@/lib/prisma";
-import { getFeatureFlags, setFeatureFlag, type FeatureFlags } from "@/lib/feature-flags";
+import {
+  getCurrentBrandMembership,
+  requireOwnerAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
+import {
+  getFeatureFlags,
+  setFeatureFlag,
+  VALID_FLAG_NAMES,
+  type FeatureFlags,
+} from "@/lib/feature-flags";
 
 /**
  * GET /api/settings/feature-flags — returns current flags for brand
  */
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand access" }, { status: 403 });
-    }
-
-    // Check admin role
-    if (membership.role !== "owner" && membership.role !== "editor") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireOwnerAccess(membership);
 
     const flags = await getFeatureFlags(membership.brandId);
     return NextResponse.json({ flags });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[feature-flags] GET error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
@@ -51,33 +36,8 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand access" }, { status: 403 });
-    }
-
-    // Check admin role
-    if (membership.role !== "owner" && membership.role !== "editor") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireOwnerAccess(membership);
 
     const body = (await request.json()) as { flag?: string; value?: boolean };
 
@@ -88,14 +48,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const validFlags: Array<keyof FeatureFlags> = [
-      "aiReplyEnabled",
-      "unipileDmEnabled",
-      "shopifyOrderEnabled",
-      "reminderEmailEnabled",
-    ];
-
-    if (!validFlags.includes(body.flag as keyof FeatureFlags)) {
+    if (!VALID_FLAG_NAMES.includes(body.flag as keyof FeatureFlags)) {
       return NextResponse.json(
         { error: `Invalid flag: ${body.flag}` },
         { status: 400 }
@@ -111,6 +64,9 @@ export async function PATCH(request: NextRequest) {
     const flags = await getFeatureFlags(membership.brandId);
     return NextResponse.json({ flags });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[feature-flags] PATCH error:", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }

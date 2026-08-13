@@ -10,22 +10,28 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
+  type ConnectionOverviewItem,
   type ConnectionsOverviewResponse,
   type IntegrationMethod,
   type IntegrationProvider,
 } from "@/lib/integrations/methods";
-import { cn } from "@/lib/utils";
+import {
+  GmailConnectionCard,
+  InstagramConnectionCard,
+  ShopifyConnectionCard,
+  UnipileConnectionCard,
+} from "./provider-cards";
+import {
+  ConnectionsErrorState,
+  ConnectionsLoadingState,
+  ConnectionsReturnBanner,
+  ConnectionsSupportBanner,
+  getConnectionErrorText,
+  type FlashMessage,
+  type LoadError,
+} from "./shared";
 
 type ConnectionsContentProps = {
   embedded?: boolean;
@@ -33,161 +39,6 @@ type ConnectionsContentProps = {
   initialReturnTo?: string;
   showSupportCta?: boolean;
 };
-
-type FlashMessage =
-  | {
-      tone: "success" | "error";
-      text: string;
-    }
-  | null;
-
-type LoadError = {
-  status: number;
-  message: string;
-} | null;
-
-const SUPPORT_MAILTO =
-  "mailto:ar@soramedia.co?subject=Seed%20Scale%20connection%20help";
-
-const PROVIDER_GUIDES: Record<
-  IntegrationProvider,
-  {
-    title: string;
-    summary: string;
-    bullets: string[];
-  }
-> = {
-  gmail: {
-    title: "Need help connecting Gmail?",
-    summary:
-      "Use the Gmail account you want outreach to send from. If Google blocks the flow or your workspace is not approved yet, our team can help complete the setup.",
-    bullets: [
-      "Start with the Gmail account you want to send from.",
-      "If Google shows an approval or test-user warning, contact our team and we will help finish the connection.",
-      "Once OAuth is fully approved, this will collapse down to a standard Google connect button.",
-    ],
-  },
-  shopify: {
-    title: "Need help connecting Shopify?",
-    summary:
-      "This manual setup needs your Shopify admin domain and an Admin API access token from your custom app.",
-    bullets: [
-      "Use your admin domain in the form your-store.myshopify.com.",
-      "Create or open your Shopify custom app and copy the Admin API access token.",
-      "Storefront domains like sleepkalm.com will not work for this admin-token flow.",
-    ],
-  },
-  instagram: {
-    title: "Need help connecting Instagram / Meta?",
-    summary:
-      "Connect the Instagram Business account that is linked to the correct Facebook page. If the Meta flow is not ready for your account, our team can guide you through the remaining steps.",
-    bullets: [
-      "Make sure the Instagram account is a Business or Creator account.",
-      "Confirm that Instagram is linked to the Facebook page you want to monitor.",
-      "If Meta blocks the flow or permissions are missing, contact our team for support.",
-    ],
-  },
-  unipile: {
-    title: "Need help connecting Unipile?",
-    summary:
-      "Use the API key from your Unipile workspace. The account ID is optional, but helps us target the exact mailbox or social account faster.",
-    bullets: [
-      "Copy the API key from your Unipile dashboard.",
-      "Paste the account ID too if you already know which account should handle DMs.",
-      "If you are unsure which account to use, contact our team and we will help map it.",
-    ],
-  },
-};
-
-function FeedbackBanner({ message }: { message: FlashMessage }) {
-  if (!message) {
-    return null;
-  }
-
-  return (
-    <div
-      className={cn(
-        "rounded-lg border px-3 py-2 text-sm",
-        message.tone === "error"
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-green-200 bg-green-50 text-green-800"
-      )}
-    >
-      {message.text}
-    </div>
-  );
-}
-
-function MethodSelector({
-  methods,
-  activeMethod,
-  disabled,
-  onChange,
-}: {
-  methods: readonly IntegrationMethod[];
-  activeMethod: IntegrationMethod;
-  disabled: boolean;
-  onChange: (method: IntegrationMethod) => void;
-}) {
-  if (methods.length === 1) {
-    return (
-      <div className="rounded-lg border bg-muted/20 px-3 py-1 text-xs text-muted-foreground">
-        Setup method: {methods[0] === "oauth" ? "OAuth" : "Manual credentials"}
-      </div>
-    );
-  }
-
-  return (
-    <div className="inline-flex rounded-lg border bg-muted/30 p-1">
-      {methods.map((method) => {
-        const selected = method === activeMethod;
-        return (
-          <button
-            key={method}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(method)}
-            className={cn(
-              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-              selected
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-              disabled && "opacity-60"
-            )}
-          >
-            {method === "oauth" ? "OAuth" : "Manual"}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ProviderGuide({ provider }: { provider: IntegrationProvider }) {
-  const guide = PROVIDER_GUIDES[provider];
-
-  return (
-    <details className="rounded-lg border border-dashed border-border/80 bg-muted/10 px-3 py-2 text-sm">
-      <summary className="cursor-pointer list-none font-medium text-foreground">
-        {guide.title}
-      </summary>
-      <div className="mt-2 space-y-2 text-muted-foreground">
-        <p>{guide.summary}</p>
-        <ul className="space-y-1 pl-5 list-disc">
-          {guide.bullets.map((bullet) => (
-            <li key={bullet}>{bullet}</li>
-          ))}
-        </ul>
-        <a
-          href={SUPPORT_MAILTO}
-          className="inline-flex text-sm font-medium text-foreground underline underline-offset-4"
-        >
-          Contact our team for support
-        </a>
-      </div>
-    </details>
-  );
-}
 
 export function ConnectionsContent({
   embedded = false,
@@ -297,7 +148,7 @@ export function ConnectionsContent({
     }));
   }
 
-  function getProvider(provider: IntegrationProvider) {
+  function getProvider(provider: IntegrationProvider): ConnectionOverviewItem | null {
     return overview?.providers.find((item) => item.provider === provider) ?? null;
   }
 
@@ -588,69 +439,19 @@ export function ConnectionsContent({
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
+  if (loading) return <ConnectionsLoadingState />;
 
   if (!overview) {
-    const isAuthError = loadError?.status === 401;
-    const isNotFound = loadError?.status === 404;
-
     return (
-      <div className={embedded ? "space-y-4" : "space-y-6"}>
-        {!embedded && (
-          <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-        )}
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">
-              {isAuthError
-                ? "Your session has expired. Please refresh the page or log in again."
-                : isNotFound
-                  ? "No brand found. Visit the dashboard to get started."
-                  : "Something went wrong loading your connections. Please try again."}
-            </p>
-            {!isAuthError && !isNotFound && loadError?.message && (
-              <p className="mt-2 text-xs text-muted-foreground/70">
-                Error: {loadError.message}
-              </p>
-            )}
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {isAuthError ? (
-                <Button onClick={() => window.location.reload()}>
-                  Refresh page
-                </Button>
-              ) : isNotFound ? (
-                <Button
-                  onClick={() => {
-                    window.location.href = "/dashboard";
-                  }}
-                >
-                  Go to Dashboard
-                </Button>
-              ) : (
-                <Button onClick={() => void refreshConnectionData()}>
-                  Retry
-                </Button>
-              )}
-              {returnTo && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = returnTo;
-                  }}
-                >
-                  Back
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <ConnectionsErrorState
+        embedded={embedded}
+        loadError={loadError}
+        returnTo={returnTo}
+        onRetry={() => void refreshConnectionData()}
+        onReturn={() => {
+          window.location.href = returnTo ?? "/dashboard";
+        }}
+      />
     );
   }
 
@@ -659,22 +460,7 @@ export function ConnectionsContent({
   const shopify = getProvider("shopify");
   const unipile = getProvider("unipile");
 
-  const errorText =
-    error === "oauth_denied"
-      ? "OAuth access was denied."
-      : error === "no_refresh_token"
-        ? "No refresh token returned. Revoke access in Google Account and reconnect."
-        : error === "forbidden"
-          ? "You do not have access to this brand."
-          : error === "no_instagram_account"
-            ? "No Instagram Business Account found. Ensure your Instagram account is connected to a Facebook Page."
-            : error === "invalid_signature"
-              ? "Shopify OAuth signature validation failed."
-              : error === "invalid_state"
-                ? "Shopify OAuth state expired. Start the connection again."
-                : error
-                  ? "An error occurred. Please try again."
-                  : null;
+  const errorText = getConnectionErrorText(error);
 
   return (
     <div className={embedded ? "space-y-4" : "space-y-6"}>
@@ -687,35 +473,15 @@ export function ConnectionsContent({
         </div>
       )}
 
-      {showSupportCta && (
-        <div className="flex flex-col gap-3 rounded-xl border bg-muted/10 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <p>
-            Manual setup is still the default for some channels while OAuth approvals
-            and public apps are still being finalized.
-          </p>
-          <a
-            href={SUPPORT_MAILTO}
-            className="inline-flex items-center justify-center rounded-lg border px-3 py-2 font-medium text-foreground"
-          >
-            Contact our team for support
-          </a>
-        </div>
-      )}
+      {showSupportCta && <ConnectionsSupportBanner />}
 
       {returnTo && !embedded && (
-        <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-4 text-sm">
-          <p className="text-muted-foreground">
-            Finish connections here, then return to onboarding when you are ready.
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              window.location.href = returnTo;
-            }}
-          >
-            Return to Onboarding
-          </Button>
-        </div>
+        <ConnectionsReturnBanner
+          returnTo={returnTo}
+          onReturn={() => {
+            window.location.href = returnTo;
+          }}
+        />
       )}
 
       {errorText && (
@@ -726,332 +492,85 @@ export function ConnectionsContent({
 
       <div className="grid gap-4 md:grid-cols-2">
         {gmail && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-lg">{gmail.label}</CardTitle>
-                <Badge variant={gmail.connected ? "default" : "secondary"}>
-                  {gmail.connected ? "Connected" : "Not connected"}
-                </Badge>
-              </div>
-              <CardDescription>{gmail.summary}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <MethodSelector
-                methods={gmail.availableMethods}
-                activeMethod={gmail.activeMethod}
-                disabled
-                onChange={() => undefined}
-              />
-              {gmail.connected ? (
-                <p className="text-sm text-muted-foreground">
-                  Outreach emails will be sent from{" "}
-                  <strong>{gmail.details?.gmailAddress ?? gmail.externalId ?? "your Gmail account"}</strong>.
-                </p>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      brandId: brandIdOverride ?? overview.brand.id,
-                    });
-                    if (authReturnTo) {
-                      params.set("returnTo", authReturnTo);
-                    }
-                    window.location.href = `/api/auth/gmail?${params.toString()}`;
-                  }}
-                >
-                  Connect Gmail
-                </Button>
-              )}
-              <ProviderGuide provider="gmail" />
-            </CardContent>
-          </Card>
+          <GmailConnectionCard
+            provider={gmail}
+            message={messages.gmail ?? null}
+            onConnect={() => {
+              const params = new URLSearchParams({
+                brandId: brandIdOverride ?? overview.brand.id,
+              });
+              if (authReturnTo) {
+                params.set("returnTo", authReturnTo);
+              }
+              window.location.href = `/api/auth/gmail?${params.toString()}`;
+            }}
+          />
         )}
 
         {shopify && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-lg">{shopify.label}</CardTitle>
-                <Badge variant={shopify.connected ? "default" : "secondary"}>
-                  {shopify.connected ? "Connected" : "Not connected"}
-                </Badge>
-              </div>
-              <CardDescription>{shopify.summary}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <MethodSelector
-                methods={shopify.availableMethods}
-                activeMethod={shopify.activeMethod}
-                disabled={switchingProvider === "shopify"}
-                onChange={(method) => void handleMethodChange("shopify", method)}
-              />
-              <FeedbackBanner message={messages.shopify ?? null} />
-
-              {shopify.connected ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Connected store:{" "}
-                    <strong>
-                      {shopify.details?.storeDomain ??
-                        shopify.externalId ??
-                        "Unknown store"}
-                    </strong>
-                  </p>
-                  {shopify.details?.lastSyncAt && (
-                    <p className="text-sm text-muted-foreground">
-                      Last sync:{" "}
-                      <strong>
-                        {new Date(shopify.details.lastSyncAt).toLocaleString()}
-                      </strong>
-                      {typeof shopify.details.lastSyncedCount === "number" &&
-                        ` · ${shopify.details.lastSyncedCount} products`}
-                      {shopify.details.truncated ? " · partial sync" : ""}
-                    </p>
-                  )}
-                  {shopify.details?.lastSyncError && (
-                    <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                      Last sync failed: {shopify.details.lastSyncError}
-                    </div>
-                  )}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => void handleSyncShopify()}
-                      disabled={shopifySaving}
-                    >
-                      {shopifySaving ? "Syncing..." : "Retry sync"}
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      onClick={() => void handleDisconnectShopify()}
-                      disabled={shopifySaving}
-                    >
-                      {shopifySaving ? "Disconnecting..." : "Disconnect"}
-                    </Button>
-                  </div>
-                </div>
-              ) : shopify.activeMethod === "manual" ? (
-                <form className="space-y-2" onSubmit={(event) => void handleSaveShopify(event)}>
-                  <Input
-                    type="text"
-                    placeholder="your-store.myshopify.com"
-                    value={shopifyForm.storeDomain}
-                    autoComplete="off"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    onChange={(event) =>
-                      setShopifyForm((current) => ({
-                        ...current,
-                        storeDomain: event.target.value,
-                      }))
-                    }
-                  />
-                  <Input
-                    type="password"
-                    placeholder="Access Token"
-                    value={shopifyForm.accessToken}
-                    autoComplete="new-password"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
-                    onChange={(event) =>
-                      setShopifyForm((current) => ({
-                        ...current,
-                        accessToken: event.target.value,
-                      }))
-                    }
-                  />
-                  <Button
-                    type="submit"
-                    variant="outline"
-                    disabled={
-                      shopifySaving ||
-                      !shopifyForm.storeDomain.trim() ||
-                      !shopifyForm.accessToken.trim()
-                    }
-                  >
-                    {shopifySaving ? "Connecting..." : "Connect manually"}
-                  </Button>
-                  <p className="text-xs text-muted-foreground">
-                    Use the Shopify admin domain in the form{" "}
-                    <code className="font-mono">your-store.myshopify.com</code>.
-                    Storefront domains like <code className="font-mono">sleepkalm.com</code>{" "}
-                    will not work with the admin token flow.
-                  </p>
-                  <ProviderGuide provider="shopify" />
-                  <p className="text-xs text-muted-foreground">
-                    Tokens are masked in the form and cleared after save. Use a fresh Admin API token, then verify the connection state and product sync result on this card.
-                  </p>
-                </form>
-              ) : (
-                <div className="space-y-2">
-                  <Input
-                    type="text"
-                    placeholder="your-store.myshopify.com"
-                    value={shopifyForm.oauthShop}
-                    onChange={(event) =>
-                      setShopifyForm((current) => ({
-                        ...current,
-                        oauthShop: event.target.value,
-                      }))
-                    }
-                  />
-                  <Button
-                    variant="outline"
-                    disabled={!shopifyForm.oauthShop.trim()}
-                    onClick={() => {
-                      window.location.href = buildShopifyOAuthUrl(
-                        brandIdOverride ?? overview.brand.id
-                      );
-                    }}
-                  >
-                    Connect with Shopify OAuth
-                  </Button>
-                  <ProviderGuide provider="shopify" />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <ShopifyConnectionCard
+            provider={shopify}
+            message={messages.shopify ?? null}
+            switching={switchingProvider === "shopify"}
+            saving={shopifySaving}
+            storeDomain={shopifyForm.storeDomain}
+            accessToken={shopifyForm.accessToken}
+            oauthShop={shopifyForm.oauthShop}
+            onMethodChange={(method) => void handleMethodChange("shopify", method)}
+            onStoreDomainChange={(value) =>
+              setShopifyForm((current) => ({ ...current, storeDomain: value }))
+            }
+            onAccessTokenChange={(value) =>
+              setShopifyForm((current) => ({ ...current, accessToken: value }))
+            }
+            onOauthShopChange={(value) =>
+              setShopifyForm((current) => ({ ...current, oauthShop: value }))
+            }
+            onSave={(event) => void handleSaveShopify(event)}
+            onDisconnect={() => void handleDisconnectShopify()}
+            onSync={() => void handleSyncShopify()}
+            onOAuthConnect={() => {
+              window.location.href = buildShopifyOAuthUrl(
+                brandIdOverride ?? overview.brand.id,
+              );
+            }}
+          />
         )}
 
         {instagram && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-lg">{instagram.label}</CardTitle>
-                <Badge variant={instagram.connected ? "default" : "secondary"}>
-                  {instagram.connected ? "Connected" : "Not connected"}
-                </Badge>
-              </div>
-              <CardDescription>{instagram.summary}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <MethodSelector
-                methods={instagram.availableMethods}
-                activeMethod={instagram.activeMethod}
-                disabled
-                onChange={() => undefined}
-              />
-              <FeedbackBanner message={messages.instagram ?? null} />
-              {instagram.connected ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Connected account:{" "}
-                    <strong>
-                      @{instagram.details?.instagramUsername ?? instagram.externalId ?? "unknown"}
-                    </strong>
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Tagged posts and mentions are checked every 15 minutes.
-                  </p>
-                  <Button
-                    variant="destructive"
-                    onClick={() => void handleDisconnectInstagram()}
-                    disabled={instagramLoading}
-                  >
-                    {instagramLoading ? "Disconnecting..." : "Disconnect"}
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      brandId: brandIdOverride ?? overview.brand.id,
-                    });
-                    if (authReturnTo) {
-                      params.set("returnTo", authReturnTo);
-                    }
-                    window.location.href = `/api/auth/instagram?${params.toString()}`;
-                  }}
-                >
-                  Connect Instagram
-                </Button>
-              )}
-              <ProviderGuide provider="instagram" />
-            </CardContent>
-          </Card>
+          <InstagramConnectionCard
+            provider={instagram}
+            message={messages.instagram ?? null}
+            loading={instagramLoading}
+            onConnect={() => {
+              const params = new URLSearchParams({
+                brandId: brandIdOverride ?? overview.brand.id,
+              });
+              if (authReturnTo) {
+                params.set("returnTo", authReturnTo);
+              }
+              window.location.href = `/api/auth/instagram?${params.toString()}`;
+            }}
+            onDisconnect={() => void handleDisconnectInstagram()}
+          />
         )}
 
         {unipile && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <CardTitle className="text-lg">{unipile.label}</CardTitle>
-                <Badge variant={unipile.connected ? "default" : "secondary"}>
-                  {unipile.connected ? "Connected" : "Not connected"}
-                </Badge>
-              </div>
-              <CardDescription>{unipile.summary}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <MethodSelector
-                methods={unipile.availableMethods}
-                activeMethod={unipile.activeMethod}
-                disabled
-                onChange={() => undefined}
-              />
-              <FeedbackBanner message={messages.unipile ?? null} />
-              {unipile.connected ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    Instagram DMs are active
-                    {unipile.details?.accountId
-                      ? ` for account ${unipile.details.accountId}`
-                      : ""}.
-                  </p>
-                  <Button
-                    variant="destructive"
-                    onClick={() => void handleDisconnectUnipile()}
-                    disabled={unipileSaving}
-                  >
-                    {unipileSaving ? "Disconnecting..." : "Disconnect"}
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <Input
-                      type="password"
-                      placeholder="Unipile API Key"
-                      value={unipileForm.apiKey}
-                      onChange={(event) =>
-                        setUnipileForm((current) => ({
-                          ...current,
-                          apiKey: event.target.value,
-                        }))
-                      }
-                    />
-                    <Input
-                      type="text"
-                      placeholder="Unipile Account ID (optional)"
-                      value={unipileForm.accountId}
-                      onChange={(event) =>
-                        setUnipileForm((current) => ({
-                          ...current,
-                          accountId: event.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => void handleSaveUnipile()}
-                    disabled={unipileSaving || !unipileForm.apiKey.trim()}
-                  >
-                    {unipileSaving ? "Saving..." : "Connect Unipile"}
-                  </Button>
-                  <ProviderGuide provider="unipile" />
-                  <p className="text-xs text-muted-foreground">
-                    API keys stay masked in this form. After save, use the connected state here as your verification signal before enabling DM sending.
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+          <UnipileConnectionCard
+            provider={unipile}
+            message={messages.unipile ?? null}
+            saving={unipileSaving}
+            apiKey={unipileForm.apiKey}
+            accountId={unipileForm.accountId}
+            onApiKeyChange={(value) =>
+              setUnipileForm((current) => ({ ...current, apiKey: value }))
+            }
+            onAccountIdChange={(value) =>
+              setUnipileForm((current) => ({ ...current, accountId: value }))
+            }
+            onSave={() => void handleSaveUnipile()}
+            onDisconnect={() => void handleDisconnectUnipile()}
+          />
         )}
       </div>
     </div>
@@ -1060,13 +579,7 @@ export function ConnectionsContent({
 
 export default function ConnectionsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<ConnectionsLoadingState />}>
       <ConnectionsContent />
     </Suspense>
   );

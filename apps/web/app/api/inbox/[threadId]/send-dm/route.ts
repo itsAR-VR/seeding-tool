@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
 import { checkDailyLimit, getOrCreateChat, sendDm } from "@/lib/unipile/dms";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
 /**
  * POST /api/inbox/:threadId/send-dm — Send an Instagram DM via Unipile.
- *
- * Body: { message: string }
  *
  * // INVARIANT: DM send only on explicit human action — never automated
  * // INVARIANT: Unipile DMs limited to 20/day per brand account
@@ -18,29 +19,8 @@ type RouteContext = { params: Promise<{ threadId: string }> };
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { threadId } = await context.params;
-
-    const supabase = await createClient();
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-
-    if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const user = await getUserBySupabaseId(authUser.id);
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
-    }
-
-    const membership = await prisma.brandMembership.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-    });
-
-    if (!membership) {
-      return NextResponse.json({ error: "No brand found" }, { status: 404 });
-    }
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     // Feature flag guard: Unipile DM must be enabled
     const flags = await getFeatureFlags(membership.brandId);
@@ -106,7 +86,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     let externalMessageId: string;
 
     if (chatId) {
-      // Send to existing chat
       const result = await sendDm(
         membership.brandId,
         chatId,
@@ -114,7 +93,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
       externalMessageId = result.messageId;
     } else {
-      // Get or create chat
       const chatResult = await getOrCreateChat(
         membership.brandId,
         instagramHandle,
@@ -122,7 +100,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
       chatId = chatResult.chatId;
 
-      // Update thread with Unipile chat ID
       await prisma.conversationThread.update({
         where: { id: threadId },
         data: {
@@ -132,10 +109,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
 
       if (chatResult.isNew) {
-        // Message was sent during chat creation
         externalMessageId = `unipile-new-${Date.now()}`;
       } else {
-        // Chat existed but wasn't linked — send message
         const result = await sendDm(
           membership.brandId,
           chatId,
@@ -146,7 +121,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     // INVARIANT: DM send only on explicit human action — never automated
-    // Persist message
     const message = await prisma.message.create({
       data: {
         direction: "outbound",
@@ -163,12 +137,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       chatId,
     });
   } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("[inbox/send-dm/POST]", error);
 
     const errMsg =
       error instanceof Error ? error.message : "Failed to send DM";
 
-    // Don't propagate Unipile errors as 500s — return useful error
     return NextResponse.json({ error: errMsg }, { status: 500 });
   }
 }

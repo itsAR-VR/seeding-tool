@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildUnifiedDiscoveryQueryFromCampaignRequest,
   buildUnifiedDiscoveryQueryFromAutomationConfig,
   buildUnifiedDiscoveryQueryFromCampaignSearch,
   buildUnifiedDiscoveryQueryFromManualSearch,
@@ -42,6 +43,51 @@ describe("creator search contracts", () => {
         maxFollowers: 50000,
         requireCategory: false,
       },
+    });
+  });
+
+  it("preserves unified campaign discovery payloads from the discover UI", () => {
+    const query = buildUnifiedDiscoveryQueryFromCampaignRequest({
+      sources: ["collabstr", "apify_search", "approved_seed_following"],
+      keywords: ["sleep creator", "Supplements"],
+      canonicalCategories: ["Beauty"],
+      platform: "instagram",
+      limit: 80,
+      location: "Toronto",
+      filters: {
+        minFollowers: 1200,
+        maxFollowers: 50000,
+        requireCategory: true,
+        excludeExistingCreators: true,
+      },
+      seedExpansion: {
+        enabled: true,
+        maxSeedsPerRun: 7,
+        maxFollowingPerSeed: 125,
+      },
+      emailPrefetch: true,
+      usernames: [],
+    });
+
+    expect(query).toMatchObject({
+      sources: ["collabstr", "apify_search", "approved_seed_following"],
+      keywords: ["sleep creator", "Supplements"],
+      canonicalCategories: ["Beauty"],
+      platform: "instagram",
+      limit: 80,
+      location: "Toronto",
+      filters: {
+        minFollowers: 1200,
+        maxFollowers: 50000,
+        requireCategory: true,
+        excludeExistingCreators: true,
+      },
+      seedExpansion: {
+        enabled: true,
+        maxSeedsPerRun: 7,
+        maxFollowingPerSeed: 125,
+      },
+      emailPrefetch: true,
     });
   });
 

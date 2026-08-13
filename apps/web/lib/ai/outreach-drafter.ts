@@ -3,6 +3,7 @@
  */
 import OpenAI from "openai";
 import type { OutreachPersona } from "./personas";
+import { AI_MODEL } from "@/lib/ai/config";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -41,6 +42,7 @@ export type GenerateDraftParams = {
 export type GeneratedDraft = {
   subject?: string;
   body: string;
+  bodyHtml?: string;
   tokens: number;
 };
 
@@ -125,7 +127,7 @@ ${
   const userPrompt = buildUserPrompt(params);
 
   const completion = await openai.chat.completions.create({
-    model: "gpt-5-mini",
+    model: AI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },

@@ -49,6 +49,7 @@ model Organization {
   @@map("organizations")
 }
 
+// ACTIVE — used by lib/tenancy.ts, scripts/seed-phase18-fixtures.ts
 model OrganizationMembership {
   id     String @id @default(uuid())
   role   String @default("member") // owner | admin | member
@@ -135,9 +136,11 @@ model BrandMembership {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, brandId])
+  @@index([brandId])
   @@map("brand_memberships")
 }
 
+// ACTIVE — used by app/api/billing/webhook/route.ts
 model SubscriptionPlan {
   id          String @id @default(uuid())
   name        String // Free | Starter | Growth | Enterprise
@@ -154,6 +157,7 @@ model SubscriptionPlan {
   @@map("subscription_plans")
 }
 
+// ACTIVE — used by app/api/billing/webhook/route.ts (via SubscriptionPlan relation)
 model SubscriptionEntitlement {
   id    String @id @default(uuid())
   key   String // max_brands | max_creators_per_campaign | max_campaigns | etc.
@@ -194,6 +198,7 @@ model Subscription {
 // Brand Configuration
 // ──────────────────────────────────────────────
 
+// ACTIVE — used by app/api/onboarding/status/route.ts, app/api/onboarding/complete/route.ts
 model BrandOnboarding {
   id            String  @id @default(uuid())
   currentStep   Int     @default(0)
@@ -236,6 +241,7 @@ model BrandSettings {
 // Credit System
 // ──────────────────────────────────────────────
 
+// ACTIVE — used by lib/credits.ts, app/api/billing/balance/route.ts
 model BrandCreditBalance {
   id      String @id @default(uuid())
   credits Int    @default(0)
@@ -251,6 +257,7 @@ model BrandCreditBalance {
   @@map("brand_credit_balances")
 }
 
+// ACTIVE — used by lib/credits.ts
 model BrandCreditTransaction {
   id        String  @id @default(uuid())
   type      String  // "mint" | "debit"
@@ -259,6 +266,7 @@ model BrandCreditTransaction {
   metadata  Json?
 
   stripePaymentIntentId String? @map("stripe_payment_intent_id")
+  stripeInvoiceId       String? @map("stripe_invoice_id")
 
   balanceId String
 
@@ -269,6 +277,7 @@ model BrandCreditTransaction {
   @@map("brand_credit_transactions")
 }
 
+// ACTIVE — used by lib/inngest/functions/mention-check.ts
 model OutreachTemplate {
   id        String @id @default(uuid())
   name      String
@@ -284,6 +293,7 @@ model OutreachTemplate {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("outreach_templates")
 }
 
@@ -306,12 +316,13 @@ model BrandProduct {
 
   campaignProducts CampaignProduct[]
 
+  @@index([brandId])
   @@map("brand_products")
 }
 
 model ProviderCredential {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | meta_creator_marketplace | unipile
+  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
   label    String?
   credentialType String @default("api_key") // oauth_refresh_token | oauth_access_token | api_key | shopify_admin_token
 
@@ -332,7 +343,7 @@ model ProviderCredential {
 
 model BrandConnection {
   id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | unipile
+  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
   status   String @default("connected") // connected | disconnected | error
   connectionMethod String @default("manual") // oauth | manual
 
@@ -347,6 +358,7 @@ model BrandConnection {
   updatedAt DateTime @updatedAt
 
   @@unique([brandId, provider])
+  @@index([status])
   @@map("brand_connections")
 }
 
@@ -355,9 +367,10 @@ model EmailAlias {
   address     String
   displayName String?
   isPrimary   Boolean @default(false)
-  isWarmedUp  Boolean @default(false)
-  isPaused    Boolean @default(false)
-  dailyLimit  Int     @default(50)
+  isWarmedUp      Boolean   @default(false)
+  warmupStartedAt DateTime?
+  isPaused        Boolean   @default(false)
+  dailyLimit      Int       @default(50)
 
   brandId String
 
@@ -390,9 +403,22 @@ model SendingMetric {
   updatedAt DateTime @updatedAt
 
   @@unique([aliasId, date])
+  @@index([brandId])
   @@map("sending_metrics")
 }
 
+model EmailSuppression {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  reason       String   // UNSUBSCRIBE | BOUNCE | COMPLAINT | MANUAL
+  suppressedAt DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@map("email_suppressions")
+}
+
+// UNUSED — candidate for removal (no prisma.discoverySeed calls found in codebase)
 model DiscoverySeed {
   id       String @id @default(uuid())
   platform String // instagram | tiktok
@@ -419,6 +445,7 @@ model Campaign {
   name        String
   description String?
   status      String @default("draft") // draft | active | paused | completed | archived
+  portfolioConfig Json? @map("portfolio_config")
 
   brandId String
 
@@ -430,7 +457,11 @@ model Campaign {
   campaignProducts  CampaignProduct[]
   campaignCreators  CampaignCreator[]
   creatorSearchJobs CreatorSearchJob[]
+  outcomes          CampaignOutcome[]
+  healthSnapshots   CampaignHealthSnapshot[]
 
+  @@index([brandId])
+  @@index([status])
   @@map("campaigns")
 }
 
@@ -466,6 +497,7 @@ model Creator {
   notes    String? @db.Text
 
   instagramHandle String? @map("instagram_handle")
+  tiktokHandle    String? @map("tiktok_handle")
 
   /// Source of discovery: phantombuster | apify | csv_import | manual | creator_marketplace
   // INVARIANT: discoverySource is always tagged — never null
@@ -475,8 +507,11 @@ model Creator {
   avgViews      Int?    @map("avg_views")
   bioCategory   String? @map("bio_category")
   validationStatus   String    @default("unknown") @map("validation_status")
+  validationErrorCode String?  @map("validation_error_code")
+  validationAttempts  Int      @default(0) @map("validation_attempts")
   lastValidatedAt    DateTime? @map("last_validated_at")
   lastValidationError String?  @db.Text @map("last_validation_error")
+  influencerIdentityId String? @map("influencer_identity_id")
 
   optedOut   Boolean   @default(false)
   optOutDate DateTime?
@@ -484,6 +519,7 @@ model Creator {
   brandId String
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  influencerIdentity InfluencerIdentity? @relation(fields: [influencerIdentityId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -491,8 +527,12 @@ model Creator {
   profiles          CreatorProfile[]
   campaignCreators  CampaignCreator[]
   discoveryTouches  CreatorDiscoveryTouch[]
+  rawPayloads       CreatorRawPayload[]
+  outcomes          CampaignOutcome[]
 
   @@unique([brandId, instagramHandle])
+  @@unique([brandId, tiktokHandle])
+  @@index([influencerIdentityId])
   @@map("creators")
 }
 
@@ -516,6 +556,111 @@ model CreatorProfile {
 
   @@unique([creatorId, platform])
   @@map("creator_profiles")
+}
+
+// ACTIVE — used by lib/identity/matching.ts, lib/creator-search/job-runner.ts, lib/seeding/outcome-recorder.ts, and 4+ other files
+model InfluencerIdentity {
+  id              String   @id @default(uuid())
+  displayName     String?  @map("display_name")
+  primaryLanguage String?  @map("primary_language")
+  homeRegion      String?  @map("home_region")
+  mergedIntoId    String?  @map("merged_into_id")
+
+  mergedInto  InfluencerIdentity?  @relation("InfluencerIdentityMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom  InfluencerIdentity[] @relation("InfluencerIdentityMerge")
+  creators    Creator[]
+  profiles    InfluencerPlatformProfile[]
+  outcomes    CampaignOutcome[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([mergedIntoId])
+  @@map("influencer_identities")
+}
+
+model InfluencerPlatformProfile {
+  id               String   @id @default(uuid())
+  influencerId     String   @map("influencer_id")
+  platform         String
+  platformUserId   String?  @map("platform_user_id")
+  handle           String
+  normalizedHandle String   @map("normalized_handle")
+  profileUrl       String?  @map("profile_url")
+  profileImageUrl  String?  @map("profile_image_url")
+  websiteUrl       String?  @map("website_url")
+  bioText          String?  @db.Text @map("bio_text")
+  email            String?
+  region           String?
+  languageDetected String?  @map("language_detected")
+  isPrivate        Boolean  @default(false) @map("is_private")
+  isVerified       Boolean  @default(false) @map("is_verified")
+  followerCount    Int?     @map("follower_count")
+  followingCount   Int?     @map("following_count")
+  postCount        Int?     @map("post_count")
+  avgViews         Int?     @map("avg_views")
+  engagementRate   Float?   @map("engagement_rate")
+  metadata         Json?
+  lastFetchedAt    DateTime? @map("last_fetched_at")
+
+  influencer             InfluencerIdentity               @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  edgesFrom              IdentityEdge[]                   @relation("IdentityEdgeFrom")
+  edgesTo                IdentityEdge[]                   @relation("IdentityEdgeTo")
+  contactPoints          ContactPoint[]
+  metricsDaily           InfluencerMetricsDaily[]
+  authenticityAssessments InfluencerAuthenticityAssessment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([platform, normalizedHandle])
+  @@index([influencerId])
+  @@index([platform, platformUserId])
+  @@map("influencer_platform_profiles")
+}
+
+model IdentityEdge {
+  id            String   @id @default(uuid())
+  fromProfileId String   @map("from_profile_id")
+  toProfileId   String   @map("to_profile_id")
+  matchScore    Float    @map("match_score")
+  matchBand     String   @map("match_band")
+  evidenceJson  Json     @map("evidence_json")
+  reviewedBy    String?  @map("reviewed_by")
+  reviewedAt    DateTime? @map("reviewed_at")
+  reviewOutcome String?  @map("review_outcome")
+
+  fromProfile InfluencerPlatformProfile @relation("IdentityEdgeFrom", fields: [fromProfileId], references: [id], onDelete: Cascade)
+  toProfile   InfluencerPlatformProfile @relation("IdentityEdgeTo", fields: [toProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([fromProfileId, toProfileId])
+  @@index([matchBand])
+  @@index([reviewOutcome])
+  @@map("identity_edges")
+}
+
+model ContactPoint {
+  id             String   @id @default(uuid())
+  profileId       String   @map("profile_id")
+  contactType     String   @map("contact_type")
+  contactValue    String   @map("contact_value")
+  confidence      Float
+  source          String
+  isStale         Boolean  @default(false) @map("is_stale")
+  lastVerifiedAt  DateTime? @map("last_verified_at")
+  metadata        Json?
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([profileId])
+  @@index([contactType, confidence])
+  @@map("contact_points")
 }
 
 /// CampaignCreator replaces the Airtable People table.
@@ -554,6 +699,7 @@ model CampaignCreator {
   mentionAssets          MentionAsset[]
   reminderSchedules      ReminderSchedule[]
   aiDrafts               AIDraft[]
+  outcome                CampaignOutcome?
 
   @@unique([campaignId, creatorId])
   @@map("campaign_creators")
@@ -588,6 +734,7 @@ model CreatorSearchJob {
 
   results          CreatorSearchResult[]
   discoveryTouches CreatorDiscoveryTouch[]
+  rawPayloads      CreatorRawPayload[]
 
   @@index([brandId, status])
   @@index([campaignId, status])
@@ -620,6 +767,10 @@ model CreatorSearchResult {
 
   fitScore    Float? // AI-scored creator fit (0-1)
   fitReasoning String? @db.Text
+  scoreComponents Json? @map("score_components")
+  triage         String?
+  sourceConfidence Float? @map("source_confidence")
+  sourceConfidenceTier String? @map("source_confidence_tier")
 
   searchJobId String
 
@@ -657,6 +808,124 @@ model CreatorDiscoveryTouch {
   @@map("creator_discovery_touches")
 }
 
+model CreatorRawPayload {
+  id          String   @id @default(uuid())
+  creatorId   String?  @map("creator_id")
+  searchJobId String?  @map("search_job_id")
+  source      String
+  eventType   String   @map("event_type")
+  payload     Json
+  payloadHash String?  @map("payload_hash")
+
+  creator   Creator?          @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  searchJob CreatorSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([creatorId])
+  @@index([searchJobId])
+  @@index([source, createdAt])
+  @@map("creator_raw_payloads")
+}
+
+model InfluencerMetricsDaily {
+  id               String   @id @default(uuid())
+  profileId        String   @map("profile_id")
+  date             DateTime @db.Date
+  followers        Int?
+  following        Int?
+  posts            Int?
+  avgViews         Int?     @map("avg_views")
+  engagementRate   Float?   @map("engagement_rate")
+  likes            Int?
+  comments         Int?
+  source           String
+  sourceConfidence Float    @default(0) @map("source_confidence")
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([profileId, date])
+  @@index([profileId, date])
+  @@index([date])
+  @@map("influencer_metrics_daily")
+}
+
+// ACTIVE — used by app/api/creators/[creatorId]/provenance/route.ts, lib/creator-search/decision-engine.ts
+model InfluencerAuthenticityAssessment {
+  id                     String   @id @default(uuid())
+  profileId              String   @map("profile_id")
+  authScore              Float    @map("auth_score")
+  botRiskScore           Float    @map("bot_risk_score")
+  growthAnomalyScore     Float    @map("growth_anomaly_score")
+  engagementQualityScore Float    @map("engagement_quality_score")
+  modelVersion           String   @map("model_version")
+  notesJson              Json?    @map("notes_json")
+  inputSnapshotCount     Int      @default(0) @map("input_snapshot_count")
+
+  profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  computedAt DateTime @default(now()) @map("computed_at")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([profileId, computedAt])
+  @@index([authScore])
+  @@map("influencer_authenticity_assessments")
+}
+
+model CampaignOutcome {
+  id                  String   @id @default(uuid())
+  campaignCreatorId   String   @unique @map("campaign_creator_id")
+  campaignId          String   @map("campaign_id")
+  creatorId           String   @map("creator_id")
+  identityId          String?  @map("identity_id")
+  reviewDecision      String?  @map("review_decision")
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewedBy          String?  @map("reviewed_by")
+  declineReason       String?  @db.Text @map("decline_reason")
+  outreachSentAt      DateTime? @map("outreach_sent_at")
+  outreachMethod      String?  @map("outreach_method")
+  repliedAt           DateTime? @map("replied_at")
+  replyType           String?  @map("reply_type")
+  responseTimeHours   Float?   @map("response_time_hours")
+  acceptedAt          DateTime? @map("accepted_at")
+  addressConfirmedAt  DateTime? @map("address_confirmed_at")
+  orderCreatedAt      DateTime? @map("order_created_at")
+  shippedAt           DateTime? @map("shipped_at")
+  deliveredAt         DateTime? @map("delivered_at")
+  postedAt            DateTime? @map("posted_at")
+  completedAt         DateTime? @map("completed_at")
+  optedOutAt          DateTime? @map("opted_out_at")
+  stalledAt           DateTime? @map("stalled_at")
+  stallReason         String?  @db.Text @map("stall_reason")
+  contentQuality      String?  @map("content_quality")
+  contentReach        Int?     @map("content_reach")
+  contentEngagement   Float?   @map("content_engagement")
+  costPerCreator      Float?   @map("cost_per_creator")
+  costPerEngagement   Float?   @map("cost_per_engagement")
+  fitScoreAtSeed      Float?   @map("fit_score_at_seed")
+  triageAtSeed        String?  @map("triage_at_seed")
+  scoreComponentsAtSeed Json?  @map("score_components_at_seed")
+
+  campaignCreator CampaignCreator      @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  campaign       Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator        Creator               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  identity       InfluencerIdentity?   @relation(fields: [identityId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([identityId])
+  @@index([reviewDecision])
+  @@map("campaign_outcomes")
+}
+
 // ──────────────────────────────────────────────
 // Inbox & Operations
 // ──────────────────────────────────────────────
@@ -682,6 +951,8 @@ model ConversationThread {
   messages    Message[]
   aiArtifacts AIArtifact[]
 
+  @@index([brandId])
+  @@index([status])
   @@map("conversation_threads")
 }
 
@@ -735,8 +1006,9 @@ model AIDraft {
   type    String // reply | outreach | follow_up | reminder
   status  String @default("draft") // draft | approved | sent | discarded
 
-  subject String?
-  body    String  @db.Text
+  subject  String?
+  body     String  @db.Text
+  bodyHtml String? @db.Text @map("body_html")
 
   approvedAt DateTime?
   approvedBy String?
@@ -748,6 +1020,7 @@ model AIDraft {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("ai_drafts")
 }
 
@@ -822,6 +1095,7 @@ model FulfillmentEvent {
   @@map("fulfillment_events")
 }
 
+// ACTIVE — used by app/api/campaigns/[campaignId]/analytics/route.ts, lib/creators/validation-ops.ts
 model CostRecord {
   id       String @id @default(uuid())
   type     String // product | shipping | platform_fee | other
@@ -851,6 +1125,8 @@ model MentionAsset {
   views    Int?
   postedAt DateTime? @map("posted_at")
 
+  attributionConfidence String? @map("attribution_confidence") // "high" | "low"
+
   campaignCreatorId String @map("campaign_creator_id")
 
   campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
@@ -879,6 +1155,7 @@ model ReminderSchedule {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([status])
   @@map("reminder_schedules")
 }
 
@@ -904,6 +1181,8 @@ model InterventionCase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
+  @@index([status])
   @@map("intervention_cases")
 }
 
@@ -926,10 +1205,12 @@ model WebhookEvent {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@index([provider, status])
   @@map("webhook_events")
 }
 
+// PLANNED — behind feature flags (no prisma.backgroundJob calls found; schema-only for future job queue)
 model BackgroundJob {
   id        String @id @default(uuid())
   type      String // outreach | follow_up | reply_process | order_create | fulfillment_sync | reminder_send | mention_process | search_dispatch | billing_sync | alias_warmup | health_check
@@ -953,11 +1234,13 @@ model BackgroundJob {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@index([type, status])
   @@index([scheduledFor])
   @@map("background_jobs")
 }
 
+// ACTIVE — used by lib/outreach/send-pipeline.ts, app/api/inbox/[threadId]/send/route.ts, app/api/campaigns/[campaignId]/creators/[creatorId]/review/route.ts
 model ActivityLog {
   id     String @id @default(uuid())
   action String // e.g. creator.approved, outreach.sent, order.created, etc.
@@ -999,6 +1282,7 @@ model AiPersona {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("ai_personas")
 }
 
@@ -1024,7 +1308,27 @@ model Automation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([brandId])
   @@map("automations")
+}
+
+// ──────────────────────────────────────────────
+// Shopify Product Catalog
+// ──────────────────────────────────────────────
+
+// ACTIVE — used by lib/inngest/functions/weekly-calibration.ts, app/api/analytics/calibration/route.ts
+model CalibrationSnapshot {
+  id                 String   @id @default(uuid())
+  createdAt          DateTime @default(now())
+  brandId            String?  @map("brand_id")
+  outcomeCount       Int      @map("outcome_count")
+  reportJson         Json     @map("report_json")
+  adjustmentsApplied Boolean  @default(false) @map("adjustments_applied")
+  weightsBefore      Json     @map("weights_before")
+  suggestedWeights   Json     @map("suggested_weights")
+
+  @@index([brandId])
+  @@map("calibration_snapshots")
 }
 
 // ──────────────────────────────────────────────
@@ -1072,4 +1376,21 @@ model ShopifyVariant {
 
   @@unique([productId, shopifyVariantId])
   @@map("shopify_variants")
+}
+
+// ──────────────────────────────────────────────
+// Campaign Health Monitoring
+// ──────────────────────────────────────────────
+
+model CampaignHealthSnapshot {
+  id         String   @id @default(uuid())
+  createdAt  DateTime @default(now())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  status     String   // "healthy" | "warning" | "critical"
+  metrics    Json     // HealthMetrics (typed in application code)
+  alerts     Json     // HealthAlert[] (typed in application code)
+
+  @@index([campaignId, createdAt])
+  @@map("campaign_health_snapshots")
 }

@@ -10,6 +10,8 @@ const APIFY_SEARCH_ACTOR_ID = "apify/instagram-search-scraper";
 const APIFY_FOLLOWING_ACTOR_ID = "datadoping/instagram-following-scraper";
 const APIFY_KEYWORD_EMAIL_ACTOR_ID = "scraper-mind/instagram-email-scraper";
 const APIFY_LEGACY_HASHTAG_ACTOR_ID = "apify/instagram-hashtag-scraper";
+const APIFY_TIKTOK_PROFILE_ACTOR_ID =
+  process.env.APIFY_TIKTOK_ACTOR_ID ?? "clockworks/tiktok-scraper";
 
 export type ApifyActorRunRef = {
   datasetId: string;
@@ -292,6 +294,68 @@ export function mapInstagramSearchUserToCreator(
     seedCreatorId: null,
     metadata: {
       rawResult: result,
+    },
+  };
+}
+
+export type ApifyTikTokProfile = {
+  uniqueId?: string;
+  nickname?: string;
+  signature?: string;
+  verified?: boolean;
+  followerCount?: number;
+  followingCount?: number;
+  heartCount?: number;
+  videoCount?: number;
+  diggCount?: number;
+  avatarLarger?: string;
+  avatarMedium?: string;
+  [key: string]: unknown;
+};
+
+export type TikTokProfileScraperInput = {
+  profiles: string[];
+  resultsPerPage?: number;
+};
+
+export async function runTikTokProfileScraper(
+  usernames: string[]
+): Promise<ApifyActorRunRef> {
+  return callActor(APIFY_TIKTOK_PROFILE_ACTOR_ID, {
+    profiles: usernames.map(
+      (username) => `https://www.tiktok.com/@${username.replace(/^@/, "")}`
+    ),
+    resultsPerPage: 1,
+  });
+}
+
+export function mapTikTokProfileToCreator(
+  profile: ApifyTikTokProfile
+): MappedCreatorData | null {
+  const handle = normalizeHandle(profile.uniqueId);
+  if (!handle) return null;
+
+  return {
+    handle,
+    name: profile.nickname || null,
+    bio: profile.signature || null,
+    bioCategory: null,
+    rawSourceCategory: null,
+    followerCount: profile.followerCount ?? null,
+    engagementRate: null,
+    profileUrl: `https://tiktok.com/@${handle}`,
+    imageUrl: profile.avatarLarger || profile.avatarMedium || null,
+    isVerified: profile.verified ?? false,
+    source: "apify_tiktok",
+    primarySource: "apify_tiktok",
+    sources: ["apify_tiktok"],
+    email: null,
+    seedCreatorId: null,
+    metadata: {
+      followingCount: profile.followingCount ?? null,
+      heartCount: profile.heartCount ?? null,
+      videoCount: profile.videoCount ?? null,
+      diggCount: profile.diggCount ?? null,
     },
   };
 }

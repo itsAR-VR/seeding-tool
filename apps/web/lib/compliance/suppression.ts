@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 /**
  * Consent suppression service.
  *
- * Uses Creator.optedOut + optOutDate fields as the suppression mechanism.
- * The schema has no separate ConsentSuppression table — Creator is the
- * canonical source of opt-out state.
+ * Uses Creator.optedOut + optOutDate fields as the primary suppression mechanism.
+ * Also writes to the durable EmailSuppression table so that emails NOT in the
+ * Creator table can still be suppressed (e.g. one-click unsubscribe from unknown
+ * recipients).
  *
  * // INVARIANT: Suppressed recipients never receive email — checked before every send
  */
@@ -20,6 +21,7 @@ export async function isSuppressed(email: string): Promise<boolean> {
 
   const normalizedEmail = email.toLowerCase().trim();
 
+  // Check Creator-based suppression
   const creator = await prisma.creator.findFirst({
     where: {
       email: normalizedEmail,
@@ -28,7 +30,15 @@ export async function isSuppressed(email: string): Promise<boolean> {
     select: { id: true },
   });
 
-  return !!creator;
+  if (creator) return true;
+
+  // Check durable EmailSuppression table (for emails not in Creator table)
+  const suppression = await prisma.emailSuppression.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true },
+  });
+
+  return !!suppression;
 }
 
 /**
@@ -39,9 +49,20 @@ export async function isSuppressed(email: string): Promise<boolean> {
  */
 export async function addSuppression(
   email: string,
-  _reason: string
+  reason: string
 ): Promise<void> {
   const normalizedEmail = email.toLowerCase().trim();
+
+  // Write to durable EmailSuppression table (upsert — idempotent)
+  await prisma.emailSuppression.upsert({
+    where: { email: normalizedEmail },
+    create: {
+      email: normalizedEmail,
+      reason,
+      suppressedAt: new Date(),
+    },
+    update: {}, // Already suppressed — no-op
+  });
 
   // Update all Creator records matching this email
   await prisma.creator.updateMany({
@@ -72,24 +93,48 @@ export async function addSuppression(
 }
 
 /**
+ * Returns the APP_ENCRYPTION_KEY or throws if unset.
+ * SECURITY: Never fall back to empty string — that makes all HMACs forgeable.
+ */
+function getEncryptionKey(): string {
+  const key = process.env.APP_ENCRYPTION_KEY;
+  if (!key) {
+    throw new Error(
+      "APP_ENCRYPTION_KEY is not set. Cannot generate or verify HMAC tokens."
+    );
+  }
+  return key;
+}
+
+/**
  * Generate an HMAC token for unsubscribe links.
  */
 export function generateUnsubscribeToken(email: string): string {
-  const secret = process.env.APP_ENCRYPTION_KEY || "";
+  const secret = getEncryptionKey();
   return createHmac("sha256", secret)
     .update(email.toLowerCase().trim())
     .digest("hex");
 }
 
 /**
- * Verify an HMAC unsubscribe token.
+ * Verify an HMAC unsubscribe token using constant-time comparison.
+ * SECURITY: Uses timingSafeEqual to prevent timing attacks.
  */
 export function verifyUnsubscribeToken(
   email: string,
   token: string
 ): boolean {
   const expected = generateUnsubscribeToken(email);
-  return token === expected;
+
+  // timingSafeEqual requires buffers of equal length
+  const tokenBuf = Buffer.from(token);
+  const expectedBuf = Buffer.from(expected);
+
+  if (tokenBuf.length !== expectedBuf.length) {
+    return false;
+  }
+
+  return timingSafeEqual(tokenBuf, expectedBuf);
 }
 
 /**

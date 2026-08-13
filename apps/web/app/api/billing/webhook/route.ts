@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
+import { mint, CREDITS_PER_PLAN } from "@/lib/credits";
 import type Stripe from "stripe";
+
+// A "processing" record older than this is treated as stranded (the
+// invocation died mid-flight) and reclaimed; otherwise Stripe retries
+// would be deduplicated forever while the event stays unprocessed.
+const STALE_PROCESSING_MS = 10 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -35,6 +43,95 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // ── Idempotency guard: status-aware deduplication ─────────────────────
+    // "processed" or "processing" → already handled or in-flight, skip.
+    // "failed" → transient failure on a prior attempt, re-process.
+    // No record → new event, claim it.
+    const existing = await prisma.webhookEvent.findUnique({
+      where: { externalEventId: event.id },
+      select: { id: true, status: true, updatedAt: true },
+    });
+
+    if (existing?.status === "processed") {
+      return NextResponse.json({ received: true, deduplicated: true });
+    }
+
+    let reclaimStranded = false;
+    if (existing?.status === "processing") {
+      const isStranded =
+        existing.updatedAt.getTime() < Date.now() - STALE_PROCESSING_MS;
+      if (!isStranded) {
+        return NextResponse.json({ received: true, deduplicated: true });
+      }
+      reclaimStranded = true;
+    }
+
+    // Claim this event: insert a new "processing" row, or re-claim a "failed" one.
+    // The try/catch handles the TOCTOU race where a concurrent request inserts
+    // between our findUnique and this write — on unique constraint violation we
+    // re-read and apply the same status logic.
+    let webhookRecordId: string;
+
+    if (reclaimStranded && existing) {
+      // Atomic reclaim guarded on the stale timestamp: if another request
+      // reclaimed first (updatedAt moved), we stand down as deduplicated.
+      const reclaimed = await prisma.webhookEvent.updateMany({
+        where: {
+          id: existing.id,
+          status: "processing",
+          updatedAt: existing.updatedAt,
+        },
+        data: { status: "processing", error: null, attempts: { increment: 1 } },
+      });
+      if (reclaimed.count === 0) {
+        return NextResponse.json({ received: true, deduplicated: true });
+      }
+      webhookRecordId = existing.id;
+    } else if (existing?.status === "failed") {
+      // Re-process a previously failed event
+      await prisma.webhookEvent.update({
+        where: { id: existing.id },
+        data: { status: "processing", error: null },
+      });
+      webhookRecordId = existing.id;
+    } else {
+      try {
+        const created = await prisma.webhookEvent.create({
+          data: {
+            provider: "stripe",
+            eventType: event.type,
+            externalEventId: event.id,
+            payload: event.data.object as object,
+            status: "processing",
+          },
+        });
+        webhookRecordId = created.id;
+      } catch (insertError) {
+        // TOCTOU race: another request inserted between findUnique and create.
+        if (
+          insertError instanceof Prisma.PrismaClientKnownRequestError &&
+          insertError.code === "P2002"
+        ) {
+          const raceWinner = await prisma.webhookEvent.findUnique({
+            where: { externalEventId: event.id },
+            select: { id: true, status: true },
+          });
+          if (!raceWinner || raceWinner.status === "processed" || raceWinner.status === "processing") {
+            return NextResponse.json({ received: true, deduplicated: true });
+          }
+          // Race winner is "failed" — re-process
+          await prisma.webhookEvent.update({
+            where: { id: raceWinner.id },
+            data: { status: "processing", error: null },
+          });
+          webhookRecordId = raceWinner.id;
+        } else {
+          throw insertError;
+        }
+      }
+    }
+
+    // ── Process the event ──────────────────────────────────────────────────
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -54,6 +151,12 @@ export async function POST(request: NextRequest) {
         break;
       }
 
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice;
+        await handleInvoicePaid(invoice);
+        break;
+      }
+
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
         await handlePaymentFailed(invoice);
@@ -61,32 +164,24 @@ export async function POST(request: NextRequest) {
       }
 
       default:
-        console.log(`[stripe-webhook] Unhandled event type: ${event.type}`);
+        log("info", "stripe-webhook.unhandled", { eventType: event.type });
     }
 
-    // Log the webhook event
-    await prisma.webhookEvent.create({
-      data: {
-        provider: "stripe",
-        eventType: event.type,
-        externalEventId: event.id,
-        payload: event.data.object as object,
-        status: "processed",
-        processedAt: new Date(),
-      },
+    // Mark as processed
+    await prisma.webhookEvent.update({
+      where: { id: webhookRecordId },
+      data: { status: "processed", processedAt: new Date() },
     });
 
     return NextResponse.json({ received: true });
   } catch (error) {
     console.error("[stripe-webhook] Processing error:", error);
 
+    // Best-effort: mark the existing record as failed (if it was inserted)
     await prisma.webhookEvent
-      .create({
+      .updateMany({
+        where: { externalEventId: event.id },
         data: {
-          provider: "stripe",
-          eventType: event.type,
-          externalEventId: event.id,
-          payload: event.data.object as object,
           status: "failed",
           error: error instanceof Error ? error.message : "Unknown error",
         },
@@ -215,6 +310,60 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     .catch(() => {
       // Subscription might not exist in our DB yet
     });
+}
+
+/**
+ * Handle invoice.paid — mint credits for all brands under the subscription's org.
+ *
+ * Path: invoice -> subscription -> organization -> clients -> brands
+ * Credit amount is determined by the subscription plan name via CREDITS_PER_PLAN.
+ */
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  const subRef = invoice.parent?.subscription_details?.subscription ?? null;
+  const subscriptionId = typeof subRef === "string" ? subRef : subRef?.id ?? null;
+
+  if (!subscriptionId) return;
+
+  const subscription = await prisma.subscription.findUnique({
+    where: { stripeSubscriptionId: subscriptionId },
+    include: {
+      plan: { select: { name: true } },
+      organization: {
+        include: {
+          clients: {
+            include: { brands: { select: { id: true } } },
+          },
+        },
+      },
+    },
+  });
+
+  if (!subscription) return;
+
+  const creditAmount = CREDITS_PER_PLAN[subscription.plan.name] ?? 0;
+  if (creditAmount <= 0) return;
+
+  const brands = subscription.organization.clients.flatMap((c) => c.brands);
+
+  for (const brand of brands) {
+    try {
+      await mint(brand.id, creditAmount, `invoice.paid: ${invoice.id}`, {
+        stripeInvoiceId: invoice.id,
+        stripeSubscriptionId: subscriptionId,
+        planName: subscription.plan.name,
+      }, { stripeInvoiceId: invoice.id });
+    } catch (error) {
+      // Unique (stripe_invoice_id, balanceId): a prior partial attempt already
+      // minted this brand for this invoice — skip instead of double-minting.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
+  }
 }
 
 async function handlePaymentFailed(invoice: Stripe.Invoice) {

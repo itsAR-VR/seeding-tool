@@ -17,10 +17,7 @@ export const scheduleReminders = inngest.createFunction(
   },
   { event: "shopify/order.fulfilled" },
   async ({ event, step }) => {
-    const { orderId, campaignCreatorId } = event.data as {
-      orderId: string;
-      campaignCreatorId: string;
-    };
+    const { orderId, campaignCreatorId } = event.data;
 
     // Fetch campaign creator with brand settings
     const campaignCreator = await step.run(

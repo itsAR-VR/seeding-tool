@@ -1,4 +1,5 @@
 import { resolveProviderCredential } from "@/lib/integrations/state";
+import { SHOPIFY_API_VERSION } from "@/lib/shopify/config";
 
 /**
  * Shopify Admin API client for a specific brand.
@@ -36,13 +37,12 @@ export async function getShopifyClient(brandId: string): Promise<ShopifyClient> 
   }
 
   const storeDomain = connection.externalId; // e.g. "my-store.myshopify.com"
-  const apiVersion = "2024-01";
 
   return {
     storeDomain,
     accessToken,
     async fetch(path: string, options: RequestInit = {}): Promise<Response> {
-      const url = `https://${storeDomain}/admin/api/${apiVersion}${path}`;
+      const url = `https://${storeDomain}/admin/api/${SHOPIFY_API_VERSION}${path}`;
       return globalThis.fetch(url, {
         ...options,
         headers: {

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -20,35 +19,26 @@ const statusColors: Record<string, string> = {
 };
 
 export default async function CampaignsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) {
-    return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
-        <Card>
-          <CardHeader>
-            <CardTitle>No brand found</CardTitle>
-            <CardDescription>
-              Complete onboarding to start creating campaigns.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </div>
-    );
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return (
+        <div className="space-y-6">
+          <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
+          <Card>
+            <CardHeader>
+              <CardTitle>No brand found</CardTitle>
+              <CardDescription>
+                Complete onboarding to start creating campaigns.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
+      );
+    }
+    return null;
   }
 
   const campaigns = await prisma.campaign.findMany({

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { mapTrack17Status } from "@/lib/track17/client";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Track17 Webhook Handler (Push Notifications)
@@ -132,25 +133,12 @@ export async function POST(request: NextRequest) {
             where: { id: fe.order.campaignCreatorId },
             data: { lifecycleStatus: "delivered" },
           });
+          await recordOutcomeEvent({
+            campaignCreatorId: fe.order.campaignCreatorId,
+            event: { type: "delivered" },
+          });
         }
 
-        // Emit Inngest event for downstream processing (e.g. reminders)
-        try {
-          const { inngest } = await import("@/lib/inngest/client");
-          await inngest.send({
-            name: "shopify/fulfillment.updated",
-            data: {
-              orderId: fe.orderId,
-              shopifyOrderId: fe.order.shopifyOrderId,
-              campaignCreatorId: fe.order.campaignCreatorId,
-              status: "delivered",
-            },
-          });
-        } catch {
-          console.warn(
-            "[track17-webhook] Failed to emit Inngest event for delivery"
-          );
-        }
       }
     }
 

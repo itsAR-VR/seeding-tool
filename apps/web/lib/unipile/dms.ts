@@ -1,3 +1,20 @@
+/**
+ * Inbox / Reply DM Module — brandId-based abstraction.
+ *
+ * Use this module for sending DMs in the context of an existing conversation
+ * (inbox reply flow). It resolves the Unipile client internally from a brandId,
+ * manages chat lookup/creation, and enforces daily send limits.
+ *
+ * Key differences from `send-dm.ts`:
+ * - Takes `brandId` (resolves client internally via `getUnipileClient`)
+ * - Uses direct user lookup by username (`/api/v1/users/:handle`)
+ * - Manages existing chat discovery via paginated chat listing
+ * - Designed for inbox/reply DM sending where a chat context already exists
+ *
+ * For outreach pipeline DM sending (handle verification via fuzzy search +
+ * exact match), use `send-dm.ts` instead.
+ */
+
 import { prisma } from "@/lib/prisma";
 import { getUnipileClient, type UnipileClient } from "./client";
 

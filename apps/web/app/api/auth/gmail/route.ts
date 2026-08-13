@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { assertBrandAccess, BrandAccessError } from "@/lib/integrations/brand-access";
 import { encodeIntegrationOAuthState } from "@/lib/integrations/oauth-state";
 import { createClient } from "@/lib/supabase/server";
+import { APP_URL } from "@/lib/config";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -10,9 +11,7 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return Response.redirect(
-      `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/login`
-    );
+    return Response.redirect(`${APP_URL}/login`);
   }
 
   const { searchParams } = new URL(request.url);
@@ -38,7 +37,7 @@ export async function GET(request: NextRequest) {
     return new Response("Google OAuth not configured", { status: 500 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = APP_URL;
 
   const params = new URLSearchParams({
     client_id: clientId,

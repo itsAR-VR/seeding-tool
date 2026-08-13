@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
@@ -43,22 +42,13 @@ type PageProps = {
 export default async function CampaignDetailPage({ params }: PageProps) {
   const { campaignId } = await params;
 
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
-
-  if (!authUser) return null;
-
-  const user = await getUserBySupabaseId(authUser.id);
-  if (!user) return null;
-
-  const membership = await prisma.brandMembership.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
-
-  if (!membership) return notFound();
+  let membership;
+  try {
+    membership = await getCurrentBrandMembership();
+  } catch (error) {
+    if (error instanceof BrandAccessError) return notFound();
+    return null;
+  }
 
   const [campaign, brandSetup] = await Promise.all([
     prisma.campaign.findFirst({
@@ -191,6 +181,9 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             <Button variant="outline">
               Review Queue ({stats.pendingReview})
             </Button>
+          </Link>
+          <Link href={`/campaigns/${campaignId}/seed-list`}>
+            <Button variant="outline">Portfolio Preview</Button>
           </Link>
         </div>
       </div>

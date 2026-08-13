@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Link a MentionAsset to a CampaignCreator and update lifecycle.
@@ -39,6 +40,31 @@ export async function attributeMention(
       where: { id: campaignCreatorId },
       data: { lifecycleStatus: "posted" },
     });
+    await recordOutcomeEvent({
+      campaignCreatorId,
+      event: {
+        type: "posted",
+        reach: mention.views ?? undefined,
+        engagement:
+          mention.views && (mention.likes != null || mention.comments != null)
+            ? ((mention.likes ?? 0) + (mention.comments ?? 0)) / Math.max(1, mention.views)
+            : undefined,
+      },
+    });
+  }
+
+  // Emit confirm event for 7-day completion check
+  try {
+    const { inngest } = await import("@/lib/inngest/client");
+    await inngest.send({
+      name: "mention/posted.confirm",
+      data: {
+        campaignCreatorId,
+        mentionAssetId,
+      },
+    });
+  } catch {
+    // Inngest may not be configured — log and continue
   }
 
   // Cancel any pending reminders
@@ -67,6 +93,7 @@ export async function createAndAttributeMention(params: {
   views?: number;
   postedAt?: Date;
   campaignCreatorId: string;
+  attributionConfidence?: string;
 }): Promise<string> {
   // Dedupe: check if mention already exists for this platform + mediaUrl
   const existing = await prisma.mentionAsset.findUnique({
@@ -97,6 +124,7 @@ export async function createAndAttributeMention(params: {
       views: params.views,
       postedAt: params.postedAt,
       campaignCreatorId: params.campaignCreatorId,
+      attributionConfidence: params.attributionConfidence,
     },
   });
 

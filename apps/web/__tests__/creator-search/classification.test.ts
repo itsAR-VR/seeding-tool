@@ -17,7 +17,7 @@ describe("creator discovery classification", () => {
     });
   });
 
-  it("falls back to Other when rule matching is weak", () => {
+  it("maps wellness and supplement categories into the shared taxonomy", () => {
     const result = classifyDiscoveryText({
       rawSourceCategory: "Supplements",
       bio: "Sleep support creator",
@@ -25,8 +25,36 @@ describe("creator discovery classification", () => {
       profileDump: null,
     });
 
-    expect(result.canonicalCategory).toBe("Other");
-    expect(result.confidence).toBe("low");
+    expect(result.canonicalCategory).toBe("Health & Wellness");
+    expect(result.confidence).toBe("high");
+  });
+
+  it("normalizes common collabstr aliases into canonical categories", () => {
+    const result = classifyDiscoveryText({
+      rawSourceCategory: "Home Decor",
+      bio: "Apartment styling creator",
+      name: "Room Reset",
+      profileDump: null,
+    });
+
+    expect(result).toMatchObject({
+      canonicalCategory: "Home & Garden",
+      confidence: "high",
+    });
+  });
+
+  it("classifies multilingual bios with accent-insensitive keyword matching", () => {
+    const result = classifyDiscoveryText({
+      rawSourceCategory: null,
+      bio: "Consejos de belleza y maquillaje para piel sensible",
+      name: "Luz",
+      profileDump: null,
+    });
+
+    expect(result).toMatchObject({
+      canonicalCategory: "Beauty",
+      languageDetected: "es",
+    });
   });
 });
 
@@ -56,6 +84,12 @@ describe("creator discovery merge", () => {
         primarySource: "collabstr",
         sources: ["collabstr"],
         sourceMetadata: { origin: "collabstr" },
+        existingValidationStatus: null,
+        expandedCategories: [],
+        languageDetected: "en",
+        topicSignals: [],
+        sourceConfidence: 0.8,
+        sourceConfidenceTier: "official",
         relevanceScore: 12,
       },
       {
@@ -81,6 +115,12 @@ describe("creator discovery merge", () => {
         primarySource: "apify_search",
         sources: ["apify_search"],
         sourceMetadata: { origin: "apify" },
+        expandedCategories: [],
+        languageDetected: "en",
+        topicSignals: [],
+        sourceConfidence: 0.8,
+        sourceConfidenceTier: "official",
+        existingValidationStatus: null,
         relevanceScore: 28,
       }
     );

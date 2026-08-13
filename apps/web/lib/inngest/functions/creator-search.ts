@@ -1,8 +1,5 @@
 import { inngest } from "@/lib/inngest/client";
-import {
-  runCreatorSearchJob,
-  type CreatorSearchRequestedEvent,
-} from "@/lib/creator-search/job-runner";
+import { runCreatorSearchJob } from "@/lib/creator-search/job-runner";
 
 export const handleCreatorSearch = inngest.createFunction(
   {
@@ -13,8 +10,6 @@ export const handleCreatorSearch = inngest.createFunction(
   },
   { event: "creator-search/requested" },
   async ({ event }) => {
-    return await runCreatorSearchJob(
-      event.data as CreatorSearchRequestedEvent
-    );
+    return await runCreatorSearchJob(event.data);
   }
 );

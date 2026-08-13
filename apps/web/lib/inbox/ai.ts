@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import OpenAI from "openai";
+import { AI_MODEL } from "@/lib/ai/config";
 
 type ClassificationResult = {
   intent: "positive" | "negative" | "address" | "question" | "other";
@@ -54,7 +55,8 @@ async function createAIIntervention(
 export async function classifyReply(
   message: { body: string; subject?: string | null },
   brandId: string,
-  campaignCreatorId?: string
+  campaignCreatorId?: string,
+  channel: "email" | "instagram_dm" = "email"
 ): Promise<ClassificationResult> {
   const client = getOpenAIClient();
 
@@ -70,14 +72,22 @@ export async function classifyReply(
   }
 
   try {
-    log("info", "ai.classify.attempt", { brandId, campaignCreatorId });
-    const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are an email classifier for a creator seeding platform. 
+    log("info", "ai.classify.attempt", { brandId, campaignCreatorId, channel });
+
+    const systemPrompt =
+      channel === "instagram_dm"
+        ? `You are a message classifier for a creator seeding platform.
+Classify the creator's Instagram DM reply into one of these intents:
+- "positive": Creator is interested, willing to participate
+- "negative": Creator declines, not interested, opts out
+- "address": Creator is providing their shipping address (may be terse — just an address with no greeting, e.g. "123 Main St NYC 10001")
+- "question": Creator has questions about the campaign/product
+- "other": Anything else (auto-replies, irrelevant content)
+
+Note: DMs are typically shorter than emails, may contain emoji/slang, and address-only messages are common.
+
+Respond with JSON: { "intent": string, "confidence": number (0-1) }`
+        : `You are an email classifier for a creator seeding platform.
 Classify the creator's reply into one of these intents:
 - "positive": Creator is interested, willing to participate
 - "negative": Creator declines, not interested, opts out
@@ -85,11 +95,24 @@ Classify the creator's reply into one of these intents:
 - "question": Creator has questions about the campaign/product
 - "other": Anything else (auto-replies, irrelevant content)
 
-Respond with JSON: { "intent": string, "confidence": number (0-1) }`,
+Respond with JSON: { "intent": string, "confidence": number (0-1) }`;
+
+    const userContent =
+      channel === "instagram_dm"
+        ? `Message:\n${message.body}`
+        : `Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`;
+
+    const response = await client.chat.completions.create({
+      model: AI_MODEL,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
         },
         {
           role: "user",
-          content: `Subject: ${message.subject ?? "(none)"}\n\nBody:\n${message.body}`,
+          content: userContent,
         },
       ],
     });
@@ -107,7 +130,7 @@ Respond with JSON: { "intent": string, "confidence": number (0-1) }`,
         type: "classification",
         input: { subject: message.subject, body: message.body.slice(0, 500) },
         output: parsed,
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
       },
     });
@@ -152,7 +175,7 @@ export async function extractAddress(
 
   try {
     const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       response_format: { type: "json_object" },
       messages: [
         {
@@ -181,7 +204,7 @@ If no address is found, return all null values.`,
         type: "extraction",
         input: { body: messageBody.slice(0, 500) },
         output: parsed,
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
       },
     });
@@ -239,7 +262,7 @@ export async function generateDraft(
       .join("\n\n---\n\n");
 
     const response = await client.chat.completions.create({
-      model: "gpt-5-mini",
+      model: AI_MODEL,
       messages: [
         {
           role: "system",
@@ -269,7 +292,7 @@ Do NOT include subject lines. Only output the email body text.`,
         type: "draft",
         input: { messageCount: thread.messages.length },
         output: { draft: draft.slice(0, 500) },
-        model: "gpt-5-mini",
+        model: AI_MODEL,
         tokens: response.usage?.total_tokens,
         threadId: undefined, // filled by caller if needed
       },

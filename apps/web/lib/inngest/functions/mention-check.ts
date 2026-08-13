@@ -2,6 +2,11 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { isSuppressed } from "@/lib/compliance/suppression";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { DailyLimitExceededError } from "@/lib/outreach/errors";
+import { isInEarlyWarmup } from "@/lib/outreach/warmup";
+import { escapeHtml } from "@/lib/outreach/html-escape";
+import { renderBaseTemplate } from "@/lib/outreach/templates/base";
+import { buildUnsubscribeUrl } from "@/lib/gmail/send";
 
 /**
  * Inngest function: Handle reminder/send events.
@@ -21,12 +26,7 @@ export const handleReminderSend = inngest.createFunction(
   },
   { event: "reminder/send" },
   async ({ event }) => {
-    const { campaignCreatorId, brandId, reminderNumber } = event.data as {
-      campaignCreatorId: string;
-      brandId: string;
-      reminderNumber: number;
-      orderId: string;
-    };
+    const { campaignCreatorId, brandId, reminderNumber } = event.data;
 
     // Feature flag guard: reminder emails must be enabled
     const flags = await getFeatureFlags(brandId);
@@ -165,39 +165,94 @@ export const handleReminderSend = inngest.createFunction(
     try {
       const { sendEmail } = await import("@/lib/gmail/send");
 
+      const creatorName = campaignCreator.creator.name || "there";
+      const campaignName = campaignCreator.campaign.name;
+
       const subject = template.subject
-        .replace("{{creator_name}}", campaignCreator.creator.name || "there")
-        .replace("{{campaign_name}}", campaignCreator.campaign.name);
+        .replace("{{creator_name}}", creatorName)
+        .replace("{{campaign_name}}", campaignName);
 
       const body = template.body
-        .replace("{{creator_name}}", campaignCreator.creator.name || "there")
-        .replace("{{campaign_name}}", campaignCreator.campaign.name)
+        .replace("{{creator_name}}", creatorName)
+        .replace("{{campaign_name}}", campaignName)
         .replace("{{reminder_number}}", String(reminderNumber));
+
+      // Wrap plain-text reminder body in HTML base template
+      const unsubUrl = buildUnsubscribeUrl(creatorEmail);
+      const safeCreatorName = escapeHtml(creatorName);
+      const safeCampaignName = escapeHtml(campaignName);
+      const htmlBody = template.body
+        .replace("{{creator_name}}", safeCreatorName)
+        .replace("{{campaign_name}}", safeCampaignName)
+        .replace("{{reminder_number}}", String(reminderNumber));
+
+      const brandName = campaignCreator.campaign.brand.name ?? "Our Team";
+
+      // htmlBody already has escaped variables — don't double-escape
+      const wrappedHtml = renderBaseTemplate({
+        bodyContent: `<p>${htmlBody.replace(/\n/g, "<br/>")}</p>`,
+        brandName,
+        unsubscribeUrl: unsubUrl,
+      });
+
+      // Warmup gate: days 1-3 send plain text only
+      const effectiveBodyHtml = isInEarlyWarmup(alias)
+        ? undefined
+        : wrappedHtml;
 
       await sendEmail({
         aliasId: alias.id,
         to: creatorEmail,
         subject,
         body,
+        bodyHtml: effectiveBodyHtml,
         threadId: campaignCreator.conversationThread?.id,
         externalThreadId:
           campaignCreator.conversationThread?.externalThreadId || undefined,
       });
 
-      // Update reminder schedule
-      await prisma.reminderSchedule.updateMany({
+      const nextPendingReminder = await prisma.reminderSchedule.findFirst({
         where: {
           campaignCreatorId,
           status: "pending",
         },
-        data: {
-          status: "sent",
-          sentAt: new Date(),
-        },
+        orderBy: { scheduledFor: "asc" },
+        select: { id: true },
       });
+
+      if (nextPendingReminder) {
+        await prisma.reminderSchedule.update({
+          where: { id: nextPendingReminder.id },
+          data: {
+            status: "sent",
+            sentAt: new Date(),
+          },
+        });
+      }
 
       return { status: "sent", reminderNumber };
     } catch (error) {
+      // Daily limit reached — create intervention and reschedule for next day
+      if (error instanceof DailyLimitExceededError) {
+        await prisma.interventionCase.create({
+          data: {
+            type: "manual_review",
+            status: "open",
+            priority: "normal",
+            title: "Reminder deferred: daily send limit reached",
+            description: `Reminder #${reminderNumber} for ${creatorEmail} deferred — alias has sent ${error.sent}/${error.dailyLimit} today.`,
+            brandId,
+            campaignCreatorId,
+          },
+        });
+
+        return {
+          status: "deferred",
+          reason: "daily_limit_reached",
+          retryAfter: "next_day",
+        };
+      }
+
       const errMsg =
         error instanceof Error ? error.message : "Unknown error";
 
@@ -207,7 +262,7 @@ export const handleReminderSend = inngest.createFunction(
           type: "auth_failure",
           status: "open",
           priority: "high",
-          title: `Reminder email send failed`,
+          title: "Reminder email send failed",
           description: `Reminder #${reminderNumber} for ${creatorEmail} failed: ${errMsg}`,
           brandId,
           campaignCreatorId,

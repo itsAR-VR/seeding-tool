@@ -21,3 +21,4 @@ scripts/collabstr-influencers.jsonl
 scripts/archive/
 scripts/.collabstr-influencers.checkpoint.json
 .env*.local
+.gitnexus

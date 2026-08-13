@@ -507,13 +507,23 @@ export default function DiscoverCreatorsPage() {
             ) : null}
 
             <div className="flex justify-end">
-              <Button
-                onClick={() =>
-                  router.push(`/campaigns/${params.campaignId}/review`)
-                }
-              >
-                Open Review Queue →
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    router.push(`/campaigns/${params.campaignId}/seed-list`)
+                  }
+                >
+                  Preview Seed List
+                </Button>
+                <Button
+                  onClick={() =>
+                    router.push(`/campaigns/${params.campaignId}/review`)
+                  }
+                >
+                  Open Review Queue →
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

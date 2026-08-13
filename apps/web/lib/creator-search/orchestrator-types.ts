@@ -14,6 +14,9 @@ export type UnifiedDiscoveryCandidate = {
   canonicalCategory: CanonicalDiscoveryCategory | null;
   classificationConfidence: DiscoveryClassification["confidence"] | null;
   matchedCategorySignals: string[];
+  expandedCategories: string[];
+  languageDetected: string | null;
+  topicSignals: DiscoveryClassification["topicSignals"];
   followerCount: number | null;
   avgViews: number | null;
   engagementRate: number | null;
@@ -27,6 +30,8 @@ export type UnifiedDiscoveryCandidate = {
   lastValidatedAt: string | null;
   primarySource: UnifiedDiscoverySource;
   sources: UnifiedDiscoverySource[];
+  sourceConfidence: number;
+  sourceConfidenceTier: string;
   sourceMetadata: Record<string, unknown>;
   relevanceScore: number;
 };

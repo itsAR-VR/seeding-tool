@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId, requireOrg } from "@/lib/tenancy";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
+import { APP_URL } from "@/lib/config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = APP_URL;
 
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
