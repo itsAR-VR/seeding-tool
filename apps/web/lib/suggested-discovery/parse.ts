@@ -60,10 +60,9 @@ export function normalizeIgHandle(raw: string | null | undefined): string | null
 }
 
 const COUNT_LINE_PATTERN = /^([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/i;
+const COUNT_PAIR_PATTERN = /([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/gi;
 
-function applyCountSegment(counts: HeaderCounts, segment: string): void {
-  const match = segment.trim().match(COUNT_LINE_PATTERN);
-  if (!match) return;
+function applyCountMatch(counts: HeaderCounts, match: RegExpMatchArray): void {
   const value = parseInstagramCountText(match[1]);
   if (value === null) return;
   const label = match[2].toLowerCase();
@@ -74,6 +73,11 @@ function applyCountSegment(counts: HeaderCounts, segment: string): void {
     counts.followers = value;
   else if (label.startsWith("following") && counts.following === null)
     counts.following = value;
+}
+
+function applyCountSegment(counts: HeaderCounts, segment: string): void {
+  const match = segment.trim().match(COUNT_LINE_PATTERN);
+  if (match) applyCountMatch(counts, match);
 }
 
 /** Extract "1,234 posts / 56.7K followers / 912 following" counts from header text. */
@@ -141,12 +145,14 @@ export function parseMetaDescription(html: string): ParsedProfileHeader | null {
   const description = extractMetaContent(html, "og:description");
   if (!description) return null;
 
-  // Counts live in the comma-separated lead: "84.2K Followers, 610
-  // Following, 431 Posts - See Instagram photos and videos from ..."
+  // Counts live in the lead: "84.2K Followers, 610 Following, 431 Posts
+  // - See Instagram photos and videos from ...". Match full <number>
+  // <label> pairs — comma-splitting would break comma-grouped numbers
+  // like "1,234 Followers".
   const counts: HeaderCounts = { posts: null, followers: null, following: null };
   const countSection = description.split(" - ")[0] ?? "";
-  for (const segment of countSection.split(",")) {
-    applyCountSegment(counts, segment);
+  for (const match of countSection.matchAll(COUNT_PAIR_PATTERN)) {
+    applyCountMatch(counts, match);
   }
   const nameMatch = description.match(/from\s+(.+?)\s*\(@([a-z0-9._]+)\)\s*$/i);
 

@@ -101,6 +101,15 @@ describe("parseMetaDescription", () => {
     expect(parsed?.posts).toBe(431);
   });
 
+  it("preserves comma-grouped numbers in meta counts", () => {
+    const html =
+      '<meta property="og:description" content="1,234 Followers, 610 Following, 431 Posts - See Instagram photos and videos from Kate Wilder (@trail.kate)" />';
+    expect(parseMetaDescription(html)?.followers).toBe(1234);
+    const big =
+      '<meta property="og:description" content="1,234,567 Followers, 10 Following, 5 Posts - See Instagram photos and videos from Kate Wilder (@trail.kate)" />';
+    expect(parseMetaDescription(big)?.followers).toBe(1234567);
+  });
+
   it("returns null when the meta tag is absent", () => {
     expect(parseMetaDescription("<html><head></head></html>")).toBeNull();
   });
