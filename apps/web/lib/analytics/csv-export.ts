@@ -7,7 +7,13 @@ import type { AnalyticsResponse } from "./types";
 
 function escapeCSVField(value: string | number | null | undefined): string {
   if (value == null) return "";
-  const str = String(value);
+  let str = String(value);
+  // Neutralize spreadsheet formulas: externally sourced values (creator
+  // names, handles) starting with =, +, -, @ would otherwise execute as
+  // formulas when an operator opens the export.
+  if (/^[\t\r ]*[=+\-@]/.test(str)) {
+    str = `'${str}`;
+  }
   if (str.includes(",") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;
   }

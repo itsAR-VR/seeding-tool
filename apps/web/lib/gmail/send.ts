@@ -229,28 +229,77 @@ export async function sendEmail(params: SendEmailParams) {
     );
   }
 
-  // Daily limit enforcement: check current day's send count
+  // Daily limit enforcement: atomically reserve one unit of capacity
+  // BEFORE the external send. A read-then-send check lets concurrent
+  // requests all observe the same count and overshoot the limit together;
+  // the conditional increment can only succeed for `limit` senders.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const todayMetric = await prisma.sendingMetric.findUnique({
-    where: {
-      aliasId_date: { aliasId: params.aliasId, date: today },
-    },
-    select: { sent: true },
-  });
-
-  const currentSent = todayMetric?.sent ?? 0;
   const effectiveLimit = getEffectiveDailyLimit(alias);
-  if (currentSent >= effectiveLimit) {
+  let reserved = false;
+
+  if (effectiveLimit <= 0) {
+    throw new DailyLimitExceededError(params.aliasId, 0, effectiveLimit);
+  }
+
+  const reservation = await prisma.sendingMetric.updateMany({
+    where: {
+      aliasId: params.aliasId,
+      date: today,
+      sent: { lt: effectiveLimit },
+    },
+    data: { sent: { increment: 1 } },
+  });
+  if (reservation.count > 0) {
+    reserved = true;
+  } else {
+    // No row for today yet, or the limit is already reached. Try to create
+    // the day's row; if we lose the create race, retry the conditional
+    // reservation once before concluding the limit is exhausted.
+    try {
+      await prisma.sendingMetric.create({
+        data: {
+          aliasId: params.aliasId,
+          brandId: alias.brandId,
+          date: today,
+          sent: 1,
+        },
+      });
+      reserved = true;
+    } catch (createError) {
+      const isRace =
+        createError instanceof Error &&
+        "code" in createError &&
+        (createError as { code?: string }).code === "P2002";
+      if (!isRace) throw createError;
+      const retry = await prisma.sendingMetric.updateMany({
+        where: {
+          aliasId: params.aliasId,
+          date: today,
+          sent: { lt: effectiveLimit },
+        },
+        data: { sent: { increment: 1 } },
+      });
+      reserved = retry.count > 0;
+    }
+  }
+
+  if (!reserved) {
+    const current = await prisma.sendingMetric.findUnique({
+      where: { aliasId_date: { aliasId: params.aliasId, date: today } },
+      select: { sent: true },
+    });
     throw new DailyLimitExceededError(
       params.aliasId,
-      currentSent,
+      current?.sent ?? effectiveLimit,
       effectiveLimit
     );
   }
 
-  const resolved = await resolveProviderCredential(alias.brandId, "gmail");
+  let sentExternally = false;
+  try {
+    const resolved = await resolveProviderCredential(alias.brandId, "gmail");
   if (!resolved.decryptedValue) {
     throw new Error("No valid Gmail credential for this brand");
   }
@@ -285,6 +334,7 @@ export async function sendEmail(params: SendEmailParams) {
     accessToken,
     sendBody
   );
+  sentExternally = true;
 
   // 4. Persist outbound message
   // INVARIANT: Message dedupe on externalId prevents replay duplicates.
@@ -313,24 +363,28 @@ export async function sendEmail(params: SendEmailParams) {
     });
   }
 
-  // Update sending metrics (today already defined above for limit check)
-  await prisma.sendingMetric.upsert({
-    where: {
-      aliasId_date: { aliasId: params.aliasId, date: today },
-    },
-    create: {
-      aliasId: params.aliasId,
-      brandId: alias.brandId,
-      date: today,
-      sent: 1,
-    },
-    update: {
-      sent: { increment: 1 },
-    },
-  });
-
+  // Capacity was already reserved atomically before the send — no
+  // post-send metric write here.
   return {
     gmailMessageId: sentMessage.id,
     gmailThreadId: sentMessage.threadId,
   };
+  } catch (error) {
+    // Compensate the reservation only when the email never left — if
+    // Gmail accepted it, capacity stays consumed even if local
+    // persistence afterwards failed.
+    if (!sentExternally) {
+      await prisma.sendingMetric
+        .updateMany({
+          where: {
+            aliasId: params.aliasId,
+            date: today,
+            sent: { gt: 0 },
+          },
+          data: { sent: { decrement: 1 } },
+        })
+        .catch(() => undefined);
+    }
+    throw error;
+  }
 }

@@ -128,19 +128,21 @@ describe("Billing webhook: invoice.paid → mint credits", () => {
     const res = await callWebhook(invoicePaidEvent());
     expect(res.status).toBe(200);
 
-    // Should mint to both brands
+    // Should mint to both brands, with the invoice idempotency key
     expect(mockMint).toHaveBeenCalledTimes(2);
     expect(mockMint).toHaveBeenCalledWith(
       "brand-1",
       100,
       expect.stringContaining("invoice.paid"),
-      expect.objectContaining({ stripeInvoiceId: "inv_paid_1" })
+      expect.objectContaining({ stripeInvoiceId: "inv_paid_1" }),
+      { stripeInvoiceId: "inv_paid_1" }
     );
     expect(mockMint).toHaveBeenCalledWith(
       "brand-2",
       100,
       expect.stringContaining("invoice.paid"),
-      expect.objectContaining({ stripeInvoiceId: "inv_paid_1" })
+      expect.objectContaining({ stripeInvoiceId: "inv_paid_1" }),
+      { stripeInvoiceId: "inv_paid_1" }
     );
   });
 

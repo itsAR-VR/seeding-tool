@@ -6,6 +6,11 @@ import { log } from "@/lib/logger";
 import { mint, CREDITS_PER_PLAN } from "@/lib/credits";
 import type Stripe from "stripe";
 
+// A "processing" record older than this is treated as stranded (the
+// invocation died mid-flight) and reclaimed; otherwise Stripe retries
+// would be deduplicated forever while the event stays unprocessed.
+const STALE_PROCESSING_MS = 10 * 60 * 1000;
+
 export async function POST(request: NextRequest) {
   const body = await request.text();
   const signature = request.headers.get("stripe-signature");
@@ -44,11 +49,21 @@ export async function POST(request: NextRequest) {
     // No record → new event, claim it.
     const existing = await prisma.webhookEvent.findUnique({
       where: { externalEventId: event.id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, updatedAt: true },
     });
 
-    if (existing?.status === "processed" || existing?.status === "processing") {
+    if (existing?.status === "processed") {
       return NextResponse.json({ received: true, deduplicated: true });
+    }
+
+    let reclaimStranded = false;
+    if (existing?.status === "processing") {
+      const isStranded =
+        existing.updatedAt.getTime() < Date.now() - STALE_PROCESSING_MS;
+      if (!isStranded) {
+        return NextResponse.json({ received: true, deduplicated: true });
+      }
+      reclaimStranded = true;
     }
 
     // Claim this event: insert a new "processing" row, or re-claim a "failed" one.
@@ -57,7 +72,22 @@ export async function POST(request: NextRequest) {
     // re-read and apply the same status logic.
     let webhookRecordId: string;
 
-    if (existing?.status === "failed") {
+    if (reclaimStranded && existing) {
+      // Atomic reclaim guarded on the stale timestamp: if another request
+      // reclaimed first (updatedAt moved), we stand down as deduplicated.
+      const reclaimed = await prisma.webhookEvent.updateMany({
+        where: {
+          id: existing.id,
+          status: "processing",
+          updatedAt: existing.updatedAt,
+        },
+        data: { status: "processing", error: null, attempts: { increment: 1 } },
+      });
+      if (reclaimed.count === 0) {
+        return NextResponse.json({ received: true, deduplicated: true });
+      }
+      webhookRecordId = existing.id;
+    } else if (existing?.status === "failed") {
       // Re-process a previously failed event
       await prisma.webhookEvent.update({
         where: { id: existing.id },
@@ -316,11 +346,23 @@ async function handleInvoicePaid(invoice: Stripe.Invoice) {
   const brands = subscription.organization.clients.flatMap((c) => c.brands);
 
   for (const brand of brands) {
-    await mint(brand.id, creditAmount, `invoice.paid: ${invoice.id}`, {
-      stripeInvoiceId: invoice.id,
-      stripeSubscriptionId: subscriptionId,
-      planName: subscription.plan.name,
-    });
+    try {
+      await mint(brand.id, creditAmount, `invoice.paid: ${invoice.id}`, {
+        stripeInvoiceId: invoice.id,
+        stripeSubscriptionId: subscriptionId,
+        planName: subscription.plan.name,
+      }, { stripeInvoiceId: invoice.id });
+    } catch (error) {
+      // Unique (stripe_invoice_id, balanceId): a prior partial attempt already
+      // minted this brand for this invoice — skip instead of double-minting.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        continue;
+      }
+      throw error;
+    }
   }
 }
 

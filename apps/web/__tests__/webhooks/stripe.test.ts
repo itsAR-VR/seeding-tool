@@ -305,6 +305,7 @@ describe("Stripe webhook handler", () => {
       mockPrisma.webhookEvent.findUnique.mockResolvedValue({
         id: "we-inflight",
         status: "processing",
+        updatedAt: new Date(), // fresh claim — not stranded
       });
 
       const res = await callStripeWebhook(event);
@@ -313,6 +314,52 @@ describe("Stripe webhook handler", () => {
       const json = await res.json();
       expect(json.deduplicated).toBe(true);
 
+      expect(mockPrisma.webhookEvent.create).not.toHaveBeenCalled();
+    });
+
+    it("reclaims a stranded processing event and re-processes it", async () => {
+      const event = checkoutSessionCompletedEvent();
+      const strandedSince = new Date(Date.now() - 15 * 60 * 1000);
+
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue({
+        id: "we-stranded",
+        status: "processing",
+        updatedAt: strandedSince,
+      });
+      mockPrisma.webhookEvent.updateMany.mockResolvedValue({ count: 1 });
+
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.deduplicated).not.toBe(true);
+      expect(mockPrisma.webhookEvent.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id: "we-stranded",
+            status: "processing",
+            updatedAt: strandedSince,
+          }),
+        })
+      );
+    });
+
+    it("stands down when a stranded event was reclaimed by a concurrent request", async () => {
+      const event = checkoutSessionCompletedEvent();
+      const strandedSince = new Date(Date.now() - 15 * 60 * 1000);
+
+      mockPrisma.webhookEvent.findUnique.mockResolvedValue({
+        id: "we-stranded",
+        status: "processing",
+        updatedAt: strandedSince,
+      });
+      mockPrisma.webhookEvent.updateMany.mockResolvedValue({ count: 0 });
+
+      const res = await callStripeWebhook(event);
+
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.deduplicated).toBe(true);
       expect(mockPrisma.webhookEvent.create).not.toHaveBeenCalled();
     });
 

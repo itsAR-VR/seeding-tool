@@ -113,7 +113,12 @@ export async function sendOutreachBatch(
           },
         },
         conversationThread: {
-          select: { id: true, unipileChatId: true, channel: true },
+          select: {
+            id: true,
+            unipileChatId: true,
+            channel: true,
+            externalThreadId: true,
+          },
         },
       },
     });
@@ -162,7 +167,21 @@ export async function sendOutreachBatch(
         continue;
       }
 
-      // Empty thread from a failed prior attempt — clean up so we can retry
+      // Thread has no outbound message — but if Gmail assigned an external
+      // thread id, a prior attempt DID reach Gmail and only the local
+      // persist failed. Resending would duplicate the external email, so
+      // flag for manual reconciliation instead of delete-and-retry.
+      if (existingThread.externalThreadId) {
+        results.push({
+          ...draft,
+          status: "failed",
+          error: `Ambiguous prior send: thread has Gmail id ${existingThread.externalThreadId} but no recorded outbound message. Not auto-resending — reconcile manually.`,
+        });
+        continue;
+      }
+
+      // Empty thread with no external id: the prior attempt failed before
+      // sending — clean up so we can retry
       await prisma.conversationThread.delete({
         where: { id: existingThread.id },
       });

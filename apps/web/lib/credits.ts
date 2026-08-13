@@ -77,7 +77,8 @@ export async function mint(
   brandId: string,
   amount: number,
   reason?: string,
-  metadata?: Record<string, unknown>
+  metadata?: Record<string, unknown>,
+  options?: { stripeInvoiceId?: string }
 ): Promise<number> {
   if (amount <= 0) throw new RangeError("mint amount must be positive");
 
@@ -96,6 +97,7 @@ export async function mint(
         reason: reason ?? "Credit grant",
         metadata: toJsonValue(metadata),
         balanceId: balance.id,
+        stripeInvoiceId: options?.stripeInvoiceId ?? null,
       },
     });
 
