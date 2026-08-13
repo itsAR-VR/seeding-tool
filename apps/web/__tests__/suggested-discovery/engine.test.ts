@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { textFallbackVerdict } from "@/lib/suggested-discovery/engine";
 import type { SuggestedProfile } from "@/lib/suggested-discovery/types";
 
-function profile(bio: string, category: string | null = null): SuggestedProfile {
+function profile(bio: string | null, category: string | null = null): SuggestedProfile {
   return {
     handle: "test.subject",
     displayName: null,

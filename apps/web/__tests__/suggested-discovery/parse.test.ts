@@ -41,6 +41,16 @@ describe("parseHeaderCounts", () => {
       following: null,
     });
   });
+
+  it("does not let bio text overwrite real counts", () => {
+    const text = [
+      "8K followers",
+      "120 following",
+      "Some Creator",
+      "Helping 50K followers grow their audience",
+    ].join("\n");
+    expect(parseHeaderCounts(text).followers).toBe(8000);
+  });
 });
 
 describe("parseHeaderText", () => {

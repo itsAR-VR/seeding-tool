@@ -59,18 +59,28 @@ export function normalizeIgHandle(raw: string | null | undefined): string | null
   return value;
 }
 
+const COUNT_LINE_PATTERN = /^([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/i;
+
+function applyCountSegment(counts: HeaderCounts, segment: string): void {
+  const match = segment.trim().match(COUNT_LINE_PATTERN);
+  if (!match) return;
+  const value = parseInstagramCountText(match[1]);
+  if (value === null) return;
+  const label = match[2].toLowerCase();
+  // First hit per label wins — a bio line like "Helping 50K followers
+  // grow" must not overwrite the real header count parsed earlier.
+  if (label.startsWith("post") && counts.posts === null) counts.posts = value;
+  else if (label.startsWith("follower") && counts.followers === null)
+    counts.followers = value;
+  else if (label.startsWith("following") && counts.following === null)
+    counts.following = value;
+}
+
 /** Extract "1,234 posts / 56.7K followers / 912 following" counts from header text. */
 export function parseHeaderCounts(headerText: string): HeaderCounts {
   const counts: HeaderCounts = { posts: null, followers: null, following: null };
-  const pattern = /([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(headerText)) !== null) {
-    const value = parseInstagramCountText(match[1]);
-    if (value === null) continue;
-    const label = match[2].toLowerCase();
-    if (label.startsWith("post")) counts.posts = value;
-    else if (label.startsWith("follower")) counts.followers = value;
-    else counts.following = value;
+  for (const line of headerText.split("\n")) {
+    applyCountSegment(counts, line);
   }
   return counts;
 }
@@ -92,7 +102,7 @@ export function parseHeaderText(headerText: string, handle: string): ParsedProfi
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .filter((line) => !/([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)/i.test(line))
+    .filter((line) => !COUNT_LINE_PATTERN.test(line))
     .filter((line) => !HEADER_NOISE_LINES.has(line.toLowerCase()))
     .filter((line) => line.toLowerCase() !== handle)
     .filter((line) => line.toLowerCase() !== `@${handle}`)
@@ -131,7 +141,13 @@ export function parseMetaDescription(html: string): ParsedProfileHeader | null {
   const description = extractMetaContent(html, "og:description");
   if (!description) return null;
 
-  const counts = parseHeaderCounts(description);
+  // Counts live in the comma-separated lead: "84.2K Followers, 610
+  // Following, 431 Posts - See Instagram photos and videos from ..."
+  const counts: HeaderCounts = { posts: null, followers: null, following: null };
+  const countSection = description.split(" - ")[0] ?? "";
+  for (const segment of countSection.split(",")) {
+    applyCountSegment(counts, segment);
+  }
   const nameMatch = description.match(/from\s+(.+?)\s*\(@([a-z0-9._]+)\)\s*$/i);
 
   return {
