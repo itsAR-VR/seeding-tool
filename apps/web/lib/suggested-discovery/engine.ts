@@ -27,6 +27,7 @@ const NICHE_STOP_WORDS = new Set([
   "best", "top", "based", "looking", "want", "wants", "need", "needs",
   "creator", "creators", "influencer", "influencers", "brand", "brands",
   "product", "products", "audience", "audiences", "content", "niche",
+  "other",
 ]);
 
 function escapeRegExp(value: string): string {
@@ -59,11 +60,18 @@ export function textFallbackVerdict(
   });
 
   const terms = nicheTerms(niche);
+  // "Other" is the classifier's fallback sentinel, not a real signal —
+  // including it would let a niche brief containing "other" match every
+  // unclassified profile.
+  const canonicalSignal =
+    classification.canonicalCategory === "Other"
+      ? null
+      : classification.canonicalCategory;
   const haystack = [
     profile.bio ?? "",
     profile.category ?? "",
     profile.displayName ?? "",
-    classification.canonicalCategory,
+    canonicalSignal ?? "",
     ...classification.matchedKeywords,
     ...(classification.expandedCategories ?? []),
   ]

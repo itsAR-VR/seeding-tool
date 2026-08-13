@@ -49,4 +49,14 @@ describe("textFallbackVerdict", () => {
     expect(verdict.match).toBe(true);
     expect(verdict.tags.length).toBeGreaterThan(0);
   });
+
+  it("does not match on the Other fallback sentinel", () => {
+    // "Other" is the classifier's catch-all — a brief containing "other"
+    // must not approve an otherwise-unclassifiable profile.
+    const verdict = textFallbackVerdict(
+      profile("Minecraft speedruns and meme compilations"),
+      "skincare and other wellness"
+    );
+    expect(verdict.match).toBe(false);
+  });
 });
