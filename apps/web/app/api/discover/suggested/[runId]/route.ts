@@ -14,11 +14,12 @@ type RouteContext = { params: Promise<{ runId: string }> };
  */
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    await getCurrentBrandMembership();
+    const membership = await getCurrentBrandMembership();
     const { runId } = await context.params;
 
     const run = readRun(runId);
-    if (!run) {
+    // Cross-brand runs are other tenants' data — hide their existence.
+    if (!run || (run.brandId !== null && run.brandId !== membership.brandId)) {
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
     return NextResponse.json({ run });

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   getCurrentBrandMembership,
+  requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
 import { runDemoDiscovery } from "@/lib/suggested-discovery/demo";
@@ -27,8 +28,13 @@ const startRunSchema = z.object({
  */
 export async function GET() {
   try {
-    await getCurrentBrandMembership();
-    return NextResponse.json({ runs: listRuns() });
+    const membership = await getCurrentBrandMembership();
+    // Runs are brand-scoped; brandId null marks operator CLI runs on this
+    // machine, visible to any brand on the local install.
+    const runs = listRuns().filter(
+      (run) => run.brandId === null || run.brandId === membership.brandId
+    );
+    return NextResponse.json({ runs });
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -48,6 +54,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
 
     const body = startRunSchema.safeParse(await request.json().catch(() => null));
     if (!body.success) {
@@ -76,6 +83,21 @@ export async function POST(request: NextRequest) {
         brandId: membership.brandId,
       });
       return NextResponse.json({ run }, { status: 201 });
+    }
+
+    // Live mode spawns a local Playwright walk via the CLI — that only
+    // exists on an operator machine. On serverless there is no Chromium,
+    // no tsx, and no IG session, so fail loudly instead of returning 202
+    // for a run that would never progress. Durable worker dispatch is a
+    // follow-up phase.
+    if (process.env.VERCEL) {
+      return NextResponse.json(
+        {
+          error:
+            "Live discovery is local-only in this phase. Run it via `npm run discover:suggested -- --seed <handle> --niche \"...\"` on an operator machine, or use demo mode here.",
+        },
+        { status: 400 }
+      );
     }
 
     const run = createRun({

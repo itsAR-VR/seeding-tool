@@ -3,7 +3,7 @@ import {
   getCurrentBrandMembership,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
-import { readScreenshot } from "@/lib/suggested-discovery/store";
+import { readRun, readScreenshot } from "@/lib/suggested-discovery/store";
 
 export const runtime = "nodejs";
 
@@ -15,8 +15,13 @@ type RouteContext = { params: Promise<{ runId: string; handle: string }> };
  */
 export async function GET(_request: Request, context: RouteContext) {
   try {
-    await getCurrentBrandMembership();
+    const membership = await getCurrentBrandMembership();
     const { runId, handle } = await context.params;
+
+    const run = readRun(runId);
+    if (!run || (run.brandId !== null && run.brandId !== membership.brandId)) {
+      return NextResponse.json({ error: "Screenshot not found" }, { status: 404 });
+    }
 
     const png = readScreenshot(runId, handle);
     if (!png) {

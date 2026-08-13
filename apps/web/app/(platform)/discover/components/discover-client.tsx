@@ -81,7 +81,9 @@ export function DiscoverClient() {
     async function poll() {
       const run = await refreshDetail(selectedId as string);
       if (cancelled) return;
-      if (run && ACTIVE_STATUSES.includes(run.status)) {
+      if (!run || ACTIVE_STATUSES.includes(run.status)) {
+        // Active run OR a transient fetch failure — keep polling either
+        // way; only a fetched terminal status stops the loop.
         timer = setTimeout(poll, 2_500);
       } else {
         refreshRuns();
