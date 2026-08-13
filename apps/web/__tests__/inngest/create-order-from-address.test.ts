@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Hoisted mocks ──────────────────────────────────────────
 const mocks = vi.hoisted(() => {
-  const capturedHandler = { fn: null as Function | null };
+  const capturedHandler = { fn: null as ((...args: unknown[]) => unknown) | null };
 
   return {
     capturedHandler,
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => {
     getFeatureFlags: vi.fn(),
     createDraftOrder: vi.fn(),
     recordOutcomeEvent: vi.fn(),
-    mockCreateFunction: vi.fn((_config: unknown, _trigger: unknown, handler: Function) => {
+    mockCreateFunction: vi.fn((_config: unknown, _trigger: unknown, handler: (...args: unknown[]) => unknown) => {
       capturedHandler.fn = handler;
       return handler;
     }),

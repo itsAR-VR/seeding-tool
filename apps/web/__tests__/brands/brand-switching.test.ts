@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
 
@@ -140,7 +141,6 @@ describe("POST /api/brands/switch", () => {
     });
 
     const { POST } = await import("@/app/api/brands/switch/route");
-    const { NextRequest } = require("next/server");
     const req = new NextRequest("http://localhost:3000/api/brands/switch", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -168,7 +168,6 @@ describe("POST /api/brands/switch", () => {
     mockPrisma.brandMembership.findUnique.mockResolvedValue(null);
 
     const { POST } = await import("@/app/api/brands/switch/route");
-    const { NextRequest } = require("next/server");
     const req = new NextRequest("http://localhost:3000/api/brands/switch", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -181,7 +180,6 @@ describe("POST /api/brands/switch", () => {
 
   it("returns 400 when brandId is missing", async () => {
     const { POST } = await import("@/app/api/brands/switch/route");
-    const { NextRequest } = require("next/server");
     const req = new NextRequest("http://localhost:3000/api/brands/switch", {
       method: "POST",
       headers: { "content-type": "application/json" },

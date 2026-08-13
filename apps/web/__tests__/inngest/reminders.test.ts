@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
-  const handlers: Record<string, Function> = {};
+  const handlers: Record<string, (...args: unknown[]) => unknown> = {};
 
   return {
     handlers,
     createFunction: vi.fn(
-      (config: { id: string }, _trigger: unknown, handler: Function) => {
+      (config: { id: string }, _trigger: unknown, handler: (...args: unknown[]) => unknown) => {
         handlers[config.id] = handler;
         return handler;
       },
@@ -55,7 +55,7 @@ function getHandler() {
 
 function makeStep() {
   return {
-    run: vi.fn((_name: string, fn: Function) => fn()),
+    run: vi.fn((_name: string, fn: (...args: unknown[]) => unknown) => fn()),
     sleep: vi.fn(async () => {}),
   };
 }

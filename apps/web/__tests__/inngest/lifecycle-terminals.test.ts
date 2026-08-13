@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // ── Hoisted mocks ──────────────────────────────────────────
 
 const mocks = vi.hoisted(() => {
-  const capturedHandlers: Record<string, Function> = {};
+  const capturedHandlers: Record<string, (...args: unknown[]) => unknown> = {};
 
   return {
     capturedHandlers,
@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => {
     transaction: vi.fn(),
 
     mockCreateFunction: vi.fn(
-      (_config: unknown, _trigger: unknown, handler: Function) => {
+      (_config: unknown, _trigger: unknown, handler: (...args: unknown[]) => unknown) => {
         const config = _config as { id: string };
         capturedHandlers[config.id] = handler;
         return handler;
@@ -132,7 +132,7 @@ function getHandler(id: string) {
 
 function makeStep() {
   return {
-    run: vi.fn((_name: string, fn: Function) => fn()),
+    run: vi.fn((_name: string, fn: (...args: unknown[]) => unknown) => fn()),
     sleep: vi.fn(),
   };
 }
@@ -167,7 +167,7 @@ describe("Phase 27b — Lifecycle Terminals", () => {
 
       mocks.fulfillmentEventFindMany.mockResolvedValue([fulfillment]);
       mocks.fulfillmentEventUpdate.mockResolvedValue({});
-      mocks.transaction.mockImplementation(async (fn: Function) => fn({
+      mocks.transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => fn({
         shopifyOrder: { update: mocks.shopifyOrderUpdate.mockResolvedValue({}) },
         campaignCreator: { update: mocks.campaignCreatorUpdate.mockResolvedValue({}) },
       }));
@@ -214,7 +214,7 @@ describe("Phase 27b — Lifecycle Terminals", () => {
 
       mocks.fulfillmentEventFindMany.mockResolvedValue([fulfillment]);
       mocks.fulfillmentEventUpdate.mockResolvedValue({});
-      mocks.transaction.mockImplementation(async (fn: Function) => fn({
+      mocks.transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => fn({
         shopifyOrder: { update: vi.fn().mockResolvedValue({}) },
         campaignCreator: { update: vi.fn().mockResolvedValue({}) },
       }));
@@ -269,7 +269,7 @@ describe("Phase 27b — Lifecycle Terminals", () => {
 
       mocks.fulfillmentEventFindMany.mockResolvedValue(fulfillments);
       mocks.fulfillmentEventUpdate.mockResolvedValue({});
-      mocks.transaction.mockImplementation(async (fn: Function) => fn({
+      mocks.transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => fn({
         shopifyOrder: { update: vi.fn().mockResolvedValue({}) },
         campaignCreator: { update: vi.fn().mockResolvedValue({}) },
       }));
@@ -465,7 +465,7 @@ describe("Phase 27b — Lifecycle Terminals", () => {
         { id: "cc-1" },
       ]);
 
-      mocks.transaction.mockImplementation(async (fn: Function) => {
+      mocks.transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
         return fn({
           mentionAsset: {
             findFirst: vi.fn().mockResolvedValue(

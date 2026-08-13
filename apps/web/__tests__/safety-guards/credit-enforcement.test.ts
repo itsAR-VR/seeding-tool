@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { NextRequest } from "next/server";
 
 /**
  * Credit enforcement integration tests.
@@ -68,7 +69,6 @@ vi.mock("@/lib/creator-search/local-fallback", () => ({
 // ─── Helpers ─────────────────────────────────────────────
 
 function makeSearchRequest(body: Record<string, unknown> = {}) {
-  const { NextRequest } = require("next/server");
   return new NextRequest("http://localhost:3000/api/creators/search", {
     method: "POST",
     headers: { "content-type": "application/json" },
