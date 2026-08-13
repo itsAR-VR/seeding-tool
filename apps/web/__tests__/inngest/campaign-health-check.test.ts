@@ -92,6 +92,11 @@ import "@/lib/inngest/functions/campaign-health-check";
 
 // ── Helpers ────────────────────────────────────────────────
 
+type HealthCheckRunResult = {
+  campaignsChecked: number;
+  results: Record<string, { status: string; alertCount: number }>;
+};
+
 function getHandler(id: string) {
   const handler = mocks.capturedHandlers[id];
   if (!handler) {
@@ -99,7 +104,7 @@ function getHandler(id: string) {
       `Handler ${id} was not captured. Available: ${Object.keys(mocks.capturedHandlers).join(", ")}`
     );
   }
-  return handler;
+  return handler as (...args: unknown[]) => Promise<HealthCheckRunResult>;
 }
 
 function makeStep() {
