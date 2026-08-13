@@ -121,4 +121,10 @@ describe("parseMetaDescription", () => {
   it("returns null when the meta tag is absent", () => {
     expect(parseMetaDescription("<html><head></head></html>")).toBeNull();
   });
+
+  it("parses meta content containing apostrophes", () => {
+    const html =
+      '<meta property="og:description" content="84.2K Followers, 610 Following, 431 Posts - See Instagram photos and videos from Kate\'s Bakery (@kates.bakery)" />';
+    expect(parseMetaDescription(html)?.displayName).toBe("Kate's Bakery");
+  });
 });

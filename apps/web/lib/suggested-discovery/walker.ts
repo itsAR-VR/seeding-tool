@@ -319,15 +319,14 @@ export async function openLoginSession(sessionDir?: string): Promise<void> {
   );
 
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    // Require a positive authenticated-UI signal. Instagram can serve the
-    // logged-out login wall at `/` without redirecting, so the URL alone
-    // proves nothing.
+    // Require a strong authenticated-UI signal: the app nav only renders
+    // when logged in. Profile pictures are NOT proof — logged-out pages
+    // can show them too.
     const authed = await page
       .evaluate(() =>
         Boolean(
           document.querySelector('svg[aria-label="Home"]') ||
-            document.querySelector('a[href*="/direct/"]') ||
-            document.querySelector('img[alt*="profile picture" i]')
+            document.querySelector('a[href*="/direct/"]')
         )
       )
       .catch(() => false);

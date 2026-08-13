@@ -68,6 +68,13 @@ export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRu
       run.mode !== "live" ||
       run.maxProfiles !== maxProfiles
     ) {
+      // Fail the run record too — leaving it queued would strand the UI
+      // polling a run that can never progress.
+      patchRun(run.id, {
+        status: "failed",
+        error: "Attach mismatch: supplied seed/niche/limit do not match the stored run",
+        finishedAt: new Date().toISOString(),
+      });
       throw new Error(
         `Run ${input.runId} does not match the supplied seed/niche/limit — refusing to attach`
       );

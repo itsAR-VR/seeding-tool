@@ -190,19 +190,21 @@ export function parseMetaDescription(html: string): ParsedProfileHeader | null {
 }
 
 export function extractMetaContent(html: string, name: string): string | null {
+  // Quote-aware backreference: the capture runs to the SAME quote char
+  // that opened it, so apostrophes inside double-quoted content parse.
   const patterns = [
     new RegExp(
-      `<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`,
+      `<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=(["'])([\\s\\S]*?)\\1[^>]*>`,
       "i"
     ),
     new RegExp(
-      `<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${name}["'][^>]*>`,
+      `<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]+(?:property|name)=["']${name}["'][^>]*>`,
       "i"
     ),
   ];
   for (const pattern of patterns) {
     const match = html.match(pattern);
-    if (match?.[1]) return decodeHtmlEntities(match[1]);
+    if (match?.[2]) return decodeHtmlEntities(match[2]);
   }
   return null;
 }
