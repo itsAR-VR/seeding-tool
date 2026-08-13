@@ -136,16 +136,22 @@ async function collectSuggestedHandles(page: Page, limit: number): Promise<strin
 
     // Walk up from the marker to the smallest ancestor that holds the
     // profile cards (several handle links), then collect only within it.
+    // Fail closed: if no ancestor qualifies, return nothing rather than
+    // scanning an unchecked page-level wrapper.
     const PROFILE_HREF = /^\/([a-z0-9._]{1,30})\/?$/i;
     let container: HTMLElement | null = marker.parentElement;
+    let found = false;
     for (let depth = 0; container && depth < 6; depth += 1) {
       const links = Array.from(
         container.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')
       ).filter((anchor) => PROFILE_HREF.test(anchor.getAttribute("href") ?? ""));
-      if (links.length >= 2) break;
+      if (links.length >= 2) {
+        found = true;
+        break;
+      }
       container = container.parentElement;
     }
-    if (!container) return [];
+    if (!container || !found) return [];
 
     const out: string[] = [];
     for (const anchor of Array.from(
@@ -214,6 +220,9 @@ async function scrapeProfile(
     waitUntil: "domcontentloaded",
     timeout: NAV_TIMEOUT_MS,
   });
+  // A session can expire mid-walk: never let a login redirect be parsed
+  // as an empty profile.
+  await assertLoggedIn(page);
   await page.waitForSelector("header", { timeout: 10_000 }).catch(() => undefined);
   await sleep(1_000); // let counts/bio hydrate
 
@@ -282,6 +291,7 @@ export async function walkSuggestedProfiles(
         visited += 1;
         log(`Scraped @${handle} (${visited}/${handles.length})`);
       } catch (error) {
+        if (error instanceof NeedsLoginError) throw error;
         await callbacks.onProfileError?.(
           handle,
           error instanceof Error ? error : new Error(String(error))

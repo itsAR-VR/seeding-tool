@@ -75,4 +75,13 @@ describe("demo discovery run", () => {
     });
     expect(run.candidates).toHaveLength(2);
   });
+
+  it("clamps invalid maxProfiles instead of mis-slicing fixtures", () => {
+    const run = runDemoDiscovery({
+      seedHandle: "seeding.brand",
+      niche: "skincare",
+      maxProfiles: -1,
+    });
+    expect(run.candidates).toHaveLength(1);
+  });
 });
