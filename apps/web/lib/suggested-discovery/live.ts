@@ -1,0 +1,108 @@
+/**
+ * Suggested Discovery — live run orchestration (CLI only).
+ *
+ * Walks the seed's suggested rail, classifies each profile as it lands
+ * (vision → text fallback), and persists incrementally so the UI polls
+ * real progress. Never import from Next.js routes — spawns via CLI.
+ */
+
+import { decideCandidate } from "./engine";
+import { normalizeIgHandle } from "./parse";
+import {
+  createRun,
+  patchRun,
+  readRun,
+  saveScreenshot,
+  upsertCandidate,
+} from "./store";
+import { NeedsLoginError, walkSuggestedProfiles } from "./walker";
+import { HARD_MAX_PROFILES, type DiscoveryRun } from "./types";
+
+export interface LiveRunInput {
+  seedHandle: string;
+  niche: string;
+  maxProfiles: number;
+  brandId?: string | null;
+  /** Resume/attach to a pre-created run (API creates it before spawning). */
+  runId?: string;
+  headless?: boolean;
+  log?: (message: string) => void;
+}
+
+export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRun> {
+  const log = input.log ?? console.log;
+  const seed = normalizeIgHandle(input.seedHandle);
+  if (!seed) throw new Error(`Invalid seed handle: ${input.seedHandle}`);
+
+  const run = input.runId
+    ? readRun(input.runId)
+    : createRun({
+        seedHandle: seed,
+        niche: input.niche,
+        mode: "live",
+        maxProfiles: input.maxProfiles,
+        brandId: input.brandId,
+      });
+  if (!run) throw new Error(`Run not found: ${input.runId}`);
+
+  const maxProfiles = Math.min(Math.max(1, input.maxProfiles), HARD_MAX_PROFILES);
+  patchRun(run.id, { status: "running", startedAt: new Date().toISOString() });
+
+  try {
+    await walkSuggestedProfiles(
+      { seedHandle: seed, maxProfiles, headless: input.headless ?? true },
+      {
+        log,
+        onProfile: async (profile, screenshot) => {
+          let screenshotFile: string | null = null;
+          if (screenshot) {
+            screenshotFile = saveScreenshot(run.id, profile.handle, screenshot);
+          }
+          const candidate = await decideCandidate(
+            { ...profile, screenshotFile },
+            input.niche,
+            screenshot
+          );
+          upsertCandidate(run.id, candidate);
+        },
+        onProfileError: async (handle, error) => {
+          log(`Error on @${handle}: ${error.message}`);
+          upsertCandidate(run.id, {
+            profile: {
+              handle,
+              displayName: null,
+              bio: null,
+              category: null,
+              followers: null,
+              following: null,
+              posts: null,
+              externalUrl: null,
+              isVerified: false,
+              profileUrl: `https://www.instagram.com/${handle}/`,
+              discoveredFrom: seed,
+              screenshotFile: null,
+            },
+            verdict: null,
+            status: "error",
+            error: error.message,
+          });
+        },
+      }
+    );
+
+    patchRun(run.id, { status: "completed", finishedAt: new Date().toISOString() });
+  } catch (error) {
+    if (error instanceof NeedsLoginError) {
+      patchRun(run.id, { status: "needs_login", error: error.message });
+    } else {
+      patchRun(run.id, {
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+        finishedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  const finished = readRun(run.id);
+  return finished ?? run;
+}

@@ -1,0 +1,302 @@
+/**
+ * Suggested Discovery — Instagram suggested-profile walker (CLI only).
+ *
+ * Opens a seed profile in a persistent Playwright session, expands the
+ * "Suggested for you" rail, visits each suggested profile, and captures
+ * structured fields + a header screenshot per profile.
+ *
+ * Bot-protection posture mirrors scripts/scrape-collabstr.ts: real
+ * Chromium, desktop UA, fixed viewport, human pacing. Login is manual
+ * and one-time (`--login`); the session persists under .auth/instagram.
+ *
+ * Instagram's DOM is obfuscated and shifts often, so selectors are
+ * layered fallbacks and every failure is captured per candidate rather
+ * than crashing the run.
+ *
+ * IMPORTANT: never import this module from Next.js routes — it pulls
+ * playwright into the server bundle. The API spawns the CLI instead.
+ */
+
+import { chromium, type BrowserContext, type Page } from "playwright";
+import { getSessionDir } from "./store";
+import {
+  normalizeIgHandle,
+  parseHeaderText,
+  parseMetaDescription,
+} from "./parse";
+import type { SuggestedProfile } from "./types";
+
+const IG_BASE = "https://www.instagram.com";
+const DESKTOP_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const VIEWPORT = { width: 1440, height: 900 };
+const NAV_TIMEOUT_MS = 30_000;
+const PROFILE_DELAY_MS = 2_500;
+
+export class NeedsLoginError extends Error {
+  constructor() {
+    super(
+      "Instagram session is logged out. Run: npm run discover:suggested -- --login"
+    );
+    this.name = "NeedsLoginError";
+  }
+}
+
+export interface WalkCallbacks {
+  onProfile: (profile: SuggestedProfile, screenshot: Buffer | null) => Promise<void> | void;
+  onProfileError?: (handle: string, error: Error) => Promise<void> | void;
+  log?: (message: string) => void;
+}
+
+export interface WalkOptions {
+  seedHandle: string;
+  maxProfiles: number;
+  headless?: boolean;
+  sessionDir?: string;
+}
+
+interface RawHeaderSnapshot {
+  headerText: string;
+  isVerified: boolean;
+  externalUrl: string | null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function launchSession(headless: boolean, sessionDir?: string): Promise<BrowserContext> {
+  return chromium.launchPersistentContext(sessionDir ?? getSessionDir(), {
+    headless,
+    viewport: VIEWPORT,
+    userAgent: DESKTOP_UA,
+    locale: "en-US",
+    timezoneId: "America/Toronto",
+    args: ["--disable-blink-features=AutomationControlled"],
+  });
+}
+
+async function assertLoggedIn(page: Page): Promise<void> {
+  if (page.url().includes("/accounts/login")) throw new NeedsLoginError();
+  const loginWall = await page
+    .getByText(/log in to instagram/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (loginWall) throw new NeedsLoginError();
+}
+
+/**
+ * Expand the suggested-profile rail. The entry point is the chevron
+ * button beside Follow/Message on the profile header; on some layouts
+ * the rail is already rendered below the header.
+ */
+async function expandSuggestions(page: Page): Promise<void> {
+  const alreadyVisible = await page
+    .getByText(/suggested for you/i)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (alreadyVisible) return;
+
+  const triggers = [
+    'button[aria-label*="imilar" i]',
+    'div[role="button"][aria-label*="imilar" i]',
+    'button[aria-label*="uggested" i]',
+  ];
+  for (const selector of triggers) {
+    const trigger = page.locator(selector).first();
+    if (await trigger.isVisible().catch(() => false)) {
+      await trigger.click().catch(() => undefined);
+      break;
+    }
+  }
+  await page
+    .getByText(/suggested for you/i)
+    .first()
+    .waitFor({ timeout: 8_000 })
+    .catch(() => undefined);
+}
+
+/** Collect suggested profile handles from the expanded rail. */
+async function collectSuggestedHandles(page: Page, limit: number): Promise<string[]> {
+  const handles = await page.evaluate(() => {
+    const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="/"]'));
+    const out: string[] = [];
+    for (const anchor of anchors) {
+      const match = anchor.getAttribute("href")?.match(/^\/([a-z0-9._]{1,30})\/?$/i);
+      if (match) out.push(match[1].toLowerCase());
+    }
+    return out;
+  });
+
+  const seen = new Set<string>();
+  const seed = normalizeIgHandle(page.url().split("instagram.com/")[1] ?? "");
+  const unique: string[] = [];
+  for (const handle of handles) {
+    if (handle === seed || seen.has(handle)) continue;
+    // Skip nav chrome links that match the handle pattern (explore, reels, ...)
+    if (["explore", "reels", "direct", "accounts", "p", "reel"].includes(handle)) continue;
+    seen.add(handle);
+    unique.push(handle);
+    if (unique.length >= limit) break;
+  }
+  return unique;
+}
+
+async function snapshotHeader(page: Page): Promise<RawHeaderSnapshot> {
+  return page.evaluate(() => {
+    const header = document.querySelector("header");
+    const headerText = (header as HTMLElement | null)?.innerText ?? "";
+    const isVerified = Boolean(
+      document.querySelector('header svg[aria-label="Verified"], header [title="Verified"]')
+    );
+    const external =
+      Array.from(document.querySelectorAll<HTMLAnchorElement>('header a[href^="http"]')).find(
+        (anchor) => !/instagram\.com|facebook\.com|fb\.com/.test(anchor.href)
+      ) ?? null;
+    return {
+      headerText,
+      isVerified,
+      externalUrl: external?.href ?? null,
+    };
+  });
+}
+
+async function screenshotHeader(page: Page): Promise<Buffer | null> {
+  const header = page.locator("header").first();
+  try {
+    return (await header.screenshot({ timeout: 5_000 })) as Buffer;
+  } catch {
+    try {
+      return (await page.screenshot({
+        clip: { x: 0, y: 0, width: VIEWPORT.width, height: 480 },
+      })) as Buffer;
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function scrapeProfile(
+  page: Page,
+  handle: string,
+  discoveredFrom: string
+): Promise<{ profile: SuggestedProfile; screenshot: Buffer | null }> {
+  await page.goto(`${IG_BASE}/${handle}/`, {
+    waitUntil: "domcontentloaded",
+    timeout: NAV_TIMEOUT_MS,
+  });
+  await page.waitForSelector("header", { timeout: 10_000 }).catch(() => undefined);
+  await sleep(1_000); // let counts/bio hydrate
+
+  const snapshot = await snapshotHeader(page);
+  const html = await page.content();
+  const fromHeader = parseHeaderText(snapshot.headerText, handle);
+  const fromMeta = parseMetaDescription(html);
+
+  const profile: SuggestedProfile = {
+    handle,
+    displayName: fromHeader.displayName ?? fromMeta?.displayName ?? null,
+    bio: fromHeader.bio,
+    category: fromHeader.category,
+    followers: fromHeader.followers ?? fromMeta?.followers ?? null,
+    following: fromHeader.following ?? fromMeta?.following ?? null,
+    posts: fromHeader.posts ?? fromMeta?.posts ?? null,
+    externalUrl: snapshot.externalUrl,
+    isVerified: snapshot.isVerified,
+    profileUrl: `${IG_BASE}/${handle}/`,
+    discoveredFrom,
+    screenshotFile: null,
+  };
+
+  const screenshot = await screenshotHeader(page);
+  return { profile, screenshot };
+}
+
+/**
+ * Walk the suggested rail of a seed profile. Calls onProfile per
+ * successfully scraped suggestion so callers can persist incrementally.
+ */
+export async function walkSuggestedProfiles(
+  options: WalkOptions,
+  callbacks: WalkCallbacks
+): Promise<{ visited: number }> {
+  const seed = normalizeIgHandle(options.seedHandle);
+  if (!seed) throw new Error(`Invalid seed handle: ${options.seedHandle}`);
+  const log = callbacks.log ?? (() => undefined);
+
+  const context = await launchSession(options.headless ?? true, options.sessionDir);
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(NAV_TIMEOUT_MS);
+
+    log(`Opening seed profile @${seed}`);
+    await page.goto(`${IG_BASE}/${seed}/`, {
+      waitUntil: "domcontentloaded",
+      timeout: NAV_TIMEOUT_MS,
+    });
+    await assertLoggedIn(page);
+
+    await expandSuggestions(page);
+    const handles = await collectSuggestedHandles(page, options.maxProfiles);
+    if (handles.length === 0) {
+      throw new Error(
+        `No suggested profiles found for @${seed} — Instagram may not have rendered the rail. Try --headful to inspect.`
+      );
+    }
+    log(`Found ${handles.length} suggested profiles`);
+
+    let visited = 0;
+    for (const handle of handles) {
+      try {
+        const { profile, screenshot } = await scrapeProfile(page, handle, seed);
+        await callbacks.onProfile(profile, screenshot);
+        visited += 1;
+        log(`Scraped @${handle} (${visited}/${handles.length})`);
+      } catch (error) {
+        await callbacks.onProfileError?.(
+          handle,
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+      await sleep(PROFILE_DELAY_MS);
+    }
+    return { visited };
+  } finally {
+    await context.close();
+  }
+}
+
+/**
+ * One-time manual login: opens a headed browser on instagram.com and
+ * waits until the session is authenticated, then closes. The profile
+ * directory persists, so later headless runs reuse it.
+ */
+export async function openLoginSession(sessionDir?: string): Promise<void> {
+  const context = await launchSession(false, sessionDir);
+  const page = await context.newPage();
+  await page.goto(IG_BASE, { waitUntil: "domcontentloaded" });
+  console.log(
+    "Log in to Instagram in the opened window. This session is reused by discovery runs."
+  );
+
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    if (!page.url().includes("/accounts/login")) {
+      const onHome = await page
+        .getByText(/suggested for you|for you/i)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      if (onHome || page.url() === `${IG_BASE}/`) {
+        console.log("Login detected — session saved.");
+        await context.close();
+        return;
+      }
+    }
+    await sleep(2_000);
+  }
+
+  await context.close();
+  throw new Error("Timed out waiting for login (4 minutes). Re-run --login to retry.");
+}
