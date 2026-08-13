@@ -18,8 +18,9 @@ export async function GET(_request: Request, context: RouteContext) {
     const { runId } = await context.params;
 
     const run = readRun(runId);
-    // Cross-brand runs are other tenants' data — hide their existence.
-    if (!run || (run.brandId !== null && run.brandId !== membership.brandId)) {
+    // Unowned (CLI-created, brandId null) runs are local-only artifacts
+    // and never served over HTTP; cross-brand runs are hidden entirely.
+    if (!run || run.brandId !== membership.brandId) {
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
     return NextResponse.json({ run });

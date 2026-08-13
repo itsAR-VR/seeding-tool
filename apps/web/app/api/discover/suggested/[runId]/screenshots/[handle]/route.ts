@@ -19,7 +19,7 @@ export async function GET(_request: Request, context: RouteContext) {
     const { runId, handle } = await context.params;
 
     const run = readRun(runId);
-    if (!run || (run.brandId !== null && run.brandId !== membership.brandId)) {
+    if (!run || run.brandId !== membership.brandId) {
       return NextResponse.json({ error: "Screenshot not found" }, { status: 404 });
     }
 

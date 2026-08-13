@@ -8,7 +8,7 @@ import {
 } from "@/lib/integrations/brand-access";
 import { runDemoDiscovery } from "@/lib/suggested-discovery/demo";
 import { normalizeIgHandle } from "@/lib/suggested-discovery/parse";
-import { createRun, listRuns } from "@/lib/suggested-discovery/store";
+import { createRun, listRuns, patchRun, readRun } from "@/lib/suggested-discovery/store";
 import {
   DEFAULT_MAX_PROFILES,
   HARD_MAX_PROFILES,
@@ -18,23 +18,20 @@ export const runtime = "nodejs";
 
 const startRunSchema = z.object({
   seedHandle: z.string().min(1),
-  niche: z.string().min(3).max(500),
+  niche: z.string().trim().min(3).max(500),
   maxProfiles: z.number().int().min(1).max(HARD_MAX_PROFILES).optional(),
   mode: z.enum(["live", "demo"]).default("demo"),
 });
 
 /**
- * GET /api/discover/suggested — recent discovery runs, newest first.
+ * GET /api/discover/suggested — recent discovery runs for the caller's
+ * brand, newest first. Unowned (CLI-created, brandId null) runs are
+ * local-artifact only and never exposed over HTTP.
  */
 export async function GET() {
   try {
     const membership = await getCurrentBrandMembership();
-    // Runs are brand-scoped; brandId null marks operator CLI runs on this
-    // machine, visible to any brand on the local install.
-    const runs = listRuns().filter(
-      (run) => run.brandId === null || run.brandId === membership.brandId
-    );
-    return NextResponse.json({ runs });
+    return NextResponse.json({ runs: listRuns(20, membership.brandId) });
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -55,6 +52,20 @@ export async function POST(request: NextRequest) {
   try {
     const membership = await getCurrentBrandMembership();
     requireWriteAccess(membership);
+
+    // The whole API persists runs on the local filesystem (and live mode
+    // needs a local browser + IG session). On serverless that storage is
+    // unavailable, so fail loudly for both modes instead of 500ing on the
+    // write. Durable storage + worker dispatch is a follow-up phase.
+    if (process.env.VERCEL) {
+      return NextResponse.json(
+        {
+          error:
+            "Suggested discovery is local-only in this phase. Run it via `npm run discover:suggested -- --seed <handle> --niche \"...\" [--demo]` on an operator machine.",
+        },
+        { status: 400 }
+      );
+    }
 
     const body = startRunSchema.safeParse(await request.json().catch(() => null));
     if (!body.success) {
@@ -83,21 +94,6 @@ export async function POST(request: NextRequest) {
         brandId: membership.brandId,
       });
       return NextResponse.json({ run }, { status: 201 });
-    }
-
-    // Live mode spawns a local Playwright walk via the CLI — that only
-    // exists on an operator machine. On serverless there is no Chromium,
-    // no tsx, and no IG session, so fail loudly instead of returning 202
-    // for a run that would never progress. Durable worker dispatch is a
-    // follow-up phase.
-    if (process.env.VERCEL) {
-      return NextResponse.json(
-        {
-          error:
-            "Live discovery is local-only in this phase. Run it via `npm run discover:suggested -- --seed <handle> --niche \"...\"` on an operator machine, or use demo mode here.",
-        },
-        { status: 400 }
-      );
     }
 
     const run = createRun({
@@ -131,6 +127,27 @@ export async function POST(request: NextRequest) {
         env: process.env,
       }
     );
+
+    // Spawn failures (missing npx, tsx error before the first store write)
+    // surface asynchronously — without handlers the process can crash or
+    // the run would sit "queued" forever while the UI polls it.
+    child.on("error", (error) => {
+      patchRun(run.id, {
+        status: "failed",
+        error: `Failed to start discovery worker: ${error.message}`,
+        finishedAt: new Date().toISOString(),
+      });
+    });
+    child.on("exit", (code) => {
+      const current = readRun(run.id);
+      if (current && current.status === "queued") {
+        patchRun(run.id, {
+          status: "failed",
+          error: `Discovery worker exited (code ${code}) before starting the run`,
+          finishedAt: new Date().toISOString(),
+        });
+      }
+    });
     child.unref();
 
     return NextResponse.json({ run }, { status: 202 });

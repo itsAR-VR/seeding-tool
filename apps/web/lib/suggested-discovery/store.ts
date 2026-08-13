@@ -133,7 +133,7 @@ export function upsertCandidate(
   return writeRun({ ...run, candidates });
 }
 
-export function listRuns(limit = 20): DiscoveryRun[] {
+export function listRuns(limit = 20, brandId?: string | null): DiscoveryRun[] {
   const dir = getRunsDir();
   let entries: fs.Dirent[];
   try {
@@ -149,7 +149,12 @@ export function listRuns(limit = 20): DiscoveryRun[] {
     if (run) runs.push(run);
   }
 
+  // Scope BEFORE the limit: truncating the global list first would let
+  // other tenants' newer runs push this brand's valid runs out of view.
+  // brandId provided → only that brand's runs (unowned CLI runs are
+  // never exposed over HTTP). No brandId → full local list (CLI use).
   return runs
+    .filter((run) => brandId === undefined || run.brandId === brandId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, limit);
 }
