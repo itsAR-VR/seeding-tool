@@ -50,4 +50,10 @@ describe("parseVerdictJson", () => {
     expect(parseVerdictJson("{broken")).toBeNull();
     expect(parseVerdictJson("[1,2,3]")).toBeNull();
   });
+
+  it("rejects malformed verdicts missing a boolean match", () => {
+    expect(parseVerdictJson('{"confidence": 0.9}')).toBeNull();
+    expect(parseVerdictJson('{"match": "yes", "confidence": 0.9}')).toBeNull();
+    expect(parseVerdictJson('{"match": null, "tags": []}')).toBeNull();
+  });
 });

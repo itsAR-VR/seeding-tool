@@ -118,13 +118,40 @@ async function expandSuggestions(page: Page): Promise<void> {
     .catch(() => undefined);
 }
 
-/** Collect suggested profile handles from the expanded rail. */
+/**
+ * Collect suggested profile handles, scoped to the expanded
+ * "Suggested for you" rail. Scanning the whole page would pull in
+ * unrelated profile links (e.g. "Followed by" accounts), so if the
+ * rail cannot be located we return nothing and the caller fails closed.
+ */
 async function collectSuggestedHandles(page: Page, limit: number): Promise<string[]> {
   const handles = await page.evaluate(() => {
-    const anchors = Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href^="/"]'));
+    const marker = Array.from(
+      document.querySelectorAll<HTMLElement>("span, div")
+    ).find(
+      (el) =>
+        el.children.length === 0 && /suggested for you/i.test(el.textContent ?? "")
+    );
+    if (!marker) return [];
+
+    // Walk up from the marker to the smallest ancestor that holds the
+    // profile cards (several handle links), then collect only within it.
+    const PROFILE_HREF = /^\/([a-z0-9._]{1,30})\/?$/i;
+    let container: HTMLElement | null = marker.parentElement;
+    for (let depth = 0; container && depth < 6; depth += 1) {
+      const links = Array.from(
+        container.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')
+      ).filter((anchor) => PROFILE_HREF.test(anchor.getAttribute("href") ?? ""));
+      if (links.length >= 2) break;
+      container = container.parentElement;
+    }
+    if (!container) return [];
+
     const out: string[] = [];
-    for (const anchor of anchors) {
-      const match = anchor.getAttribute("href")?.match(/^\/([a-z0-9._]{1,30})\/?$/i);
+    for (const anchor of Array.from(
+      container.querySelectorAll<HTMLAnchorElement>('a[href^="/"]')
+    )) {
+      const match = anchor.getAttribute("href")?.match(PROFILE_HREF);
       if (match) out.push(match[1].toLowerCase());
     }
     return out;

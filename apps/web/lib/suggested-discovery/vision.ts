@@ -78,6 +78,12 @@ export function parseVerdictJson(raw: string): MatchVerdict | null {
   if (typeof parsed !== "object" || parsed === null) return null;
 
   const record = parsed as Record<string, unknown>;
+
+  // A verdict without an explicit boolean `match` is malformed — treat
+  // it as unusable so the caller falls back to text classification
+  // instead of silently converting it into a rejection.
+  if (typeof record.match !== "boolean") return null;
+
   const tags = Array.isArray(record.tags)
     ? record.tags
         .filter((tag): tag is string => typeof tag === "string")
@@ -91,7 +97,7 @@ export function parseVerdictJson(raw: string): MatchVerdict | null {
       : 0.5;
 
   return {
-    match: record.match === true,
+    match: record.match,
     confidence,
     tags,
     reason: typeof record.reason === "string" ? record.reason.trim().slice(0, 280) : "",
