@@ -319,17 +319,22 @@ export async function openLoginSession(sessionDir?: string): Promise<void> {
   );
 
   for (let attempt = 0; attempt < 120; attempt += 1) {
-    if (!page.url().includes("/accounts/login")) {
-      const onHome = await page
-        .getByText(/suggested for you|for you/i)
-        .first()
-        .isVisible()
-        .catch(() => false);
-      if (onHome || page.url() === `${IG_BASE}/`) {
-        console.log("Login detected — session saved.");
-        await context.close();
-        return;
-      }
+    // Require a positive authenticated-UI signal. Instagram can serve the
+    // logged-out login wall at `/` without redirecting, so the URL alone
+    // proves nothing.
+    const authed = await page
+      .evaluate(() =>
+        Boolean(
+          document.querySelector('svg[aria-label="Home"]') ||
+            document.querySelector('a[href*="/direct/"]') ||
+            document.querySelector('img[alt*="profile picture" i]')
+        )
+      )
+      .catch(() => false);
+    if (authed) {
+      console.log("Login detected — session saved.");
+      await context.close();
+      return;
     }
     await sleep(2_000);
   }

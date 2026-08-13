@@ -16,7 +16,11 @@ import {
   upsertCandidate,
 } from "./store";
 import { NeedsLoginError, walkSuggestedProfiles } from "./walker";
-import { HARD_MAX_PROFILES, type DiscoveryRun } from "./types";
+import {
+  DEFAULT_MAX_PROFILES,
+  HARD_MAX_PROFILES,
+  type DiscoveryRun,
+} from "./types";
 
 export interface LiveRunInput {
   seedHandle: string;
@@ -34,18 +38,25 @@ export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRu
   const seed = normalizeIgHandle(input.seedHandle);
   if (!seed) throw new Error(`Invalid seed handle: ${input.seedHandle}`);
 
+  // Normalize before persisting: one effective integer limit used for both
+  // the stored run record and the walk itself.
+  const requested =
+    Number.isFinite(input.maxProfiles) && input.maxProfiles > 0
+      ? Math.floor(input.maxProfiles)
+      : DEFAULT_MAX_PROFILES;
+  const maxProfiles = Math.min(Math.max(1, requested), HARD_MAX_PROFILES);
+
   const run = input.runId
     ? readRun(input.runId)
     : createRun({
         seedHandle: seed,
         niche: input.niche,
         mode: "live",
-        maxProfiles: input.maxProfiles,
+        maxProfiles,
         brandId: input.brandId,
       });
   if (!run) throw new Error(`Run not found: ${input.runId}`);
 
-  const maxProfiles = Math.min(Math.max(1, input.maxProfiles), HARD_MAX_PROFILES);
   patchRun(run.id, { status: "running", startedAt: new Date().toISOString() });
 
   try {
