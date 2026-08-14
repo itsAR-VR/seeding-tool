@@ -114,26 +114,31 @@ export async function debit(
   if (amount <= 0) throw new RangeError("debit amount must be positive");
 
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.brandCreditBalance.findUnique({
+    // Conditional decrement: balance check and debit are ONE atomic
+    // statement, so concurrent debits cannot both observe sufficient
+    // credits and drive the balance negative.
+    const debited = await tx.brandCreditBalance.updateMany({
+      where: { brandId, credits: { gte: amount } },
+      data: { credits: { decrement: amount } },
+    });
+
+    if (debited.count === 0) {
+      const row = await tx.brandCreditBalance.findUnique({
+        where: { brandId },
+        select: { credits: true },
+      });
+      throw new CreditInsufficientError(amount, row?.credits ?? 0);
+    }
+
+    const balance = await tx.brandCreditBalance.findUnique({
       where: { brandId },
       select: { id: true, credits: true },
     });
 
-    const current = existing?.credits ?? 0;
-    if (current < amount) {
-      throw new CreditInsufficientError(amount, current);
-    }
-
-    const balance = existing
-      ? await tx.brandCreditBalance.update({
-          where: { brandId },
-          data: { credits: { decrement: amount } },
-          select: { id: true, credits: true },
-        })
-      : null;
-
     if (!balance) {
-      throw new CreditInsufficientError(amount, current);
+      // updateMany succeeded, so the row exists — unreachable, but keeps
+      // the type honest.
+      throw new CreditInsufficientError(amount, 0);
     }
 
     await tx.brandCreditTransaction.create({

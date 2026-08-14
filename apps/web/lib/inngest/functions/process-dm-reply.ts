@@ -131,7 +131,7 @@ export const processDmReply = inngest.createFunction(
         });
 
         // Forward-only lifecycle guard: never regress status
-        await prisma.campaignCreator.updateMany({
+        const advanced = await prisma.campaignCreator.updateMany({
           where: {
             id: campaignCreatorId,
             lifecycleStatus: {
@@ -143,6 +143,15 @@ export const processDmReply = inngest.createFunction(
             lastReplyAt: new Date(),
           },
         });
+
+        // Outcome feed parity with the Gmail path — DM-origin address
+        // confirmations must also populate CampaignOutcome.
+        if (advanced.count > 0) {
+          await recordOutcomeEvent({
+            campaignCreatorId,
+            event: { type: "address_confirmed" },
+          });
+        }
       }
 
       return { status: "processed", intent: "address" };

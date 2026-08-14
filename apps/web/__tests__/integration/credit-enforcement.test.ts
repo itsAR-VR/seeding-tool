@@ -246,6 +246,8 @@ describe("credit enforcement — campaigns/search", () => {
     mocks.ensureCredits.mockRejectedValue(
       new CreditInsufficientError(5, 0)
     );
+    // Job is created before the debit; the 402 path must roll it back.
+    mocks.prisma.creatorSearchJob.create.mockResolvedValue({ id: "job-1" });
 
     const res = await campaignSearchPOST(
       makeCampaignSearchRequest(),
@@ -255,6 +257,9 @@ describe("credit enforcement — campaigns/search", () => {
 
     const body = await res.json();
     expect(body.error).toContain("Insufficient credits");
+    expect(mocks.prisma.creatorSearchJob.delete).toHaveBeenCalledWith({
+      where: { id: "job-1" },
+    });
   });
 
   it("debits correctly when credits are sufficient", async () => {

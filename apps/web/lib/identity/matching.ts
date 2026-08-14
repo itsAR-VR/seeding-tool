@@ -380,38 +380,43 @@ export async function resolveIdentityEdge(
     throw new Error("identity_edge_not_found");
   }
 
-  if (action === "confirm") {
-    const targetIdentityId = edge.toProfile.influencerId;
-    const sourceIdentityId = edge.fromProfile.influencerId;
+  // The merge + edge update run in ONE transaction: a failure between
+  // the profile/creator moves and the edge update would otherwise leave
+  // a partially merged identity graph with an unresolved edge.
+  return prisma.$transaction(async (tx) => {
+    if (action === "confirm") {
+      const targetIdentityId = edge.toProfile.influencerId;
+      const sourceIdentityId = edge.fromProfile.influencerId;
 
-    if (sourceIdentityId !== targetIdentityId) {
-      await prisma.influencerPlatformProfile.updateMany({
-        where: { influencerId: sourceIdentityId },
-        data: { influencerId: targetIdentityId },
-      });
-      await prisma.creator.updateMany({
-        where: { influencerIdentityId: sourceIdentityId },
-        data: { influencerIdentityId: targetIdentityId },
-      });
-      await prisma.influencerIdentity.update({
-        where: { id: sourceIdentityId },
-        data: { mergedIntoId: targetIdentityId },
-      });
+      if (sourceIdentityId !== targetIdentityId) {
+        await tx.influencerPlatformProfile.updateMany({
+          where: { influencerId: sourceIdentityId },
+          data: { influencerId: targetIdentityId },
+        });
+        await tx.creator.updateMany({
+          where: { influencerIdentityId: sourceIdentityId },
+          data: { influencerIdentityId: targetIdentityId },
+        });
+        await tx.influencerIdentity.update({
+          where: { id: sourceIdentityId },
+          data: { mergedIntoId: targetIdentityId },
+        });
+      }
     }
-  }
 
-  return prisma.identityEdge.update({
-    where: { id: edgeId },
-    data: {
-      matchBand: action === "confirm" ? "human_confirmed" : edge.matchBand,
-      reviewOutcome:
-        action === "confirm"
-          ? "confirmed"
-          : action === "reject"
-            ? "rejected"
-            : "deferred",
-      reviewedAt: new Date(),
-      reviewedBy,
-    },
+    return tx.identityEdge.update({
+      where: { id: edgeId },
+      data: {
+        matchBand: action === "confirm" ? "human_confirmed" : edge.matchBand,
+        reviewOutcome:
+          action === "confirm"
+            ? "confirmed"
+            : action === "reject"
+              ? "rejected"
+              : "deferred",
+        reviewedAt: new Date(),
+        reviewedBy,
+      },
+    });
   });
 }

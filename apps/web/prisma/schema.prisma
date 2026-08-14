@@ -1174,6 +1174,7 @@ model InterventionCase {
   resolvedBy String?
 
   brandId            String
+  campaignId         String? @map("campaign_id")
   campaignCreatorId  String? @map("campaign_creator_id")
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
@@ -1183,6 +1184,7 @@ model InterventionCase {
 
   @@index([brandId])
   @@index([status])
+  @@index([campaignId])
   @@map("intervention_cases")
 }
 

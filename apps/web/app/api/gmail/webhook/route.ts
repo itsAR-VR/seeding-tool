@@ -131,6 +131,13 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Every persisted inbound reply feeds the outcome feed once,
+        // before intent branching (mirrors the Inngest process-reply path).
+        await recordOutcomeEvent({
+          campaignCreatorId,
+          event: { type: "reply_received", replyType: classification.intent },
+        });
+
         // Handle based on classification (same logic as Inngest function)
         log("info", "gmail.ingest.classified", { threadId: thread.id, intent: classification.intent, confidence: classification.confidence, brandId: brand.id });
 

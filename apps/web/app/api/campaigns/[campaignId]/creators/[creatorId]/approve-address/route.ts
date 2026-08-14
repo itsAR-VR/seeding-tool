@@ -130,11 +130,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
-    // 7. Pre-validate campaign product with Shopify variant
+    // 7. Pre-validate campaign product with Shopify variant.
+    // createDraftOrder consumes the related BrandProduct.shopifyVariantId,
+    // so validate that source — CampaignProduct.shopifyVariantId is never
+    // populated by the product-selection route.
     const campaignProduct = await prisma.campaignProduct.findFirst({
       where: {
         campaignId,
-        shopifyVariantId: { not: null },
+        product: { shopifyVariantId: { not: null } },
       },
     });
 

@@ -84,6 +84,13 @@ vi.mock("@/lib/inngest/client", () => ({
 
 vi.mock("@/lib/shopify/orders", () => ({
   createDraftOrder: mocks.createDraftOrder,
+  // Same class identity for the code under test's instanceof check.
+  OrderAlreadyExistsError: class OrderAlreadyExistsError extends Error {
+    constructor(id: string) {
+      super(`Order already exists for campaign creator ${id}`);
+      this.name = "OrderAlreadyExistsError";
+    }
+  },
 }));
 
 vi.mock("@/lib/seeding/outcome-recorder", () => ({

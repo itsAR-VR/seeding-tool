@@ -638,6 +638,15 @@ async function reclassifyLowConfidenceCandidates(
 export async function orchestrateUnifiedDiscovery(
   context: OrchestratorContext
 ) {
+  // All discovery lanes below are Instagram implementations. A TikTok
+  // query must fail loudly here instead of returning Instagram-scraped
+  // candidates that the job runner would label and persist as TikTok.
+  if (context.query.platform === "tiktok") {
+    throw new Error(
+      "TikTok discovery is not yet supported by the live lanes (tracked as a follow-up); refusing to run Instagram lanes under a TikTok label"
+    );
+  }
+
   const rawLimit = Math.max(context.query.limit, context.query.limit * 3);
   const lanePromises: Array<
     Promise<{ lane: string; candidates: LaneCandidate[] }>

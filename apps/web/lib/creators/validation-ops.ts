@@ -5,6 +5,7 @@ import {
   type CampaignCleanupCandidate,
 } from "@/lib/creators/validation-policy";
 import type { InstagramValidationResult } from "@/lib/instagram/validator";
+import type { ValidationResult } from "@/lib/validation/types";
 
 function asMetadataRecord(value: unknown) {
   if (!value || Array.isArray(value) || typeof value !== "object") {
@@ -90,7 +91,7 @@ export async function applyValidationResultToCreator({
   platform = "instagram",
 }: {
   creatorId: string;
-  result: InstagramValidationResult;
+  result: InstagramValidationResult | ValidationResult;
   profileUrl?: string | null;
   engagementRate?: number | null;
   isVerified?: boolean;

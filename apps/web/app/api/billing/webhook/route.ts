@@ -19,7 +19,16 @@ export async function POST(request: NextRequest) {
 
   let event: Stripe.Event;
 
-  if (webhookSecret && signature) {
+  if (webhookSecret) {
+    // Secret configured: a missing header must NOT fall through to the
+    // unsigned parse path — that would let forged events (e.g. invoice.paid
+    // for a known subscription) through by simply omitting the header.
+    if (!signature) {
+      return NextResponse.json(
+        { error: "Missing stripe-signature header" },
+        { status: 400 }
+      );
+    }
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (err) {
@@ -29,11 +38,16 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+  } else if (process.env.NODE_ENV === "production") {
+    // Fail closed: unsigned parsing is a development convenience only.
+    console.error("[stripe-webhook] STRIPE_WEBHOOK_SECRET not set in production");
+    return NextResponse.json(
+      { error: "Webhook verification not configured" },
+      { status: 500 }
+    );
   } else {
-    // In development without webhook secret, parse the body directly
-    // This is only safe because we check for the secret first
     console.warn(
-      "[stripe-webhook] No STRIPE_WEBHOOK_SECRET set — skipping signature verification"
+      "[stripe-webhook] No STRIPE_WEBHOOK_SECRET set — skipping signature verification (dev only)"
     );
     try {
       event = JSON.parse(body) as Stripe.Event;

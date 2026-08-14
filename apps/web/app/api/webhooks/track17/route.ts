@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createHash, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { mapTrack17Status } from "@/lib/track17/client";
@@ -27,8 +28,42 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 export async function POST(request: NextRequest) {
   let payload: Record<string, unknown>;
 
+  // Verify BEFORE parsing: Track17 v2 signs the raw body as
+  // sha256(rawBody + "/" + TRACK17_API_KEY) in the `sign` header.
+  // Without this, anyone who knows a tracking number could forge a
+  // "Delivered" payload and corrupt delivery outcomes and calibration.
+  const rawBody = await request.text();
+  const track17Key = process.env.TRACK17_API_KEY;
+  if (track17Key) {
+    const sign = request.headers.get("sign") ?? "";
+    const expected = createHash("sha256")
+      .update(`${rawBody}/${track17Key}`)
+      .digest("hex");
+    const signBuffer = Buffer.from(sign, "utf8");
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    const valid =
+      signBuffer.length === expectedBuffer.length &&
+      timingSafeEqual(signBuffer, expectedBuffer);
+    if (!valid) {
+      log("warn", "track17.webhook.bad_signature", {});
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    // Fail closed in production: without the key, forged "Delivered"
+    // payloads would be accepted. Local development may run unsigned.
+    log("error", "track17.webhook.unconfigured", {});
+    return NextResponse.json(
+      { error: "Webhook verification not configured" },
+      { status: 500 }
+    );
+  } else {
+    console.warn(
+      "[track17-webhook] TRACK17_API_KEY not set — skipping signature verification (dev only)"
+    );
+  }
+
   try {
-    payload = (await request.json()) as Record<string, unknown>;
+    payload = JSON.parse(rawBody) as Record<string, unknown>;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }

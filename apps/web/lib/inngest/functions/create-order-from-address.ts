@@ -2,7 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { getFeatureFlags } from "@/lib/feature-flags";
-import { createDraftOrder } from "@/lib/shopify/orders";
+import { createDraftOrder, OrderAlreadyExistsError } from "@/lib/shopify/orders";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
@@ -104,6 +104,13 @@ export const createOrderFromAddress = inngest.createFunction(
         orderId: result.orderId,
       };
     } catch (error) {
+      // Lost the atomic claim race or an order already exists — a success
+      // no-op, not a failure; never open an intervention or retry.
+      if (error instanceof OrderAlreadyExistsError) {
+        log("info", "create_order.already_exists", { campaignCreatorId });
+        return { status: "success", reason: "order_already_exists" };
+      }
+
       const message =
         error instanceof Error ? error.message : "Unknown Shopify error";
 

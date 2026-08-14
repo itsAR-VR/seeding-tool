@@ -2,6 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { classifyReply, extractAddress, generateDraft } from "@/lib/inbox/ai";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Inngest function: Process an inbound Gmail reply.
@@ -51,6 +52,14 @@ export const processReply = inngest.createFunction(
       },
     });
 
+    // Every persisted inbound reply feeds the outcome feed once, before
+    // intent branching — reply rate and response-time metrics must not
+    // depend on which branch handles the reply.
+    await recordOutcomeEvent({
+      campaignCreatorId,
+      event: { type: "reply_received", replyType: classification.intent },
+    });
+
     // 5. Low confidence — always create intervention regardless of intent
     if (classification.confidence < 0.7) {
       await prisma.interventionCase.create({
@@ -87,6 +96,13 @@ export const processReply = inngest.createFunction(
             lifecycleStatus: "address_confirmed",
             lastReplyAt: new Date(),
           },
+        });
+
+        // Outcome feed must see the Inngest path too, not only the
+        // webhook's inline fallback.
+        await recordOutcomeEvent({
+          campaignCreatorId,
+          event: { type: "address_confirmed" },
         });
       }
 

@@ -47,15 +47,19 @@ function determineStatus(
   recentOutreach: number,
   mentionGap: number,
   integrationHealth: IntegrationHealthMap,
-  hoursSinceLastSend: number | null
+  hoursSinceLastSend: number | null,
+  campaignStatus?: string
 ): HealthStatus {
   const integrationDown =
     !integrationHealth.gmail ||
     !integrationHealth.shopify ||
     !integrationHealth.instagram;
 
+  // Paused campaigns are expected to send nothing — the zero-send rule
+  // does not apply to them (delivery/mention checks above still run).
   const zeroSendsRecently =
-    hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS;
+    campaignStatus !== "paused" &&
+    (hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS);
 
   // Critical: reply < 2%, integration down, or 0 sends in 48h
   if (
@@ -84,12 +88,14 @@ function generateAlerts(
   recentOutreach: number,
   mentionGap: number,
   integrationHealth: IntegrationHealthMap,
-  hoursSinceLastSend: number | null
+  hoursSinceLastSend: number | null,
+  campaignStatus?: string
 ): readonly HealthAlert[] {
   const alerts: HealthAlert[] = [];
 
   const zeroSendsRecently =
-    hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS;
+    campaignStatus !== "paused" &&
+    (hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS);
 
   if (recentOutreach > 0 && replyRate < REPLY_RATE_CRITICAL) {
     alerts.push({
@@ -252,11 +258,12 @@ export const campaignHealthCheck = inngest.createFunction(
           );
           const conversionRates = computeConversionRates(lifecycle);
 
-          // ── Mention gap (delivered, no post, exclude opted_out/stalled) ──
+          // ── Mention gap (delivered >14d ago, no post, exclude opted_out/stalled) ──
+          const mentionGapCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
           const mentionGap = await prisma.campaignOutcome.count({
             where: {
               campaignId: campaign.id,
-              deliveredAt: { not: null },
+              deliveredAt: { not: null, lt: mentionGapCutoff },
               postedAt: null,
               campaignCreator: {
                 lifecycleStatus: { notIn: ["opted_out", "stalled"] },
@@ -300,7 +307,8 @@ export const campaignHealthCheck = inngest.createFunction(
             recentOutreach,
             mentionGap,
             integrationHealth,
-            hoursSinceLastSend
+            hoursSinceLastSend,
+            campaign.status
           );
 
           const alerts = generateAlerts(
@@ -308,7 +316,8 @@ export const campaignHealthCheck = inngest.createFunction(
             recentOutreach,
             mentionGap,
             integrationHealth,
-            hoursSinceLastSend
+            hoursSinceLastSend,
+            campaign.status
           );
 
           const metrics: HealthMetrics = {
@@ -333,10 +342,13 @@ export const campaignHealthCheck = inngest.createFunction(
           });
 
           // ── InterventionCase for critical (with dedup) ──
+          // Phase 27d contract: one open health intervention PER CAMPAIGN —
+          // brand-level dedupe would suppress the second critical campaign.
           if (status === "critical") {
             const existingCase = await prisma.interventionCase.findFirst({
               where: {
                 brandId: campaign.brandId,
+                campaignId: campaign.id,
                 type: "health_critical",
                 status: { in: ["open", "in_progress"] },
               },
@@ -355,6 +367,7 @@ export const campaignHealthCheck = inngest.createFunction(
                   title: `Campaign "${campaign.name}" health critical`,
                   description: alertSummary || "Campaign health is critical",
                   brandId: campaign.brandId,
+                  campaignId: campaign.id,
                 },
               });
             }

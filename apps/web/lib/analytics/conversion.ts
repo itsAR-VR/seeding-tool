@@ -24,8 +24,12 @@ const PRIMARY_STAGES = [
 /**
  * Counts how many creators have reached at least a given stage.
  * A creator at stage N has also passed through stages 0..N-1.
- * Terminal states (opted_out, stalled) count as having reached
- * their last active stage.
+ *
+ * KNOWN LIMITATION (review follow-up): lifecycle counts reflect CURRENT
+ * status, so terminal creators (opted_out, stalled) are absent from every
+ * denominator — funnels overstate conversion once creators churn. The
+ * canonical fix is to compute stage-reached counts from CampaignOutcome
+ * timestamps (durable event record) instead of current lifecycle state.
  */
 function countAtOrBeyondStage(
   lifecycle: Readonly<Record<string, number>>,
