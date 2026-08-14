@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +28,10 @@ export function DiscoverClient() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<DiscoveryRun | null>(null);
   const [copied, setCopied] = useState(false);
+  // Tracks the live selection so an in-flight fetch for a previously
+  // selected run cannot overwrite the panel after the user switches.
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -45,7 +49,9 @@ export function DiscoverClient() {
       const response = await fetch(`/api/discover/suggested/${runId}`);
       if (!response.ok) return;
       const payload = (await response.json()) as { run: DiscoveryRun };
-      setDetail(payload.run);
+      if (selectedIdRef.current === runId) {
+        setDetail(payload.run);
+      }
       return payload.run;
     } catch {
       return null;

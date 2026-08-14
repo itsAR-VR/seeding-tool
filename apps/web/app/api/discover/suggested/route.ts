@@ -140,7 +140,21 @@ export async function POST(request: NextRequest) {
     });
     child.on("exit", (code) => {
       const current = readRun(run.id);
-      if (current && current.status === "queued") {
+      if (!current) return;
+      const stillActive =
+        current.status === "queued" ||
+        current.status === "running" ||
+        current.status === "classifying";
+      // A worker that exits while the run is still active never reached
+      // its terminal write — mark it failed so the UI stops polling and
+      // the run can be retried.
+      if (stillActive && code !== 0) {
+        patchRun(run.id, {
+          status: "failed",
+          error: `Discovery worker exited (code ${code}) mid-run`,
+          finishedAt: new Date().toISOString(),
+        });
+      } else if (current.status === "queued") {
         patchRun(run.id, {
           status: "failed",
           error: `Discovery worker exited (code ${code}) before starting the run`,
