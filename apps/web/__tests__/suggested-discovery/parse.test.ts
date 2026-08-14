@@ -34,6 +34,11 @@ describe("normalizeIgHandle", () => {
     expect(normalizeIgHandle("https://evil.example/?next=instagram.com/victim")).toBeNull();
     expect(normalizeIgHandle("https://instagram.com.evil.com/victim")).toBeNull();
   });
+
+  it("accepts bare handles that contain the instagram.com substring", () => {
+    expect(normalizeIgHandle("instagram.comedy")).toBe("instagram.comedy");
+    expect(normalizeIgHandle("myinstagram.com")).toBe("myinstagram.com");
+  });
 });
 
 describe("parseHeaderCounts", () => {

@@ -65,7 +65,13 @@ export function normalizeIgHandle(raw: string | null | undefined): string | null
   let value = raw.trim();
   if (!value) return null;
 
-  if (/instagram\.com/i.test(value) || /^https?:\/\//i.test(value)) {
+  // Only URL-shaped input goes through URL parsing: a protocol, or the
+  // Instagram host at the START of the string. Bare handles like
+  // "instagram.comedy" or "myinstagram.com" contain the substring but
+  // are valid handles and must not be parsed as hosts.
+  const looksLikeUrl =
+    /^https?:\/\//i.test(value) || /^(www\.)?instagram\.com\//i.test(value);
+  if (looksLikeUrl) {
     let url: URL;
     try {
       url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
