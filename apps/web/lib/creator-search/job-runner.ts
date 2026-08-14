@@ -8,6 +8,7 @@ import {
 import { orchestrateUnifiedDiscovery } from "@/lib/creator-search/orchestrator";
 import { scoreDecisionCandidate, type ScoredDecisionCandidate } from "@/lib/creator-search/decision-engine";
 import { applyValidationResultToCreator } from "@/lib/creators/validation-ops";
+import type { ValidationResult } from "@/lib/validation/types";
 import { deriveBrandICP } from "@/lib/brands/icp";
 import { classifyDiscoveryText } from "@/lib/creator-search/classification";
 import { getFeatureFlags } from "@/lib/feature-flags";
@@ -97,12 +98,15 @@ async function claimPendingCreatorSearchJob({
     return {
       status: "missing" as const,
       storedQuery: normalizeUnifiedDiscoveryQuery({}),
-      boundCampaignId: campaignId ?? null,
+      boundCampaignId: campaignId || null,
     };
   }
 
   const storedQuery = parseJobQuery(query ?? existingJob.query);
-  const boundCampaignId = existingJob.campaignId ?? campaignId ?? null;
+  // Standalone search and automation dispatch campaignId as "" — ?? keeps
+  // that empty string and the creator_search_jobs.campaign_id FK then
+  // rejects the claim. Normalize to null.
+  const boundCampaignId = existingJob.campaignId || campaignId || null;
 
   const claim = await prisma.creatorSearchJob.updateMany({
     where: {
@@ -234,13 +238,14 @@ export async function runCreatorSearchJob(
                 : `https://instagram.com/${candidate.handle}`),
             followerCount: null,
             avgViews: null,
-            checkedVideoCount: 0,
-            blocked: false,
+            engagementRate: null,
+            isVerified: false,
+            metadata: {},
             status: candidate.validationStatus,
             errorCode: candidate.validationErrorCode,
             error: candidate.validationError,
             attemptCount: candidate.validationAttempts,
-          },
+          } satisfies ValidationResult,
         });
       }
     }

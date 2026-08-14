@@ -7,9 +7,10 @@ import {
 } from "@/lib/creator-search/contracts";
 import {
   validateInstagramCreators,
-  type InstagramValidationErrorCode,
   type InstagramValidationResult,
 } from "@/lib/instagram/validator";
+import { getValidator } from "@/lib/validation/registry";
+import type { ValidationResult } from "@/lib/validation/types";
 import type { Prisma } from "@prisma/client";
 import type { orchestrateUnifiedDiscovery } from "@/lib/creator-search/orchestrator";
 
@@ -20,7 +21,7 @@ export type DiscoveryCandidate = Awaited<
 export type ValidatedDiscoveryCandidate = DiscoveryCandidate & {
   validationStatus: "valid" | "unknown" | "retry" | "invalid";
   validationError: string | null;
-  validationErrorCode: InstagramValidationErrorCode | null;
+  validationErrorCode: string | null;
   validationAttempts: number;
   validatedFollowerCount: number | null;
   validatedAvgViews: number | null;
@@ -41,7 +42,7 @@ export function parseJobQuery(
 
 function toValidatedCandidate(
   candidate: DiscoveryCandidate,
-  validation: InstagramValidationResult
+  validation: InstagramValidationResult | ValidationResult
 ): ValidatedDiscoveryCandidate {
   return {
     ...candidate,
@@ -95,27 +96,58 @@ export async function validateDiscoveryCandidates(
       maxFollowers: query.filters.maxFollowers ?? null,
     }));
 
-  // Validation is Instagram-only: no TikTok validator exists, so TikTok
-  // candidates are marked "unknown" instead of being checked against the
-  // wrong platform (which would reject or mislabel valid candidates).
+  // Dispatch through the platform registry: TikTok targets go to the
+  // registered TikTokValidator (Apify TikTok profile scraper), Instagram
+  // keeps its tuned validator. Registry results use the platform-agnostic
+  // ValidationResult shape; adapt Instagram's result into it so the
+  // downstream mapping is uniform.
   const platform = query.platform ?? "instagram";
 
-  const validationResults =
-    targets.length > 0 && platform === "instagram"
-      ? await validateInstagramCreators(targets, {
-          concurrency: 1,
-          includeAvgViews: false,
-          navigationTimeoutSecs: 15,
-          requestHandlerTimeoutSecs: 20,
-          delayRangeMs: [200, 600],
-          blockPauseMs: 1_000,
-          maxPauseCycles: 0,
-        })
-      : [];
-
-  const validationByHandle = new Map(
-    validationResults.map((result) => [result.handle.toLowerCase(), result])
-  );
+  let validationByHandle: Map<string, ValidationResult>;
+  if (platform === "tiktok") {
+    const validator = getValidator("tiktok");
+    const results =
+      validator && targets.length > 0
+        ? await validator.validateBatch(
+            targets.map((t) => ({ handle: t.handle, creatorId: t.creatorId }))
+          )
+        : [];
+    validationByHandle = new Map(
+      results.map((result) => [result.handle.toLowerCase(), { ...result }])
+    );
+  } else {
+    const validationResults =
+      targets.length > 0
+        ? await validateInstagramCreators(targets, {
+            concurrency: 1,
+            includeAvgViews: false,
+            navigationTimeoutSecs: 15,
+            requestHandlerTimeoutSecs: 20,
+            delayRangeMs: [200, 600],
+            blockPauseMs: 1_000,
+            maxPauseCycles: 0,
+          })
+        : [];
+    validationByHandle = new Map(
+      validationResults.map((result) => [
+        result.handle.toLowerCase(),
+        {
+          handle: result.handle,
+          creatorId: result.creatorId ?? null,
+          url: result.url || null,
+          status: result.status,
+          followerCount: result.followerCount,
+          avgViews: result.avgViews,
+          engagementRate: null,
+          isVerified: false,
+          errorCode: result.errorCode,
+          error: result.error,
+          attemptCount: result.attemptCount,
+          metadata: {},
+        } satisfies ValidationResult,
+      ])
+    );
+  }
 
   const newlyValidated = candidates
     .filter(
@@ -130,35 +162,37 @@ export async function validateDiscoveryCandidates(
         validationByHandle.get(candidate.handle.toLowerCase()) ??
         (platform === "tiktok"
           ? ({
-              creatorId: candidate.creatorId,
+              creatorId: candidate.creatorId ?? null,
               handle: candidate.handle,
               url:
                 candidate.profileUrl ??
                 `https://tiktok.com/@${candidate.handle}`,
               followerCount: candidate.followerCount,
               avgViews: candidate.avgViews,
-              checkedVideoCount: 0,
-              blocked: false,
+              engagementRate: null,
+              isVerified: false,
               status: "unknown",
               errorCode: null,
               error: null,
               attemptCount: 0,
-            } satisfies InstagramValidationResult)
+              metadata: {},
+            } satisfies ValidationResult)
           : ({
-              creatorId: candidate.creatorId,
+              creatorId: candidate.creatorId ?? null,
               handle: candidate.handle,
               url:
                 candidate.profileUrl ??
                 `https://instagram.com/${candidate.handle}`,
               followerCount: null,
               avgViews: null,
-              checkedVideoCount: 0,
-              blocked: false,
+              engagementRate: null,
+              isVerified: false,
               status: "retry",
               errorCode: "navigation_failed",
               error: "navigation_failed",
               attemptCount: 1,
-            } satisfies InstagramValidationResult));
+              metadata: {},
+            } satisfies ValidationResult));
 
       return toValidatedCandidate(candidate, validation);
     });

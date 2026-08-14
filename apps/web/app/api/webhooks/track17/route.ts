@@ -48,6 +48,14 @@ export async function POST(request: NextRequest) {
       log("warn", "track17.webhook.bad_signature", {});
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
     }
+  } else if (process.env.NODE_ENV === "production") {
+    // Fail closed in production: without the key, forged "Delivered"
+    // payloads would be accepted. Local development may run unsigned.
+    log("error", "track17.webhook.unconfigured", {});
+    return NextResponse.json(
+      { error: "Webhook verification not configured" },
+      { status: 500 }
+    );
   } else {
     console.warn(
       "[track17-webhook] TRACK17_API_KEY not set — skipping signature verification (dev only)"
