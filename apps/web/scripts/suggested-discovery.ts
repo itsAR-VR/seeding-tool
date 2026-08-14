@@ -42,7 +42,8 @@ function loadEnvFileGapFill(envPath: string): void {
   }
 }
 
-for (const envPath of ["../../.env.local", ".env.local", "../../.env", ".env"]) {
+// App-local config wins over the repo-level fallback; gap-fill only.
+for (const envPath of [".env.local", ".env", "../../.env.local", "../../.env"]) {
   loadEnvFileGapFill(envPath);
 }
 

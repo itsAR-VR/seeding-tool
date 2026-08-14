@@ -193,7 +193,9 @@ async function snapshotHeader(page: Page): Promise<RawHeaderSnapshot> {
       try {
         const url = new URL(anchor.href);
         if (url.hostname === "l.instagram.com" && url.searchParams.get("u")) {
-          externalUrl = decodeURIComponent(url.searchParams.get("u") as string);
+          // URLSearchParams.get already decodes — a second decode would
+          // corrupt targets containing encoded values or literal percents.
+          externalUrl = url.searchParams.get("u");
           break;
         }
         if (!/instagram\.com|facebook\.com|fb\.com/.test(url.hostname)) {

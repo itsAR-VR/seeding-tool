@@ -81,7 +81,14 @@ export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRu
     }
   }
 
-  patchRun(run.id, { status: "running", startedAt: new Date().toISOString() });
+  // Resuming an attached run clears its prior terminal metadata so the
+  // final record reflects the current attempt, not a previous failure.
+  patchRun(run.id, {
+    status: "running",
+    startedAt: new Date().toISOString(),
+    error: undefined,
+    finishedAt: undefined,
+  });
 
   try {
     await walkSuggestedProfiles(
