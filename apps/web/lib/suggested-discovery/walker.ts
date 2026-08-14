@@ -36,7 +36,7 @@ const PROFILE_DELAY_MS = 2_500;
 export class NeedsLoginError extends Error {
   constructor() {
     super(
-      "Instagram session is logged out. Run: npm run discover:suggested -- --login"
+      "Instagram session is logged out. From the repo root, run: npm run discover:suggested -- --login"
     );
     this.name = "NeedsLoginError";
   }
