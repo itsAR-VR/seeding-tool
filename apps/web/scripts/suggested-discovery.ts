@@ -30,6 +30,9 @@ const { runLiveDiscovery } = await import("../lib/suggested-discovery/live");
 const { openLoginSession } = await import("../lib/suggested-discovery/walker");
 const { DEFAULT_MAX_PROFILES } = await import("../lib/suggested-discovery/types");
 
+// Mark as a module so the top-level awaits above are legal.
+export {};
+
 interface CliArgs {
   seed: string | null;
   niche: string;
