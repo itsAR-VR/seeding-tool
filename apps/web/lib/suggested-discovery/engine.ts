@@ -60,21 +60,12 @@ export function textFallbackVerdict(
   });
 
   const terms = nicheTerms(niche);
-  // "Other" is the classifier's fallback sentinel, not a real signal —
-  // including it would let a niche brief containing "other" match every
-  // unclassified profile.
-  const canonicalSignal =
-    classification.canonicalCategory === "Other"
-      ? null
-      : classification.canonicalCategory;
-  const haystack = [
-    profile.bio ?? "",
-    profile.category ?? "",
-    profile.displayName ?? "",
-    canonicalSignal ?? "",
-    ...classification.matchedKeywords,
-    ...(classification.expandedCategories ?? []),
-  ]
+  // Only the profile's own text goes in the haystack. The classifier's
+  // derived signals (canonicalCategory, matchedKeywords) are produced by
+  // substring matching upstream ("competitive" contains "pet" → Pets),
+  // so mixing them in would defeat the whole-word boundary here. They
+  // still inform the displayed tags below.
+  const haystack = [profile.bio ?? "", profile.category ?? "", profile.displayName ?? ""]
     .join(" ")
     .toLowerCase();
 

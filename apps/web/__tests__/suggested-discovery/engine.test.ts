@@ -59,4 +59,11 @@ describe("textFallbackVerdict", () => {
     );
     expect(verdict.match).toBe(false);
   });
+
+  it("does not trust substring-derived classifier categories", () => {
+    // classifyDiscoveryText substring-matches "competitive" → "pet" →
+    // Pets; a pets niche must not approve a runner profile on that basis.
+    const verdict = textFallbackVerdict(profile("competitive runner"), "pets");
+    expect(verdict.match).toBe(false);
+  });
 });
