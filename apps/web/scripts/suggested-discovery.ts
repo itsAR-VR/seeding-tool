@@ -14,14 +14,36 @@
 // tsx does not load Next.js .env files — without this, OPENAI_API_KEY /
 // AI_MODEL are absent and every live run silently degrades to the text
 // fallback. Load BEFORE importing the pipeline modules. The repo keeps
-// env at apps/web/.env.local and sometimes at the repo root.
-for (const envPath of [".env.local", "../../.env.local", ".env"]) {
+// env at apps/web/.env.local and sometimes at the repo root; load ALL
+// candidates (already-set variables win, gaps get filled) since no
+// single file is guaranteed to carry the AI keys.
+import { readFileSync } from "fs";
+
+function loadEnvFileGapFill(envPath: string): void {
+  let text: string;
   try {
-    process.loadEnvFile(envPath);
-    break;
+    text = readFileSync(envPath, "utf8");
   } catch {
-    // try the next candidate
+    return; // candidate missing
   }
+  for (const line of text.split("\n")) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[match[1]] === undefined) {
+      process.env[match[1]] = value;
+    }
+  }
+}
+
+for (const envPath of ["../../.env.local", ".env.local", "../../.env", ".env"]) {
+  loadEnvFileGapFill(envPath);
 }
 
 const { runDemoDiscovery } = await import("../lib/suggested-discovery/demo");

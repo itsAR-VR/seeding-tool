@@ -184,14 +184,30 @@ async function snapshotHeader(page: Page): Promise<RawHeaderSnapshot> {
     const isVerified = Boolean(
       document.querySelector('header svg[aria-label="Verified"], header [title="Verified"]')
     );
-    const external =
-      Array.from(document.querySelectorAll<HTMLAnchorElement>('header a[href^="http"]')).find(
-        (anchor) => !/instagram\.com|facebook\.com|fb\.com/.test(anchor.href)
-      ) ?? null;
+    // Instagram wraps outbound links as l.instagram.com/?u=<url> — unwrap
+    // the redirect instead of discarding it as an Instagram-internal link.
+    let externalUrl: string | null = null;
+    for (const anchor of Array.from(
+      document.querySelectorAll<HTMLAnchorElement>('header a[href^="http"]')
+    )) {
+      try {
+        const url = new URL(anchor.href);
+        if (url.hostname === "l.instagram.com" && url.searchParams.get("u")) {
+          externalUrl = decodeURIComponent(url.searchParams.get("u") as string);
+          break;
+        }
+        if (!/instagram\.com|facebook\.com|fb\.com/.test(url.hostname)) {
+          externalUrl = anchor.href;
+          break;
+        }
+      } catch {
+        // unparsable href — skip
+      }
+    }
     return {
       headerText,
       isVerified,
-      externalUrl: external?.href ?? null,
+      externalUrl,
     };
   });
 }
