@@ -90,7 +90,9 @@ export function normalizeIgHandle(raw: string | null | undefined): string | null
   return value;
 }
 
-const COUNT_LINE_PATTERN = /^([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/i;
+// A count line contains ONLY the count and its label — end-anchored so
+// bio lines like "50K followers learning skincare together" survive.
+const COUNT_LINE_PATTERN = /^([\d.,]+[KMBkmb]?)\s+(posts?|followers?|following)$/i;
 const COUNT_PAIR_PATTERN = /([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/gi;
 
 function applyCountMatch(counts: HeaderCounts, match: RegExpMatchArray): void {

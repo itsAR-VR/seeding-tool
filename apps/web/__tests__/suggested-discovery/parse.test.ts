@@ -64,6 +64,20 @@ describe("parseHeaderCounts", () => {
     ].join("\n");
     expect(parseHeaderCounts(text).followers).toBe(8000);
   });
+
+  it("keeps bio lines that merely start with count-like text", () => {
+    // Not a standalone count line — it must survive into the bio.
+    const text = [
+      "creator.two",
+      "100 posts",
+      "12K followers",
+      "300 following",
+      "50K followers learning skincare together",
+    ].join("\n");
+    const parsed = parseHeaderText(text, "creator.two");
+    expect(parsed.followers).toBe(12000);
+    expect(parsed.bio).toBe("50K followers learning skincare together");
+  });
 });
 
 describe("parseHeaderText", () => {
