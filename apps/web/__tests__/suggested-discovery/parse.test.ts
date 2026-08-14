@@ -39,6 +39,12 @@ describe("normalizeIgHandle", () => {
     expect(normalizeIgHandle("instagram.comedy")).toBe("instagram.comedy");
     expect(normalizeIgHandle("myinstagram.com")).toBe("myinstagram.com");
   });
+
+  it("rejects Instagram URLs with extra path segments", () => {
+    expect(normalizeIgHandle("https://www.instagram.com/victim/p/ABC/")).toBeNull();
+    expect(normalizeIgHandle("instagram.com/trail.kate/reels")).toBeNull();
+    expect(normalizeIgHandle("https://www.instagram.com/trail.kate/")).toBe("trail.kate");
+  });
 });
 
 describe("parseHeaderCounts", () => {

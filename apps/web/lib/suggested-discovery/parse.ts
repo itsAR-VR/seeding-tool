@@ -80,7 +80,12 @@ export function normalizeIgHandle(raw: string | null | undefined): string | null
     }
     const host = url.hostname.toLowerCase();
     if (host !== "instagram.com" && host !== "www.instagram.com") return null;
-    value = url.pathname.split("/").filter(Boolean)[0] ?? "";
+    // Exactly one path segment — extra segments mean a post/reel/etc URL,
+    // not a profile, and silently taking the first segment would target
+    // the wrong account.
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments.length !== 1) return null;
+    value = segments[0];
   }
 
   value = value.replace(/^@+/, "").replace(/\/+$/, "").toLowerCase();

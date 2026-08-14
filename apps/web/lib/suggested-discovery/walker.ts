@@ -198,7 +198,12 @@ async function snapshotHeader(page: Page): Promise<RawHeaderSnapshot> {
           externalUrl = url.searchParams.get("u");
           break;
         }
-        if (!/instagram\.com|facebook\.com|fb\.com/.test(url.hostname)) {
+        // Compare by domain boundary: substring matching would discard
+        // legitimate domains like notfacebook.com or instagram.comedy.io.
+        const isInternal = ["instagram.com", "facebook.com", "fb.com"].some(
+          (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+        );
+        if (!isInternal) {
           externalUrl = anchor.href;
           break;
         }
