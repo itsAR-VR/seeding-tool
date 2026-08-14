@@ -65,8 +65,10 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (toParam) {
       const toDate = new Date(toParam);
       if (!Number.isNaN(toDate.getTime())) {
-        // Set to end of day
-        toDate.setHours(23, 59, 59, 999);
+        // Date-only strings parse as UTC midnight — end the day in UTC
+        // too, not local time (local setHours shifts the date in
+        // negative-offset timezones).
+        toDate.setUTCHours(23, 59, 59, 999);
         dateFilter.lte = toDate;
       }
     }

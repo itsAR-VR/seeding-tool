@@ -252,11 +252,12 @@ export const campaignHealthCheck = inngest.createFunction(
           );
           const conversionRates = computeConversionRates(lifecycle);
 
-          // ── Mention gap (delivered, no post, exclude opted_out/stalled) ──
+          // ── Mention gap (delivered >14d ago, no post, exclude opted_out/stalled) ──
+          const mentionGapCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
           const mentionGap = await prisma.campaignOutcome.count({
             where: {
               campaignId: campaign.id,
-              deliveredAt: { not: null },
+              deliveredAt: { not: null, lt: mentionGapCutoff },
               postedAt: null,
               campaignCreator: {
                 lifecycleStatus: { notIn: ["opted_out", "stalled"] },

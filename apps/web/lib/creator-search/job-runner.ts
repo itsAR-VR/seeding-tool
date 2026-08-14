@@ -219,13 +219,16 @@ export async function runCreatorSearchJob(
       if (candidate.creatorId) {
         await applyValidationResultToCreator({
           creatorId: candidate.creatorId,
+          platform: storedQuery.platform,
           result: {
             creatorId: candidate.creatorId,
             handle: candidate.handle,
             url:
               candidate.validatedProfileUrl ??
               candidate.profileUrl ??
-              `https://instagram.com/${candidate.handle}`,
+              (storedQuery.platform === "tiktok"
+                ? `https://tiktok.com/@${candidate.handle}`
+                : `https://instagram.com/${candidate.handle}`),
             followerCount: null,
             avgViews: null,
             checkedVideoCount: 0,
@@ -248,7 +251,7 @@ export async function runCreatorSearchJob(
       await prisma.creatorSearchResult.create({
         data: {
           searchJobId: jobId,
-          platform: "instagram",
+          platform: storedQuery.platform,
           handle: candidate.handle,
           source: candidate.primarySource,
           primarySource: candidate.primarySource,

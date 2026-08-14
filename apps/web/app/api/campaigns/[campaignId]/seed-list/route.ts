@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   BrandAccessError,
+  assertBrandAccess,
   getAuthorizedCampaign,
-  getCurrentBrandMembership,
   requireWriteAccess,
 } from "@/lib/integrations/brand-access";
 import { getFeatureFlags } from "@/lib/feature-flags";
@@ -163,9 +163,10 @@ export async function POST(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
     const { brandId } = await getAuthorizedCampaign(campaignId);
-    // This POST overwrites campaign.portfolioConfig — membership alone is
-    // not enough, viewers must not mutate campaign configuration.
-    requireWriteAccess(await getCurrentBrandMembership());
+    // This POST overwrites campaign.portfolioConfig — authorize the write
+    // against the CAMPAIGN'S brand, not the cookie-selected active brand
+    // (a viewer in A but editor in B must not overwrite A's config).
+    requireWriteAccess(await assertBrandAccess(brandId));
     const body = (await request.json()) as {
       targetSize?: number;
       qualityWeight?: number;

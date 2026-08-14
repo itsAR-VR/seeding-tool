@@ -2,6 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { classifyReply, extractAddress, generateDraft } from "@/lib/inbox/ai";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Inngest function: Process an inbound Gmail reply.
@@ -88,6 +89,13 @@ export const processReply = inngest.createFunction(
             lastReplyAt: new Date(),
           },
         });
+
+        // Outcome feed must see the Inngest path too, not only the
+        // webhook's inline fallback.
+        await recordOutcomeEvent({
+          campaignCreatorId,
+          event: { type: "address_confirmed" },
+        });
       }
 
       return { status: "processed", intent: "address" };
@@ -170,6 +178,10 @@ export const processReply = inngest.createFunction(
               lastReplyAt: new Date(),
             },
           });
+          await recordOutcomeEvent({
+            campaignCreatorId,
+            event: { type: "reply_received", replyType: "positive" },
+          });
         }
       }
 
@@ -196,6 +208,11 @@ export const processReply = inngest.createFunction(
           lifecycleStatus: "replied",
           lastReplyAt: new Date(),
         },
+      });
+
+      await recordOutcomeEvent({
+        campaignCreatorId,
+        event: { type: "reply_received", replyType: "negative" },
       });
 
       return { status: "intervention", intent: "negative" };
