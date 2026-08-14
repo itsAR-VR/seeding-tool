@@ -11,10 +11,24 @@
  * enters the Next.js bundle.
  */
 
-import { runDemoDiscovery } from "../lib/suggested-discovery/demo";
-import { runLiveDiscovery } from "../lib/suggested-discovery/live";
-import { openLoginSession } from "../lib/suggested-discovery/walker";
-import { DEFAULT_MAX_PROFILES } from "../lib/suggested-discovery/types";
+// tsx does not load Next.js .env files — without this, OPENAI_API_KEY /
+// AI_MODEL are absent and every live run silently degrades to the text
+// fallback. Load BEFORE importing the pipeline modules (they read env
+// at call time, but keep the ordering explicit and safe).
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  try {
+    process.loadEnvFile(".env");
+  } catch {
+    // no env file — text fallback remains available
+  }
+}
+
+const { runDemoDiscovery } = await import("../lib/suggested-discovery/demo");
+const { runLiveDiscovery } = await import("../lib/suggested-discovery/live");
+const { openLoginSession } = await import("../lib/suggested-discovery/walker");
+const { DEFAULT_MAX_PROFILES } = await import("../lib/suggested-discovery/types");
 
 interface CliArgs {
   seed: string | null;
