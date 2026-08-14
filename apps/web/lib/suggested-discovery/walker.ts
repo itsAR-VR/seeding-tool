@@ -199,11 +199,22 @@ async function snapshotHeader(page: Page): Promise<RawHeaderSnapshot> {
 async function screenshotHeader(page: Page): Promise<Buffer | null> {
   const header = page.locator("header").first();
   try {
-    return (await header.screenshot({ timeout: 5_000 })) as Buffer;
+    const box = await header.boundingBox({ timeout: 5_000 });
+    if (!box) return null;
+    // The verdict prompt judges "visible content themes", so the capture
+    // must include the first post-grid rows, not just header metadata.
+    // Clip from the header's top edge ~900px past its bottom edge.
+    const clip = {
+      x: Math.max(0, box.x),
+      y: Math.max(0, box.y),
+      width: Math.min(box.width, VIEWPORT.width),
+      height: Math.min(box.height + 900, 1_800),
+    };
+    return (await page.screenshot({ clip })) as Buffer;
   } catch {
     try {
       return (await page.screenshot({
-        clip: { x: 0, y: 0, width: VIEWPORT.width, height: 480 },
+        clip: { x: 0, y: 0, width: VIEWPORT.width, height: 1_200 },
       })) as Buffer;
     } catch {
       return null;
