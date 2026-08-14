@@ -30,8 +30,8 @@ export function DiscoverClient() {
   const [copied, setCopied] = useState(false);
   // Tracks the live selection so an in-flight fetch for a previously
   // selected run cannot overwrite the panel after the user switches.
+  // Updated in the selection handlers (event-time), never during render.
   const selectedIdRef = useRef<string | null>(null);
-  selectedIdRef.current = selectedId;
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -104,6 +104,7 @@ export function DiscoverClient() {
   }, [selectedId, refreshDetail, refreshRuns]);
 
   function handleStarted(runId: string) {
+    selectedIdRef.current = runId;
     setSelectedId(runId);
     setDetail(null);
     refreshRuns();
@@ -113,6 +114,7 @@ export function DiscoverClient() {
     // Clear the previous detail immediately — a slow or failed fetch for
     // the new selection must not leave another run's panel (and its
     // "Copy matched handles" action) on screen.
+    selectedIdRef.current = runId;
     setSelectedId(runId);
     setDetail(null);
   }
