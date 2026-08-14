@@ -14,6 +14,7 @@ import {
   readRun,
   saveScreenshot,
   upsertCandidate,
+  writeRun,
 } from "./store";
 import { NeedsLoginError, walkSuggestedProfiles } from "./walker";
 import {
@@ -83,7 +84,11 @@ export async function runLiveDiscovery(input: LiveRunInput): Promise<DiscoveryRu
 
   // Resuming an attached run clears its prior terminal metadata so the
   // final record reflects the current attempt, not a previous failure.
-  patchRun(run.id, {
+  // Candidates are also reset: the walk always starts fresh, and keeping
+  // stale suggestions from a previous rail would corrupt the list.
+  writeRun({
+    ...run,
+    candidates: [],
     status: "running",
     startedAt: new Date().toISOString(),
     error: undefined,

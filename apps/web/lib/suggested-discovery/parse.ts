@@ -144,11 +144,15 @@ export function parseHeaderText(headerText: string, handle: string): ParsedProfi
     .filter((line) => line.toLowerCase() !== `@${handle}`)
     .filter((line) => !/^followed by /i.test(line));
 
-  const displayName = lines[0] ?? null;
+  // The display-name line is optional on Instagram. When only one content
+  // line survives, it is more likely the bio than the name, and the bio
+  // drives classification — prefer bio and leave the name null.
+  const hasName = lines.length > 1;
+  const displayName = hasName ? lines[0] : null;
+  const bioLines = hasName ? lines.slice(1) : lines;
 
   const bio =
-    lines
-      .slice(1)
+    bioLines
       .filter((line) => !/^https?:\/\//i.test(line))
       .join("\n")
       .trim() || null;

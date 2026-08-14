@@ -93,12 +93,15 @@ describe("parseHeaderText", () => {
     expect(parsed.posts).toBe(431);
   });
 
-  it("handles minimal headers without a category line", () => {
+  it("treats a lone content line as bio, not display name", () => {
+    // Display name is optional on IG; a single remaining line is more
+    // likely bio text, and the bio drives classification.
     const minimal = ["someone", "10 posts", "100 followers", "50 following", "Just bio."].join(
       "\n"
     );
     const parsed = parseHeaderText(minimal, "someone");
-    expect(parsed.displayName).toBe("Just bio.");
+    expect(parsed.displayName).toBeNull();
+    expect(parsed.bio).toBe("Just bio.");
     expect(parsed.category).toBeNull();
   });
 
