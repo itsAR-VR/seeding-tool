@@ -333,10 +333,13 @@ export const campaignHealthCheck = inngest.createFunction(
           });
 
           // ── InterventionCase for critical (with dedup) ──
+          // Phase 27d contract: one open health intervention PER CAMPAIGN —
+          // brand-level dedupe would suppress the second critical campaign.
           if (status === "critical") {
             const existingCase = await prisma.interventionCase.findFirst({
               where: {
                 brandId: campaign.brandId,
+                campaignId: campaign.id,
                 type: "health_critical",
                 status: { in: ["open", "in_progress"] },
               },
@@ -355,6 +358,7 @@ export const campaignHealthCheck = inngest.createFunction(
                   title: `Campaign "${campaign.name}" health critical`,
                   description: alertSummary || "Campaign health is critical",
                   brandId: campaign.brandId,
+                  campaignId: campaign.id,
                 },
               });
             }

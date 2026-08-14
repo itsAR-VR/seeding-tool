@@ -95,8 +95,13 @@ export async function validateDiscoveryCandidates(
       maxFollowers: query.filters.maxFollowers ?? null,
     }));
 
+  // Validation is Instagram-only: no TikTok validator exists, so TikTok
+  // candidates are marked "unknown" instead of being checked against the
+  // wrong platform (which would reject or mislabel valid candidates).
+  const platform = query.platform ?? "instagram";
+
   const validationResults =
-    targets.length > 0
+    targets.length > 0 && platform === "instagram"
       ? await validateInstagramCreators(targets, {
           concurrency: 1,
           includeAvgViews: false,
@@ -123,21 +128,37 @@ export async function validateDiscoveryCandidates(
     .map<ValidatedDiscoveryCandidate>((candidate) => {
       const validation =
         validationByHandle.get(candidate.handle.toLowerCase()) ??
-        ({
-          creatorId: candidate.creatorId,
-          handle: candidate.handle,
-          url:
-            candidate.profileUrl ??
-            `https://instagram.com/${candidate.handle}`,
-          followerCount: null,
-          avgViews: null,
-          checkedVideoCount: 0,
-          blocked: false,
-          status: "retry",
-          errorCode: "navigation_failed",
-          error: "navigation_failed",
-          attemptCount: 1,
-        } satisfies InstagramValidationResult);
+        (platform === "tiktok"
+          ? ({
+              creatorId: candidate.creatorId,
+              handle: candidate.handle,
+              url:
+                candidate.profileUrl ??
+                `https://tiktok.com/@${candidate.handle}`,
+              followerCount: candidate.followerCount,
+              avgViews: candidate.avgViews,
+              checkedVideoCount: 0,
+              blocked: false,
+              status: "unknown",
+              errorCode: null,
+              error: null,
+              attemptCount: 0,
+            } satisfies InstagramValidationResult)
+          : ({
+              creatorId: candidate.creatorId,
+              handle: candidate.handle,
+              url:
+                candidate.profileUrl ??
+                `https://instagram.com/${candidate.handle}`,
+              followerCount: null,
+              avgViews: null,
+              checkedVideoCount: 0,
+              blocked: false,
+              status: "retry",
+              errorCode: "navigation_failed",
+              error: "navigation_failed",
+              attemptCount: 1,
+            } satisfies InstagramValidationResult));
 
       return toValidatedCandidate(candidate, validation);
     });

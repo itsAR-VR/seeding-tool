@@ -307,6 +307,7 @@ export async function runCreatorSearchJob(
           campaignId: boundCampaignId,
           attachToCampaign: true,
           featureFlags,
+          platform: storedQuery.platform,
         });
         creatorIdsToEnrich.push(creatorId);
       }
@@ -319,11 +320,12 @@ export async function runCreatorSearchJob(
           campaignId: boundCampaignId,
           attachToCampaign: false,
           featureFlags,
+          platform: storedQuery.platform,
         });
         creatorIdsToEnrich.push(creatorId);
       }
 
-      if (creatorIdsToEnrich.length > 0) {
+      if (creatorIdsToEnrich.length > 0 && storedQuery.platform === "instagram") {
         await triggerAvgViewsEnrichment(creatorIdsToEnrich);
       }
     } else {
@@ -335,11 +337,12 @@ export async function runCreatorSearchJob(
           candidate,
           attachToCampaign: false,
           featureFlags,
+          platform: storedQuery.platform,
         });
         overflowCreatorIds.push(creatorId);
       }
 
-      if (overflowCreatorIds.length > 0) {
+      if (overflowCreatorIds.length > 0 && storedQuery.platform === "instagram") {
         await triggerAvgViewsEnrichment(overflowCreatorIds);
       }
     }

@@ -108,6 +108,7 @@ export async function createDraftOrder(
     throw error;
   }
 
+  let draftCreatedRemotely = false;
   try {
     // 4. Create draft order via Shopify API
     const client = await getShopifyClient(brandId);
@@ -157,6 +158,9 @@ export async function createDraftOrder(
   };
 
   const draftOrderId = draftData.draft_order.id;
+  // From here on a Shopify-side artifact exists; the claim must survive
+  // any local failure so retries cannot create a second order.
+  draftCreatedRemotely = true;
 
   // 4. Complete the draft order → creates a real order
   const completeResponse = await client.fetch(
@@ -196,11 +200,25 @@ export async function createDraftOrder(
 
   return { shopifyOrderId, orderId: order.id };
   } catch (error) {
-    // Release the claim so a failed attempt can be retried (best-effort).
-    try {
-      await prisma.shopifyOrder.delete({ where: { id: claimId } });
-    } catch {
-      // claim row may already be gone; the original error takes precedence
+    if (draftCreatedRemotely) {
+      // Shopify may have completed the order — never release the claim
+      // (a retry would create a duplicate). Mark it for reconciliation.
+      try {
+        await prisma.shopifyOrder.update({
+          where: { id: claimId },
+          data: { status: "error_needs_reconciliation" },
+        });
+      } catch {
+        // original error takes precedence
+      }
+    } else {
+      // Failed before any Shopify artifact existed — release the claim
+      // so a retry can proceed (best-effort).
+      try {
+        await prisma.shopifyOrder.delete({ where: { id: claimId } });
+      } catch {
+        // claim row may already be gone; the original error takes precedence
+      }
     }
     throw error;
   }
