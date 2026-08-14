@@ -105,7 +105,16 @@ export function DiscoverClient() {
 
   function handleStarted(runId: string) {
     setSelectedId(runId);
+    setDetail(null);
     refreshRuns();
+  }
+
+  function handleSelect(runId: string) {
+    // Clear the previous detail immediately — a slow or failed fetch for
+    // the new selection must not leave another run's panel (and its
+    // "Copy matched handles" action) on screen.
+    setSelectedId(runId);
+    setDetail(null);
   }
 
   async function copyMatchedHandles() {
@@ -135,7 +144,7 @@ export function DiscoverClient() {
             <button
               key={run.id}
               type="button"
-              onClick={() => setSelectedId(run.id)}
+              onClick={() => handleSelect(run.id)}
               className={`w-full rounded-lg border p-3 text-left text-sm transition-colors hover:bg-accent ${
                 selectedId === run.id ? "border-foreground/40 bg-accent" : ""
               }`}

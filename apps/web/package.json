@@ -67,6 +67,7 @@
     "postcss": "^8.5.8",
     "prisma": "^7.4.2",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   }
