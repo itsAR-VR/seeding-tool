@@ -81,12 +81,13 @@ describe("parseHeaderText", () => {
     "trailkate.example.com",
   ].join("\n");
 
-  it("extracts name, category, bio and counts", () => {
+  it("extracts name, bio and counts without fabricating a category", () => {
     const parsed = parseHeaderText(headerText, "trail.kate");
     expect(parsed.displayName).toBe("Kate Wilder");
-    expect(parsed.category).toBe("Outdoor enthusiast");
+    // No DOM category signal → null; the label line stays in the bio
+    expect(parsed.category).toBeNull();
     expect(parsed.bio).toBe(
-      "Backpacking the PCT one section at a time\nGear reviews & trail recipes\ntrailkate.example.com"
+      "Outdoor enthusiast\nBackpacking the PCT one section at a time\nGear reviews & trail recipes\ntrailkate.example.com"
     );
     expect(parsed.followers).toBe(84200);
     expect(parsed.posts).toBe(431);
@@ -99,6 +100,24 @@ describe("parseHeaderText", () => {
     const parsed = parseHeaderText(minimal, "someone");
     expect(parsed.displayName).toBe("Just bio.");
     expect(parsed.category).toBeNull();
+  });
+
+  it("never promotes bio lines into the category field", () => {
+    // Category-less profile with a multi-line bio: the first bio line is
+    // short and punctuation-free — it must NOT be reported as the
+    // authoritative Instagram category.
+    const text = [
+      "creator.one",
+      "100 posts",
+      "12K followers",
+      "300 following",
+      "Creator One",
+      "Derm approved skincare",
+      "Sensitive-skin routines",
+    ].join("\n");
+    const parsed = parseHeaderText(text, "creator.one");
+    expect(parsed.category).toBeNull();
+    expect(parsed.bio).toBe("Derm approved skincare\nSensitive-skin routines");
   });
 });
 

@@ -123,12 +123,13 @@ export function parseHeaderCounts(headerText: string): HeaderCounts {
 /**
  * Heuristic layout parse of a profile header's innerText.
  *
- * Typical shape once count lines and action buttons are removed:
- *   [username/verified line] [display name] [category?] [bio lines...] [link text?]
- *
- * The username line is dropped using the known handle. The first
- * remaining line is the display name; a short second line that does
- * not look like a URL or bio sentence is treated as the IG category.
+ * Once count lines and action buttons are removed, the first remaining
+ * line is the display name; everything after it is bio text. We do NOT
+ * guess Instagram's category label from formatting: a category-less
+ * profile with a multi-line bio would get its first bio line mislabeled
+ * as the authoritative category, which would corrupt both the stored
+ * profile and the vision prompt. Category stays null unless a dedicated
+ * DOM signal is added later.
  */
 export function parseHeaderText(headerText: string, handle: string): ParsedProfileHeader {
   const counts = parseHeaderCounts(headerText);
@@ -145,27 +146,14 @@ export function parseHeaderText(headerText: string, handle: string): ParsedProfi
 
   const displayName = lines[0] ?? null;
 
-  let category: string | null = null;
-  let bioLines = lines.slice(1);
-  const maybeCategory = bioLines[0];
-  if (
-    maybeCategory &&
-    maybeCategory.length <= 40 &&
-    !maybeCategory.includes("http") &&
-    !/[.!?…]/.test(maybeCategory) &&
-    bioLines.length > 1
-  ) {
-    category = maybeCategory;
-    bioLines = bioLines.slice(1);
-  }
-
   const bio =
-    bioLines
+    lines
+      .slice(1)
       .filter((line) => !/^https?:\/\//i.test(line))
       .join("\n")
       .trim() || null;
 
-  return { ...counts, displayName, category, bio };
+  return { ...counts, displayName, category: null, bio };
 }
 
 /**

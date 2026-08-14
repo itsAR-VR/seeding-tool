@@ -13,15 +13,14 @@
 
 // tsx does not load Next.js .env files — without this, OPENAI_API_KEY /
 // AI_MODEL are absent and every live run silently degrades to the text
-// fallback. Load BEFORE importing the pipeline modules (they read env
-// at call time, but keep the ordering explicit and safe).
-try {
-  process.loadEnvFile(".env.local");
-} catch {
+// fallback. Load BEFORE importing the pipeline modules. The repo keeps
+// env at apps/web/.env.local and sometimes at the repo root.
+for (const envPath of [".env.local", "../../.env.local", ".env"]) {
   try {
-    process.loadEnvFile(".env");
+    process.loadEnvFile(envPath);
+    break;
   } catch {
-    // no env file — text fallback remains available
+    // try the next candidate
   }
 }
 
