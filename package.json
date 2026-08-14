@@ -16,6 +16,7 @@
     "audit:all": "npm run audit:marketing && npm run audit:competitors && npm run audit:report",
     "collabstr:scrape": "tsx scripts/scrape-collabstr.ts",
     "collabstr:import": "tsx scripts/import-collabstr.ts",
+    "discover:suggested": "cd apps/web && npx tsx scripts/suggested-discovery.ts",
     "vercel:env:merge": "node scripts/vercel-env-merge.mjs",
     "vercel:env:sync": "node scripts/vercel-env-sync.mjs",
     "web:dev": "cd apps/web && npm run dev",

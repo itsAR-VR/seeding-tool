@@ -1,0 +1,228 @@
+/**
+ * Suggested Discovery — pure parsing helpers.
+ *
+ * Everything here is side-effect free so it can be unit-tested without
+ * a browser and safely bundled into the demo-mode API path.
+ *
+ * Instagram's profile DOM is obfuscated and changes often, so the
+ * walker captures two raw artifacts per profile and these helpers do
+ * the interpretation:
+ *   1. `headerText`  — innerText of the profile <header> block
+ *   2. page HTML meta — og:title / og:description (stable contract)
+ */
+
+import { parseInstagramCountText } from "@/lib/instagram/profile-html";
+
+const HANDLE_PATTERN = /^[a-z0-9._]{1,30}$/;
+
+/** Button labels that leak into header innerText and must be ignored. */
+const HEADER_NOISE_LINES = new Set([
+  "follow",
+  "following",
+  "message",
+  "subscribe",
+  "contact",
+  "notes",
+  "suggested",
+  "call",
+  "email",
+]);
+
+export interface HeaderCounts {
+  posts: number | null;
+  followers: number | null;
+  following: number | null;
+}
+
+export interface ParsedProfileHeader extends HeaderCounts {
+  displayName: string | null;
+  category: string | null;
+  bio: string | null;
+}
+
+/** Instagram routes that look like handles but are not profiles. */
+const RESERVED_SEGMENTS = new Set([
+  "p",
+  "reel",
+  "reels",
+  "explore",
+  "accounts",
+  "direct",
+  "stories",
+  "tv",
+  "legal",
+  "developer",
+]);
+
+/**
+ * Normalize any user-supplied handle form ("@name", profile URLs) into a
+ * bare lowercase handle, or null if invalid. URLs are parsed explicitly:
+ * the hostname must be Instagram and the path must be a bare profile
+ * segment — "/p/…" posts, "/explore", and lookalike hosts are rejected.
+ */
+export function normalizeIgHandle(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let value = raw.trim();
+  if (!value) return null;
+
+  // Only URL-shaped input goes through URL parsing: a protocol, or the
+  // Instagram host at the START of the string. Bare handles like
+  // "instagram.comedy" or "myinstagram.com" contain the substring but
+  // are valid handles and must not be parsed as hosts.
+  const looksLikeUrl =
+    /^https?:\/\//i.test(value) || /^(www\.)?instagram\.com\//i.test(value);
+  if (looksLikeUrl) {
+    let url: URL;
+    try {
+      url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    } catch {
+      return null;
+    }
+    const host = url.hostname.toLowerCase();
+    if (host !== "instagram.com" && host !== "www.instagram.com") return null;
+    // Exactly one path segment — extra segments mean a post/reel/etc URL,
+    // not a profile, and silently taking the first segment would target
+    // the wrong account.
+    const segments = url.pathname.split("/").filter(Boolean);
+    if (segments.length !== 1) return null;
+    value = segments[0];
+  }
+
+  value = value.replace(/^@+/, "").replace(/\/+$/, "").toLowerCase();
+
+  if (RESERVED_SEGMENTS.has(value)) return null;
+  if (!HANDLE_PATTERN.test(value)) return null;
+  return value;
+}
+
+// A count line contains ONLY the count and its label — end-anchored so
+// bio lines like "50K followers learning skincare together" survive.
+const COUNT_LINE_PATTERN = /^([\d.,]+[KMBkmb]?)\s+(posts?|followers?|following)$/i;
+const COUNT_PAIR_PATTERN = /([\d.,]+[KMBkmb]?)\s*(posts?|followers?|following)\b/gi;
+
+function applyCountMatch(counts: HeaderCounts, match: RegExpMatchArray): void {
+  const value = parseInstagramCountText(match[1]);
+  if (value === null) return;
+  const label = match[2].toLowerCase();
+  // First hit per label wins — a bio line like "Helping 50K followers
+  // grow" must not overwrite the real header count parsed earlier.
+  if (label.startsWith("post") && counts.posts === null) counts.posts = value;
+  else if (label.startsWith("follower") && counts.followers === null)
+    counts.followers = value;
+  else if (label.startsWith("following") && counts.following === null)
+    counts.following = value;
+}
+
+function applyCountSegment(counts: HeaderCounts, segment: string): void {
+  const match = segment.trim().match(COUNT_LINE_PATTERN);
+  if (match) applyCountMatch(counts, match);
+}
+
+/** Extract "1,234 posts / 56.7K followers / 912 following" counts from header text. */
+export function parseHeaderCounts(headerText: string): HeaderCounts {
+  const counts: HeaderCounts = { posts: null, followers: null, following: null };
+  for (const line of headerText.split("\n")) {
+    applyCountSegment(counts, line);
+  }
+  return counts;
+}
+
+/**
+ * Heuristic layout parse of a profile header's innerText.
+ *
+ * Once count lines and action buttons are removed, the remaining lines
+ * are bio text — EXCEPT an optional display-name line, which we only
+ * strip when it matches `knownDisplayName` (from the reliable og:title /
+ * meta contract). We never guess the name from position: profiles may
+ * omit it, and a positional guess would fabricate a name out of the
+ * first bio line. Category is likewise null unless a dedicated DOM
+ * signal is added later.
+ */
+export function parseHeaderText(
+  headerText: string,
+  handle: string,
+  knownDisplayName?: string | null
+): ParsedProfileHeader {
+  const counts = parseHeaderCounts(headerText);
+
+  const lines = headerText
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !COUNT_LINE_PATTERN.test(line))
+    .filter((line) => !HEADER_NOISE_LINES.has(line.toLowerCase()))
+    .filter((line) => line.toLowerCase() !== handle)
+    .filter((line) => line.toLowerCase() !== `@${handle}`)
+    .filter((line) => !/^followed by /i.test(line));
+
+  let displayName: string | null = null;
+  let bioLines = lines;
+  if (knownDisplayName && lines[0] === knownDisplayName) {
+    displayName = knownDisplayName;
+    bioLines = lines.slice(1);
+  }
+
+  const bio =
+    bioLines
+      .filter((line) => !/^https?:\/\//i.test(line))
+      .join("\n")
+      .trim() || null;
+
+  return { ...counts, displayName, category: null, bio };
+}
+
+/**
+ * Parse Instagram's stable meta contract:
+ *   og:description = "56K Followers, 900 Following, 120 Posts - See Instagram photos and videos from Display Name (@handle)"
+ */
+export function parseMetaDescription(html: string): ParsedProfileHeader | null {
+  const description = extractMetaContent(html, "og:description");
+  if (!description) return null;
+
+  // Counts live in the lead: "84.2K Followers, 610 Following, 431 Posts
+  // - See Instagram photos and videos from ...". Match full <number>
+  // <label> pairs — comma-splitting would break comma-grouped numbers
+  // like "1,234 Followers".
+  const counts: HeaderCounts = { posts: null, followers: null, following: null };
+  const countSection = description.split(" - ")[0] ?? "";
+  for (const match of countSection.matchAll(COUNT_PAIR_PATTERN)) {
+    applyCountMatch(counts, match);
+  }
+  const nameMatch = description.match(/from\s+(.+?)\s*\(@([a-z0-9._]+)\)\s*$/i);
+
+  return {
+    ...counts,
+    displayName: nameMatch?.[1] ?? null,
+    category: null,
+    bio: null,
+  };
+}
+
+export function extractMetaContent(html: string, name: string): string | null {
+  // Quote-aware backreference: the capture runs to the SAME quote char
+  // that opened it, so apostrophes inside double-quoted content parse.
+  const patterns = [
+    new RegExp(
+      `<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=(["'])([\\s\\S]*?)\\1[^>]*>`,
+      "i"
+    ),
+    new RegExp(
+      `<meta[^>]+content=(["'])([\\s\\S]*?)\\1[^>]+(?:property|name)=["']${name}["'][^>]*>`,
+      "i"
+    ),
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match?.[2]) return decodeHtmlEntities(match[2]);
+  }
+  return null;
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
