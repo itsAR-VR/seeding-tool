@@ -50,6 +50,20 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const unifiedQuery = buildUnifiedDiscoveryQueryFromCampaignRequest(body);
     const requestedCount = unifiedQuery.limit;
 
+    // Create the job BEFORE consuming credits: if the debit fails, the
+    // job is deleted and no balance is consumed for work that never ran.
+    const job = await prisma.creatorSearchJob.create({
+      data: {
+        status: "pending",
+        platform: body.platform ?? "instagram",
+        brandId: membership.brandId,
+        campaignId,
+        requestedCount,
+        progressPercent: 0,
+        query: unifiedQuery,
+      },
+    });
+
     // Credit enforcement: reserve estimated cost before starting search
     if (isCreditEnforcementEnabled()) {
       const estimatedCost = CREDIT_COSTS.creator_search;
@@ -62,6 +76,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
           { type: "reservation", campaignId }
         );
       } catch (error) {
+        // Roll back the job so the customer is not charged for nothing.
+        try {
+          await prisma.creatorSearchJob.delete({ where: { id: job.id } });
+        } catch {
+          // best-effort rollback; the credit error below takes precedence
+        }
         if (error instanceof CreditInsufficientError) {
           return NextResponse.json(
             {
@@ -75,18 +95,6 @@ export async function POST(request: NextRequest, context: RouteContext) {
         throw error;
       }
     }
-
-    const job = await prisma.creatorSearchJob.create({
-      data: {
-        status: "pending",
-        platform: body.platform ?? "instagram",
-        brandId: membership.brandId,
-        campaignId,
-        requestedCount,
-        progressPercent: 0,
-        query: unifiedQuery,
-      },
-    });
 
     try {
       await inngest.send({

@@ -31,7 +31,15 @@ export const creatorValidationCleanup = inngest.createFunction(
       let removedCampaignLinks = 0;
       let retainedCampaignLinks = 0;
 
-      while (true) {
+      // Bound the loop: invalid creators stay invalid after revalidation,
+      // so a brand with >=100 permanently invalid creators would otherwise
+      // rescan the same batch forever within one run. Remaining stale
+      // creators are picked up on the next scheduled run.
+      const MAX_BATCHES_PER_RUN = 10;
+      let batches = 0;
+
+      while (batches < MAX_BATCHES_PER_RUN) {
+        batches += 1;
         const batch = await runCreatorValidationSweep({
           brandId: brand.brandId,
           limit: 100,

@@ -52,6 +52,14 @@ export const processReply = inngest.createFunction(
       },
     });
 
+    // Every persisted inbound reply feeds the outcome feed once, before
+    // intent branching — reply rate and response-time metrics must not
+    // depend on which branch handles the reply.
+    await recordOutcomeEvent({
+      campaignCreatorId,
+      event: { type: "reply_received", replyType: classification.intent },
+    });
+
     // 5. Low confidence — always create intervention regardless of intent
     if (classification.confidence < 0.7) {
       await prisma.interventionCase.create({
@@ -178,10 +186,6 @@ export const processReply = inngest.createFunction(
               lastReplyAt: new Date(),
             },
           });
-          await recordOutcomeEvent({
-            campaignCreatorId,
-            event: { type: "reply_received", replyType: "positive" },
-          });
         }
       }
 
@@ -208,11 +212,6 @@ export const processReply = inngest.createFunction(
           lifecycleStatus: "replied",
           lastReplyAt: new Date(),
         },
-      });
-
-      await recordOutcomeEvent({
-        campaignCreatorId,
-        event: { type: "reply_received", replyType: "negative" },
       });
 
       return { status: "intervention", intent: "negative" };

@@ -21,26 +21,24 @@ export async function GET() {
       where: {
         reviewOutcome: null,
         matchBand: { in: ["auto_linked", "possible_match"] },
-        OR: [
-          {
-            fromProfile: {
-              influencer: {
-                creators: {
-                  some: { brandId: membership.brandId },
-                },
-              },
+        // Both endpoints must belong to this brand: the response includes
+        // profile details and contact points for BOTH sides, and identity
+        // matching runs globally — OR-visibility would leak the other
+        // tenant's data.
+        fromProfile: {
+          influencer: {
+            creators: {
+              some: { brandId: membership.brandId },
             },
           },
-          {
-            toProfile: {
-              influencer: {
-                creators: {
-                  some: { brandId: membership.brandId },
-                },
-              },
+        },
+        toProfile: {
+          influencer: {
+            creators: {
+              some: { brandId: membership.brandId },
             },
           },
-        ],
+        },
       },
       include: {
         fromProfile: {
