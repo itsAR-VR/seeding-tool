@@ -123,15 +123,19 @@ export function parseHeaderCounts(headerText: string): HeaderCounts {
 /**
  * Heuristic layout parse of a profile header's innerText.
  *
- * Once count lines and action buttons are removed, the first remaining
- * line is the display name; everything after it is bio text. We do NOT
- * guess Instagram's category label from formatting: a category-less
- * profile with a multi-line bio would get its first bio line mislabeled
- * as the authoritative category, which would corrupt both the stored
- * profile and the vision prompt. Category stays null unless a dedicated
- * DOM signal is added later.
+ * Once count lines and action buttons are removed, the remaining lines
+ * are bio text — EXCEPT an optional display-name line, which we only
+ * strip when it matches `knownDisplayName` (from the reliable og:title /
+ * meta contract). We never guess the name from position: profiles may
+ * omit it, and a positional guess would fabricate a name out of the
+ * first bio line. Category is likewise null unless a dedicated DOM
+ * signal is added later.
  */
-export function parseHeaderText(headerText: string, handle: string): ParsedProfileHeader {
+export function parseHeaderText(
+  headerText: string,
+  handle: string,
+  knownDisplayName?: string | null
+): ParsedProfileHeader {
   const counts = parseHeaderCounts(headerText);
 
   const lines = headerText
@@ -144,12 +148,12 @@ export function parseHeaderText(headerText: string, handle: string): ParsedProfi
     .filter((line) => line.toLowerCase() !== `@${handle}`)
     .filter((line) => !/^followed by /i.test(line));
 
-  // The display-name line is optional on Instagram. When only one content
-  // line survives, it is more likely the bio than the name, and the bio
-  // drives classification — prefer bio and leave the name null.
-  const hasName = lines.length > 1;
-  const displayName = hasName ? lines[0] : null;
-  const bioLines = hasName ? lines.slice(1) : lines;
+  let displayName: string | null = null;
+  let bioLines = lines;
+  if (knownDisplayName && lines[0] === knownDisplayName) {
+    displayName = knownDisplayName;
+    bioLines = lines.slice(1);
+  }
 
   const bio =
     bioLines

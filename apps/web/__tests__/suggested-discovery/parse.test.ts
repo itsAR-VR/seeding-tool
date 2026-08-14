@@ -82,15 +82,22 @@ describe("parseHeaderText", () => {
   ].join("\n");
 
   it("extracts name, bio and counts without fabricating a category", () => {
-    const parsed = parseHeaderText(headerText, "trail.kate");
+    // The name is only stripped from the bio when it matches the reliable
+    // meta-derived signal.
+    const parsed = parseHeaderText(headerText, "trail.kate", "Kate Wilder");
     expect(parsed.displayName).toBe("Kate Wilder");
-    // No DOM category signal → null; the label line stays in the bio
     expect(parsed.category).toBeNull();
     expect(parsed.bio).toBe(
       "Outdoor enthusiast\nBackpacking the PCT one section at a time\nGear reviews & trail recipes\ntrailkate.example.com"
     );
     expect(parsed.followers).toBe(84200);
     expect(parsed.posts).toBe(431);
+  });
+
+  it("keeps the name line in the bio when no meta name is available", () => {
+    const parsed = parseHeaderText(headerText, "trail.kate");
+    expect(parsed.displayName).toBeNull();
+    expect(parsed.bio).toContain("Kate Wilder");
   });
 
   it("treats a lone content line as bio, not display name", () => {
@@ -108,18 +115,19 @@ describe("parseHeaderText", () => {
   it("never promotes bio lines into the category field", () => {
     // Category-less profile with a multi-line bio: the first bio line is
     // short and punctuation-free — it must NOT be reported as the
-    // authoritative Instagram category.
+    // authoritative Instagram category. Without a meta name signal the
+    // display-name line conservatively stays in the bio too.
     const text = [
       "creator.one",
       "100 posts",
       "12K followers",
       "300 following",
-      "Creator One",
       "Derm approved skincare",
       "Sensitive-skin routines",
     ].join("\n");
     const parsed = parseHeaderText(text, "creator.one");
     expect(parsed.category).toBeNull();
+    expect(parsed.displayName).toBeNull();
     expect(parsed.bio).toBe("Derm approved skincare\nSensitive-skin routines");
   });
 });

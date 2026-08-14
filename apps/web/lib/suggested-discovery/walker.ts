@@ -265,8 +265,15 @@ async function scrapeProfile(
 
   const snapshot = await snapshotHeader(page);
   const html = await page.content();
-  const fromHeader = parseHeaderText(snapshot.headerText, handle);
+  // Meta (og:title/og:description) is the reliable name signal; the header
+  // text parse uses it to strip the name line from the bio instead of
+  // guessing positionally.
   const fromMeta = parseMetaDescription(html);
+  const fromHeader = parseHeaderText(
+    snapshot.headerText,
+    handle,
+    fromMeta?.displayName ?? null
+  );
 
   const profile: SuggestedProfile = {
     handle,
