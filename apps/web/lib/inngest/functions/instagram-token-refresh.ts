@@ -214,13 +214,24 @@ async function countConsecutiveFailures(
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
+  // "Consecutive" means no success in between: a successful refresh writes
+  // the credential row, so only failures after its last update count.
+  const credential = await prisma.providerCredential.findUnique({
+    where: { id: credentialId },
+    select: { updatedAt: true },
+  });
+  const since =
+    credential && credential.updatedAt > sevenDaysAgo
+      ? credential.updatedAt
+      : sevenDaysAgo;
+
   // Scope to specific credential via title to avoid cross-credential contamination
   const failures = await prisma.interventionCase.count({
     where: {
       brandId,
       type: "auth_failure",
       title: { contains: `credential ${credentialId}` },
-      createdAt: { gte: sevenDaysAgo },
+      createdAt: { gt: since },
     },
   });
 

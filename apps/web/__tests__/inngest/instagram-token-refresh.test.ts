@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
   return {
     capturedHandler,
     providerCredentialFindMany: vi.fn(),
+  providerCredentialFindUnique: vi.fn(),
     providerCredentialUpdate: vi.fn(),
     interventionCaseCreate: vi.fn(),
     interventionCaseCount: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     providerCredential: {
       findMany: mocks.providerCredentialFindMany,
+      findUnique: mocks.providerCredentialFindUnique,
       update: mocks.providerCredentialUpdate,
     },
     interventionCase: {
