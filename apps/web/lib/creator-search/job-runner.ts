@@ -215,7 +215,10 @@ export async function runCreatorSearchJob(
       Math.max(0, storedQuery.limit * 3 - selectedVisible.length)
     );
 
-    for (const candidate of [...invalid, ...unknown]) {
+    // Only definitive results touch canonical creator records: writing a
+    // transient unknown/retry outcome would clear previously valid
+    // follower/view metrics on the creator.
+    for (const candidate of invalid) {
       if (candidate.creatorId) {
         await applyValidationResultToCreator({
           creatorId: candidate.creatorId,

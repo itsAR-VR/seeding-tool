@@ -47,15 +47,19 @@ function determineStatus(
   recentOutreach: number,
   mentionGap: number,
   integrationHealth: IntegrationHealthMap,
-  hoursSinceLastSend: number | null
+  hoursSinceLastSend: number | null,
+  campaignStatus?: string
 ): HealthStatus {
   const integrationDown =
     !integrationHealth.gmail ||
     !integrationHealth.shopify ||
     !integrationHealth.instagram;
 
+  // Paused campaigns are expected to send nothing — the zero-send rule
+  // does not apply to them (delivery/mention checks above still run).
   const zeroSendsRecently =
-    hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS;
+    campaignStatus !== "paused" &&
+    (hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS);
 
   // Critical: reply < 2%, integration down, or 0 sends in 48h
   if (
@@ -84,12 +88,14 @@ function generateAlerts(
   recentOutreach: number,
   mentionGap: number,
   integrationHealth: IntegrationHealthMap,
-  hoursSinceLastSend: number | null
+  hoursSinceLastSend: number | null,
+  campaignStatus?: string
 ): readonly HealthAlert[] {
   const alerts: HealthAlert[] = [];
 
   const zeroSendsRecently =
-    hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS;
+    campaignStatus !== "paused" &&
+    (hoursSinceLastSend === null || hoursSinceLastSend > ZERO_SENDS_HOURS);
 
   if (recentOutreach > 0 && replyRate < REPLY_RATE_CRITICAL) {
     alerts.push({
@@ -301,7 +307,8 @@ export const campaignHealthCheck = inngest.createFunction(
             recentOutreach,
             mentionGap,
             integrationHealth,
-            hoursSinceLastSend
+            hoursSinceLastSend,
+            campaign.status
           );
 
           const alerts = generateAlerts(
@@ -309,7 +316,8 @@ export const campaignHealthCheck = inngest.createFunction(
             recentOutreach,
             mentionGap,
             integrationHealth,
-            hoursSinceLastSend
+            hoursSinceLastSend,
+            campaign.status
           );
 
           const metrics: HealthMetrics = {
