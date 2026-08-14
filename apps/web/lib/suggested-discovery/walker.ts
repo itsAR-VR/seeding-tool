@@ -223,7 +223,15 @@ async function scrapeProfile(
   // A session can expire mid-walk: never let a login redirect be parsed
   // as an empty profile.
   await assertLoggedIn(page);
-  await page.waitForSelector("header", { timeout: 10_000 }).catch(() => undefined);
+  const headerFound = await page
+    .waitForSelector("header", { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!headerFound) {
+    // 404, challenge page, network failure, or DOM change — a scrape
+    // error, not an empty profile to classify as "rejected".
+    throw new Error(`Profile header not found for @${handle}`);
+  }
   await sleep(1_000); // let counts/bio hydrate
 
   const snapshot = await snapshotHeader(page);
