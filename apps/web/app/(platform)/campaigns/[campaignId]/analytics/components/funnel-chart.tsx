@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -14,9 +14,6 @@ import {
 
 type FunnelChartProps = {
   readonly initialLifecycle: Readonly<Record<string, number>>;
-  readonly campaignId: string;
-  readonly from?: string;
-  readonly to?: string;
 };
 
 const STAGE_CONFIG = [
@@ -33,56 +30,15 @@ const STAGE_CONFIG = [
   { key: "stalled", label: "Stalled", color: "#f59e0b" },
 ] as const;
 
-export function FunnelChart({
-  initialLifecycle,
-  campaignId,
-  from,
-  to,
-}: FunnelChartProps) {
-  const [lifecycle, setLifecycle] =
-    useState<Readonly<Record<string, number>>>(initialLifecycle);
-
-  useEffect(() => {
-    if (!from && !to) {
-      setLifecycle(initialLifecycle);
-      return;
-    }
-
-    const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-
-    let cancelled = false;
-
-    async function fetchFiltered() {
-      try {
-        const res = await fetch(
-          `/api/campaigns/${campaignId}/analytics?${params.toString()}`
-        );
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { lifecycle: Record<string, number> };
-        if (!cancelled) {
-          setLifecycle(data.lifecycle);
-        }
-      } catch {
-        // Keep showing existing data on error
-      }
-    }
-
-    fetchFiltered();
-    return () => {
-      cancelled = true;
-    };
-  }, [campaignId, from, to, initialLifecycle]);
-
+export function FunnelChart({ initialLifecycle }: FunnelChartProps) {
   const chartData = useMemo(
     () =>
       STAGE_CONFIG.map((stage) => ({
         name: stage.label,
-        count: lifecycle[stage.key] ?? 0,
+        count: initialLifecycle[stage.key] ?? 0,
         color: stage.color,
       })),
-    [lifecycle]
+    [initialLifecycle]
   );
 
   const hasData = chartData.some((d) => d.count > 0);

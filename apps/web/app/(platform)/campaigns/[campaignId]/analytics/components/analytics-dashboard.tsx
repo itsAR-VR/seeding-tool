@@ -104,9 +104,6 @@ export function AnalyticsDashboard({
         <CardContent>
           <FunnelChart
             initialLifecycle={data.lifecycle}
-            campaignId={data.campaignId}
-            from={from}
-            to={to}
           />
           {/* Conversion rates summary */}
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-sm">
