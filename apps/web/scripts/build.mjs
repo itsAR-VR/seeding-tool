@@ -12,7 +12,7 @@ const buildEnvironment = {
 };
 
 const command = process.platform === "win32" ? "next.cmd" : "next";
-const result = spawnSync(command, ["build"], {
+const result = spawnSync(command, ["build", "--webpack"], {
   env: buildEnvironment,
   stdio: "inherit",
 });
