@@ -40,7 +40,7 @@ type ConnectionsContentProps = {
   showSupportCta?: boolean;
 };
 
-export function ConnectionsContent({
+function ConnectionsContent({
   embedded = false,
   brandIdOverride,
   initialReturnTo,
