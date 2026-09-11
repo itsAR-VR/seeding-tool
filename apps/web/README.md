@@ -16,6 +16,7 @@
 - `npm run dev` — local app server
 - `npm run build` — production build
 - `npm run lint` — ESLint CLI
+- `npm run staging:preflight` — report staging env readiness by variable name/status only; never prints values
 - `npm run db:generate` — Prisma client generation once schema exists
 - `npm run db:push` — Prisma schema push once the database is configured
 - `npm run inngest:dev` — local Inngest dev server for `/api/inngest`
