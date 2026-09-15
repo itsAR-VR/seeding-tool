@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signInAndBootstrapLogin } from "./login-bootstrap";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,14 +22,14 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const result = await signInAndBootstrapLogin({
+      supabase: createClient(),
       email,
       password,
     });
 
-    if (authError) {
-      setError(authError.message);
+    if (!result.ok) {
+      setError(result.error);
       setLoading(false);
       return;
     }
