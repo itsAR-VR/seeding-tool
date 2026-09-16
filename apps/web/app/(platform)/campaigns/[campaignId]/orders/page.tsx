@@ -13,12 +13,15 @@ import {
 
 type OrderRow = {
   id: string;
-  shopifyOrderId: string;
+  shopifyOrderId: string | null;
   shopifyOrderNumber: string | null;
+  shopifyDraftOrderId: string | null;
+  shopifyDraftOrderName: string | null;
   status: string;
   createdAt: string;
   campaignCreator: {
     id: string;
+    creatorId: string;
     lifecycleStatus: string;
     creator: {
       name: string | null;
@@ -43,6 +46,10 @@ type EligibleCreator = {
 };
 
 const statusColors: Record<string, string> = {
+  draft_pending: "bg-gray-100 text-gray-800",
+  draft_created: "bg-amber-100 text-amber-800",
+  draft_completing: "bg-yellow-100 text-yellow-800",
+  error_needs_reconciliation: "bg-red-100 text-red-800",
   created: "bg-blue-100 text-blue-800",
   processing: "bg-yellow-100 text-yellow-800",
   shipped: "bg-indigo-100 text-indigo-800",
@@ -57,7 +64,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [eligible, setEligible] = useState<EligibleCreator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState<string | null>(null);
+  const [completing, setCompleting] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -89,6 +96,7 @@ export default function OrdersPage() {
             ...cc.shopifyOrder,
             campaignCreator: {
               id: cc.id,
+              creatorId: cc.creatorId,
               lifecycleStatus: cc.lifecycleStatus,
               creator: cc.creator,
             },
@@ -112,8 +120,13 @@ export default function OrdersPage() {
     }
   }
 
-  async function placeOrder(creatorId: string) {
-    setPlacing(creatorId);
+  async function completeDraft(creatorId: string) {
+    const approved = window.confirm(
+      "Approve this gift and create the real Shopify order? This does not prove that the warehouse shipped it."
+    );
+    if (!approved) return;
+
+    setCompleting(creatorId);
     try {
       const res = await fetch(
         `/api/campaigns/${campaignId}/creators/${creatorId}/order`,
@@ -122,18 +135,18 @@ export default function OrdersPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Failed to place order");
+        throw new Error(data.error || "Failed to complete draft");
       }
 
       // Reload data
       await loadData();
     } catch (error) {
-      console.error("Failed to place order:", error);
+      console.error("Failed to complete draft:", error);
       alert(
-        error instanceof Error ? error.message : "Failed to place order"
+        error instanceof Error ? error.message : "Failed to complete draft"
       );
     } finally {
-      setPlacing(null);
+      setCompleting(null);
     }
   }
 
@@ -150,16 +163,16 @@ export default function OrdersPage() {
       <div>
         <h1 className="text-2xl font-bold">Orders</h1>
         <p className="text-muted-foreground">
-          Manage Shopify gift orders for this campaign
+          Review Shopify gift drafts, then complete approved drafts into real orders
         </p>
       </div>
 
-      {/* Eligible creators — ready to place orders */}
+      {/* Eligible creators — waiting for draft creation */}
       {eligible.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">
-              Ready to Order ({eligible.length})
+              Address Confirmed, No Draft Yet ({eligible.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -174,18 +187,9 @@ export default function OrdersPage() {
                       {cc.creator.name || cc.creator.email || "Unknown"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Address confirmed
+                      Address confirmed; Shopify draft has not been prepared yet
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => placeOrder(cc.creatorId)}
-                    disabled={placing === cc.creatorId}
-                  >
-                    {placing === cc.creatorId
-                      ? "Placing…"
-                      : "Place Order"}
-                  </Button>
                 </div>
               ))}
             </div>
@@ -211,52 +215,83 @@ export default function OrdersPage() {
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-2 pr-4 font-medium">Creator</th>
-                    <th className="pb-2 pr-4 font-medium">Order ID</th>
+                    <th className="pb-2 pr-4 font-medium">Shopify Ref</th>
                     <th className="pb-2 pr-4 font-medium">Status</th>
                     <th className="pb-2 pr-4 font-medium">Tracking</th>
-                    <th className="pb-2 font-medium">Date</th>
+                    <th className="pb-2 pr-4 font-medium">Date</th>
+                    <th className="pb-2 font-medium">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => (
-                    <tr key={order.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4">
-                        {order.campaignCreator.creator.name ||
-                          order.campaignCreator.creator.email ||
-                          "Unknown"}
-                      </td>
-                      <td className="py-3 pr-4 font-mono text-xs">
-                        {order.shopifyOrderNumber ||
-                          order.shopifyOrderId}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Badge
-                          className={
-                            statusColors[order.status] ||
-                            "bg-gray-100 text-gray-800"
-                          }
-                        >
-                          {order.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 pr-4">
-                        {order.fulfillmentEvents?.[0]?.trackingNumber ? (
-                          <span className="font-mono text-xs">
-                            {order.fulfillmentEvents[0].carrier &&
-                              `${order.fulfillmentEvents[0].carrier}: `}
-                            {order.fulfillmentEvents[0].trackingNumber}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
+                  {orders.map((order) => {
+                    const isDraft =
+                      Boolean(order.shopifyDraftOrderId) &&
+                      !order.shopifyOrderId;
+                    const creatorId = order.campaignCreator.creatorId;
+                    return (
+                      <tr key={order.id} className="border-b last:border-0">
+                        <td className="py-3 pr-4">
+                          {order.campaignCreator.creator.name ||
+                            order.campaignCreator.creator.email ||
+                            "Unknown"}
+                        </td>
+                        <td className="py-3 pr-4 font-mono text-xs">
+                          {isDraft
+                            ? order.shopifyDraftOrderName ||
+                              order.shopifyDraftOrderId
+                            : order.shopifyOrderNumber ||
+                              order.shopifyOrderId}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge
+                            className={
+                              statusColors[order.status] ||
+                              "bg-gray-100 text-gray-800"
+                            }
+                          >
+                            {isDraft
+                              ? "draft awaiting review"
+                              : order.status.replace(/_/g, " ")}
+                          </Badge>
+                        </td>
+                        <td className="py-3 pr-4">
+                          {isDraft ? (
+                            <span className="text-muted-foreground">
+                              Not shipped
+                            </span>
+                          ) : order.fulfillmentEvents?.[0]?.trackingNumber ? (
+                            <span className="font-mono text-xs">
+                              {order.fulfillmentEvents[0].carrier &&
+                                `${order.fulfillmentEvents[0].carrier}: `}
+                              {order.fulfillmentEvents[0].trackingNumber}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              No carrier proof
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-muted-foreground">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="py-3">
+                          {isDraft ? (
+                            <Button
+                              size="sm"
+                              onClick={() => completeDraft(creatorId)}
+                              disabled={completing === creatorId}
+                            >
+                              {completing === creatorId
+                                ? "Completing..."
+                                : "Approve & create order"}
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

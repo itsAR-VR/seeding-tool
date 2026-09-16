@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createDraftOrder } from "@/lib/shopify/orders";
+import { completeDraftOrder } from "@/lib/shopify/orders";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -15,7 +16,7 @@ type RouteContext = {
 /**
  * POST /api/campaigns/[campaignId]/creators/[creatorId]/order
  *
- * Triggers Shopify order creation for a creator with confirmed address.
+ * Completes a reviewed Shopify draft order for a creator.
  * Human-initiated only.
  */
 export async function POST(_request: NextRequest, context: RouteContext) {
@@ -42,12 +43,17 @@ export async function POST(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    // Create the order
-    const result = await createDraftOrder(
+    // Complete the reviewed draft order into a real Shopify order.
+    const result = await completeDraftOrder(
       membership.brandId,
       creatorId,
       campaignId
     );
+
+    await recordOutcomeEvent({
+      campaignCreatorId: result.campaignCreatorId,
+      event: { type: "order_created" },
+    });
 
     return NextResponse.json({
       success: true,

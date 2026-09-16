@@ -174,6 +174,18 @@ describe("POST /api/campaigns/[campaignId]/creators/[creatorId]/approve-address"
     expect(res.status).toBe(200);
   });
 
+  it("returns 200 for creator-submitted address_review lifecycle", async () => {
+    mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
+      id: "cc-1",
+      campaignId: "camp-1",
+      creatorId: "creator-1",
+      lifecycleStatus: "address_review",
+    });
+
+    const res = await POST(makeRequest({ snapshotId: "snap-1" }), makeContext());
+    expect(res.status).toBe(200);
+  });
+
   it("returns 422 when no Shopify connection", async () => {
     mocks.prisma.brandConnection.findUnique.mockResolvedValue(null);
 

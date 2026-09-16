@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { createDraftOrder, OrderAlreadyExistsError } from "@/lib/shopify/orders";
-import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
  * Inngest function: Create Shopify order from an approved shipping address.
@@ -15,8 +14,7 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
  * 2. Load CampaignCreator with creator relation (need creatorId for Shopify)
  * 3. Check feature flag (fail-closed: skip if disabled)
  * 4. Idempotency guard: skip if order already exists
- * 5. Create draft order via Shopify API
- * 6. Record outcome event
+ * 5. Create reviewable draft order via Shopify API
  * 7. On Shopify error: create InterventionCase
  *
  * // INVARIANT: createDraftOrder takes (brandId, creatorId, campaignId) — NOT campaignCreatorId
@@ -86,21 +84,15 @@ export const createOrderFromAddress = inngest.createFunction(
         campaignId
       );
 
-      // 6. Record outcome
-      await recordOutcomeEvent({
-        campaignCreatorId,
-        event: { type: "order_created" },
-      });
-
       log("info", "create_order.success", {
         campaignCreatorId,
         brandId,
-        shopifyOrderId: result.shopifyOrderId,
+        shopifyDraftOrderId: result.shopifyDraftOrderId,
       });
 
       return {
         status: "success",
-        shopifyOrderId: result.shopifyOrderId,
+        shopifyDraftOrderId: result.shopifyDraftOrderId,
         orderId: result.orderId,
       };
     } catch (error) {

@@ -478,6 +478,7 @@ model CampaignProduct {
   product        BrandProduct    @relation(fields: [productId], references: [id], onDelete: Cascade)
   shopifyProduct ShopifyProduct? @relation(fields: [shopifyProductId], references: [id])
   shopifyVariant ShopifyVariant? @relation(fields: [shopifyVariantId], references: [id])
+  giftClaims     CreatorGiftClaim[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -671,7 +672,7 @@ model CampaignCreator {
   /// Human approval gate: pending | approved | declined | deferred
   reviewStatus    String @default("pending") @map("review_status")
 
-  /// Post-approval execution: ready | outreach_sent | replied | address_confirmed |
+  /// Post-approval execution: ready | outreach_sent | replied | address_review | address_confirmed |
   /// order_created | shipped | delivered | posted | completed | opted_out | stalled
   lifecycleStatus String @default("ready") @map("lifecycle_status")
 
@@ -694,6 +695,7 @@ model CampaignCreator {
 
   conversationThread     ConversationThread?
   shippingSnapshots      ShippingAddressSnapshot[]
+  giftClaims             CreatorGiftClaim[]
   shopifyOrder           ShopifyOrder?
   costRecords            CostRecord[]
   mentionAssets          MentionAsset[]
@@ -1045,6 +1047,7 @@ model ShippingAddressSnapshot {
   campaignCreatorId String @map("campaign_creator_id")
 
   campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  giftClaim        CreatorGiftClaim?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1052,12 +1055,41 @@ model ShippingAddressSnapshot {
   @@map("shipping_address_snapshots")
 }
 
+model CreatorGiftClaim {
+  id String @id @default(uuid())
+
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  claimedAt DateTime? @map("claimed_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdBy String?   @map("created_by")
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  campaignCreatorId          String  @map("campaign_creator_id")
+  campaignProductId          String? @map("campaign_product_id")
+  shippingAddressSnapshotId  String? @unique @map("shipping_address_snapshot_id")
+
+  campaignCreator         CampaignCreator          @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  campaignProduct         CampaignProduct?         @relation(fields: [campaignProductId], references: [id], onDelete: SetNull)
+  shippingAddressSnapshot ShippingAddressSnapshot? @relation(fields: [shippingAddressSnapshotId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignCreatorId])
+  @@index([expiresAt])
+  @@map("creator_gift_claims")
+}
+
 model ShopifyOrder {
   id String @id @default(uuid())
 
-  shopifyOrderId     String  @unique @map("shopify_order_id")
+  shopifyOrderId     String? @unique @map("shopify_order_id")
   shopifyOrderNumber String? @map("shopify_order_number")
-  status             String  @default("created") // created | processing | shipped | delivered | cancelled
+  shopifyDraftOrderId   String? @unique @map("shopify_draft_order_id")
+  shopifyDraftOrderName String? @map("shopify_draft_order_name")
+  status             String  @default("draft_pending") // draft_pending | draft_created | draft_completing | created | processing | shipped | delivered | cancelled | error_needs_reconciliation
 
   totalPrice Int? // cents
   currency   String @default("USD")

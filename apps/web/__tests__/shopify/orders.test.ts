@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   campaignProductFindFirst: vi.fn(),
   shopifyOrderCreate: vi.fn(),
   shopifyOrderUpdate: vi.fn(),
+  shopifyOrderUpdateMany: vi.fn(),
+  shopifyOrderFindUnique: vi.fn(),
   shopifyOrderDelete: vi.fn(),
   campaignCreatorUpdate: vi.fn(),
   getShopifyClient: vi.fn(),
@@ -28,6 +30,8 @@ vi.mock("@/lib/prisma", () => ({
     shopifyOrder: {
       create: mocks.shopifyOrderCreate,
       update: mocks.shopifyOrderUpdate,
+      updateMany: mocks.shopifyOrderUpdateMany,
+      findUnique: mocks.shopifyOrderFindUnique,
       delete: mocks.shopifyOrderDelete,
     },
   },
@@ -75,19 +79,6 @@ function setupHappyPath() {
     }),
   });
 
-  // Draft order completion response
-  mocks.clientFetch.mockResolvedValueOnce({
-    ok: true,
-    json: async () => ({
-      draft_order: {
-        id: 999,
-        order_id: 5001,
-        name: "#1001",
-        status: "completed",
-      },
-    }),
-  });
-
   mocks.getShopifyClient.mockResolvedValue({
     storeDomain: "test-store.myshopify.com",
     accessToken: "shpat_xxx",
@@ -97,6 +88,7 @@ function setupHappyPath() {
   // Claim-first flow: create = pending claim row, update = real Shopify ids
   mocks.shopifyOrderCreate.mockResolvedValue({ id: "order-db-1" });
   mocks.shopifyOrderUpdate.mockResolvedValue({ id: "order-db-1" });
+  mocks.shopifyOrderUpdateMany.mockResolvedValue({ count: 1 });
   mocks.campaignCreatorUpdate.mockResolvedValue({});
 }
 
@@ -107,13 +99,14 @@ describe("createDraftOrder", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a draft order with 100% discount and completes it", async () => {
+  it("creates a draft order with 100% discount without completing it", async () => {
     setupHappyPath();
 
     const { createDraftOrder } = await import("@/lib/shopify/orders");
     const result = await createDraftOrder("brand-1", "creator-1", "camp-1");
 
-    expect(result.shopifyOrderId).toBe("5001");
+    expect(result.shopifyDraftOrderId).toBe("999");
+    expect(result.shopifyDraftOrderName).toBe("#D001");
     expect(result.orderId).toBe("order-db-1");
 
     // Verify draft order POST payload includes 100% discount
@@ -126,19 +119,21 @@ describe("createDraftOrder", () => {
     expect(body.draft_order.applied_discount.value_type).toBe("percentage");
   });
 
-  it("completes the draft order via PUT", async () => {
+  it("does not call Shopify draft completion during draft creation", async () => {
     setupHappyPath();
 
     const { createDraftOrder } = await import("@/lib/shopify/orders");
     await createDraftOrder("brand-1", "creator-1", "camp-1");
 
-    // Second fetch call is the completion
-    const completeCallArgs = mocks.clientFetch.mock.calls[1];
-    expect(completeCallArgs[0]).toBe("/draft_orders/999/complete.json");
-    expect(completeCallArgs[1].method).toBe("PUT");
+    expect(mocks.clientFetch).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.clientFetch.mock.calls.some(([path]) =>
+        String(path).includes("/complete.json")
+      )
+    ).toBe(false);
   });
 
-  it("persists ShopifyOrder record with correct data", async () => {
+  it("persists ShopifyOrder draft record with correct data", async () => {
     setupHappyPath();
 
     const { createDraftOrder } = await import("@/lib/shopify/orders");
@@ -147,38 +142,37 @@ describe("createDraftOrder", () => {
     // Claim row is created pending with the atomic idempotency key
     expect(mocks.shopifyOrderCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        status: "pending",
+        status: "draft_pending",
         campaignCreatorId: "cc-1",
       }),
       select: { id: true },
     });
     expect(
-      mocks.shopifyOrderCreate.mock.calls[0][0].data.shopifyOrderId
+      mocks.shopifyOrderCreate.mock.calls[0][0].data.shopifyDraftOrderId
     ).toMatch(/^pending:/);
 
-    // Claim row is then updated with the real Shopify ids
+    // Claim row is then updated with draft ids only.
     expect(mocks.shopifyOrderUpdate).toHaveBeenCalledWith({
       where: { id: "order-db-1" },
       data: {
-        shopifyOrderId: "5001",
-        shopifyOrderNumber: "#1001",
-        status: "created",
+        shopifyOrderId: null,
+        shopifyOrderNumber: null,
+        shopifyDraftOrderId: "999",
+        shopifyDraftOrderName: "#D001",
+        status: "draft_created",
         totalPrice: 0,
         currency: "USD",
       },
     });
   });
 
-  it("updates lifecycle status to order_created", async () => {
+  it("does not update lifecycle status to order_created while only a draft exists", async () => {
     setupHappyPath();
 
     const { createDraftOrder } = await import("@/lib/shopify/orders");
     await createDraftOrder("brand-1", "creator-1", "camp-1");
 
-    expect(mocks.campaignCreatorUpdate).toHaveBeenCalledWith({
-      where: { id: "cc-1" },
-      data: { lifecycleStatus: "order_created" },
-    });
+    expect(mocks.campaignCreatorUpdate).not.toHaveBeenCalled();
   });
 
   it("throws when CampaignCreator not found", async () => {
@@ -303,7 +297,7 @@ describe("createDraftOrder", () => {
     ).rejects.toThrow("draft order creation failed");
   });
 
-  it("throws when Shopify draft order completion fails", async () => {
+  it("marks the draft for reconciliation when local persistence fails after Shopify creates it", async () => {
     mocks.campaignCreatorFindUnique.mockResolvedValue({
       id: "cc-1",
       shopifyOrder: null,
@@ -322,28 +316,30 @@ describe("createDraftOrder", () => {
       product: { id: "prod-1", shopifyVariantId: "12345" },
     });
     mocks.shopifyOrderCreate.mockResolvedValue({ id: "claim-1" });
-
-    const clientFetch = vi.fn();
-    // Draft creation succeeds
-    clientFetch.mockResolvedValueOnce({
+    mocks.shopifyOrderUpdate.mockRejectedValueOnce(new Error("DB write failed"));
+    mocks.getShopifyClient.mockResolvedValue({
+      fetch: vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         draft_order: { id: 999, order_id: null, name: "#D001" },
       }),
+      }),
     });
-    // Completion fails
-    clientFetch.mockResolvedValueOnce({
-      ok: false,
-      text: async () => "Internal server error",
-    });
-
-    mocks.getShopifyClient.mockResolvedValue({ fetch: clientFetch });
 
     const { createDraftOrder } = await import("@/lib/shopify/orders");
 
     await expect(
       createDraftOrder("brand-1", "creator-1", "camp-1"),
-    ).rejects.toThrow("draft order completion failed");
+    ).rejects.toThrow("DB write failed");
+
+    expect(mocks.shopifyOrderUpdate).toHaveBeenLastCalledWith({
+      where: { id: "claim-1" },
+      data: {
+        shopifyDraftOrderId: "999",
+        shopifyDraftOrderName: "#D001",
+        status: "error_needs_reconciliation",
+      },
+    });
   });
 
   it("maps shipping address fields correctly to Shopify payload", async () => {
@@ -364,5 +360,157 @@ describe("createDraftOrder", () => {
     expect(addr.zip).toBe("10001");
     expect(addr.country).toBe("US");
     expect(addr.phone).toBe("555-1234");
+  });
+});
+
+describe("completeDraftOrder", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("completes an existing Shopify draft exactly once", async () => {
+    mocks.campaignCreatorFindUnique.mockResolvedValue({
+      id: "cc-1",
+      shopifyOrder: {
+        id: "order-db-1",
+        shopifyOrderId: null,
+        shopifyDraftOrderId: "999",
+        totalPrice: 0,
+        currency: "USD",
+        status: "draft_created",
+      },
+    });
+    mocks.clientFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        draft_order: {
+          id: 999,
+          order_id: 5001,
+          name: "#1001",
+          status: "completed",
+        },
+      }),
+    });
+    mocks.getShopifyClient.mockResolvedValue({ fetch: mocks.clientFetch });
+    mocks.shopifyOrderUpdate.mockResolvedValue({ id: "order-db-1" });
+    mocks.campaignCreatorUpdate.mockResolvedValue({});
+
+    const { completeDraftOrder } = await import("@/lib/shopify/orders");
+    const result = await completeDraftOrder("brand-1", "creator-1", "camp-1");
+
+    expect(result).toEqual({
+      shopifyOrderId: "5001",
+      orderId: "order-db-1",
+      campaignCreatorId: "cc-1",
+    });
+    expect(mocks.clientFetch).toHaveBeenCalledTimes(1);
+    expect(mocks.shopifyOrderUpdateMany).toHaveBeenCalledWith({
+      where: {
+        id: "order-db-1",
+        shopifyOrderId: null,
+        status: "draft_created",
+      },
+      data: { status: "draft_completing" },
+    });
+    expect(mocks.clientFetch).toHaveBeenCalledWith(
+      "/draft_orders/999/complete.json",
+      { method: "PUT" }
+    );
+    expect(mocks.shopifyOrderUpdate).toHaveBeenCalledWith({
+      where: { id: "order-db-1" },
+      data: {
+        shopifyOrderId: "5001",
+        shopifyOrderNumber: "#1001",
+        status: "created",
+        totalPrice: 0,
+        currency: "USD",
+      },
+    });
+    expect(mocks.campaignCreatorUpdate).toHaveBeenCalledWith({
+      where: { id: "cc-1" },
+      data: { lifecycleStatus: "order_created" },
+    });
+  });
+
+  it("returns an existing real order without completing a draft again", async () => {
+    mocks.campaignCreatorFindUnique.mockResolvedValue({
+      id: "cc-1",
+      shopifyOrder: {
+        id: "order-db-1",
+        shopifyOrderId: "5001",
+        shopifyDraftOrderId: "999",
+        status: "created",
+      },
+    });
+
+    const { completeDraftOrder } = await import("@/lib/shopify/orders");
+    const result = await completeDraftOrder("brand-1", "creator-1", "camp-1");
+
+    expect(result).toEqual({
+      shopifyOrderId: "5001",
+      orderId: "order-db-1",
+      campaignCreatorId: "cc-1",
+    });
+    expect(mocks.clientFetch).not.toHaveBeenCalled();
+    expect(mocks.shopifyOrderUpdate).not.toHaveBeenCalled();
+  });
+
+  it("throws when Shopify draft order completion fails", async () => {
+    mocks.campaignCreatorFindUnique.mockResolvedValue({
+      id: "cc-1",
+      shopifyOrder: {
+        id: "order-db-1",
+        shopifyOrderId: null,
+        shopifyDraftOrderId: "999",
+        totalPrice: 0,
+        currency: "USD",
+        status: "draft_created",
+      },
+    });
+    mocks.getShopifyClient.mockResolvedValue({
+      fetch: vi.fn().mockResolvedValue({
+        ok: false,
+        text: async () => "Internal server error",
+      }),
+    });
+
+    const { completeDraftOrder } = await import("@/lib/shopify/orders");
+
+    await expect(
+      completeDraftOrder("brand-1", "creator-1", "camp-1")
+    ).rejects.toThrow("draft order completion failed");
+
+    expect(mocks.shopifyOrderUpdateMany).toHaveBeenLastCalledWith({
+      where: { id: "order-db-1", status: "draft_completing" },
+      data: { status: "error_needs_reconciliation" },
+    });
+  });
+
+  it("does not call Shopify when another completion already holds the claim", async () => {
+    mocks.campaignCreatorFindUnique.mockResolvedValue({
+      id: "cc-1",
+      shopifyOrder: {
+        id: "order-db-1",
+        shopifyOrderId: null,
+        shopifyDraftOrderId: "999",
+        totalPrice: 0,
+        currency: "USD",
+        status: "draft_created",
+      },
+    });
+    mocks.shopifyOrderUpdateMany.mockResolvedValueOnce({ count: 0 });
+    mocks.shopifyOrderFindUnique.mockResolvedValue({
+      id: "order-db-1",
+      shopifyOrderId: null,
+      status: "draft_completing",
+    });
+
+    const { completeDraftOrder } = await import("@/lib/shopify/orders");
+
+    await expect(
+      completeDraftOrder("brand-1", "creator-1", "camp-1")
+    ).rejects.toThrow("already in progress or needs reconciliation");
+
+    expect(mocks.clientFetch).not.toHaveBeenCalled();
   });
 });

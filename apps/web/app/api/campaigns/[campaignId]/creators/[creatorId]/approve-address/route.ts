@@ -18,7 +18,11 @@ const bodySchema = z.object({
   snapshotId: z.string().min(1, "snapshotId is required"),
 });
 
-const ALLOWED_LIFECYCLE_STATUSES = ["replied", "address_confirmed"] as const;
+const ALLOWED_LIFECYCLE_STATUSES = [
+  "replied",
+  "address_review",
+  "address_confirmed",
+] as const;
 
 /**
  * POST /api/campaigns/[campaignId]/creators/[creatorId]/approve-address
@@ -28,7 +32,7 @@ const ALLOWED_LIFECYCLE_STATUSES = ["replied", "address_confirmed"] as const;
  * Validations:
  * 1. RBAC: user must have write access to the brand
  * 2. Feature flag: shopifyOrderEnabled must be true
- * 3. Lifecycle: creator must be in "replied" or "address_confirmed" state
+ * 3. Lifecycle: creator must be in "replied", "address_review", or "address_confirmed" state
  * 4. Snapshot: must exist and belong to this campaign creator
  * 5. Shopify connection: brand must have a connected Shopify store
  * 6. Campaign product: at least one product with a shopifyVariantId

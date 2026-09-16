@@ -13,11 +13,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { TriggerSearchButton } from "./_components/TriggerSearchButton";
+import { GiftClaimLinkButton } from "./_components/GiftClaimLinkButton";
 
 const lifecycleColors: Record<string, string> = {
   ready: "bg-gray-100 text-gray-800",
   outreach_sent: "bg-blue-100 text-blue-800",
   replied: "bg-purple-100 text-purple-800",
+  address_review: "bg-amber-100 text-amber-800",
   address_confirmed: "bg-green-100 text-green-800",
   order_created: "bg-teal-100 text-teal-800",
   shipped: "bg-indigo-100 text-indigo-800",
@@ -102,6 +104,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       (c) => c.lifecycleStatus !== "ready" && c.reviewStatus === "approved"
     ).length,
     replied: creators.filter((c) => c.lifecycleStatus === "replied").length,
+    addressReview: creators.filter((c) => c.lifecycleStatus === "address_review").length,
     addressConfirmed: creators.filter(
       (c) => c.lifecycleStatus === "address_confirmed"
     ).length,
@@ -266,7 +269,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       </Card>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
         {[
           { label: "Total", value: stats.total },
           { label: "Pending", value: stats.pendingReview },
@@ -274,6 +277,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           { label: "Declined", value: stats.declined },
           { label: "Outreach Sent", value: stats.outreachSent },
           { label: "Replied", value: stats.replied },
+          { label: "Address Review", value: stats.addressReview },
           { label: "Address Confirmed", value: stats.addressConfirmed },
         ].map((stat) => (
           <Card key={stat.label}>
@@ -351,6 +355,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                     <th className="pb-2 font-medium">Followers</th>
                     <th className="pb-2 font-medium">Review</th>
                     <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 font-medium">Claim Link</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -394,6 +399,13 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                           >
                             {cc.lifecycleStatus.replace(/_/g, " ")}
                           </Badge>
+                        </td>
+                        <td className="py-2">
+                          <GiftClaimLinkButton
+                            campaignId={campaignId}
+                            creatorId={cc.creatorId}
+                            disabled={cc.reviewStatus !== "approved" || !hasCampaignProducts}
+                          />
                         </td>
                       </tr>
                     );
