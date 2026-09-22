@@ -72,8 +72,9 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     );
   }
 
-  const unavailableReason =
-    claim.revokedAt || claim.claimedAt
+  const unavailableReason = claim.revokedAt
+    ? "revoked"
+    : claim.claimedAt
       ? "submitted"
       : claim.expiresAt <= now
         ? "expired"
