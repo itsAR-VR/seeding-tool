@@ -11,11 +11,11 @@ const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-displ
 
 export const metadata: Metadata = {
   title: {
-    default: "Seeding OS",
+    default: "Kalm Seeding",
     template: "%s",
   },
   description:
-    "Operational software for influencer sourcing, execution, and post verification.",
+    "Kalm creator seeding.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

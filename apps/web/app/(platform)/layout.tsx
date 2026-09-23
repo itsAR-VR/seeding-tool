@@ -34,8 +34,10 @@ export default async function PlatformLayout({
       {/* Sidebar */}
       <aside className="hidden w-64 shrink-0 border-r bg-muted/40 p-6 md:block">
         <div className="mb-8">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-            Seed Scale
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kalm-logo.png" alt="Kalm" className="h-7 w-auto" />
+          <p className="mt-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            Creator seeding
           </p>
         </div>
 

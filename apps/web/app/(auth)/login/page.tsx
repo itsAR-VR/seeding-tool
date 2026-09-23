@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,9 +41,11 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Log in to Seed Scale</CardTitle>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kalm-logo.png" alt="Kalm" className="mx-auto h-8 w-auto" />
+          <CardTitle className="text-2xl font-bold">Creator seeding</CardTitle>
           <CardDescription>
-            Enter your email and password to access your workspace
+            Sign in with your Kalm account
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -82,13 +83,6 @@ export default function LoginPage() {
               {loading ? "Signing in…" : "Sign in"}
             </Button>
           </form>
-
-          <p className="mt-4 text-center text-sm text-muted-foreground">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="font-medium underline underline-offset-4 hover:text-primary">
-              Sign up
-            </Link>
-          </p>
         </CardContent>
       </Card>
     </div>

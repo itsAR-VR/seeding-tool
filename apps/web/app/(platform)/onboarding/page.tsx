@@ -19,6 +19,7 @@ function OnboardingContent() {
   const stepIndex = getStepIndex(step);
   const isBrandStep = step === "brand";
   const [reentryChecked, setReentryChecked] = useState(false);
+  const [noAccess, setNoAccess] = useState(false);
 
   // Re-entry guard: if onboarding is already complete, redirect to dashboard
   // Exception: allow re-entry to the "connect" step so users can add connections
@@ -34,6 +35,11 @@ function OnboardingContent() {
           if (!cancelled && data.isComplete && step !== "connect") {
             router.replace("/dashboard");
             return;
+          }
+          // Kalm's instance is invite-only: someone without a brand membership
+          // is told to ask for access instead of being walked into creating a brand.
+          if (!cancelled && data.hasBrand === false) {
+            setNoAccess(true);
           }
         }
       } catch {
@@ -55,6 +61,15 @@ function OnboardingContent() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (noAccess) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 text-center">
+        <h1 className="text-xl font-semibold">You don&apos;t have access to Kalm yet</h1>
+        <p className="text-muted-foreground">Ask Kam to add you to the creator seeding workspace.</p>
       </div>
     );
   }
