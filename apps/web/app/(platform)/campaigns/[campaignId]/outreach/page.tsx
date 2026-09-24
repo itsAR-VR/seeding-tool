@@ -464,7 +464,13 @@ export default function OutreachPage() {
                   disabled={savingSender}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue>
+                      {(value: string | null) =>
+                        value && value !== DEFAULT_SENDER
+                          ? campaignSetup?.senderOptions?.find((o) => o.id === value)?.address ?? value
+                          : `Default (${campaignSetup?.senderOptions?.find((o) => o.isPrimary)?.address ?? "primary Gmail"})`
+                      }
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={DEFAULT_SENDER}>
