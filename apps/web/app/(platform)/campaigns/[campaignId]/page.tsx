@@ -62,6 +62,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         campaignCreators: {
           include: {
             creator: { include: { profiles: true } },
+            conversationThread: { select: { id: true } },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -166,18 +167,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {outreachBlockers.length === 0 && (
+            <Link href={`/campaigns/${campaignId}/outreach`}>
+              <Button>Email creators →</Button>
+            </Link>
+          )}
           <Link href={`/campaigns/${campaignId}/analytics`}>
             <Button variant="outline">📊 Analytics</Button>
           </Link>
           <TriggerSearchButton campaignId={campaignId} />
-          {outreachBlockers.length === 0 ? (
-            <Link href={`/campaigns/${campaignId}/outreach`}>
-              <Button variant="outline">✨ Draft Outreach</Button>
-            </Link>
-          ) : (
+          {outreachBlockers.length > 0 && (
             <Button variant="outline" disabled>
-              ✨ Draft Outreach blocked
+              Email creators (finish setup first)
             </Button>
           )}
           <Link href={`/campaigns/${campaignId}/review`}>
@@ -191,6 +193,18 @@ export default async function CampaignDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {outreachBlockers.length === 0 ? (
+        <Link
+          href={`/campaigns/${campaignId}/outreach`}
+          className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 transition-colors hover:bg-green-100"
+        >
+          <span className="font-medium">Ready to email</span>
+          <span>✓ {campaign.campaignProducts.length} product{campaign.campaignProducts.length === 1 ? "" : "s"}</span>
+          <span>✓ {stats.approved} approved</span>
+          <span>✓ {hasEmailSender ? "Gmail" : "Instagram DMs"} connected</span>
+          <span className="ml-auto font-medium">Email creators →</span>
+        </Link>
+      ) : (
       <Card
         className={
           outreachBlockers.length > 0
@@ -209,6 +223,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             {[
               {
                 label: "Products attached",
+                href: `/campaigns/${campaignId}/products`,
                 ready: hasCampaignProducts,
                 helper: hasCampaignProducts
                   ? `${campaign.campaignProducts.length} product${campaign.campaignProducts.length === 1 ? "" : "s"} linked`
@@ -216,6 +231,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
               },
               {
                 label: "Approved creators",
+                href: stats.approved > 0 ? `/campaigns/${campaignId}/outreach` : `/campaigns/${campaignId}/review`,
                 ready: stats.approved > 0,
                 helper:
                   stats.approved > 0
@@ -224,6 +240,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
               },
               {
                 label: "Send channels",
+                href: "/settings/connections",
                 ready: hasAnyOutreachChannel,
                 helper: hasAnyOutreachChannel
                   ? [
@@ -235,15 +252,19 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                   : "Connect Gmail or Unipile",
               },
             ].map((item) => (
-              <div key={item.label} className="rounded-lg border bg-white p-4">
+              <Link
+                key={item.label}
+                href={item.href}
+                className="block rounded-lg border bg-white p-4 transition-colors hover:border-foreground/30 hover:bg-accent/40"
+              >
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium">{item.label}</p>
                   <Badge variant={item.ready ? "default" : "secondary"}>
                     {item.ready ? "Ready" : "Needs setup"}
                   </Badge>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">{item.helper}</p>
-              </div>
+                <p className="mt-2 text-sm text-muted-foreground">{item.helper} →</p>
+              </Link>
             ))}
           </div>
 
@@ -267,6 +288,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
@@ -355,6 +377,7 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                     <th className="pb-2 font-medium">Followers</th>
                     <th className="pb-2 font-medium">Review</th>
                     <th className="pb-2 font-medium">Status</th>
+                    <th className="pb-2 font-medium">Next step</th>
                     <th className="pb-2 font-medium">Claim Link</th>
                   </tr>
                 </thead>
@@ -399,6 +422,32 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                           >
                             {cc.lifecycleStatus.replace(/_/g, " ")}
                           </Badge>
+                        </td>
+                        <td className="py-2">
+                          {cc.conversationThread ? (
+                            <Link
+                              href={`/inbox/${cc.conversationThread.id}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Open conversation →
+                            </Link>
+                          ) : cc.reviewStatus === "approved" && cc.lifecycleStatus === "ready" ? (
+                            <Link
+                              href={`/campaigns/${campaignId}/outreach?select=${cc.id}`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Email →
+                            </Link>
+                          ) : cc.reviewStatus === "pending" ? (
+                            <Link
+                              href={`/campaigns/${campaignId}/review`}
+                              className="text-blue-600 hover:underline"
+                            >
+                              Review →
+                            </Link>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                         <td className="py-2">
                           <GiftClaimLinkButton

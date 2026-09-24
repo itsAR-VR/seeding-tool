@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -99,6 +99,8 @@ type ConnectionsOverview = {
 
 export default function OutreachPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
+  const searchParams = useSearchParams();
+  const preselectId = searchParams.get("select");
 
   const [creators, setCreators] = useState<CampaignCreator[]>([]);
   const [customPersonas, setCustomPersonas] = useState<CustomPersona[]>([]);
@@ -141,6 +143,15 @@ export default function OutreachPage() {
   useEffect(() => {
     void loadCreators();
   }, [loadCreators]);
+
+  // Arriving from a creator's "Email →" link pre-selects that creator.
+  useEffect(() => {
+    if (!preselectId) return;
+    const target = creators.find((c) => c.id === preselectId);
+    if (target && target.reviewStatus === "approved" && target.lifecycleStatus === "ready") {
+      setSelectedIds((prev) => (prev.has(preselectId) ? prev : new Set([...prev, preselectId])));
+    }
+  }, [preselectId, creators]);
 
   // Load custom personas
   useEffect(() => {
