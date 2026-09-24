@@ -300,6 +300,9 @@ export default function OutreachPage() {
           }
         }
         setEditedDrafts(edits);
+        window.setTimeout(() => {
+          document.getElementById("review-emails")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
       } else {
         const err = await res.json().catch(() => null);
         console.error("Draft generation failed:", err);
@@ -479,15 +482,142 @@ export default function OutreachPage() {
       </Card>
       )}
 
-      {/* Configuration */}
+      {/* Creator Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Settings</CardTitle>
-          <CardDescription>
-            Where emails come from and how they&apos;re written.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Choose creators</CardTitle>
+              <CardDescription>
+                {loadingCreators
+                  ? "Loading..."
+                  : `Click the creators you want to email. ${sendableCreators.length} of ${approvedCreators.length} haven't been contacted yet.`}
+              </CardDescription>
+            </div>
+            {sendableCreators.length > 0 && (
+              <Button variant="outline" size="sm" onClick={selectAll}>
+                {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
+                  sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
+                  ? "Deselect All"
+                  : `Select All (up to ${MAX_BATCH_SIZE})`}
+              </Button>
+            )}
+          </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
+          {loadingCreators ? (
+            <p className="text-sm text-muted-foreground">
+              Loading creators...
+            </p>
+          ) : approvedCreators.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No approved creators in this campaign yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {approvedCreators.map((cc) => {
+                const sendable = cc.lifecycleStatus === "ready";
+                return (
+                <div
+                  key={cc.id}
+                  role="checkbox"
+                  aria-checked={selectedIds.has(cc.id)}
+                  aria-disabled={!sendable}
+                  tabIndex={sendable ? 0 : -1}
+                  onClick={() => sendable && toggleCreator(cc.id)}
+                  onKeyDown={(e) => {
+                    if (sendable && (e.key === " " || e.key === "Enter")) {
+                      e.preventDefault();
+                      toggleCreator(cc.id);
+                    }
+                  }}
+                  className={`flex select-none items-center gap-3 rounded-lg border p-3 transition-colors ${
+                    !sendable
+                      ? "cursor-not-allowed bg-muted/40 opacity-70"
+                      : selectedIds.has(cc.id)
+                        ? "cursor-pointer border-foreground/40 bg-accent"
+                        : "cursor-pointer hover:bg-accent/50"
+                  }`}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(cc.id)}
+                    disabled={!sendable}
+                    className="pointer-events-none"
+                    tabIndex={-1}
+                    aria-hidden
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {cc.creator.name ??
+                          cc.creator.instagramHandle ??
+                          "Unknown"}
+                      </span>
+                      {cc.creator.instagramHandle && (
+                        <span className="text-sm text-muted-foreground">
+                          @{cc.creator.instagramHandle}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {[
+                        cc.creator.email,
+                        cc.creator.followerCount
+                          ? `${cc.creator.followerCount.toLocaleString()} followers`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </div>
+                  <Badge
+                    variant={sendable ? "outline" : "secondary"}
+                    className="text-xs"
+                  >
+                    {statusLabel(cc.lifecycleStatus)}
+                  </Badge>
+                </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="sticky bottom-4 mt-4 flex items-center justify-end gap-3 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur">
+            <span className="mr-auto text-sm text-muted-foreground">
+              {selectedIds.size === 0
+                ? "Click a creator to select them"
+                : `${selectedIds.size} selected`}
+            </span>
+            {draftBlocker ? (
+              <span className="text-sm font-medium text-amber-700">
+                {draftBlocker}
+              </span>
+            ) : null}
+            {selectedIds.size > MAX_BATCH_SIZE && (
+              <span className="text-sm text-red-500 font-medium">
+                Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
+              </span>
+            )}
+            <Button
+              size="lg"
+              onClick={generateDrafts}
+              disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
+            >
+              {generating
+                ? "Loading drafts..."
+                : `Load drafts (${selectedIds.size})`}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Configuration */}
+      <details className="group rounded-xl border bg-card">
+        <summary className="cursor-pointer list-none px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <span className="group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span> More options: sender, channel, AI writing
+        </summary>
+        <div className="space-y-4 px-6 pb-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label>AI writing style</Label>
@@ -613,135 +743,12 @@ export default function OutreachPage() {
               rows={3}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Creator Selection */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Choose creators</CardTitle>
-              <CardDescription>
-                {loadingCreators
-                  ? "Loading..."
-                  : `${sendableCreators.length} of ${approvedCreators.length} approved creators not contacted yet`}
-              </CardDescription>
-            </div>
-            {sendableCreators.length > 0 && (
-              <Button variant="outline" size="sm" onClick={selectAll}>
-                {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
-                  sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
-                  ? "Deselect All"
-                  : `Select All (up to ${MAX_BATCH_SIZE})`}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loadingCreators ? (
-            <p className="text-sm text-muted-foreground">
-              Loading creators...
-            </p>
-          ) : approvedCreators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No approved creators in this campaign yet.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {approvedCreators.map((cc) => {
-                const sendable = cc.lifecycleStatus === "ready";
-                return (
-                <div
-                  key={cc.id}
-                  role="checkbox"
-                  aria-checked={selectedIds.has(cc.id)}
-                  aria-disabled={!sendable}
-                  tabIndex={sendable ? 0 : -1}
-                  onClick={() => sendable && toggleCreator(cc.id)}
-                  onKeyDown={(e) => {
-                    if (sendable && (e.key === " " || e.key === "Enter")) {
-                      e.preventDefault();
-                      toggleCreator(cc.id);
-                    }
-                  }}
-                  className={`flex select-none items-center gap-3 rounded-lg border p-3 transition-colors ${
-                    !sendable
-                      ? "cursor-not-allowed bg-muted/40 opacity-70"
-                      : selectedIds.has(cc.id)
-                        ? "cursor-pointer border-foreground/40 bg-accent"
-                        : "cursor-pointer hover:bg-accent/50"
-                  }`}
-                >
-                  <Checkbox
-                    checked={selectedIds.has(cc.id)}
-                    disabled={!sendable}
-                    className="pointer-events-none"
-                    tabIndex={-1}
-                    aria-hidden
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {cc.creator.name ??
-                          cc.creator.instagramHandle ??
-                          "Unknown"}
-                      </span>
-                      {cc.creator.instagramHandle && (
-                        <span className="text-sm text-muted-foreground">
-                          @{cc.creator.instagramHandle}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {[
-                        cc.creator.email,
-                        cc.creator.followerCount
-                          ? `${cc.creator.followerCount.toLocaleString()} followers`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </div>
-                  <Badge
-                    variant={sendable ? "outline" : "secondary"}
-                    className="text-xs"
-                  >
-                    {statusLabel(cc.lifecycleStatus)}
-                  </Badge>
-                </div>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center justify-end gap-3">
-            {draftBlocker ? (
-              <span className="text-sm font-medium text-amber-700">
-                {draftBlocker}
-              </span>
-            ) : null}
-            {selectedIds.size > MAX_BATCH_SIZE && (
-              <span className="text-sm text-red-500 font-medium">
-                Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
-              </span>
-            )}
-            <Button
-              onClick={generateDrafts}
-              disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
-            >
-              {generating
-                ? "Loading drafts..."
-                : `Load drafts (${selectedIds.size})`}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       {/* Generated Drafts */}
       {drafts.length > 0 && (
-        <Card>
+        <Card id="review-emails">
           <CardHeader>
             <CardTitle>Review emails</CardTitle>
             <CardDescription>
