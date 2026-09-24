@@ -654,14 +654,31 @@ export default function OutreachPage() {
                 return (
                 <div
                   key={cc.id}
-                  className={`flex items-center gap-3 rounded-lg border p-3 transition-colors ${
-                    sendable ? "hover:bg-accent/50" : "bg-muted/40 opacity-70"
+                  role="checkbox"
+                  aria-checked={selectedIds.has(cc.id)}
+                  aria-disabled={!sendable}
+                  tabIndex={sendable ? 0 : -1}
+                  onClick={() => sendable && toggleCreator(cc.id)}
+                  onKeyDown={(e) => {
+                    if (sendable && (e.key === " " || e.key === "Enter")) {
+                      e.preventDefault();
+                      toggleCreator(cc.id);
+                    }
+                  }}
+                  className={`flex select-none items-center gap-3 rounded-lg border p-3 transition-colors ${
+                    !sendable
+                      ? "cursor-not-allowed bg-muted/40 opacity-70"
+                      : selectedIds.has(cc.id)
+                        ? "cursor-pointer border-foreground/40 bg-accent"
+                        : "cursor-pointer hover:bg-accent/50"
                   }`}
                 >
                   <Checkbox
                     checked={selectedIds.has(cc.id)}
                     disabled={!sendable}
-                    onCheckedChange={() => toggleCreator(cc.id)}
+                    className="pointer-events-none"
+                    tabIndex={-1}
+                    aria-hidden
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
