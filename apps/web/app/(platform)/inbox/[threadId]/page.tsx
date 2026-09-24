@@ -79,6 +79,13 @@ type BrandData = {
   }>;
 };
 
+const ADDRESS_LINK = "{address link}";
+const DEFAULT_FOLLOW_UP = `Yay, so happy you're in!!
+
+Here's the link to add your address: ${ADDRESS_LINK}
+
+I'll let you know as soon as it ships. No pressure to post, I just want you to try it.`;
+
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
   const router = useRouter();
@@ -91,6 +98,9 @@ export default function ThreadDetailPage() {
   const [dmText, setDmText] = useState("");
   const [dmSending, setDmSending] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState(DEFAULT_FOLLOW_UP);
+  const [replySending, setReplySending] = useState(false);
+  const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -114,6 +124,42 @@ export default function ThreadDetailPage() {
     }
     load();
   }, [params.threadId]);
+
+  async function reloadThread() {
+    const res = await fetch(`/api/inbox/${params.threadId}`);
+    if (res.ok) setThread((await res.json()) as Thread);
+  }
+
+  async function handleSendReply() {
+    if (!replyText.trim()) return;
+    if (!confirm("Send this reply?")) return;
+    setReplySending(true);
+    setReplyNotice(null);
+    try {
+      const res = await fetch(`/api/inbox/${params.threadId}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: replyText }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setReplyNotice({ tone: "error", text: data.error ?? "Reply failed to send" });
+        return;
+      }
+      setReplyNotice({
+        tone: "success",
+        text: replyText.includes(ADDRESS_LINK)
+          ? "Reply sent with their private address link."
+          : "Reply sent.",
+      });
+      setReplyText("");
+      await reloadThread();
+    } catch {
+      setReplyNotice({ tone: "error", text: "Reply failed to send" });
+    } finally {
+      setReplySending(false);
+    }
+  }
 
   async function handleSendDraft(draftId: string) {
     const primaryAlias =
@@ -403,8 +449,53 @@ export default function ThreadDetailPage() {
         </Card>
       ))}
 
-      {/* DM Compose — shown for instagram_dm threads or creators with Instagram handle */}
-      {(thread.channel === "instagram_dm" || creator.instagramHandle) && (
+      {/* Email reply */}
+      {thread.channel === "email" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Reply</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {replyNotice && (
+              <div
+                className={`rounded border p-2 text-sm ${
+                  replyNotice.tone === "success"
+                    ? "border-green-200 bg-green-50 text-green-900"
+                    : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {replyNotice.text}
+              </div>
+            )}
+            <textarea
+              className="w-full min-h-40 rounded-md border p-3 text-sm leading-relaxed"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Write your reply…"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                {replyText.includes(ADDRESS_LINK)
+                  ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
+                  : `To: ${creator.email ?? "no email on file"}`}
+              </p>
+              <div className="flex gap-2">
+                {!replyText.includes(ADDRESS_LINK) && (
+                  <Button size="sm" variant="outline" onClick={() => setReplyText(DEFAULT_FOLLOW_UP)}>
+                    Use address-link message
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleSendReply} disabled={replySending || !replyText.trim()}>
+                  {replySending ? "Sending…" : "Send reply"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* DM Compose — Instagram DM threads only */}
+      {thread.channel === "instagram_dm" && (
         <Card className="border-indigo-200 bg-indigo-50">
           <CardHeader>
             <CardTitle className="text-base text-indigo-900">
@@ -462,7 +553,7 @@ export default function ThreadDetailPage() {
                 >
                   <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
                     <span className="font-medium">
-                      {msg.direction === "inbound" ? "↙ Inbound" : "↗ Sent"}
+                      {msg.direction === "inbound" ? "↙ Reply" : "↗ You sent"}
                     </span>
                     {msg.fromAddress && <span>from {msg.fromAddress}</span>}
                     <span>
