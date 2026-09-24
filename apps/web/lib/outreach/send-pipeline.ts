@@ -324,6 +324,11 @@ export async function sendOutreachBatch(
             lastOutreachAt: new Date(),
           },
         });
+        // Retire the pre-written draft so it is never offered again.
+        await prisma.aIDraft.updateMany({
+          where: { campaignCreatorId: draft.campaignCreatorId, type: "outreach", status: "draft" },
+          data: { status: "sent" },
+        });
         await recordOutcomeEvent({
           campaignCreatorId: draft.campaignCreatorId,
           event: { type: "outreach_sent", method: "email" },

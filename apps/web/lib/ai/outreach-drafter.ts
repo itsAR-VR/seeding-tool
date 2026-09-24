@@ -5,9 +5,17 @@ import OpenAI from "openai";
 import type { OutreachPersona } from "./personas";
 import { AI_MODEL } from "@/lib/ai/config";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Created lazily: constructing the client without a key throws, which would
+// crash the whole route module instead of just this code path.
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("AI drafting is not configured (OPENAI_API_KEY missing)");
+  }
+  openaiClient ??= new OpenAI({ apiKey });
+  return openaiClient;
+}
 
 export type CreatorProfile = {
   handle: string;
@@ -126,7 +134,7 @@ ${
 
   const userPrompt = buildUserPrompt(params);
 
-  const completion = await openai.chat.completions.create({
+  const completion = await getOpenAI().chat.completions.create({
     model: AI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },

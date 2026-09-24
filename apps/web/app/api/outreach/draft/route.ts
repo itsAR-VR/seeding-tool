@@ -138,6 +138,29 @@ export async function POST(request: NextRequest) {
           })),
         };
 
+        // A pre-written outreach draft for this creator wins over AI writing.
+        const saved =
+          channel === "email"
+            ? await prisma.aIDraft.findFirst({
+                where: { campaignCreatorId: cc.id, type: "outreach", status: "draft" },
+                orderBy: { updatedAt: "desc" },
+                select: { subject: true, body: true },
+              })
+            : null;
+        if (saved) {
+          return {
+            campaignCreatorId: cc.id,
+            creatorId: cc.creatorId,
+            creatorHandle:
+              cc.creator.instagramHandle ?? cc.creator.name ?? "Unknown",
+            creatorName: cc.creator.name,
+            subject: saved.subject,
+            body: saved.body,
+            tokens: 0,
+            error: null,
+          };
+        }
+
         try {
           const draft = await generateOutreachDraft({
             creatorProfile,

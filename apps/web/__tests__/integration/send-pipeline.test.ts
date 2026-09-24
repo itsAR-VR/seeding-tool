@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
     message: { findFirst: vi.fn(), create: vi.fn() },
     sendingMetric: { findUnique: vi.fn(), upsert: vi.fn() },
     activityLog: { create: vi.fn() },
+    aIDraft: { updateMany: vi.fn() },
     creator: { findFirst: vi.fn() },
     emailSuppression: { findUnique: vi.fn() },
   };
@@ -119,6 +120,7 @@ beforeEach(() => {
   mocks.prisma.message.create.mockResolvedValue({});
   mocks.prisma.campaignCreator.update.mockResolvedValue({});
   mocks.prisma.activityLog.create.mockResolvedValue({});
+  mocks.prisma.aIDraft.updateMany.mockResolvedValue({ count: 0 });
   mocks.recordOutcomeEvent.mockResolvedValue(undefined);
 });
 
