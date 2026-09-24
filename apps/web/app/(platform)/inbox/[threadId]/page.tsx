@@ -84,7 +84,7 @@ const DEFAULT_FOLLOW_UP = `Yay, so happy you're in!!
 
 Here's the link to add your address: ${ADDRESS_LINK}
 
-I'll let you know as soon as it ships. No pressure to post, I just want you to try it.`;
+I'll let you know when it ships.`;
 
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
