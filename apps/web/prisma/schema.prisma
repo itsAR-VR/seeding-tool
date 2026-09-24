@@ -371,10 +371,14 @@ model EmailAlias {
   warmupStartedAt DateTime?
   isPaused        Boolean   @default(false)
   dailyLimit      Int       @default(50)
+  // Per-address Gmail refresh token (encrypted) so a brand can send from several inboxes.
+  encryptedRefreshToken String? @map("encrypted_refresh_token")
 
   brandId String
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  senderForCampaigns Campaign[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -448,8 +452,11 @@ model Campaign {
   portfolioConfig Json? @map("portfolio_config")
 
   brandId String
+  // Gmail address outreach for this campaign is sent from; null = brand's primary.
+  senderAliasId String? @map("sender_alias_id")
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand       Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  senderAlias EmailAlias? @relation(fields: [senderAliasId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

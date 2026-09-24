@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
+import { decrypt } from "@/lib/encryption";
 import {
   isSuppressed,
   SuppressedRecipientError,
@@ -208,6 +209,7 @@ export async function sendEmail(params: SendEmailParams) {
       dailyLimit: true,
       isWarmedUp: true,
       warmupStartedAt: true,
+      encryptedRefreshToken: true,
     },
   });
 
@@ -299,13 +301,14 @@ export async function sendEmail(params: SendEmailParams) {
 
   let sentExternally = false;
   try {
-    const resolved = await resolveProviderCredential(alias.brandId, "gmail");
-  if (!resolved.decryptedValue) {
+  // 2. Use this address's own token; older aliases fall back to the brand token.
+  const refreshToken = alias.encryptedRefreshToken
+    ? decrypt(alias.encryptedRefreshToken)
+    : (await resolveProviderCredential(alias.brandId, "gmail")).decryptedValue;
+  if (!refreshToken) {
     throw new Error("No valid Gmail credential for this brand");
   }
 
-  // 2. Decrypt refresh token and get access token
-  const refreshToken = resolved.decryptedValue;
   const accessToken = await getGmailAccessToken(refreshToken);
 
   // 3. Build and send email

@@ -72,19 +72,15 @@ export async function sendOutreachBatch(
     }
   }
 
-  // Find email alias for the brand (for Gmail sends)
-  let emailAliasId: string | null = null;
-  let fromAddress: string | null = null;
+  // Primary email alias for the brand; a campaign's chosen sender overrides it.
+  let primaryAlias: { id: string; address: string } | null = null;
   const hasAnyEmail = drafts.some((d) => d.channel === "email");
   if (hasAnyEmail) {
-    const alias = await prisma.emailAlias.findFirst({
+    primaryAlias = await prisma.emailAlias.findFirst({
       where: { brandId, isPrimary: true, isPaused: false },
       orderBy: { updatedAt: "desc" },
+      select: { id: true, address: true },
     });
-    if (alias) {
-      emailAliasId = alias.id;
-      fromAddress = alias.address;
-    }
   }
 
   for (let i = 0; i < drafts.length; i++) {
@@ -104,6 +100,13 @@ export async function sendOutreachBatch(
       select: {
         id: true,
         creatorId: true,
+        campaign: {
+          select: {
+            senderAlias: {
+              select: { id: true, address: true, brandId: true, isPaused: true },
+            },
+          },
+        },
         creator: {
           select: {
             id: true,
@@ -199,6 +202,20 @@ export async function sendOutreachBatch(
 
     if (draft.channel === "email") {
       // --- Email channel ---
+      // Never fall back to a different inbox when the campaign names one.
+      const campaignSender = campaignCreator.campaign.senderAlias;
+      if (campaignSender && (campaignSender.brandId !== brandId || campaignSender.isPaused)) {
+        results.push({
+          ...draft,
+          status: "failed",
+          error: `Campaign sender ${campaignSender.address} is paused or unavailable.`,
+        });
+        continue;
+      }
+      const sender = campaignSender ?? primaryAlias;
+      const emailAliasId = sender?.id ?? null;
+      const fromAddress = sender?.address ?? null;
+
       if (!creator.email) {
         results.push({
           ...draft,

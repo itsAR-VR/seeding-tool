@@ -57,7 +57,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       ).length,
     };
 
-    return NextResponse.json({ ...campaign, stats });
+    // Connected Gmail inboxes this campaign can send from.
+    const senderOptions = await prisma.emailAlias.findMany({
+      where: { brandId: membership.brandId, encryptedRefreshToken: { not: null } },
+      select: { id: true, address: true, isPrimary: true, isPaused: true },
+      orderBy: [{ isPrimary: "desc" }, { address: "asc" }],
+    });
+
+    return NextResponse.json({ ...campaign, stats, senderOptions });
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -95,7 +102,25 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       name?: string;
       description?: string;
       status?: string;
+      senderAliasId?: string | null;
     };
+
+    if (body.senderAliasId) {
+      const alias = await prisma.emailAlias.findFirst({
+        where: {
+          id: body.senderAliasId,
+          brandId: membership.brandId,
+          encryptedRefreshToken: { not: null },
+        },
+        select: { id: true },
+      });
+      if (!alias) {
+        return NextResponse.json(
+          { error: "That Gmail inbox is not connected to this brand" },
+          { status: 400 }
+        );
+      }
+    }
 
     const campaign = await prisma.campaign.update({
       where: { id: campaignId },
@@ -103,6 +128,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         name: body.name?.trim(),
         description: body.description?.trim(),
         status: body.status,
+        senderAliasId: body.senderAliasId,
       },
     });
 

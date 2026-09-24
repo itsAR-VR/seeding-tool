@@ -83,9 +83,28 @@ export async function POST(request: NextRequest, context: RouteContext) {
       );
     }
 
+    // Reply from the inbox that started this thread (its Gmail thread id only
+    // exists in that mailbox); fall back to the alias the client picked.
+    const firstOutbound = await prisma.message.findFirst({
+      where: { threadId: thread.id, direction: "outbound" },
+      orderBy: { createdAt: "asc" },
+      select: { fromAddress: true },
+    });
+    const threadAlias = firstOutbound?.fromAddress
+      ? await prisma.emailAlias.findUnique({
+          where: {
+            brandId_address: {
+              brandId: membership.brandId,
+              address: firstOutbound.fromAddress,
+            },
+          },
+          select: { id: true },
+        })
+      : null;
+
     // INVARIANT: AI drafts are NEVER auto-sent.
     const result = await sendEmail({
-      aliasId: body.aliasId,
+      aliasId: threadAlias?.id ?? body.aliasId,
       to: recipientEmail,
       subject: draft.subject ?? "Re: Collaboration",
       body: draft.body,

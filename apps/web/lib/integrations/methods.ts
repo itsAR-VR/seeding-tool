@@ -32,6 +32,7 @@ export type ConnectionOverviewItem = {
   summary?: string;
   details?: {
     gmailAddress?: string | null;
+    gmailAddresses?: string[];
     instagramUsername?: string | null;
     storeDomain?: string | null;
     accountId?: string | null;

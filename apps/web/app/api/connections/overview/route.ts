@@ -30,6 +30,7 @@ export async function GET(request: Request) {
           select: {
             address: true,
             isPrimary: true,
+            encryptedRefreshToken: true,
           },
           orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
         },
@@ -55,8 +56,14 @@ export async function GET(request: Request) {
         if (provider === "gmail") {
           details.gmailAddress =
             primaryAlias?.address ?? state.connection?.externalId ?? null;
+          details.gmailAddresses = brand.emailAliases
+            .filter((alias) => alias.encryptedRefreshToken)
+            .map((alias) => alias.address);
           if (details.gmailAddress && state.connected) {
-            summary = `Connected as ${details.gmailAddress}`;
+            summary =
+              details.gmailAddresses.length > 1
+                ? `${details.gmailAddresses.length} inboxes connected`
+                : `Connected as ${details.gmailAddress}`;
           }
           externalId = details.gmailAddress ?? externalId;
         }

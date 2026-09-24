@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { getGmailAccessToken } from "@/lib/gmail/token";
+import { decrypt } from "@/lib/encryption";
 
 type GmailMessageHeader = {
   name: string;
@@ -82,16 +83,26 @@ function extractBody(payload: GmailMessage["payload"]): {
 
 /**
  * Fetch new messages from Gmail for a brand.
+ * When `emailAddress` names a connected inbox with its own token, that inbox
+ * is read; otherwise the brand-level Gmail credential is used.
  * Returns normalized message data ready for processing.
  */
-export async function fetchNewMessages(brandId: string) {
-  const resolved = await resolveProviderCredential(brandId, "gmail");
+export async function fetchNewMessages(brandId: string, emailAddress?: string) {
+  const alias = emailAddress
+    ? await prisma.emailAlias.findUnique({
+        where: { brandId_address: { brandId, address: emailAddress } },
+        select: { encryptedRefreshToken: true },
+      })
+    : null;
 
-  if (!resolved.decryptedValue) {
+  const refreshToken = alias?.encryptedRefreshToken
+    ? decrypt(alias.encryptedRefreshToken)
+    : (await resolveProviderCredential(brandId, "gmail")).decryptedValue;
+
+  if (!refreshToken) {
     throw new Error("No valid Gmail credential for brand");
   }
 
-  const refreshToken = resolved.decryptedValue;
   const accessToken = await getGmailAccessToken(refreshToken);
 
   // List recent messages (last 24 hours of unread)

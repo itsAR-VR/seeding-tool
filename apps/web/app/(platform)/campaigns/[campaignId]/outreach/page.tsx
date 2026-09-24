@@ -53,9 +53,20 @@ type GeneratedDraft = {
   error: string | null;
 };
 
+type SenderOption = {
+  id: string;
+  address: string;
+  isPrimary: boolean;
+  isPaused: boolean;
+};
+
 type CampaignSetup = {
   campaignProducts?: Array<{ id: string }>;
+  senderAliasId?: string | null;
+  senderOptions?: SenderOption[];
 };
+
+const DEFAULT_SENDER = "__primary";
 
 type ConnectionsOverview = {
   providers: Array<{
@@ -84,6 +95,8 @@ export default function OutreachPage() {
   const [generating, setGenerating] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendProgress, setSendProgress] = useState("");
+  const [savingSender, setSavingSender] = useState(false);
+  const [senderError, setSenderError] = useState<string | null>(null);
 
   // Load campaign creators
   useEffect(() => {
@@ -145,6 +158,31 @@ export default function OutreachPage() {
 
     loadSetup();
   }, [campaignId]);
+
+  async function handleSenderChange(value: string) {
+    const senderAliasId = value === DEFAULT_SENDER ? null : value;
+    setSavingSender(true);
+    setSenderError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderAliasId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSenderError(data?.error ?? "Could not save the sender.");
+        return;
+      }
+      setCampaignSetup((current) =>
+        current ? { ...current, senderAliasId } : current
+      );
+    } catch {
+      setSenderError("Could not save the sender.");
+    } finally {
+      setSavingSender(false);
+    }
+  }
 
   const MAX_BATCH_SIZE = 20;
 
@@ -416,6 +454,42 @@ export default function OutreachPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {channel === "email" && (campaignSetup?.senderOptions?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <Label>Send from</Label>
+                <Select
+                  value={campaignSetup?.senderAliasId ?? DEFAULT_SENDER}
+                  onValueChange={(v) => void handleSenderChange(v ?? DEFAULT_SENDER)}
+                  disabled={savingSender}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_SENDER}>
+                      Default (
+                      {campaignSetup?.senderOptions?.find((o) => o.isPrimary)?.address ??
+                        "primary Gmail"}
+                      )
+                    </SelectItem>
+                    {campaignSetup?.senderOptions?.map((option) => (
+                      <SelectItem
+                        key={option.id}
+                        value={option.id}
+                        disabled={option.isPaused}
+                      >
+                        {option.address}
+                        {option.isPaused ? " (paused)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {senderError && (
+                  <p className="text-sm text-red-600">{senderError}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

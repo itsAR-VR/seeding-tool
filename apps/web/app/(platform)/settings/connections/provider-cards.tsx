@@ -53,15 +53,34 @@ export function GmailConnectionCard({
         />
         <FeedbackBanner message={message} />
         {provider.connected ? (
-          <p className="text-sm text-muted-foreground">
-            Outreach emails will be sent from{" "}
-            <strong>
-              {provider.details?.gmailAddress ??
-                provider.externalId ??
-                "your Gmail account"}
-            </strong>
-            .
-          </p>
+          <div className="space-y-3">
+            {(provider.details?.gmailAddresses?.length ?? 0) > 1 ? (
+              <div className="text-sm text-muted-foreground">
+                <p>Connected inboxes (pick one per campaign on its Outreach page):</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {provider.details?.gmailAddresses?.map((address) => (
+                    <li key={address}>
+                      <strong>{address}</strong>
+                      {address === provider.details?.gmailAddress ? " (default)" : ""}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Outreach emails will be sent from{" "}
+                <strong>
+                  {provider.details?.gmailAddress ??
+                    provider.externalId ??
+                    "your Gmail account"}
+                </strong>
+                .
+              </p>
+            )}
+            <Button variant="outline" onClick={onConnect}>
+              Connect another Gmail
+            </Button>
+          </div>
         ) : (
           <Button variant="outline" onClick={onConnect}>
             Connect Gmail

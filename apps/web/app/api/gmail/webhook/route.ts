@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch new messages from Gmail
-    const rawMessages = await fetchNewMessages(brand.id);
+    const rawMessages = await fetchNewMessages(brand.id, emailAddress);
 
     let processed = 0;
 
