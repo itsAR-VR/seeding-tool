@@ -51,6 +51,10 @@ const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: stri
     label: "Instagram Mention Polling",
     description: "Poll for @-mentions on Instagram. Defaults ON (fail-open). Turning this off stops all mention detection.",
   },
+  claimAutoDraftEnabled: {
+    label: "Auto-draft Shopify orders from claim forms",
+    description: "When a creator submits their address, create a Shopify draft order right away. Drafts are never completed automatically.",
+  },
 };
 
 export default function FeatureFlagsPage() {

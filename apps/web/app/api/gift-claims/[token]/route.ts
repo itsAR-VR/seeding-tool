@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { hashClaimToken } from "@/lib/gift-claims/tokens";
+import { getFeatureFlags } from "@/lib/feature-flags";
+import { createDraftOrder } from "@/lib/shopify/orders";
+import { log } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,8 +49,11 @@ async function findClaim(token: string) {
       campaignCreator: {
         select: {
           id: true,
+          creatorId: true,
           campaign: {
             select: {
+              id: true,
+              brandId: true,
               name: true,
               brand: {
                 select: { name: true },
@@ -128,6 +134,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   const data = parsed.data;
 
+  let snapshotId: string | null = null;
   try {
     await prisma.$transaction(async (tx) => {
       const claimed = await tx.creatorGiftClaim.updateMany({
@@ -171,6 +178,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         },
         select: { id: true },
       });
+      snapshotId = snapshot.id;
 
       await tx.creatorGiftClaim.update({
         where: { id: claim.id },
@@ -201,11 +209,62 @@ export async function POST(request: NextRequest, context: RouteContext) {
     );
   }
 
+  const draftStatus = await maybeAutoDraft(claim, snapshotId, data.email);
+
   return NextResponse.json(
     {
       success: true,
-      status: "submitted_for_review",
+      status: draftStatus === "drafted" ? "draft_order_created" : "submitted_for_review",
     },
     { headers: NO_STORE_HEADERS }
   );
+}
+
+type FoundClaim = NonNullable<Awaited<ReturnType<typeof findClaim>>>;
+
+/**
+ * When the brand has claimAutoDraftEnabled, accept the creator's address and
+ * create a Shopify draft order right away. The draft is never completed here,
+ * so nothing ships until someone completes it. Failures leave the claim in
+ * address_review for manual follow-up; the creator still sees success.
+ */
+async function maybeAutoDraft(
+  claim: FoundClaim,
+  snapshotId: string | null,
+  email: string
+): Promise<"drafted" | "skipped" | "failed"> {
+  const campaign = claim.campaignCreator?.campaign;
+  const creatorId = claim.campaignCreator?.creatorId;
+  if (!snapshotId || !campaign?.id || !campaign.brandId || !creatorId) return "skipped";
+
+  const flags = await getFeatureFlags(campaign.brandId);
+  if (!flags.claimAutoDraftEnabled) return "skipped";
+
+  try {
+    const now = new Date();
+    await prisma.$transaction([
+      prisma.shippingAddressSnapshot.updateMany({
+        where: { campaignCreatorId: claim.campaignCreatorId, isActive: true },
+        data: { isActive: false },
+      }),
+      prisma.shippingAddressSnapshot.update({
+        where: { id: snapshotId },
+        data: { isActive: true, confirmedAt: now },
+      }),
+    ]);
+
+    await createDraftOrder(campaign.brandId, creatorId, campaign.id, { email });
+
+    await prisma.campaignCreator.update({
+      where: { id: claim.campaignCreatorId },
+      data: { lifecycleStatus: "address_confirmed" },
+    });
+    return "drafted";
+  } catch (error) {
+    log("error", "gift_claim.auto_draft_failed", {
+      campaignCreatorId: claim.campaignCreatorId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return "failed";
+  }
 }

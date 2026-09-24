@@ -5,6 +5,11 @@ import { hashClaimToken } from "@/lib/gift-claims/tokens";
 const mocks = vi.hoisted(() => ({
   claimFindUnique: vi.fn(),
   transaction: vi.fn(),
+  getFeatureFlags: vi.fn(),
+  createDraftOrder: vi.fn(),
+  snapshotUpdateMany: vi.fn(),
+  snapshotUpdate: vi.fn(),
+  campaignCreatorUpdate: vi.fn(),
   tx: {
     creatorGiftClaim: {
       updateMany: vi.fn(),
@@ -28,9 +33,26 @@ vi.mock("@/lib/prisma", () => ({
     creatorGiftClaim: {
       findUnique: mocks.claimFindUnique,
     },
+    shippingAddressSnapshot: {
+      updateMany: mocks.snapshotUpdateMany,
+      update: mocks.snapshotUpdate,
+    },
+    campaignCreator: {
+      update: mocks.campaignCreatorUpdate,
+    },
     $transaction: mocks.transaction,
   },
 }));
+
+vi.mock("@/lib/feature-flags", () => ({
+  getFeatureFlags: mocks.getFeatureFlags,
+}));
+
+vi.mock("@/lib/shopify/orders", () => ({
+  createDraftOrder: mocks.createDraftOrder,
+}));
+
+vi.mock("@/lib/logger", () => ({ log: vi.fn() }));
 
 import { GET, POST } from "@/app/api/gift-claims/[token]/route";
 
@@ -74,7 +96,14 @@ function makeClaim(overrides: Record<string, unknown> = {}) {
 describe("public gift claim route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.transaction.mockImplementation(async (callback) => callback(mocks.tx));
+    mocks.transaction.mockImplementation(async (arg) =>
+      typeof arg === "function" ? arg(mocks.tx) : Promise.all(arg)
+    );
+    mocks.getFeatureFlags.mockResolvedValue({ claimAutoDraftEnabled: false });
+    mocks.snapshotUpdateMany.mockResolvedValue({ count: 0 });
+    mocks.snapshotUpdate.mockResolvedValue({});
+    mocks.campaignCreatorUpdate.mockResolvedValue({});
+    mocks.createDraftOrder.mockResolvedValue({ shopifyDraftOrderId: "d1", shopifyDraftOrderName: "#D1", orderId: "o1" });
     mocks.tx.creatorGiftClaim.updateMany.mockResolvedValue({ count: 1 });
     mocks.tx.shippingAddressSnapshot.updateMany.mockResolvedValue({ count: 0 });
     mocks.tx.shippingAddressSnapshot.create.mockResolvedValue({ id: "snap-1" });
@@ -155,6 +184,98 @@ describe("public gift claim route", () => {
       where: { id: "cc-1" },
       data: { lifecycleStatus: "address_review" },
     });
+  });
+
+  it("POST never creates an order when auto-draft is off", async () => {
+    mocks.claimFindUnique.mockResolvedValue(
+      makeClaim({
+        campaignCreator: {
+          id: "cc-1",
+          creatorId: "creator-1",
+          campaign: { id: "camp-1", brandId: "brand-1", name: "Kalm", brand: { name: "Kalm" } },
+        },
+      })
+    );
+
+    const response = await POST(
+      makeRequest({
+        fullName: "Jane Creator",
+        email: "jane@example.com",
+        line1: "123 Main St",
+        city: "Miami",
+        state: "FL",
+        postalCode: "33131",
+      }),
+      makeContext()
+    );
+
+    expect((await response.json()).status).toBe("submitted_for_review");
+    expect(mocks.createDraftOrder).not.toHaveBeenCalled();
+    expect(mocks.snapshotUpdate).not.toHaveBeenCalled();
+  });
+
+  it("POST creates a Shopify draft (not a completed order) when auto-draft is on", async () => {
+    mocks.getFeatureFlags.mockResolvedValue({ claimAutoDraftEnabled: true });
+    mocks.claimFindUnique.mockResolvedValue(
+      makeClaim({
+        campaignCreator: {
+          id: "cc-1",
+          creatorId: "creator-1",
+          campaign: { id: "camp-1", brandId: "brand-1", name: "Kalm", brand: { name: "Kalm" } },
+        },
+      })
+    );
+
+    const response = await POST(
+      makeRequest({
+        fullName: "Jane Creator",
+        email: "jane@example.com",
+        line1: "123 Main St",
+        city: "Miami",
+        state: "FL",
+        postalCode: "33131",
+      }),
+      makeContext()
+    );
+
+    expect((await response.json()).status).toBe("draft_order_created");
+    expect(mocks.snapshotUpdate).toHaveBeenCalledWith({
+      where: { id: "snap-1" },
+      data: { isActive: true, confirmedAt: expect.any(Date) },
+    });
+    expect(mocks.createDraftOrder).toHaveBeenCalledWith("brand-1", "creator-1", "camp-1", {
+      email: "jane@example.com",
+    });
+  });
+
+  it("POST still succeeds for the creator if the Shopify draft fails", async () => {
+    mocks.getFeatureFlags.mockResolvedValue({ claimAutoDraftEnabled: true });
+    mocks.createDraftOrder.mockRejectedValue(new Error("shopify down"));
+    mocks.claimFindUnique.mockResolvedValue(
+      makeClaim({
+        campaignCreator: {
+          id: "cc-1",
+          creatorId: "creator-1",
+          campaign: { id: "camp-1", brandId: "brand-1", name: "Kalm", brand: { name: "Kalm" } },
+        },
+      })
+    );
+
+    const response = await POST(
+      makeRequest({
+        fullName: "Jane Creator",
+        email: "jane@example.com",
+        line1: "123 Main St",
+        city: "Miami",
+        state: "FL",
+        postalCode: "33131",
+      }),
+      makeContext()
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).status).toBe("submitted_for_review");
+    expect(mocks.campaignCreatorUpdate).not.toHaveBeenCalled();
   });
 
   it("POST rejects expired or already-submitted tokens", async () => {

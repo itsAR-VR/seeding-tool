@@ -29,7 +29,8 @@ export class OrderAlreadyExistsError extends Error {
 export async function createDraftOrder(
   brandId: string,
   creatorId: string,
-  campaignId: string
+  campaignId: string,
+  options: { email?: string | null } = {}
 ): Promise<{
   shopifyDraftOrderId: string;
   shopifyDraftOrderName: string;
@@ -140,11 +141,15 @@ export async function createDraftOrder(
           },
         ],
         applied_discount: {
-          description: "Creator seeding gift — 100% off",
+          description: "Seeding: free creator gift, 100% off",
           value_type: "percentage",
           value: "100.0",
-          title: "Creator Gift",
+          title: "Seeding",
         },
+        // Lets Shopify send the creator its shipping confirmation with tracking.
+        ...((options.email ?? campaignCreator.creator.email)
+          ? { email: options.email ?? campaignCreator.creator.email }
+          : {}),
         shipping_address: {
           first_name: address.fullName?.split(" ")[0] || "",
           last_name: address.fullName?.split(" ").slice(1).join(" ") || "",
@@ -156,8 +161,8 @@ export async function createDraftOrder(
           country: address.country || "US",
           phone: address.phone || "",
         },
-        note: `Seed Scale gift — Campaign: ${campaignId}, Creator: ${campaignCreator.creator.name || campaignCreator.creator.email || creatorId}`,
-        tags: "seed-scale,creator-gift",
+        note: `Seeding (free creator gift). Campaign: ${campaignId}, Creator: ${campaignCreator.creator.name || campaignCreator.creator.email || creatorId}`,
+        tags: "seeding,creator-gift,seed-scale",
       },
     };
 

@@ -43,8 +43,8 @@ describe("VALID_FLAG_NAMES", () => {
     expect(validNames).toEqual(defaultKeys);
   });
 
-  it("has 10 entries", () => {
-    expect(VALID_FLAG_NAMES).toHaveLength(10);
+  it("has 11 entries", () => {
+    expect(VALID_FLAG_NAMES).toHaveLength(11);
   });
 
   it("includes instagramMentionPollEnabled", () => {
