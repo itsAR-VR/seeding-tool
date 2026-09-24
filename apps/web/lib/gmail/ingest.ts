@@ -87,7 +87,11 @@ function extractBody(payload: GmailMessage["payload"]): {
  * is read; otherwise the brand-level Gmail credential is used.
  * Returns normalized message data ready for processing.
  */
-export async function fetchNewMessages(brandId: string, emailAddress?: string) {
+export async function fetchNewMessages(
+  brandId: string,
+  emailAddress?: string,
+  query = "is:inbox newer_than:1d"
+) {
   const alias = emailAddress
     ? await prisma.emailAlias.findUnique({
         where: { brandId_address: { brandId, address: emailAddress } },
@@ -109,7 +113,7 @@ export async function fetchNewMessages(brandId: string, emailAddress?: string) {
   const listResponse = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
       new URLSearchParams({
-        q: "is:inbox newer_than:1d",
+        q: query,
         maxResults: "50",
       }),
     {

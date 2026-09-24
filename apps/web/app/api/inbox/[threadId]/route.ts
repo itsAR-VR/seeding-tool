@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           include: {
             creator: { include: { profiles: true } },
             campaign: { select: { id: true, name: true } },
-            aiDrafts: { orderBy: { createdAt: "desc" } },
+            aiDrafts: { where: { type: "reply" }, orderBy: { createdAt: "desc" } },
             shippingSnapshots: { orderBy: { createdAt: "desc" } },
           },
         },

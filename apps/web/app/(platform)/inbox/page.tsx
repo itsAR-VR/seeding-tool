@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SyncReplies } from "./sync-replies";
 
 const statusColors: Record<string, string> = {
   open: "bg-green-100 text-green-800",
@@ -47,7 +48,7 @@ export default async function InboxPage() {
           creator: { include: { profiles: true } },
           campaign: { select: { id: true, name: true } },
           aiDrafts: {
-            where: { status: "draft" },
+            where: { status: "draft", type: "reply" },
             orderBy: { createdAt: "desc" },
             take: 1,
           },
@@ -75,11 +76,14 @@ export default async function InboxPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
-        <p className="text-muted-foreground">
-          Unified inbox for creator communications.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
+          <p className="text-muted-foreground">
+            Creator replies to your outreach.
+          </p>
+        </div>
+        <SyncReplies />
       </div>
 
       {/* Quick stats */}
