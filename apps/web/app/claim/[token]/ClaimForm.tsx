@@ -44,8 +44,7 @@ export function ClaimForm({ token }: ClaimFormProps) {
       <div className="rounded-3xl border border-green-200 bg-green-50 p-6 text-green-950">
         <h2 className="text-xl font-semibold">Address submitted</h2>
         <p className="mt-2 text-sm leading-6">
-          Thank you. Kalm will review the shipping details before preparing the
-          gift. No order or shipment is created from this form.
+          Thank you! We&apos;ll let you know when it ships.
         </p>
       </div>
     );
@@ -148,10 +147,9 @@ export function ClaimForm({ token }: ClaimFormProps) {
       </div>
 
       <div className="rounded-2xl bg-neutral-50 p-4 text-sm leading-6 text-neutral-700">
-        <p>This is a no-strings gift. Posting is optional.</p>
-        <p className="mt-2">
-          Submitting this form only lets Kalm review your shipping details. It
-          does not grant Kalm usage rights to any content.
+        <p>
+          We only use these details to ship your gift. Submitting this form
+          doesn&apos;t give Kalm rights to any of your content.
         </p>
       </div>
 

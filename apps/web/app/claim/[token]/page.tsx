@@ -49,11 +49,10 @@ export default async function GiftClaimPage({ params }: PageProps) {
     <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
       <div className="mx-auto max-w-xl">
         <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-neutral-500">
-            Kalm
-          </p>
-          <h1 className="mt-4 text-3xl font-semibold tracking-tight">
-            Claim your Kalm gift
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kalm-logo.png" alt="Kalm" className="h-8 w-auto" />
+          <h1 className="mt-6 text-3xl font-semibold tracking-tight">
+            Claim your gift
           </h1>
 
           {isUnavailable || !claim ? (
@@ -67,12 +66,9 @@ export default async function GiftClaimPage({ params }: PageProps) {
                 You’re receiving{" "}
                 <span className="font-medium">
                   {claim.campaignProduct?.product.name ?? "a Kalm product"}
-                </span>{" "}
-                from Kalm. Add your U.S. shipping details below so the team can
-                review the address before preparing the gift.
-              </p>
-              <p className="mt-3 text-sm leading-6 text-neutral-700">
-                This form does not create an order automatically.
+                </span>
+                . Add your U.S. shipping details below and we&apos;ll get it ready
+                to ship.
               </p>
               <div className="mt-6">
                 <ClaimForm token={token} />
