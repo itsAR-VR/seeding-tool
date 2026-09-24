@@ -140,7 +140,9 @@ export function ClaimForm({ token }: ClaimFormProps) {
             name="postalCode"
             autoComplete="postal-code"
             required
-            pattern="\\d{5}(-\\d{4})?"
+            pattern="[0-9]{5}(-[0-9]{4})?"
+            inputMode="numeric"
+            title="5-digit ZIP code"
             className="mt-1 w-full rounded-xl border px-3 py-3 text-base"
           />
         </label>
