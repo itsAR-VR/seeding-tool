@@ -691,6 +691,12 @@ model CampaignCreator {
   lastOutreachAt DateTime?
   lastReplyAt    DateTime?
 
+  /// Operator's call on the creator's reply: yes | no. "no" also suppresses the email.
+  replyDecision  String?   @map("reply_decision")
+  replyDecidedAt DateTime? @map("reply_decided_at")
+  /// AI's guess (yes | no | unclear) at the time the operator decided, for accuracy review.
+  aiSuggestion   String?   @map("ai_suggestion")
+
   campaignId String
   creatorId  String
 

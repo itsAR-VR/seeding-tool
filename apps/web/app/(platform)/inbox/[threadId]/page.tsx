@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { guessFromIntent } from "@/lib/inbox/decision";
 
 type Message = {
   id: string;
@@ -52,6 +53,7 @@ type Thread = {
   campaignCreator: {
     id: string;
     lifecycleStatus: string;
+    replyDecision: "yes" | "no" | null;
     creator: {
       name: string | null;
       email: string | null;
@@ -100,6 +102,7 @@ export default function ThreadDetailPage() {
   const [dmError, setDmError] = useState<string | null>(null);
   const [replyText, setReplyText] = useState(DEFAULT_FOLLOW_UP);
   const [replySending, setReplySending] = useState(false);
+  const [deciding, setDeciding] = useState(false);
   const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -128,6 +131,26 @@ export default function ThreadDetailPage() {
   async function reloadThread() {
     const res = await fetch(`/api/inbox/${params.threadId}`);
     if (res.ok) setThread((await res.json()) as Thread);
+  }
+
+  async function handleDecision(decision: "yes" | "no") {
+    if (decision === "no" && !confirm("Mark as no? They'll go on the do-not-send list and won't be emailed again.")) return;
+    setDeciding(true);
+    try {
+      const res = await fetch(`/api/inbox/${params.threadId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setReplyNotice({ tone: "error", text: data.error ?? "Could not save your decision" });
+        return;
+      }
+      await reloadThread();
+    } finally {
+      setDeciding(false);
+    }
   }
 
   async function handleSendReply() {
@@ -293,6 +316,61 @@ export default function ThreadDetailPage() {
         </Button>
       </div>
 
+      {/* Reply decision: operator's official call, AI guess shown alongside */}
+      {thread.messages.some((m) => m.direction === "inbound") && (() => {
+        const latestInbound = [...thread.messages].reverse().find((m) => m.direction === "inbound");
+        const aiGuess = guessFromIntent(latestInbound?.classification);
+        const decision = thread.campaignCreator.replyDecision;
+        return (
+          <Card
+            className={
+              decision === "yes"
+                ? "border-green-200 bg-green-50"
+                : decision === "no"
+                  ? "border-red-200 bg-red-50"
+                  : "border-amber-200 bg-amber-50"
+            }
+          >
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">
+                  {decision === "yes"
+                    ? "✓ They said yes"
+                    : decision === "no"
+                      ? "✕ They said no · on the do-not-send list"
+                      : "Did they say yes?"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {aiGuess
+                    ? `AI guess: ${aiGuess === "yes" ? "yes" : aiGuess === "no" ? "no" : "unclear"}${
+                        latestInbound?.confidence != null ? ` (${Math.round(latestInbound.confidence * 100)}% sure)` : ""
+                      }${decision && aiGuess !== "unclear" ? (aiGuess === decision ? " · matches you" : " · different from you") : ""}`
+                    : "AI guess: not available yet"}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={decision === "yes" ? "default" : "outline"}
+                  disabled={deciding || decision === "yes"}
+                  onClick={() => void handleDecision("yes")}
+                >
+                  They said yes
+                </Button>
+                <Button
+                  size="sm"
+                  variant={decision === "no" ? "destructive" : "outline"}
+                  disabled={deciding || decision === "no"}
+                  onClick={() => void handleDecision("no")}
+                >
+                  They said no
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* Pending Address Snapshot */}
       {pendingAddresses.length > 0 && (
         <Card className="border-teal-200 bg-teal-50">
@@ -450,7 +528,7 @@ export default function ThreadDetailPage() {
       ))}
 
       {/* Email reply */}
-      {thread.channel === "email" && (
+      {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Reply</CardTitle>
@@ -559,13 +637,7 @@ export default function ThreadDetailPage() {
                     <span>
                       {new Date(msg.createdAt).toLocaleString()}
                     </span>
-                    {msg.classification && (
-                      <Badge variant="outline" className="text-xs">
-                        {msg.classification}
-                        {msg.confidence != null &&
-                          ` (${(msg.confidence * 100).toFixed(0)}%)`}
-                      </Badge>
-                    )}
+
                   </div>
                   {msg.subject && (
                     <p className="mb-1 text-sm font-medium">{msg.subject}</p>

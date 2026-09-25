@@ -3,6 +3,8 @@ import { log } from "@/lib/logger";
 import { fetchNewMessages, resolveThreadByExternalId } from "@/lib/gmail/ingest";
 import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
+import { classifyReply } from "@/lib/inbox/ai";
+import { aiLabelingEnabled } from "@/lib/inbox/decision";
 
 /** How far back each sync looks for creator replies. */
 const SYNC_QUERY = "in:inbox newer_than:7d";
@@ -50,11 +52,31 @@ export async function syncRepliesForBrand(
       if (!thread || thread.brandId !== brandId) continue;
 
       // INVARIANT: Message dedupe on externalId prevents replay duplicates.
-      const { created } = await persistMessage(thread.id, {
+      const { message, created } = await persistMessage(thread.id, {
         ...normalizeInboundMessage(raw),
         direction: "inbound",
       });
       if (!created) continue;
+
+      // AI guess only (shown next to the operator's yes/no buttons); it never acts.
+      if (aiLabelingEnabled()) {
+        try {
+          const guess = await classifyReply(
+            { body: message.body, subject: message.subject },
+            brandId,
+            thread.campaignCreatorId
+          );
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { classification: guess.intent, confidence: guess.confidence },
+          });
+        } catch (error) {
+          log("warn", "gmail.sync.classify_failed", {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
       const receivedAt = raw.internalDate ? new Date(parseInt(raw.internalDate)) : new Date();
       await prisma.conversationThread.update({

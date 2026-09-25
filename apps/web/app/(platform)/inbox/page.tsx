@@ -73,6 +73,12 @@ export default async function InboxPage() {
   const hasAddress = threads.filter(
     (t) => t.campaignCreator.shippingSnapshots.length > 0
   );
+  const decided = threads.filter(
+    (t) => t.campaignCreator.replyDecision && t.campaignCreator.aiSuggestion && t.campaignCreator.aiSuggestion !== "unclear"
+  );
+  const aiMatches = decided.filter(
+    (t) => t.campaignCreator.aiSuggestion === t.campaignCreator.replyDecision
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -92,6 +98,11 @@ export default async function InboxPage() {
         {needsReview.length > 0 && (
           <Badge className="bg-purple-100 text-purple-800">
             {needsReview.length} drafts to review
+          </Badge>
+        )}
+        {decided.length > 0 && (
+          <Badge variant="outline">
+            AI matched you {aiMatches} of {decided.length}
           </Badge>
         )}
         {hasAddress.length > 0 && (
@@ -142,6 +153,16 @@ export default async function InboxPage() {
                         >
                           {thread.status}
                         </Badge>
+                        {thread.campaignCreator.replyDecision === "yes" && (
+                          <Badge className="bg-green-100 text-green-800">Said yes</Badge>
+                        )}
+                        {thread.campaignCreator.replyDecision === "no" && (
+                          <Badge className="bg-red-100 text-red-800">Said no</Badge>
+                        )}
+                        {!thread.campaignCreator.replyDecision &&
+                          lastMessage?.direction === "inbound" && (
+                            <Badge className="bg-amber-100 text-amber-800">Needs your call</Badge>
+                          )}
                         {hasDraft && (
                           <Badge className="bg-purple-100 text-purple-800">
                             Draft
