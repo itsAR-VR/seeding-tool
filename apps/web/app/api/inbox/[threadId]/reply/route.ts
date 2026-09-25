@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const membership = await getCurrentBrandMembership();
     requireWriteAccess(membership);
 
-    const { body } = (await request.json()) as { body?: string };
+    const { body, draftId } = (await request.json()) as { body?: string; draftId?: string };
     if (!body?.trim()) {
       return NextResponse.json({ error: "Write a message first" }, { status: 400 });
     }
@@ -95,6 +95,14 @@ export async function POST(request: NextRequest, context: RouteContext) {
       where: { id: thread.id },
       data: { updatedAt: new Date() },
     });
+
+    // The suggested answer was used (edited or not); retire it.
+    if (draftId) {
+      await prisma.aIDraft.updateMany({
+        where: { id: draftId, campaignCreatorId: thread.campaignCreatorId, status: "draft" },
+        data: { status: "sent" },
+      });
+    }
 
     return NextResponse.json({ success: true, gmailMessageId: result.gmailMessageId });
   } catch (error) {

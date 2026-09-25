@@ -1,0 +1,84 @@
+import OpenAI from "openai";
+import { prisma } from "@/lib/prisma";
+import { log } from "@/lib/logger";
+import { AI_MODEL } from "@/lib/ai/config";
+import { ADDRESS_LINK_PLACEHOLDER } from "@/lib/gift-claims/issue";
+
+/**
+ * Facts the suggested answer may use. Anything outside these is left for the
+ * operator with a bracketed note instead of being guessed.
+ */
+const KALM_FACTS = `- The gift is Kalm mouth tape (a 30-strip pack). It is completely free: Kalm pays for the product and the shipping. No card or payment is ever needed.
+- Kalm's mouth tape helps you breathe through your nose while you sleep, so you sleep deeper and wake up more rested.
+- How to use it: at bedtime, place one strip over closed lips.
+- Website: sleepkalm.com
+- To get one, they add their shipping address at a private link. Write the link exactly as ${ADDRESS_LINK_PLACEHOLDER} and never invent a URL.`;
+
+const SYSTEM_PROMPT = `You draft short email replies for Kam, founder of Kalm, a women's wellness brand. A creator was offered a free box of Kalm mouth tape and wrote back.
+
+Facts you may use:
+${KALM_FACTS}
+
+Rules:
+- Answer only what they asked, using only the facts above.
+- If they ask about posting, paid partnerships, rates, ingredients, medical or safety topics, or anything not covered by the facts, do not guess. Write one line exactly like: [Kam to answer: <their question>]
+- Sound like Kam: warm, casual, direct, 2 to 4 short sentences. No em dashes. No sign-off or name at the end. Don't mention posting unless they asked about it.
+- Unless they clearly said no, end with: If you want one, here's the link to add your address: ${ADDRESS_LINK_PLACEHOLDER}
+- Output only the email body.`;
+
+let client: OpenAI | null = null;
+function getClient(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return null;
+  client ??= new OpenAI({ apiKey });
+  return client;
+}
+
+/**
+ * Draft a suggested answer to a creator's question and store it as a pending
+ * reply draft for the operator to edit and send. Never sends anything.
+ * Returns the draft body, or null when AI is unavailable or fails.
+ */
+export async function createSuggestedReply(params: {
+  campaignCreatorId: string;
+  creatorFirstName: string | null;
+  inboundBody: string;
+  inboundSubject: string | null;
+}): Promise<string | null> {
+  const openai = getClient();
+  if (!openai) return null;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: AI_MODEL,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: `Creator's first name: ${params.creatorFirstName ?? "unknown"}\n\nTheir reply:\n${params.inboundBody.slice(0, 2000)}`,
+        },
+      ],
+    });
+    const body = response.choices[0]?.message?.content?.trim();
+    if (!body) return null;
+
+    await prisma.aIDraft.create({
+      data: {
+        type: "reply",
+        status: "draft",
+        subject: params.inboundSubject
+          ? `Re: ${params.inboundSubject.replace(/^re:\s*/i, "")}`
+          : null,
+        body,
+        campaignCreatorId: params.campaignCreatorId,
+      },
+    });
+    return body;
+  } catch (error) {
+    log("warn", "inbox.suggest_reply_failed", {
+      campaignCreatorId: params.campaignCreatorId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}

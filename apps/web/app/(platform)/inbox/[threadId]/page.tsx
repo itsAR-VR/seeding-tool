@@ -94,13 +94,11 @@ export default function ThreadDetailPage() {
   const [thread, setThread] = useState<Thread | null>(null);
   const [brand, setBrand] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sendLoading, setSendLoading] = useState(false);
-  const [editingDraft, setEditingDraft] = useState<string | null>(null);
-  const [draftText, setDraftText] = useState("");
   const [dmText, setDmText] = useState("");
   const [dmSending, setDmSending] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
   const [replyText, setReplyText] = useState(DEFAULT_FOLLOW_UP);
+  const [suggestionId, setSuggestionId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
@@ -114,7 +112,15 @@ export default function ThreadDetailPage() {
         ]);
 
         if (threadRes.ok) {
-          setThread((await threadRes.json()) as Thread);
+          const loaded = (await threadRes.json()) as Thread;
+          setThread(loaded);
+          const suggestion = loaded.campaignCreator.aiDrafts.find(
+            (d) => d.type === "reply" && d.status === "draft"
+          );
+          if (suggestion) {
+            setReplyText(suggestion.body);
+            setSuggestionId(suggestion.id);
+          }
         }
         if (brandRes.ok) {
           setBrand((await brandRes.json()) as BrandData);
@@ -162,7 +168,7 @@ export default function ThreadDetailPage() {
       const res = await fetch(`/api/inbox/${params.threadId}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: replyText }),
+        body: JSON.stringify({ body: replyText, draftId: suggestionId ?? undefined }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
@@ -176,59 +182,12 @@ export default function ThreadDetailPage() {
           : "Reply sent.",
       });
       setReplyText("");
+      setSuggestionId(null);
       await reloadThread();
     } catch {
       setReplyNotice({ tone: "error", text: "Reply failed to send" });
     } finally {
       setReplySending(false);
-    }
-  }
-
-  async function handleSendDraft(draftId: string) {
-    const primaryAlias =
-      brand?.emailAliases?.find((alias) => alias.isPrimary) ??
-      brand?.emailAliases?.[0];
-
-    if (!primaryAlias) return;
-
-    setSendLoading(true);
-    try {
-      // INVARIANT: AI drafts are NEVER auto-sent. Send only fires on explicit human action.
-      const res = await fetch(`/api/inbox/${params.threadId}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          draftId,
-          aliasId: primaryAlias.id,
-        }),
-      });
-
-      if (res.ok) {
-        // Refresh thread data
-        const threadRes = await fetch(`/api/inbox/${params.threadId}`);
-        if (threadRes.ok) {
-          setThread((await threadRes.json()) as Thread);
-        }
-      }
-    } catch {
-      // ignore
-    } finally {
-      setSendLoading(false);
-    }
-  }
-
-  async function handleDiscardDraft(draftId: string) {
-    try {
-      await fetch(`/api/inbox/${params.threadId}/drafts/${draftId}`, {
-        method: "DELETE",
-      });
-      // Refresh
-      const threadRes = await fetch(`/api/inbox/${params.threadId}`);
-      if (threadRes.ok) {
-        setThread((await threadRes.json()) as Thread);
-      }
-    } catch {
-      // ignore
     }
   }
 
@@ -283,9 +242,6 @@ export default function ThreadDetailPage() {
 
   const creator = thread.campaignCreator.creator;
   const profile = creator.profiles[0];
-  const pendingDrafts = thread.campaignCreator.aiDrafts.filter(
-    (d) => d.status === "draft"
-  );
   const pendingAddresses = thread.campaignCreator.shippingSnapshots.filter(
     (s) => !s.confirmedAt && !s.isActive
   );
@@ -448,90 +404,13 @@ export default function ThreadDetailPage() {
         </Card>
       )}
 
-      {/* Pending AI Drafts */}
-      {pendingDrafts.map((draft) => (
-        <Card key={draft.id} className="border-purple-200 bg-purple-50">
-          <CardHeader>
-            <CardTitle className="text-base text-purple-900">
-              ✨ AI Draft — Review Before Sending
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {draft.subject && (
-              <p className="text-sm font-medium">
-                Subject: {draft.subject}
-              </p>
-            )}
-            {editingDraft === draft.id ? (
-              <div className="space-y-2">
-                <textarea
-                  className="w-full min-h-32 rounded-md border p-3 text-sm"
-                  value={draftText}
-                  onChange={(e) => setDraftText(e.target.value)}
-                />
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      // Save edit (in a real implementation, PATCH the draft)
-                      setEditingDraft(null);
-                    }}
-                  >
-                    Save Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setEditingDraft(null)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="whitespace-pre-wrap rounded-md bg-white p-3 text-sm">
-                  {draft.body}
-                </div>
-                <div className="flex gap-2">
-                  {/* INVARIANT: AI drafts are NEVER auto-sent. Send only fires on explicit human action. */}
-                  <Button
-                    size="sm"
-                    onClick={() => handleSendDraft(draft.id)}
-                    disabled={sendLoading}
-                  >
-                    {sendLoading ? "Sending..." : "Send"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setEditingDraft(draft.id);
-                      setDraftText(draft.body);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-red-600"
-                    onClick={() => handleDiscardDraft(draft.id)}
-                  >
-                    Discard
-                  </Button>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      ))}
-
       {/* Email reply */}
       {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Reply</CardTitle>
+            <CardTitle className="text-base">
+              {suggestionId ? "Reply · suggested answer (edit before sending)" : "Reply"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {replyNotice && (

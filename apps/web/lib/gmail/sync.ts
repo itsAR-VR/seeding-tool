@@ -5,6 +5,7 @@ import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { classifyReply } from "@/lib/inbox/ai";
 import { aiLabelingEnabled } from "@/lib/inbox/decision";
+import { createSuggestedReply } from "@/lib/inbox/suggest-reply";
 
 /** How far back each sync looks for creator replies. */
 const SYNC_QUERY = "in:inbox newer_than:7d";
@@ -133,6 +134,45 @@ export async function syncRepliesForBrand(
           error: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+  }
+
+  // Draft a suggested answer for any open conversation whose latest reply is a
+  // question and that has no suggestion yet. The operator edits and sends it.
+  if (aiLabelingEnabled()) {
+    const threads = await prisma.conversationThread.findMany({
+      where: { brandId, status: "open", channel: "email" },
+      select: {
+        campaignCreatorId: true,
+        campaignCreator: {
+          select: { replyDecision: true, creator: { select: { name: true } } },
+        },
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { direction: true, classification: true, body: true, subject: true, createdAt: true },
+        },
+      },
+    });
+    for (const thread of threads) {
+      const latest = thread.messages[0];
+      if (!latest || latest.direction !== "inbound" || latest.classification !== "question") continue;
+      if (thread.campaignCreator.replyDecision === "no") continue;
+      const existing = await prisma.aIDraft.findFirst({
+        where: {
+          campaignCreatorId: thread.campaignCreatorId,
+          type: "reply",
+          createdAt: { gte: latest.createdAt },
+        },
+        select: { id: true },
+      });
+      if (existing) continue;
+      await createSuggestedReply({
+        campaignCreatorId: thread.campaignCreatorId,
+        creatorFirstName: thread.campaignCreator.creator.name?.split(" ")[0] ?? null,
+        inboundBody: latest.body,
+        inboundSubject: latest.subject,
+      });
     }
   }
 
