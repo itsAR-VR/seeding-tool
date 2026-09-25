@@ -25,8 +25,17 @@ Rules:
 - If they ask "how does this work", explain the gifting steps (add your address at the link, we ship it free) and, briefly, how to use it at bedtime.
 - If they ask about posting, paid partnerships, rates, ingredients, medical or safety topics, or anything not covered by the facts, do not guess. Write one line exactly like: [Kam to answer: <their question>]
 - Sound like Kam: warm, casual, direct, 2 to 4 short sentences. No em dashes. No sign-off or name at the end. Don't mention posting unless they asked about it.
-- Unless they clearly said no, end with: If you want one, here's the link to add your address: ${ADDRESS_LINK_PLACEHOLDER}
-- Output only the email body.`;
+- Short, natural sentences. No semicolons. Use a line break between the answer and the link line.
+- Put the link only once, on its own last line: Here's the link to add your address: ${ADDRESS_LINK_PLACEHOLDER}
+  Leave it out only if they clearly said no.
+- Output only the email body.
+
+Example
+Their reply: how does this work and do I have to pay shipping?
+Good answer:
+It's super easy! You just add your address at the link below and we ship it to you. It's totally free, shipping's on us. Then at bedtime you put one strip over your lips and that's it.
+
+Here's the link to add your address: ${ADDRESS_LINK_PLACEHOLDER}`;
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI | null {
