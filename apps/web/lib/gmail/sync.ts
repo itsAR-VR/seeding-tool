@@ -162,6 +162,7 @@ export async function syncRepliesForBrand(
         where: {
           campaignCreatorId: thread.campaignCreatorId,
           type: "reply",
+          status: { not: "discarded" },
           createdAt: { gte: latest.createdAt },
         },
         select: { id: true },
