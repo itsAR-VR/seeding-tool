@@ -66,10 +66,14 @@ export async function syncRepliesForBrand(
             brandId,
             thread.campaignCreatorId
           );
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { classification: guess.intent, confidence: guess.confidence },
-          });
+          // Confidence 0 means the AI call failed (no credit, outage); leave it
+          // unlabeled so the next sync retries instead of storing a fake guess.
+          if (guess.confidence > 0) {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { classification: guess.intent, confidence: guess.confidence },
+            });
+          }
         } catch (error) {
           log("warn", "gmail.sync.classify_failed", {
             messageId: message.id,
@@ -117,10 +121,12 @@ export async function syncRepliesForBrand(
           brandId,
           message.thread.campaignCreatorId
         );
-        await prisma.message.update({
-          where: { id: message.id },
-          data: { classification: guess.intent, confidence: guess.confidence },
-        });
+        if (guess.confidence > 0) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { classification: guess.intent, confidence: guess.confidence },
+          });
+        }
       } catch (error) {
         log("warn", "gmail.sync.backfill_classify_failed", {
           messageId: message.id,
