@@ -103,5 +103,32 @@ export async function syncRepliesForBrand(
     }
   }
 
+  // Label earlier replies that arrived before AI labeling was switched on.
+  if (aiLabelingEnabled()) {
+    const unlabeled = await prisma.message.findMany({
+      where: { direction: "inbound", classification: null, thread: { brandId } },
+      select: { id: true, body: true, subject: true, thread: { select: { campaignCreatorId: true } } },
+      take: 20,
+    });
+    for (const message of unlabeled) {
+      try {
+        const guess = await classifyReply(
+          { body: message.body, subject: message.subject },
+          brandId,
+          message.thread.campaignCreatorId
+        );
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { classification: guess.intent, confidence: guess.confidence },
+        });
+      } catch (error) {
+        log("warn", "gmail.sync.backfill_classify_failed", {
+          messageId: message.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
   return { processed, inboxes: aliases.length, errors };
 }
