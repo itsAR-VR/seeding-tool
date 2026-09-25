@@ -149,7 +149,7 @@ export async function syncRepliesForBrand(
         },
         messages: {
           orderBy: { createdAt: "desc" },
-          take: 1,
+          take: 10,
           select: { direction: true, classification: true, body: true, subject: true, createdAt: true },
         },
       },
@@ -172,6 +172,10 @@ export async function syncRepliesForBrand(
         creatorFirstName: thread.campaignCreator.creator.name?.split(" ")[0] ?? null,
         inboundBody: latest.body,
         inboundSubject: latest.subject,
+        earlierOutbound: thread.messages
+          .filter((m) => m.direction === "outbound")
+          .reverse()
+          .map((m) => m.body),
       });
     }
   }

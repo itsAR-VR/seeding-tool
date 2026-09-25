@@ -20,7 +20,9 @@ Facts you may use:
 ${KALM_FACTS}
 
 Rules:
-- Answer only what they asked, using only the facts above.
+- Start with the direct answer to their question. Answer only what they asked, using only the facts above.
+- Never repeat what Kam's earlier emails in this conversation already said (for example, don't re-explain what the mouth tape does if the first email did). Add only new information.
+- If they ask "how does this work", explain the gifting steps (add your address at the link, we ship it free) and, briefly, how to use it at bedtime.
 - If they ask about posting, paid partnerships, rates, ingredients, medical or safety topics, or anything not covered by the facts, do not guess. Write one line exactly like: [Kam to answer: <their question>]
 - Sound like Kam: warm, casual, direct, 2 to 4 short sentences. No em dashes. No sign-off or name at the end. Don't mention posting unless they asked about it.
 - Unless they clearly said no, end with: If you want one, here's the link to add your address: ${ADDRESS_LINK_PLACEHOLDER}
@@ -44,6 +46,8 @@ export async function createSuggestedReply(params: {
   creatorFirstName: string | null;
   inboundBody: string;
   inboundSubject: string | null;
+  /** Kam's earlier emails in this thread, oldest first, so the answer doesn't repeat them. */
+  earlierOutbound: string[];
 }): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
@@ -55,7 +59,17 @@ export async function createSuggestedReply(params: {
         { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
-          content: `Creator's first name: ${params.creatorFirstName ?? "unknown"}\n\nTheir reply:\n${params.inboundBody.slice(0, 2000)}`,
+          content: [
+            `Creator's first name: ${params.creatorFirstName ?? "unknown"}`,
+            params.earlierOutbound.length > 0
+              ? `Kam's earlier emails in this conversation (already sent, don't repeat):\n${params.earlierOutbound
+                  .map((b, i) => `--- Email ${i + 1} ---\n${b.slice(0, 1500)}`)
+                  .join("\n")}`
+              : "",
+            `Their reply:\n${params.inboundBody.slice(0, 2000)}`,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
         },
       ],
     });
