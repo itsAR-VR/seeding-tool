@@ -59,7 +59,10 @@ export async function createSuggestedReply(params: {
         },
       ],
     });
-    const body = response.choices[0]?.message?.content?.trim();
+    // Kam never uses em or en dashes; the model sometimes does anyway.
+    const body = response.choices[0]?.message?.content
+      ?.replace(/\s*[\u2014\u2013]\s*/g, ", ")
+      .trim();
     if (!body) return null;
 
     await prisma.aIDraft.create({
