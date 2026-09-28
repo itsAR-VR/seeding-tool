@@ -85,7 +85,7 @@ type BrandData = {
 };
 
 const ADDRESS_LINK = "{address link}";
-const DEFAULT_FOLLOW_UP = `Yay, so happy you're in!! Add your address here and I'll get it out to you: ${ADDRESS_LINK}
+const DEFAULT_FOLLOW_UP = `Yay, so happy you're in! Add your address here and I'll get it out to you: ${ADDRESS_LINK}
 
 I'll let you know when it ships.`;
 
