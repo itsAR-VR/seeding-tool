@@ -112,6 +112,9 @@ export async function POST(request: NextRequest) {
       case "fulfillments/update":
         await handleFulfillmentUpdate(payload);
         break;
+      case "draft_orders/delete":
+        await handleDraftOrderDelete(payload);
+        break;
       default:
         // Unknown topic — record and skip
         break;
@@ -216,6 +219,19 @@ async function handleOrderFulfilled(payload: Record<string, unknown>) {
  * orders/updated — Sync status changes.
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
+/**
+ * draft_orders/delete — a draft was deleted in Shopify, so it will never ship.
+ * Only drafts that never became a real order are marked cancelled.
+ */
+async function handleDraftOrderDelete(payload: Record<string, unknown>) {
+  const draftId = String(payload.id ?? "");
+  if (!draftId) return;
+  await prisma.shopifyOrder.updateMany({
+    where: { shopifyDraftOrderId: draftId, shopifyOrderId: null },
+    data: { status: "cancelled" },
+  });
+}
+
 async function handleOrderUpdated(payload: Record<string, unknown>) {
   const shopifyOrderId = String(payload.id || "");
   if (!shopifyOrderId) return;

@@ -6,6 +6,9 @@ import {
 } from "@/lib/integrations/brand-access";
 import { syncProducts, getProducts } from "@/lib/shopify/products";
 import { updateShopifyConnectionStatus } from "@/lib/shopify/status";
+import { getShopifyClient } from "@/lib/shopify/client";
+import { registerWebhooks } from "@/lib/shopify/webhooks";
+import { WEBHOOK_CALLBACK_URL } from "@/lib/config";
 
 async function getBrandId(request: NextRequest): Promise<string> {
   const campaignId = request.nextUrl.searchParams.get("campaignId");
@@ -51,6 +54,13 @@ export async function POST(request: NextRequest) {
       lastSyncedCount: result.synced,
       truncated: result.truncated,
     });
+    // Keep webhook subscriptions current (adds any newly required topics).
+    try {
+      const client = await getShopifyClient(brandId);
+      await registerWebhooks(client.storeDomain, client.accessToken, WEBHOOK_CALLBACK_URL);
+    } catch (webhookError) {
+      console.warn("[products/sync] webhook refresh failed", webhookError);
+    }
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     if (error instanceof BrandAccessError) {

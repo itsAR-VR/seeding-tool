@@ -17,6 +17,10 @@ import { NextRequest } from "next/server";
 const mockAddSuppression = vi.fn().mockResolvedValue(undefined);
 const mockVerifyToken = vi.fn();
 
+vi.mock("@/lib/prisma", () => ({
+  prisma: { creator: { findFirst: vi.fn().mockResolvedValue(null) } },
+}));
+
 vi.mock("@/lib/compliance/suppression", () => ({
   verifyUnsubscribeToken: (...args: unknown[]) => mockVerifyToken(...args),
   addSuppression: (...args: unknown[]) => mockAddSuppression(...args),
