@@ -13,7 +13,7 @@ const KALM_FACTS = `- The gift is Kalm mouth tape (a 30-strip pack). It is compl
 - How to use it: at bedtime, place one strip over closed lips.
 - What's in it / how it's different: the strips are infused with aloe, collagen, vitamin E, vitamin B5, biotin and CoQ10. The material is softer and stretchier than regular mouth tape, so it's gentler on sensitive or dry skin. It isn't a plain KT-tape-style strip.
 - Sensitive skin: Kalm developed it to be gentle on sensitive skin. Suggest they try a strip on their skin for a little while first to see how it feels.
-- Posting: they don't have to post at all. Kam would just love for them to try it.
+- Posting: use this answer, word for word: "I'd love for you to try it first, and share only if you love it!" Don't say they don't have to post.
 - Two packs: yes, Kam is happy to send 2 (for example one for a partner).
 - Shipping: US only right now. If they're outside the US, thank them, say we can only ship within the US right now, that Kam would love to send one once we can ship there, and leave the link out.
 - Health conditions (sleep apnea, CPAP, breathing or medical conditions, pregnancy): say "I'd check with your doctor first." Make no health claims.
@@ -41,6 +41,10 @@ Examples
 Their reply: how does this work and do I have to pay shipping?
 Good answer:
 There's no cost at all, and shipping is on us. You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
+
+Their reply: Do I have to post about it?
+Good answer:
+I'd love for you to try it first, and share only if you love it! You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
 
 Their reply: I'm in Toronto, do you ship to Canada?
 Good answer:
