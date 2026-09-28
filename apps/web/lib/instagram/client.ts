@@ -23,6 +23,8 @@ export interface InstagramMedia {
   caption?: string;
   media_type?: string; // IMAGE | VIDEO | CAROUSEL_ALBUM
   media_url?: string;
+  thumbnail_url?: string;
+  username?: string;
   permalink?: string;
   timestamp?: string;
   like_count?: number;

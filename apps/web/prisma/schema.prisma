@@ -14,8 +14,8 @@ datasource db {
 // ──────────────────────────────────────────────
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String  @id @default(uuid())
+  email     String  @unique
   name      String?
   avatarUrl String?
 
@@ -51,8 +51,8 @@ model Organization {
 
 // ACTIVE — used by lib/tenancy.ts, scripts/seed-phase18-fixtures.ts
 model OrganizationMembership {
-  id     String @id @default(uuid())
-  role   String @default("member") // owner | admin | member
+  id   String @id @default(uuid())
+  role String @default("member") // owner | admin | member
 
   userId         String
   organizationId String
@@ -117,6 +117,7 @@ model Brand {
   aiPersonas          AiPersona[]
   automations         Automation[]
   shopifyProducts     ShopifyProduct[]
+  contentPosts        ContentPost[]
   creditBalance       BrandCreditBalance?
 
   @@map("brands")
@@ -142,11 +143,11 @@ model BrandMembership {
 
 // ACTIVE — used by app/api/billing/webhook/route.ts
 model SubscriptionPlan {
-  id          String @id @default(uuid())
-  name        String // Free | Starter | Growth | Enterprise
+  id            String  @id @default(uuid())
+  name          String // Free | Starter | Growth | Enterprise
   stripePriceId String? @unique @map("stripe_price_id")
-  monthlyPrice  Int    @default(0) // cents
-  isActive    Boolean @default(true)
+  monthlyPrice  Int     @default(0) // cents
+  isActive      Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -178,7 +179,7 @@ model Subscription {
   id     String @id @default(uuid())
   status String @default("active") // active | past_due | canceled | trialing
 
-  stripeSubscriptionId String? @unique @map("stripe_subscription_id")
+  stripeSubscriptionId String?   @unique @map("stripe_subscription_id")
   currentPeriodStart   DateTime?
   currentPeriodEnd     DateTime?
 
@@ -200,10 +201,10 @@ model Subscription {
 
 // ACTIVE — used by app/api/onboarding/status/route.ts, app/api/onboarding/complete/route.ts
 model BrandOnboarding {
-  id            String  @id @default(uuid())
-  currentStep   Int     @default(0)
-  completedSteps Json   @default("[]") // JSON array of completed step numbers
-  isComplete    Boolean @default(false)
+  id             String  @id @default(uuid())
+  currentStep    Int     @default(0)
+  completedSteps Json    @default("[]") // JSON array of completed step numbers
+  isComplete     Boolean @default(false)
 
   brandId String @unique
 
@@ -225,7 +226,7 @@ model BrandSettings {
   reminderWindowDays  Int     @default(14)
   timezone            String  @default("America/New_York")
 
-  metadata            Json?   // feature flags and brand-specific config
+  metadata Json? // feature flags and brand-specific config
 
   brandId String @unique
 
@@ -259,11 +260,11 @@ model BrandCreditBalance {
 
 // ACTIVE — used by lib/credits.ts
 model BrandCreditTransaction {
-  id        String  @id @default(uuid())
-  type      String  // "mint" | "debit"
-  amount    Int     // positive for mint, negative for debit
-  reason    String?
-  metadata  Json?
+  id       String  @id @default(uuid())
+  type     String // "mint" | "debit"
+  amount   Int // positive for mint, negative for debit
+  reason   String?
+  metadata Json?
 
   stripePaymentIntentId String? @map("stripe_payment_intent_id")
   stripeInvoiceId       String? @map("stripe_invoice_id")
@@ -279,11 +280,11 @@ model BrandCreditTransaction {
 
 // ACTIVE — used by lib/inngest/functions/mention-check.ts
 model OutreachTemplate {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   name      String
   type      String // initial | follow_up_1 | follow_up_2 | follow_up_3 | reminder
   subject   String
-  body      String @db.Text
+  body      String  @db.Text
   isDefault Boolean @default(false)
 
   brandId String
@@ -298,14 +299,14 @@ model OutreachTemplate {
 }
 
 model BrandProduct {
-  id          String @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
   productUrl  String?
 
-  shopifyProductId  String? @map("shopify_product_id")
-  shopifyVariantId  String? @map("shopify_variant_id")
-  retailValue       Int?    // cents
+  shopifyProductId String? @map("shopify_product_id")
+  shopifyVariantId String? @map("shopify_variant_id")
+  retailValue      Int? // cents
 
   brandId String
 
@@ -321,14 +322,14 @@ model BrandProduct {
 }
 
 model ProviderCredential {
-  id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
-  label    String?
-  credentialType String @default("api_key") // oauth_refresh_token | oauth_access_token | api_key | shopify_admin_token
+  id             String  @id @default(uuid())
+  provider       String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
+  label          String?
+  credentialType String  @default("api_key") // oauth_refresh_token | oauth_access_token | api_key | shopify_admin_token
 
-  encryptedValue String @db.Text @map("encrypted_value") // AES-256-GCM encrypted
+  encryptedValue String    @map("encrypted_value") @db.Text // AES-256-GCM encrypted
   expiresAt      DateTime?
-  isValid        Boolean @default(true)
+  isValid        Boolean   @default(true)
 
   brandId String
 
@@ -342,13 +343,13 @@ model ProviderCredential {
 }
 
 model BrandConnection {
-  id       String @id @default(uuid())
-  provider String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
-  status   String @default("connected") // connected | disconnected | error
+  id               String @id @default(uuid())
+  provider         String // shopify | gmail | instagram | unipile | google_ads | meta_ads | amazon_seller_central | google_sheets
+  status           String @default("connected") // connected | disconnected | error
   connectionMethod String @default("manual") // oauth | manual
 
-  externalId  String? // e.g. Shopify store domain, Gmail address
-  metadata    Json?   // provider-specific data
+  externalId String? // e.g. Shopify store domain, Gmail address
+  metadata   Json? // provider-specific data
 
   brandId String
 
@@ -363,16 +364,16 @@ model BrandConnection {
 }
 
 model EmailAlias {
-  id          String @id @default(uuid())
-  address     String
-  displayName String?
-  isPrimary   Boolean @default(false)
-  isWarmedUp      Boolean   @default(false)
-  warmupStartedAt DateTime?
-  isPaused        Boolean   @default(false)
-  dailyLimit      Int       @default(50)
+  id                    String    @id @default(uuid())
+  address               String
+  displayName           String?
+  isPrimary             Boolean   @default(false)
+  isWarmedUp            Boolean   @default(false)
+  warmupStartedAt       DateTime?
+  isPaused              Boolean   @default(false)
+  dailyLimit            Int       @default(50)
   // Per-address Gmail refresh token (encrypted) so a brand can send from several inboxes.
-  encryptedRefreshToken String? @map("encrypted_refresh_token")
+  encryptedRefreshToken String?   @map("encrypted_refresh_token")
 
   brandId String
 
@@ -390,11 +391,11 @@ model EmailAlias {
 }
 
 model SendingMetric {
-  id   String @id @default(uuid())
+  id   String   @id @default(uuid())
   date DateTime @db.Date
 
-  sent      Int @default(0)
-  bounced   Int @default(0)
+  sent       Int @default(0)
+  bounced    Int @default(0)
   complained Int @default(0)
 
   aliasId String
@@ -414,7 +415,7 @@ model SendingMetric {
 model EmailSuppression {
   id           String   @id @default(uuid())
   email        String   @unique
-  reason       String   // UNSUBSCRIBE | BOUNCE | COMPLAINT | MANUAL
+  reason       String // UNSUBSCRIBE | BOUNCE | COMPLAINT | MANUAL
   suppressedAt DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -424,7 +425,7 @@ model EmailSuppression {
 
 // UNUSED — candidate for removal (no prisma.discoverySeed calls found in codebase)
 model DiscoverySeed {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   platform String // instagram | tiktok
   handle   String
   note     String?
@@ -445,13 +446,13 @@ model DiscoverySeed {
 // ──────────────────────────────────────────────
 
 model Campaign {
-  id          String @id @default(uuid())
-  name        String
-  description String?
-  status      String @default("draft") // draft | active | paused | completed | archived
-  portfolioConfig Json? @map("portfolio_config")
+  id              String  @id @default(uuid())
+  name            String
+  description     String?
+  status          String  @default("draft") // draft | active | paused | completed | archived
+  portfolioConfig Json?   @map("portfolio_config")
 
-  brandId String
+  brandId       String
   // Gmail address outreach for this campaign is sent from; null = brand's primary.
   senderAliasId String? @map("sender_alias_id")
 
@@ -481,10 +482,10 @@ model CampaignProduct {
   shopifyVariantId String?
   note             String?
 
-  campaign       Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  product        BrandProduct    @relation(fields: [productId], references: [id], onDelete: Cascade)
-  shopifyProduct ShopifyProduct? @relation(fields: [shopifyProductId], references: [id])
-  shopifyVariant ShopifyVariant? @relation(fields: [shopifyVariantId], references: [id])
+  campaign       Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product        BrandProduct       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  shopifyProduct ShopifyProduct?    @relation(fields: [shopifyProductId], references: [id])
+  shopifyVariant ShopifyVariant?    @relation(fields: [shopifyVariantId], references: [id])
   giftClaims     CreatorGiftClaim[]
 
   createdAt DateTime @default(now())
@@ -511,32 +512,33 @@ model Creator {
   // INVARIANT: discoverySource is always tagged — never null
   discoverySource String @default("manual") @map("discovery_source")
 
-  followerCount Int?    @map("follower_count")
-  avgViews      Int?    @map("avg_views")
-  bioCategory   String? @map("bio_category")
-  validationStatus   String    @default("unknown") @map("validation_status")
-  validationErrorCode String?  @map("validation_error_code")
-  validationAttempts  Int      @default(0) @map("validation_attempts")
-  lastValidatedAt    DateTime? @map("last_validated_at")
-  lastValidationError String?  @db.Text @map("last_validation_error")
-  influencerIdentityId String? @map("influencer_identity_id")
+  followerCount        Int?      @map("follower_count")
+  avgViews             Int?      @map("avg_views")
+  bioCategory          String?   @map("bio_category")
+  validationStatus     String    @default("unknown") @map("validation_status")
+  validationErrorCode  String?   @map("validation_error_code")
+  validationAttempts   Int       @default(0) @map("validation_attempts")
+  lastValidatedAt      DateTime? @map("last_validated_at")
+  lastValidationError  String?   @map("last_validation_error") @db.Text
+  influencerIdentityId String?   @map("influencer_identity_id")
 
   optedOut   Boolean   @default(false)
   optOutDate DateTime?
 
   brandId String
 
-  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand              Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
   influencerIdentity InfluencerIdentity? @relation(fields: [influencerIdentityId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  profiles          CreatorProfile[]
-  campaignCreators  CampaignCreator[]
-  discoveryTouches  CreatorDiscoveryTouch[]
-  rawPayloads       CreatorRawPayload[]
-  outcomes          CampaignOutcome[]
+  profiles         CreatorProfile[]
+  campaignCreators CampaignCreator[]
+  discoveryTouches CreatorDiscoveryTouch[]
+  rawPayloads      CreatorRawPayload[]
+  outcomes         CampaignOutcome[]
+  contentPosts     ContentPost[]
 
   @@unique([brandId, instagramHandle])
   @@unique([brandId, tiktokHandle])
@@ -545,15 +547,15 @@ model Creator {
 }
 
 model CreatorProfile {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   platform String // instagram | tiktok | youtube | twitter
   handle   String
   url      String?
 
-  followerCount   Int?
-  engagementRate  Float?
-  isVerified      Boolean @default(false)
-  metadata        Json?   // platform-specific stats
+  followerCount  Int?
+  engagementRate Float?
+  isVerified     Boolean @default(false)
+  metadata       Json? // platform-specific stats
 
   creatorId String
 
@@ -568,17 +570,17 @@ model CreatorProfile {
 
 // ACTIVE — used by lib/identity/matching.ts, lib/creator-search/job-runner.ts, lib/seeding/outcome-recorder.ts, and 4+ other files
 model InfluencerIdentity {
-  id              String   @id @default(uuid())
-  displayName     String?  @map("display_name")
-  primaryLanguage String?  @map("primary_language")
-  homeRegion      String?  @map("home_region")
-  mergedIntoId    String?  @map("merged_into_id")
+  id              String  @id @default(uuid())
+  displayName     String? @map("display_name")
+  primaryLanguage String? @map("primary_language")
+  homeRegion      String? @map("home_region")
+  mergedIntoId    String? @map("merged_into_id")
 
-  mergedInto  InfluencerIdentity?  @relation("InfluencerIdentityMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
-  mergedFrom  InfluencerIdentity[] @relation("InfluencerIdentityMerge")
-  creators    Creator[]
-  profiles    InfluencerPlatformProfile[]
-  outcomes    CampaignOutcome[]
+  mergedInto InfluencerIdentity?         @relation("InfluencerIdentityMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom InfluencerIdentity[]        @relation("InfluencerIdentityMerge")
+  creators   Creator[]
+  profiles   InfluencerPlatformProfile[]
+  outcomes   CampaignOutcome[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -588,34 +590,34 @@ model InfluencerIdentity {
 }
 
 model InfluencerPlatformProfile {
-  id               String   @id @default(uuid())
-  influencerId     String   @map("influencer_id")
+  id               String    @id @default(uuid())
+  influencerId     String    @map("influencer_id")
   platform         String
-  platformUserId   String?  @map("platform_user_id")
+  platformUserId   String?   @map("platform_user_id")
   handle           String
-  normalizedHandle String   @map("normalized_handle")
-  profileUrl       String?  @map("profile_url")
-  profileImageUrl  String?  @map("profile_image_url")
-  websiteUrl       String?  @map("website_url")
-  bioText          String?  @db.Text @map("bio_text")
+  normalizedHandle String    @map("normalized_handle")
+  profileUrl       String?   @map("profile_url")
+  profileImageUrl  String?   @map("profile_image_url")
+  websiteUrl       String?   @map("website_url")
+  bioText          String?   @map("bio_text") @db.Text
   email            String?
   region           String?
-  languageDetected String?  @map("language_detected")
-  isPrivate        Boolean  @default(false) @map("is_private")
-  isVerified       Boolean  @default(false) @map("is_verified")
-  followerCount    Int?     @map("follower_count")
-  followingCount   Int?     @map("following_count")
-  postCount        Int?     @map("post_count")
-  avgViews         Int?     @map("avg_views")
-  engagementRate   Float?   @map("engagement_rate")
+  languageDetected String?   @map("language_detected")
+  isPrivate        Boolean   @default(false) @map("is_private")
+  isVerified       Boolean   @default(false) @map("is_verified")
+  followerCount    Int?      @map("follower_count")
+  followingCount   Int?      @map("following_count")
+  postCount        Int?      @map("post_count")
+  avgViews         Int?      @map("avg_views")
+  engagementRate   Float?    @map("engagement_rate")
   metadata         Json?
   lastFetchedAt    DateTime? @map("last_fetched_at")
 
-  influencer             InfluencerIdentity               @relation(fields: [influencerId], references: [id], onDelete: Cascade)
-  edgesFrom              IdentityEdge[]                   @relation("IdentityEdgeFrom")
-  edgesTo                IdentityEdge[]                   @relation("IdentityEdgeTo")
-  contactPoints          ContactPoint[]
-  metricsDaily           InfluencerMetricsDaily[]
+  influencer              InfluencerIdentity                 @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+  edgesFrom               IdentityEdge[]                     @relation("IdentityEdgeFrom")
+  edgesTo                 IdentityEdge[]                     @relation("IdentityEdgeTo")
+  contactPoints           ContactPoint[]
+  metricsDaily            InfluencerMetricsDaily[]
   authenticityAssessments InfluencerAuthenticityAssessment[]
 
   createdAt DateTime @default(now())
@@ -628,15 +630,15 @@ model InfluencerPlatformProfile {
 }
 
 model IdentityEdge {
-  id            String   @id @default(uuid())
-  fromProfileId String   @map("from_profile_id")
-  toProfileId   String   @map("to_profile_id")
-  matchScore    Float    @map("match_score")
-  matchBand     String   @map("match_band")
-  evidenceJson  Json     @map("evidence_json")
-  reviewedBy    String?  @map("reviewed_by")
+  id            String    @id @default(uuid())
+  fromProfileId String    @map("from_profile_id")
+  toProfileId   String    @map("to_profile_id")
+  matchScore    Float     @map("match_score")
+  matchBand     String    @map("match_band")
+  evidenceJson  Json      @map("evidence_json")
+  reviewedBy    String?   @map("reviewed_by")
   reviewedAt    DateTime? @map("reviewed_at")
-  reviewOutcome String?  @map("review_outcome")
+  reviewOutcome String?   @map("review_outcome")
 
   fromProfile InfluencerPlatformProfile @relation("IdentityEdgeFrom", fields: [fromProfileId], references: [id], onDelete: Cascade)
   toProfile   InfluencerPlatformProfile @relation("IdentityEdgeTo", fields: [toProfileId], references: [id], onDelete: Cascade)
@@ -651,15 +653,15 @@ model IdentityEdge {
 }
 
 model ContactPoint {
-  id             String   @id @default(uuid())
-  profileId       String   @map("profile_id")
-  contactType     String   @map("contact_type")
-  contactValue    String   @map("contact_value")
-  confidence      Float
-  source          String
-  isStale         Boolean  @default(false) @map("is_stale")
-  lastVerifiedAt  DateTime? @map("last_verified_at")
-  metadata        Json?
+  id             String    @id @default(uuid())
+  profileId      String    @map("profile_id")
+  contactType    String    @map("contact_type")
+  contactValue   String    @map("contact_value")
+  confidence     Float
+  source         String
+  isStale        Boolean   @default(false) @map("is_stale")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  metadata       Json?
 
   profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
@@ -677,17 +679,17 @@ model CampaignCreator {
   id String @id @default(uuid())
 
   /// Human approval gate: pending | approved | declined | deferred
-  reviewStatus    String @default("pending") @map("review_status")
+  reviewStatus String @default("pending") @map("review_status")
 
   /// Post-approval execution: ready | outreach_sent | replied | address_review | address_confirmed |
   /// order_created | shipped | delivered | posted | completed | opted_out | stalled
   lifecycleStatus String @default("ready") @map("lifecycle_status")
 
-  reviewedAt   DateTime?
-  reviewedBy   String?
+  reviewedAt    DateTime?
+  reviewedBy    String?
   declineReason String?
 
-  outreachCount  Int @default(0)
+  outreachCount  Int       @default(0)
   lastOutreachAt DateTime?
   lastReplyAt    DateTime?
 
@@ -706,37 +708,37 @@ model CampaignCreator {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  conversationThread     ConversationThread?
-  shippingSnapshots      ShippingAddressSnapshot[]
-  giftClaims             CreatorGiftClaim[]
-  shopifyOrder           ShopifyOrder?
-  costRecords            CostRecord[]
-  mentionAssets          MentionAsset[]
-  reminderSchedules      ReminderSchedule[]
-  aiDrafts               AIDraft[]
-  outcome                CampaignOutcome?
+  conversationThread ConversationThread?
+  shippingSnapshots  ShippingAddressSnapshot[]
+  giftClaims         CreatorGiftClaim[]
+  shopifyOrder       ShopifyOrder?
+  costRecords        CostRecord[]
+  mentionAssets      MentionAsset[]
+  reminderSchedules  ReminderSchedule[]
+  aiDrafts           AIDraft[]
+  outcome            CampaignOutcome?
 
   @@unique([campaignId, creatorId])
   @@map("campaign_creators")
 }
 
 model CreatorSearchJob {
-  id     String @id @default(uuid())
-  status String @default("pending") // pending | running | completed | failed | paused
-  requestedCount Int @default(0) @map("requested_count")
-  candidateCount Int @default(0) @map("candidate_count")
-  validatedCount Int @default(0) @map("validated_count")
-  invalidCount   Int @default(0) @map("invalid_count")
-  cachedCount    Int @default(0) @map("cached_count")
-  progressPercent Int @default(0) @map("progress_percent")
-  etaSeconds     Int? @map("eta_seconds")
-  startedAt      DateTime? @map("started_at")
-  finishedAt     DateTime? @map("finished_at")
+  id              String    @id @default(uuid())
+  status          String    @default("pending") // pending | running | completed | failed | paused
+  requestedCount  Int       @default(0) @map("requested_count")
+  candidateCount  Int       @default(0) @map("candidate_count")
+  validatedCount  Int       @default(0) @map("validated_count")
+  invalidCount    Int       @default(0) @map("invalid_count")
+  cachedCount     Int       @default(0) @map("cached_count")
+  progressPercent Int       @default(0) @map("progress_percent")
+  etaSeconds      Int?      @map("eta_seconds")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
 
-  platform   String // instagram | meta_creator_marketplace
-  query      Json   // search parameters
-  campaignId String? @map("campaign_id")
-  resultCount Int   @default(0)
+  platform    String // instagram | meta_creator_marketplace
+  query       Json // search parameters
+  campaignId  String? @map("campaign_id")
+  resultCount Int     @default(0)
   error       String?
 
   brandId String
@@ -759,32 +761,32 @@ model CreatorSearchJob {
 model CreatorSearchResult {
   id String @id @default(uuid())
 
-  platform       String
-  handle         String
-  source         String @default("unknown")
-  primarySource  String? @map("primary_source")
-  sources        Json?
-  name           String?
-  followerCount  Int?
-  engagementRate Float?
-  profileUrl     String?
-  imageUrl       String?
-  bio            String? @db.Text
-  email          String?
-  bioCategory    String? @map("bio_category")
-  rawSourceCategory String? @map("raw_source_category")
-  seedCreatorId  String? @map("seed_creator_id")
-  metadata       Json?
-  validationStatus String @default("unknown") @map("validation_status")
-  validationError  String? @db.Text @map("validation_error")
-  validatedFollowerCount Int? @map("validated_follower_count")
-  validatedAvgViews      Int? @map("validated_avg_views")
+  platform               String
+  handle                 String
+  source                 String  @default("unknown")
+  primarySource          String? @map("primary_source")
+  sources                Json?
+  name                   String?
+  followerCount          Int?
+  engagementRate         Float?
+  profileUrl             String?
+  imageUrl               String?
+  bio                    String? @db.Text
+  email                  String?
+  bioCategory            String? @map("bio_category")
+  rawSourceCategory      String? @map("raw_source_category")
+  seedCreatorId          String? @map("seed_creator_id")
+  metadata               Json?
+  validationStatus       String  @default("unknown") @map("validation_status")
+  validationError        String? @map("validation_error") @db.Text
+  validatedFollowerCount Int?    @map("validated_follower_count")
+  validatedAvgViews      Int?    @map("validated_avg_views")
 
-  fitScore    Float? // AI-scored creator fit (0-1)
-  fitReasoning String? @db.Text
-  scoreComponents Json? @map("score_components")
-  triage         String?
-  sourceConfidence Float? @map("source_confidence")
+  fitScore             Float? // AI-scored creator fit (0-1)
+  fitReasoning         String? @db.Text
+  scoreComponents      Json?   @map("score_components")
+  triage               String?
+  sourceConfidence     Float?  @map("source_confidence")
   sourceConfidenceTier String? @map("source_confidence_tier")
 
   searchJobId String
@@ -809,7 +811,7 @@ model CreatorDiscoveryTouch {
   metadata          Json?
   seedCreatorId     String? @map("seed_creator_id")
 
-  creatorId   String @map("creator_id")
+  creatorId   String  @map("creator_id")
   searchJobId String? @map("search_job_id")
 
   creator   Creator           @relation(fields: [creatorId], references: [id], onDelete: Cascade)
@@ -824,13 +826,13 @@ model CreatorDiscoveryTouch {
 }
 
 model CreatorRawPayload {
-  id          String   @id @default(uuid())
-  creatorId   String?  @map("creator_id")
-  searchJobId String?  @map("search_job_id")
+  id          String  @id @default(uuid())
+  creatorId   String? @map("creator_id")
+  searchJobId String? @map("search_job_id")
   source      String
-  eventType   String   @map("event_type")
+  eventType   String  @map("event_type")
   payload     Json
-  payloadHash String?  @map("payload_hash")
+  payloadHash String? @map("payload_hash")
 
   creator   Creator?          @relation(fields: [creatorId], references: [id], onDelete: SetNull)
   searchJob CreatorSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
@@ -871,15 +873,15 @@ model InfluencerMetricsDaily {
 
 // ACTIVE — used by app/api/creators/[creatorId]/provenance/route.ts, lib/creator-search/decision-engine.ts
 model InfluencerAuthenticityAssessment {
-  id                     String   @id @default(uuid())
-  profileId              String   @map("profile_id")
-  authScore              Float    @map("auth_score")
-  botRiskScore           Float    @map("bot_risk_score")
-  growthAnomalyScore     Float    @map("growth_anomaly_score")
-  engagementQualityScore Float    @map("engagement_quality_score")
-  modelVersion           String   @map("model_version")
-  notesJson              Json?    @map("notes_json")
-  inputSnapshotCount     Int      @default(0) @map("input_snapshot_count")
+  id                     String @id @default(uuid())
+  profileId              String @map("profile_id")
+  authScore              Float  @map("auth_score")
+  botRiskScore           Float  @map("bot_risk_score")
+  growthAnomalyScore     Float  @map("growth_anomaly_score")
+  engagementQualityScore Float  @map("engagement_quality_score")
+  modelVersion           String @map("model_version")
+  notesJson              Json?  @map("notes_json")
+  inputSnapshotCount     Int    @default(0) @map("input_snapshot_count")
 
   profile InfluencerPlatformProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
 
@@ -893,43 +895,43 @@ model InfluencerAuthenticityAssessment {
 }
 
 model CampaignOutcome {
-  id                  String   @id @default(uuid())
-  campaignCreatorId   String   @unique @map("campaign_creator_id")
-  campaignId          String   @map("campaign_id")
-  creatorId           String   @map("creator_id")
-  identityId          String?  @map("identity_id")
-  reviewDecision      String?  @map("review_decision")
-  reviewedAt          DateTime? @map("reviewed_at")
-  reviewedBy          String?  @map("reviewed_by")
-  declineReason       String?  @db.Text @map("decline_reason")
-  outreachSentAt      DateTime? @map("outreach_sent_at")
-  outreachMethod      String?  @map("outreach_method")
-  repliedAt           DateTime? @map("replied_at")
-  replyType           String?  @map("reply_type")
-  responseTimeHours   Float?   @map("response_time_hours")
-  acceptedAt          DateTime? @map("accepted_at")
-  addressConfirmedAt  DateTime? @map("address_confirmed_at")
-  orderCreatedAt      DateTime? @map("order_created_at")
-  shippedAt           DateTime? @map("shipped_at")
-  deliveredAt         DateTime? @map("delivered_at")
-  postedAt            DateTime? @map("posted_at")
-  completedAt         DateTime? @map("completed_at")
-  optedOutAt          DateTime? @map("opted_out_at")
-  stalledAt           DateTime? @map("stalled_at")
-  stallReason         String?  @db.Text @map("stall_reason")
-  contentQuality      String?  @map("content_quality")
-  contentReach        Int?     @map("content_reach")
-  contentEngagement   Float?   @map("content_engagement")
-  costPerCreator      Float?   @map("cost_per_creator")
-  costPerEngagement   Float?   @map("cost_per_engagement")
-  fitScoreAtSeed      Float?   @map("fit_score_at_seed")
-  triageAtSeed        String?  @map("triage_at_seed")
-  scoreComponentsAtSeed Json?  @map("score_components_at_seed")
+  id                    String    @id @default(uuid())
+  campaignCreatorId     String    @unique @map("campaign_creator_id")
+  campaignId            String    @map("campaign_id")
+  creatorId             String    @map("creator_id")
+  identityId            String?   @map("identity_id")
+  reviewDecision        String?   @map("review_decision")
+  reviewedAt            DateTime? @map("reviewed_at")
+  reviewedBy            String?   @map("reviewed_by")
+  declineReason         String?   @map("decline_reason") @db.Text
+  outreachSentAt        DateTime? @map("outreach_sent_at")
+  outreachMethod        String?   @map("outreach_method")
+  repliedAt             DateTime? @map("replied_at")
+  replyType             String?   @map("reply_type")
+  responseTimeHours     Float?    @map("response_time_hours")
+  acceptedAt            DateTime? @map("accepted_at")
+  addressConfirmedAt    DateTime? @map("address_confirmed_at")
+  orderCreatedAt        DateTime? @map("order_created_at")
+  shippedAt             DateTime? @map("shipped_at")
+  deliveredAt           DateTime? @map("delivered_at")
+  postedAt              DateTime? @map("posted_at")
+  completedAt           DateTime? @map("completed_at")
+  optedOutAt            DateTime? @map("opted_out_at")
+  stalledAt             DateTime? @map("stalled_at")
+  stallReason           String?   @map("stall_reason") @db.Text
+  contentQuality        String?   @map("content_quality")
+  contentReach          Int?      @map("content_reach")
+  contentEngagement     Float?    @map("content_engagement")
+  costPerCreator        Float?    @map("cost_per_creator")
+  costPerEngagement     Float?    @map("cost_per_engagement")
+  fitScoreAtSeed        Float?    @map("fit_score_at_seed")
+  triageAtSeed          String?   @map("triage_at_seed")
+  scoreComponentsAtSeed Json?     @map("score_components_at_seed")
 
-  campaignCreator CampaignCreator      @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
-  campaign       Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  creator        Creator               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
-  identity       InfluencerIdentity?   @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  campaignCreator CampaignCreator     @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  campaign        Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  creator         Creator             @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  identity        InfluencerIdentity? @relation(fields: [identityId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -946,10 +948,10 @@ model CampaignOutcome {
 // ──────────────────────────────────────────────
 
 model ConversationThread {
-  id      String @id @default(uuid())
+  id      String  @id @default(uuid())
   subject String?
-  status  String @default("open") // open | closed | snoozed
-  channel String @default("email") // email | instagram_dm
+  status  String  @default("open") // open | closed | snoozed
+  channel String  @default("email") // email | instagram_dm
 
   externalThreadId String? @unique @map("external_thread_id") // Gmail thread ID
   unipileChatId    String? @map("unipile_chat_id") // Unipile chat ID for DM routing
@@ -980,7 +982,7 @@ model Message {
   toAddress   String?
   subject     String?
   body        String  @db.Text
-  bodyHtml    String? @db.Text @map("body_html")
+  bodyHtml    String? @map("body_html") @db.Text
 
   externalMessageId String? @unique @map("external_message_id") // Gmail message ID
 
@@ -1017,13 +1019,13 @@ model AIArtifact {
 }
 
 model AIDraft {
-  id      String @id @default(uuid())
-  type    String // reply | outreach | follow_up | reminder
-  status  String @default("draft") // draft | approved | sent | discarded
+  id     String @id @default(uuid())
+  type   String // reply | outreach | follow_up | reminder
+  status String @default("draft") // draft | approved | sent | discarded
 
   subject  String?
   body     String  @db.Text
-  bodyHtml String? @db.Text @map("body_html")
+  bodyHtml String? @map("body_html") @db.Text
 
   approvedAt DateTime?
   approvedBy String?
@@ -1042,25 +1044,25 @@ model AIDraft {
 model ShippingAddressSnapshot {
   id String @id @default(uuid())
 
-  fullName    String?
-  line1       String?
-  line2       String?
-  city        String?
-  state       String?
-  postalCode  String?  @map("postal_code")
-  country     String?
-  phone       String?
+  fullName   String?
+  line1      String?
+  line2      String?
+  city       String?
+  state      String?
+  postalCode String? @map("postal_code")
+  country    String?
+  phone      String?
 
-  source     String @default("ai_extracted") // ai_extracted | manual | creator_provided
-  isActive   Boolean @default(false)
-  isLocked   Boolean @default(false)
+  source      String    @default("ai_extracted") // ai_extracted | manual | creator_provided
+  isActive    Boolean   @default(false)
+  isLocked    Boolean   @default(false)
   confirmedAt DateTime?
   confirmedBy String?
 
   campaignCreatorId String @map("campaign_creator_id")
 
-  campaignCreator CampaignCreator @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
-  giftClaim        CreatorGiftClaim?
+  campaignCreator CampaignCreator   @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
+  giftClaim       CreatorGiftClaim?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1071,17 +1073,17 @@ model ShippingAddressSnapshot {
 model CreatorGiftClaim {
   id String @id @default(uuid())
 
-  tokenHash String   @unique @map("token_hash")
-  expiresAt DateTime @map("expires_at")
-  claimedAt DateTime? @map("claimed_at")
-  revokedAt DateTime? @map("revoked_at")
-  createdBy String?   @map("created_by")
-  contactEmail String? @map("contact_email")
-  contactPhone String? @map("contact_phone")
+  tokenHash    String    @unique @map("token_hash")
+  expiresAt    DateTime  @map("expires_at")
+  claimedAt    DateTime? @map("claimed_at")
+  revokedAt    DateTime? @map("revoked_at")
+  createdBy    String?   @map("created_by")
+  contactEmail String?   @map("contact_email")
+  contactPhone String?   @map("contact_phone")
 
-  campaignCreatorId          String  @map("campaign_creator_id")
-  campaignProductId          String? @map("campaign_product_id")
-  shippingAddressSnapshotId  String? @unique @map("shipping_address_snapshot_id")
+  campaignCreatorId         String  @map("campaign_creator_id")
+  campaignProductId         String? @map("campaign_product_id")
+  shippingAddressSnapshotId String? @unique @map("shipping_address_snapshot_id")
 
   campaignCreator         CampaignCreator          @relation(fields: [campaignCreatorId], references: [id], onDelete: Cascade)
   campaignProduct         CampaignProduct?         @relation(fields: [campaignProductId], references: [id], onDelete: SetNull)
@@ -1098,11 +1100,11 @@ model CreatorGiftClaim {
 model ShopifyOrder {
   id String @id @default(uuid())
 
-  shopifyOrderId     String? @unique @map("shopify_order_id")
-  shopifyOrderNumber String? @map("shopify_order_number")
+  shopifyOrderId        String? @unique @map("shopify_order_id")
+  shopifyOrderNumber    String? @map("shopify_order_number")
   shopifyDraftOrderId   String? @unique @map("shopify_draft_order_id")
   shopifyDraftOrderName String? @map("shopify_draft_order_name")
-  status             String  @default("draft_pending") // draft_pending | draft_created | draft_completing | created | processing | shipped | delivered | cancelled | error_needs_reconciliation
+  status                String  @default("draft_pending") // draft_pending | draft_created | draft_completing | created | processing | shipped | delivered | cancelled | error_needs_reconciliation
 
   totalPrice Int? // cents
   currency   String @default("USD")
@@ -1123,9 +1125,9 @@ model FulfillmentEvent {
   id     String @id @default(uuid())
   status String // confirmed | in_transit | out_for_delivery | delivered | failure | cancelled
 
-  trackingNumber  String? @map("tracking_number")
-  trackingUrl     String? @map("tracking_url")
-  carrier         String?
+  trackingNumber    String?   @map("tracking_number")
+  trackingUrl       String?   @map("tracking_url")
+  carrier           String?
   estimatedDelivery DateTime? @map("estimated_delivery")
 
   externalEventId String? @unique @map("external_event_id")
@@ -1142,10 +1144,10 @@ model FulfillmentEvent {
 
 // ACTIVE — used by app/api/campaigns/[campaignId]/analytics/route.ts, lib/creators/validation-ops.ts
 model CostRecord {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   type     String // product | shipping | platform_fee | other
-  amount   Int    // cents
-  currency String @default("USD")
+  amount   Int // cents
+  currency String  @default("USD")
   note     String?
 
   campaignCreatorId String @map("campaign_creator_id")
@@ -1159,12 +1161,12 @@ model CostRecord {
 }
 
 model MentionAsset {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   platform String // instagram | tiktok | youtube | twitter
-  mediaUrl String @map("media_url")
+  mediaUrl String  @map("media_url")
   type     String? // post | story | reel | video
 
-  caption  String? @db.Text
+  caption  String?   @db.Text
   likes    Int?
   comments Int?
   views    Int?
@@ -1184,12 +1186,53 @@ model MentionAsset {
   @@map("mention_assets")
 }
 
+/// A post that tags or mentions the brand, captured for the content library
+/// (usage rights, ads). Unlike MentionAsset it does not need a campaign.
+model ContentPost {
+  id           String    @id @default(uuid())
+  platform     String    @default("instagram")
+  externalId   String    @map("external_id")
+  permalink    String?
+  mediaType    String?   @map("media_type") // IMAGE | VIDEO | CAROUSEL_ALBUM
+  mediaUrl     String?   @map("media_url") @db.Text
+  thumbnailUrl String?   @map("thumbnail_url") @db.Text
+  caption      String?   @db.Text
+  username     String?
+  likes        Int?
+  comments     Int?
+  postedAt     DateTime? @map("posted_at")
+  source       String    @default("tag") // tag | mention
+
+  /// none | requested | approved | declined
+  rightsStatus       String    @default("none") @map("rights_status")
+  rightsToken        String?   @unique @map("rights_token")
+  rightsRequestedAt  DateTime? @map("rights_requested_at")
+  rightsRespondedAt  DateTime? @map("rights_responded_at")
+  rightsSignerName   String?   @map("rights_signer_name")
+  rightsTermsVersion String?   @map("rights_terms_version")
+
+  hidden Boolean @default(false)
+
+  brandId   String  @map("brand_id")
+  creatorId String? @map("creator_id")
+
+  brand   Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  creator Creator? @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([brandId, platform, externalId])
+  @@index([brandId, postedAt])
+  @@map("content_posts")
+}
+
 model ReminderSchedule {
   id     String @id @default(uuid())
   type   String // post_reminder | follow_up_reminder
   status String @default("pending") // pending | sent | cancelled | suppressed
 
-  scheduledFor DateTime @map("scheduled_for")
+  scheduledFor DateTime  @map("scheduled_for")
   sentAt       DateTime?
   cancelReason String?
 
@@ -1218,9 +1261,9 @@ model InterventionCase {
   resolvedAt DateTime?
   resolvedBy String?
 
-  brandId            String
-  campaignId         String? @map("campaign_id")
-  campaignCreatorId  String? @map("campaign_creator_id")
+  brandId           String
+  campaignId        String? @map("campaign_id")
+  campaignCreatorId String? @map("campaign_creator_id")
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
@@ -1234,15 +1277,15 @@ model InterventionCase {
 }
 
 model WebhookEvent {
-  id       String @id @default(uuid())
-  provider String // stripe | shopify | gmail | instagram
+  id        String @id @default(uuid())
+  provider  String // stripe | shopify | gmail | instagram
   eventType String @map("event_type")
 
-  externalEventId String? @unique @map("external_event_id")
+  externalEventId String?   @unique @map("external_event_id")
   payload         Json
-  status          String @default("pending") // pending | processing | processed | failed
+  status          String    @default("pending") // pending | processing | processed | failed
   error           String?
-  attempts        Int    @default(0)
+  attempts        Int       @default(0)
   processedAt     DateTime?
 
   brandId String?
@@ -1259,16 +1302,16 @@ model WebhookEvent {
 
 // PLANNED — behind feature flags (no prisma.backgroundJob calls found; schema-only for future job queue)
 model BackgroundJob {
-  id        String @id @default(uuid())
-  type      String // outreach | follow_up | reply_process | order_create | fulfillment_sync | reminder_send | mention_process | search_dispatch | billing_sync | alias_warmup | health_check
-  status    String @default("pending") // pending | running | completed | failed | cancelled
+  id     String @id @default(uuid())
+  type   String // outreach | follow_up | reply_process | order_create | fulfillment_sync | reminder_send | mention_process | search_dispatch | billing_sync | alias_warmup | health_check
+  status String @default("pending") // pending | running | completed | failed | cancelled
 
-  dedupeKey String? @unique @map("dedupe_key")
-  payload   Json?
-  result    Json?
-  error     String?
-  attempts  Int    @default(0)
-  maxAttempts Int  @default(3) @map("max_attempts")
+  dedupeKey   String? @unique @map("dedupe_key")
+  payload     Json?
+  result      Json?
+  error       String?
+  attempts    Int     @default(0)
+  maxAttempts Int     @default(3) @map("max_attempts")
 
   scheduledFor DateTime? @map("scheduled_for")
   startedAt    DateTime?
@@ -1299,8 +1342,8 @@ model ActivityLog {
   userId  String?
   brandId String
 
-  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
-  brand Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -1314,12 +1357,12 @@ model ActivityLog {
 // ──────────────────────────────────────────────
 
 model AiPersona {
-  id          String  @id @default(uuid())
-  name        String
-  description String?
-  tone        String  // professional | casual | influencer
-  systemPrompt String @db.Text @map("system_prompt")
-  exampleMessages Json? @map("example_messages") // array of example messages
+  id              String  @id @default(uuid())
+  name            String
+  description     String?
+  tone            String // professional | casual | influencer
+  systemPrompt    String  @map("system_prompt") @db.Text
+  exampleMessages Json?   @map("example_messages") // array of example messages
 
   brandId   String
   isDefault Boolean @default(false)
@@ -1340,9 +1383,9 @@ model AiPersona {
 model Automation {
   id       String  @id @default(uuid())
   name     String
-  type     String  // creator_discovery | mention_check | etc.
-  schedule String  // cron expression or preset (e.g. "daily", "every_12h", "every_6h", "weekly")
-  config   Json    // type-specific configuration
+  type     String // creator_discovery | mention_check | etc.
+  schedule String // cron expression or preset (e.g. "daily", "every_12h", "every_6h", "weekly")
+  config   Json // type-specific configuration
   enabled  Boolean @default(true)
 
   lastRunAt DateTime?
@@ -1395,7 +1438,7 @@ model ShopifyProduct {
   variants ShopifyVariant[]
 
   brandId String
-  brand   Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  brand   Brand  @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   campaignProducts CampaignProduct[]
 
@@ -1408,13 +1451,13 @@ model ShopifyProduct {
 }
 
 model ShopifyVariant {
-  id               String  @id @default(uuid())
-  shopifyVariantId String
-  title            String
-  price            String
-  sku              String?
+  id                String  @id @default(uuid())
+  shopifyVariantId  String
+  title             String
+  price             String
+  sku               String?
   inventoryQuantity Int?
-  imageUrl         String?
+  imageUrl          String?
 
   productId String
   product   ShopifyProduct @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -1434,9 +1477,9 @@ model CampaignHealthSnapshot {
   createdAt  DateTime @default(now())
   campaignId String
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  status     String   // "healthy" | "warning" | "critical"
-  metrics    Json     // HealthMetrics (typed in application code)
-  alerts     Json     // HealthAlert[] (typed in application code)
+  status     String // "healthy" | "warning" | "critical"
+  metrics    Json // HealthMetrics (typed in application code)
+  alerts     Json // HealthAlert[] (typed in application code)
 
   @@index([campaignId, createdAt])
   @@map("campaign_health_snapshots")

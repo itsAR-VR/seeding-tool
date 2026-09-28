@@ -284,7 +284,7 @@ export function InstagramConnectionCard({
               </strong>
             </p>
             <p className="text-sm text-muted-foreground">
-              Tagged posts and mentions are checked every 15 minutes.
+              New tagged posts show up on the Content page.
             </p>
             <Button variant="destructive" onClick={onDisconnect} disabled={loading}>
               {loading ? "Disconnecting..." : "Disconnect"}

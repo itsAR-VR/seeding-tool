@@ -11,6 +11,7 @@ const navItems = [
   { href: "/discover", label: "Discover", icon: "🧭" },
   { href: "/inbox", label: "Inbox", icon: "📬" },
   { href: "/orders", label: "Orders", icon: "📦" },
+  { href: "/content", label: "Content", icon: "🎞️" },
   { href: "/interventions", label: "Needs attention", icon: "🚨" },
   { href: "/admin/health", label: "System status", icon: "🏥" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
