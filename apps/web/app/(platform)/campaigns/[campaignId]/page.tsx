@@ -39,10 +39,27 @@ const reviewColors: Record<string, string> = {
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 };
 
-export default async function CampaignDetailPage({ params }: PageProps) {
+/** Stat-box filters for the creator list. Keys match the ?filter= query value. */
+const CREATOR_FILTERS: Record<string, { label: string; match: (c: { reviewStatus: string; lifecycleStatus: string }) => boolean }> = {
+  pending: { label: "Pending review", match: (c) => c.reviewStatus === "pending" },
+  approved: { label: "Approved", match: (c) => c.reviewStatus === "approved" },
+  declined: { label: "Declined", match: (c) => c.reviewStatus === "declined" },
+  emailed: {
+    label: "Outreach sent",
+    match: (c) => c.reviewStatus === "approved" && c.lifecycleStatus !== "ready",
+  },
+  replied: { label: "Replied", match: (c) => c.lifecycleStatus === "replied" },
+  address_review: { label: "Address review", match: (c) => c.lifecycleStatus === "address_review" },
+  address_confirmed: { label: "Address confirmed", match: (c) => c.lifecycleStatus === "address_confirmed" },
+};
+
+export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
   const { campaignId } = await params;
+  const { filter } = await searchParams;
+  const activeFilter = filter && CREATOR_FILTERS[filter] ? filter : null;
 
   let membership;
   try {
@@ -96,6 +113,9 @@ export default async function CampaignDetailPage({ params }: PageProps) {
   if (!campaign) return notFound();
 
   const creators = campaign.campaignCreators;
+  const visibleCreators = activeFilter
+    ? creators.filter(CREATOR_FILTERS[activeFilter].match)
+    : creators;
   const stats = {
     total: creators.length,
     pendingReview: creators.filter((c) => c.reviewStatus === "pending").length,
@@ -167,28 +187,34 @@ export default async function CampaignDetailPage({ params }: PageProps) {
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-1">
           {outreachBlockers.length === 0 && (
             <Link href={`/campaigns/${campaignId}/outreach`}>
               <Button>Email creators →</Button>
             </Link>
           )}
           <Link href={`/campaigns/${campaignId}/analytics`}>
-            <Button variant="outline">📊 Analytics</Button>
+            <Button variant="ghost" size="sm">📊 Analytics</Button>
           </Link>
           <TriggerSearchButton campaignId={campaignId} />
           {outreachBlockers.length > 0 && (
-            <Button variant="outline" disabled>
+            <Button variant="ghost" size="sm" disabled>
               Email creators (finish setup first)
             </Button>
           )}
           <Link href={`/campaigns/${campaignId}/review`}>
-            <Button variant="outline">
+            <Button variant="ghost" size="sm">
               Review Queue ({stats.pendingReview})
             </Button>
           </Link>
+          <Link href={`/campaigns/${campaignId}/orders`}>
+            <Button variant="ghost" size="sm">📦 Orders</Button>
+          </Link>
+          <Link href={`/campaigns/${campaignId}/mentions`}>
+            <Button variant="ghost" size="sm">📣 Mentions</Button>
+          </Link>
           <Link href={`/campaigns/${campaignId}/seed-list`}>
-            <Button variant="outline">Portfolio Preview</Button>
+            <Button variant="ghost" size="sm">Portfolio Preview</Button>
           </Link>
         </div>
       </div>
@@ -293,22 +319,36 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       {/* Stats Grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
         {[
-          { label: "Total", value: stats.total },
-          { label: "Pending", value: stats.pendingReview },
-          { label: "Approved", value: stats.approved },
-          { label: "Declined", value: stats.declined },
-          { label: "Outreach Sent", value: stats.outreachSent },
-          { label: "Replied", value: stats.replied },
-          { label: "Address Review", value: stats.addressReview },
-          { label: "Address Confirmed", value: stats.addressConfirmed },
-        ].map((stat) => (
-          <Card key={stat.label}>
-            <CardContent className="p-4">
-              <p className="text-2xl font-bold">{stat.value}</p>
-              <p className="text-xs text-muted-foreground">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+          { label: "Total", value: stats.total, filter: null },
+          { label: "Pending", value: stats.pendingReview, filter: "pending" },
+          { label: "Approved", value: stats.approved, filter: "approved" },
+          { label: "Declined", value: stats.declined, filter: "declined" },
+          { label: "Outreach Sent", value: stats.outreachSent, filter: "emailed" },
+          { label: "Replied", value: stats.replied, filter: "replied" },
+          { label: "Address Review", value: stats.addressReview, filter: "address_review" },
+          { label: "Address Confirmed", value: stats.addressConfirmed, filter: "address_confirmed" },
+        ].map((stat) => {
+          const selected = (stat.filter ?? null) === activeFilter;
+          return (
+            <Link
+              key={stat.label}
+              href={stat.filter ? `/campaigns/${campaignId}?filter=${stat.filter}#creators` : `/campaigns/${campaignId}#creators`}
+              scroll={false}
+              className="group block"
+            >
+              <Card
+                className={`h-full transition-shadow group-hover:shadow-md ${
+                  selected ? "ring-2 ring-foreground/30" : ""
+                }`}
+              >
+                <CardContent className="p-4">
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
 
       {/* Products */}
@@ -344,12 +384,22 @@ export default async function CampaignDetailPage({ params }: PageProps) {
       </Card>
 
       {/* Creator List */}
-      <Card>
+      <Card id="creators">
         <CardHeader>
-          <CardTitle className="text-base">Creators</CardTitle>
+          <CardTitle className="text-base">
+            Creators{activeFilter ? ` · ${CREATOR_FILTERS[activeFilter].label}` : ""}
+          </CardTitle>
           <CardDescription>
-            {creators.length} creator{creators.length !== 1 ? "s" : ""} in this
-            campaign
+            {activeFilter ? (
+              <>
+                Showing {visibleCreators.length} of {creators.length}.{" "}
+                <Link href={`/campaigns/${campaignId}#creators`} scroll={false} className="text-blue-600 hover:underline">
+                  Show all
+                </Link>
+              </>
+            ) : (
+              `${creators.length} creator${creators.length !== 1 ? "s" : ""} in this campaign`
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -382,12 +432,14 @@ export default async function CampaignDetailPage({ params }: PageProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {creators.map((cc) => {
+                  {visibleCreators.map((cc) => {
                     const profile = cc.creator.profiles[0];
                     return (
                       <tr key={cc.id} className="border-b last:border-0">
                         <td className="py-2">
-                          {cc.creator.name ?? "Unknown"}
+                          <Link href={`/creators/${cc.creatorId}`} className="font-medium hover:underline">
+                            {cc.creator.name ?? "Unknown"}
+                          </Link>
                         </td>
                         <td className="py-2">
                           {profile ? (

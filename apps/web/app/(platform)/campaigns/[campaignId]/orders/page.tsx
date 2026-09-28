@@ -1,9 +1,10 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -17,6 +18,7 @@ type OrderRow = {
   shopifyOrderNumber: string | null;
   shopifyDraftOrderId: string | null;
   shopifyDraftOrderName: string | null;
+  shopifyAdminUrl?: string | null;
   status: string;
   createdAt: string;
   campaignCreator: {
@@ -64,7 +66,6 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [eligible, setEligible] = useState<EligibleCreator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [completing, setCompleting] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -117,36 +118,6 @@ export default function OrdersPage() {
       console.error("Failed to load data:", error);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function completeDraft(creatorId: string) {
-    const approved = window.confirm(
-      "Approve this gift and create the real Shopify order? This does not prove that the warehouse shipped it."
-    );
-    if (!approved) return;
-
-    setCompleting(creatorId);
-    try {
-      const res = await fetch(
-        `/api/campaigns/${campaignId}/creators/${creatorId}/order`,
-        { method: "POST" }
-      );
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Failed to complete draft");
-      }
-
-      // Reload data
-      await loadData();
-    } catch (error) {
-      console.error("Failed to complete draft:", error);
-      alert(
-        error instanceof Error ? error.message : "Failed to complete draft"
-      );
-    } finally {
-      setCompleting(null);
     }
   }
 
@@ -231,9 +202,11 @@ export default function OrdersPage() {
                     return (
                       <tr key={order.id} className="border-b last:border-0">
                         <td className="py-3 pr-4">
-                          {order.campaignCreator.creator.name ||
-                            order.campaignCreator.creator.email ||
-                            "Unknown"}
+                          <Link href={`/creators/${creatorId}`} className="font-medium hover:underline">
+                            {order.campaignCreator.creator.name ||
+                              order.campaignCreator.creator.email ||
+                              "Unknown"}
+                          </Link>
                         </td>
                         <td className="py-3 pr-4 font-mono text-xs">
                           {isDraft
@@ -275,16 +248,15 @@ export default function OrdersPage() {
                           {new Date(order.createdAt).toLocaleDateString()}
                         </td>
                         <td className="py-3">
-                          {isDraft ? (
-                            <Button
-                              size="sm"
-                              onClick={() => completeDraft(creatorId)}
-                              disabled={completing === creatorId}
+                          {order.shopifyAdminUrl ? (
+                            <a
+                              href={order.shopifyAdminUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-600 hover:underline"
                             >
-                              {completing === creatorId
-                                ? "Completing..."
-                                : "Approve & create order"}
-                            </Button>
+                              {isDraft ? "Review in Shopify ↗" : "Open in Shopify ↗"}
+                            </a>
                           ) : (
                             <span className="text-muted-foreground">-</span>
                           )}

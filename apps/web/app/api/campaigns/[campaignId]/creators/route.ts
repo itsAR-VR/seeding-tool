@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getShopifyStoreDomain, shopifyAdminOrderUrl } from "@/lib/shopify/admin-links";
 import { validateInstagramCreators } from "@/lib/instagram/validator";
 import { inngest } from "@/lib/inngest/client";
 import {
@@ -57,7 +58,14 @@ export async function GET(request: NextRequest, context: RouteContext) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(creators);
+    const storeDomain = await getShopifyStoreDomain(membership.brandId);
+    return NextResponse.json(
+      creators.map((cc) =>
+        "shopifyOrder" in cc && cc.shopifyOrder
+          ? { ...cc, shopifyOrder: { ...cc.shopifyOrder, shopifyAdminUrl: shopifyAdminOrderUrl(storeDomain, cc.shopifyOrder) } }
+          : cc
+      )
+    );
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -10,8 +10,9 @@ const navItems = [
   { href: "/creators", label: "Creators", icon: "👤" },
   { href: "/discover", label: "Discover", icon: "🧭" },
   { href: "/inbox", label: "Inbox", icon: "📬" },
-  { href: "/interventions", label: "Interventions", icon: "🚨" },
-  { href: "/admin/health", label: "Health", icon: "🏥" },
+  { href: "/orders", label: "Orders", icon: "📦" },
+  { href: "/interventions", label: "Needs attention", icon: "🚨" },
+  { href: "/admin/health", label: "System status", icon: "🏥" },
   { href: "/settings", label: "Settings", icon: "⚙️" },
 ];
 

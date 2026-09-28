@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,7 @@ type Thread = {
     lifecycleStatus: string;
     replyDecision: "yes" | "no" | null;
     creator: {
+      id: string;
       name: string | null;
       email: string | null;
       instagramHandle: string | null;
@@ -253,7 +256,9 @@ export default function ThreadDetailPage() {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">
-              {creator.name ?? profile?.handle ?? "Unknown Creator"}
+              <Link href={`/creators/${creator.id}`} className="hover:underline">
+                {creator.name ?? profile?.handle ?? "Unknown Creator"}
+              </Link>
             </h1>
             <Badge>{thread.status}</Badge>
             <Badge variant="outline">
@@ -261,7 +266,9 @@ export default function ThreadDetailPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            {thread.campaignCreator.campaign.name}
+            <Link href={`/campaigns/${thread.campaignCreator.campaign.id}`} className="hover:underline">
+              {thread.campaignCreator.campaign.name}
+            </Link>
             {profile && ` · @${profile.handle}`}
             {profile?.followerCount != null &&
               ` · ${profile.followerCount.toLocaleString()} followers`}

@@ -218,25 +218,29 @@ export default async function DashboardPage() {
           value={activeCampaignCount}
           sublabel={`of ${totalCampaigns} total`}
           icon="📢"
+          href="/campaigns"
         />
         <MetricCard
           title="Creators in Pipeline"
           value={creatorsInPipeline}
           sublabel={`across ${activeCampaignCount} active campaign${activeCampaignCount !== 1 ? "s" : ""}`}
           icon="👤"
+          href="/creators"
         />
         <MetricCard
-          title="Pending Interventions"
+          title="Needs attention"
           value={pendingInterventions}
           sublabel="need attention"
           icon="🚨"
           highlight={pendingInterventions > 0}
+          href="/interventions"
         />
         <MetricCard
           title="Orders in Transit"
           value={ordersShipping}
           sublabel="created / processing / shipped"
           icon="📦"
+          href="/orders"
         />
       </div>
 
@@ -430,15 +434,23 @@ function MetricCard({
   sublabel,
   icon,
   highlight = false,
+  href,
 }: {
   title: string;
   value: number;
   sublabel: string;
   icon: string;
   highlight?: boolean;
+  href: string;
 }) {
   return (
-    <Card className={highlight ? "ring-2 ring-red-200" : undefined}>
+    <Link href={href} className="group block">
+    <Card
+      className={cn(
+        "h-full transition-shadow group-hover:shadow-md group-hover:ring-1 group-hover:ring-foreground/10",
+        highlight && "ring-2 ring-red-200"
+      )}
+    >
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardDescription>{title}</CardDescription>
@@ -447,9 +459,12 @@ function MetricCard({
         <CardTitle className="text-3xl font-bold">{value}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-xs text-muted-foreground">{sublabel}</p>
+        <p className="text-xs text-muted-foreground">
+          {sublabel} <span className="opacity-0 transition-opacity group-hover:opacity-100">→</span>
+        </p>
       </CardContent>
     </Card>
+    </Link>
   );
 }
 

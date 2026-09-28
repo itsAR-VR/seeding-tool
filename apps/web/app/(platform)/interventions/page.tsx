@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ type Intervention = {
   createdAt: string;
   resolvedAt: string | null;
   campaignCreatorId: string | null;
+  link: { label: string; href: string } | null;
 };
 
 const typeLabels: Record<string, string> = {
@@ -105,9 +108,9 @@ export default function InterventionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Interventions</h1>
+        <h1 className="text-2xl font-bold">Needs attention</h1>
         <p className="text-muted-foreground">
-          Review and resolve issues requiring attention
+          Things the tool couldn&apos;t handle on its own. Open each one, sort it out, then mark it resolved.
         </p>
       </div>
 
@@ -120,7 +123,7 @@ export default function InterventionsPage() {
             size="sm"
             onClick={() => setFilter(status)}
           >
-            {status || "All"}
+            {({ open: "Open", in_progress: "In progress", resolved: "Resolved" } as Record<string, string>)[status] ?? "All"}
           </Button>
         ))}
       </div>
@@ -131,8 +134,8 @@ export default function InterventionsPage() {
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
               {filter === "open"
-                ? "No open interventions 🎉"
-                : "No interventions found"}
+                ? "Nothing needs your attention 🎉"
+                : "Nothing here"}
             </p>
           </CardContent>
         </Card>
@@ -165,6 +168,11 @@ export default function InterventionsPage() {
                       </Badge>
                     </div>
                     <CardTitle className="text-base">{i.title}</CardTitle>
+                    {i.link && (
+                      <Link href={i.link.href} className="text-sm text-blue-600 hover:underline">
+                        Open {i.link.label} →
+                      </Link>
+                    )}
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {new Date(i.createdAt).toLocaleDateString()}

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import type { Creator } from "../hooks/use-creators-state";
 
@@ -83,18 +84,13 @@ export function CreatorsTable({
                           />
                           {creator.name &&
                             creator.name !== creator.instagramHandle && (
-                              <p className="text-xs text-muted-foreground">
-                                {creator.instagramHandle ? (
-                                  <InstagramHandleLink
-                                    handle={creator.instagramHandle}
-                                    url={instagramProfile?.url}
-                                    className="hover:text-foreground hover:underline"
-                                  >
-                                    {creator.name}
-                                  </InstagramHandleLink>
-                                ) : (
-                                  creator.name
-                                )}
+                              <p className="text-xs">
+                                <Link
+                                  href={`/creators/${creator.id}`}
+                                  className="font-medium text-foreground hover:underline"
+                                >
+                                  {creator.name}
+                                </Link>
                               </p>
                             )}
                         </div>
@@ -146,7 +142,7 @@ export function CreatorsTable({
                             variant="outline"
                             onClick={() => router.push(`/creators/${creator.id}`)}
                           >
-                            Explain
+                            View
                           </Button>
                           <Button
                             size="sm"
