@@ -39,7 +39,7 @@ async function ensureBucket(): Promise<void> {
   if (error && error.message?.includes("not found")) {
     const { error: createError } = await supabase.storage.createBucket(BUCKET, {
       public: true,
-      fileSizeLimit: 100 * 1024 * 1024, // 100 MB (videos can be large)
+      fileSizeLimit: 50 * 1024 * 1024, // 50 MB, the Supabase plan maximum
     });
 
     if (createError) {
