@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_RIGHTS_MONTHS, rightsTerms } from "@/lib/content/rights";
-import { RightsForm } from "./RightsForm";
+import { RightsForm, VideoUpload } from "./RightsForm";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -34,9 +34,12 @@ export default async function RightsPage({
               </p>
             </div>
           ) : post.rightsStatus === "approved" ? (
-            <p className="mt-4 text-sm leading-6 text-neutral-700">
-              Thank you! You already approved this post.
-            </p>
+            <div className="mt-4 space-y-5">
+              <p className="text-sm leading-6 text-neutral-700">
+                Thank you! You already approved this post.
+              </p>
+              {post.mediaType === "VIDEO" && !post.mediaUrl && <VideoUpload token={token} />}
+            </div>
           ) : post.rightsStatus === "declined" ? (
             <p className="mt-4 text-sm leading-6 text-neutral-700">
               Thanks for letting us know. We won&apos;t use this post.
@@ -67,7 +70,7 @@ export default async function RightsPage({
                 ))}
               </div>
               <div className="mt-6">
-                <RightsForm token={token} />
+                <RightsForm token={token} askForVideo={post.mediaType === "VIDEO" && !post.mediaUrl} />
               </div>
             </>
           )}

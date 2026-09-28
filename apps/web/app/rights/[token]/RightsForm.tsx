@@ -1,10 +1,79 @@
 "use client";
 
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Decision = "approve" | "decline";
 
-export function RightsForm({ token }: { token: string }) {
+/** Supabase's per-file limit on our plan. */
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+
+export function VideoUpload({ token }: { token: string }) {
+  const [status, setStatus] = useState<"idle" | "uploading" | "done">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function upload(file: File) {
+    setError(null);
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("That file is over 50 MB. Could you send a shorter or smaller version?");
+      return;
+    }
+    setStatus("uploading");
+    try {
+      const post = (body: object) =>
+        fetch(`/api/rights/${token}/upload`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentType: file.type, ...body }),
+        }).then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => ({})) }));
+
+      const start = await post({});
+      if (!start.ok) throw new Error(start.data.error ?? "Upload failed");
+
+      const { error: uploadError } = await createClient()
+        .storage.from("mention-media")
+        .uploadToSignedUrl(start.data.path, start.data.token, file, { contentType: file.type });
+      if (uploadError) throw new Error("Upload failed. Please try again.");
+
+      const finish = await post({ done: true });
+      if (!finish.ok) throw new Error(finish.data.error ?? "Upload failed");
+      setStatus("done");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+      setStatus("idle");
+    }
+  }
+
+  if (status === "done") {
+    return <p className="text-sm text-neutral-700">Got it, thank you!</p>;
+  }
+
+  return (
+    <div className="space-y-3 rounded-3xl border border-neutral-200 p-5">
+      <p className="text-sm leading-6 text-neutral-700">
+        If you still have the original video, could you upload it here? Instagram doesn&apos;t let
+        brands use songs in ads, so a version without music helps a lot.
+      </p>
+      <label className="block">
+        <span className="sr-only">Choose video</span>
+        <input
+          type="file"
+          accept="video/mp4,video/quicktime,video/webm"
+          disabled={status === "uploading"}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void upload(file);
+          }}
+          className="block w-full text-sm"
+        />
+      </label>
+      {status === "uploading" && <p className="text-sm text-neutral-600">Uploading...</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+export function RightsForm({ token, askForVideo }: { token: string; askForVideo: boolean }) {
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +102,12 @@ export function RightsForm({ token }: { token: string }) {
   }
 
   if (done === "approve") {
-    return <p className="text-sm font-medium">Thank you so much! We can&apos;t wait to share it.</p>;
+    return (
+      <div className="space-y-5">
+        <p className="text-sm font-medium">Thank you so much! We can&apos;t wait to share it.</p>
+        {askForVideo && <VideoUpload token={token} />}
+      </div>
+    );
   }
   if (done === "decline") {
     return <p className="text-sm font-medium">Thanks for letting us know. We won&apos;t use this post.</p>;
