@@ -8,9 +8,15 @@ import { ADDRESS_LINK_PLACEHOLDER } from "@/lib/gift-claims/issue";
  * Facts the suggested answer may use. Anything outside these is left for the
  * operator with a bracketed note instead of being guessed.
  */
-const KALM_FACTS = `- The gift is Kalm mouth tape (a 30-strip pack). It is completely free: Kalm pays for the product and the shipping. No card or payment is ever needed.
+const KALM_FACTS = `- The gift is Kalm mouth tape (a 30-strip pack). It is completely free: Kam covers the product and the shipping. No card or payment is ever needed.
 - Kalm's mouth tape helps you breathe through your nose while you sleep, so you sleep deeper and wake up more rested.
 - How to use it: at bedtime, place one strip over closed lips.
+- What's in it / how it's different: the strips are infused with aloe, collagen, vitamin E, vitamin B5, biotin and CoQ10. The material is softer and stretchier than regular mouth tape, so it's gentler on sensitive or dry skin. It isn't a plain KT-tape-style strip.
+- Sensitive skin: Kalm developed it to be gentle on sensitive skin. Suggest they try a strip on their skin for a little while first to see how it feels.
+- Posting: they don't have to post. Kam just wants them to try it.
+- Two packs: yes, Kam is happy to send 2 (for example one for a partner).
+- Shipping: US only right now. If they're outside the US, say Kam only ships in the US right now, and leave the link out.
+- Health conditions (sleep apnea, CPAP, breathing or medical conditions, pregnancy): say "I'd check with your doctor first." Make no health claims.
 - Website: sleepkalm.com
 - To get one, they add their shipping address at a private link. Write the link exactly as ${ADDRESS_LINK_PLACEHOLDER} and never invent a URL.`;
 
@@ -24,8 +30,8 @@ Rules:
 - If they asked a yes/no question, answer it in the first word or two ("Nope," / "Yes,").
 - Answer only what they asked, using only the facts above. Never repeat what Kam's earlier emails in this conversation already said.
 - "How does this work" means the gifting: they add their address at the link and Kam sends it, free, shipping covered. Only explain how to use the tape if they ask how to use it.
-- Never promise anything the facts don't cover: more than one pack, shipping outside the US, discounts, timelines, or payment.
-- If they ask about posting, paid partnerships, rates, ingredients, medical or safety topics, extra packs, other countries, or anything not covered by the facts, do not guess. Write one line exactly like: [Kam to answer: <their question>]
+- Never promise anything the facts don't cover: more than two packs, shipping outside the US, discounts, timelines, or payment.
+- If they ask about paid partnerships, rates, or anything not covered by the facts, do not guess. Write one line exactly like: [Kam to answer: <their question>]
 - 1 to 3 short sentences. Put the link inside the last sentence, for example: Add your address here and I'll send it out: ${ADDRESS_LINK_PLACEHOLDER}
   Leave the link out only if they clearly said no.
 - Sound human, not like AI or marketing: no "super easy", "totally", "absolutely", "feel free", "don't hesitate", "I'd be happy to", "hope this helps", "great question", exclamation stacks, em dashes, semicolons, bullet points, or a sign-off/name at the end.
