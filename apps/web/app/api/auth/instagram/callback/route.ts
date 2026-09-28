@@ -13,6 +13,7 @@ import {
   getUserPages,
   getInstagramAccountFromPage,
   getUserProfile,
+  subscribePageToWebhooks,
 } from "@/lib/instagram/client";
 
 /**
@@ -118,7 +119,12 @@ export async function GET(request: NextRequest) {
     // Collect every Page with a linked Instagram business account, then pick
     // the one that matches the brand's website (e.g. sleepkalm.com -> @sleepkalm)
     // so a user who manages several brands' Pages connects the right account.
-    const candidates: Array<{ igId: string; username: string | null; pageToken: string }> = [];
+    const candidates: Array<{
+      igId: string;
+      username: string | null;
+      pageId: string;
+      pageToken: string;
+    }> = [];
     for (const page of pages.data) {
       const igAccount = await getInstagramAccountFromPage(page.id, longLivedToken.access_token);
       if (!igAccount) continue;
@@ -129,7 +135,7 @@ export async function GET(request: NextRequest) {
       } catch {
         // Profile fetch is best-effort
       }
-      candidates.push({ igId: igAccount.id, username, pageToken: page.access_token });
+      candidates.push({ igId: igAccount.id, username, pageId: page.id, pageToken: page.access_token });
     }
 
     const brandRow = await prisma.brand.findUnique({
@@ -202,9 +208,18 @@ export async function GET(request: NextRequest) {
         metadata: {
           igUserId: igAccountId,
           igUsername,
+          pageId: chosen?.pageId ?? null,
         },
       });
     });
+
+    // Story mentions and caption @mentions arrive as webhooks, which Meta only
+    // sends for Pages subscribed to the app. Best-effort: the connection works without it.
+    if (chosen) {
+      await subscribePageToWebhooks(chosen.pageId, chosen.pageToken).catch((error) => {
+        console.error("[instagram-callback] Page webhook subscription failed:", error);
+      });
+    }
 
     return Response.redirect(
       buildConnectionRedirect(appUrl, state?.returnTo, {

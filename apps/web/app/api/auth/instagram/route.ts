@@ -14,9 +14,11 @@ import { createClient } from "@/lib/supabase/server";
  * - instagram_basic: read IG profile + media
  * - instagram_manage_comments: read comments/mentions
  * - instagram_manage_insights: read media insights
+ * - instagram_manage_messages: receive story mentions (they arrive as messages)
  * - pages_show_list: list user's Pages
  * - pages_read_engagement: read Page engagement data
  * - business_management: manage business settings
+ * - pages_manage_metadata: subscribe the Page to webhooks
  */
 export async function GET(request: NextRequest) {
   const appUrl = APP_URL;
@@ -58,9 +60,11 @@ export async function GET(request: NextRequest) {
     "instagram_basic",
     "instagram_manage_comments",
     "instagram_manage_insights",
+    "instagram_manage_messages",
     "pages_show_list",
     "pages_read_engagement",
     "business_management",
+    "pages_manage_metadata",
   ].join(",");
 
   const params = new URLSearchParams({

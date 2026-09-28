@@ -18,9 +18,9 @@ export type ContentSyncResult = {
   error?: string;
 };
 
-type InstagramCredential = { accessToken: string; igUserId: string };
+export type InstagramCredential = { accessToken: string; igUserId: string };
 
-async function loadInstagramCredential(brandId: string): Promise<InstagramCredential | null> {
+export async function loadInstagramCredential(brandId: string): Promise<InstagramCredential | null> {
   const [credential, connection] = await Promise.all([
     prisma.providerCredential.findFirst({
       where: { brandId, provider: "instagram", credentialType: "oauth_access_token", isValid: true },
@@ -43,7 +43,7 @@ async function loadInstagramCredential(brandId: string): Promise<InstagramCreden
 }
 
 /** Finds the brand's creator with this Instagram handle, stored with or without "@". */
-async function findCreatorId(brandId: string, username: string | undefined): Promise<string | null> {
+export async function findCreatorId(brandId: string, username: string | undefined): Promise<string | null> {
   if (!username) return null;
   const handle = username.replace(/^@/, "");
   const creator = await prisma.creator.findFirst({

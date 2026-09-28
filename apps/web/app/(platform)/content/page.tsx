@@ -14,6 +14,11 @@ const RIGHTS_LABELS: Record<string, { label: string; variant: "default" | "secon
   declined: { label: "Declined", variant: "destructive" },
 };
 
+const SOURCE_LABELS: Record<string, string> = {
+  story: "Story",
+  mention: "Caption mention",
+};
+
 const TABS = [
   { key: "all", label: "All" },
   { key: "none", label: "No rights yet" },
@@ -63,7 +68,7 @@ export default async function ContentPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Content</h1>
-          <p className="text-muted-foreground">Posts and reels that tag you on Instagram.</p>
+          <p className="text-muted-foreground">Posts, reels, and stories that tag or mention you on Instagram.</p>
         </div>
         <SyncContent />
       </div>
@@ -96,12 +101,14 @@ export default async function ContentPage({
             return (
               <Card key={post.id} className="overflow-hidden">
                 <a
-                  href={post.permalink ?? "#"}
+                  href={post.permalink ?? post.mediaUrl ?? "#"}
                   target="_blank"
                   rel="noreferrer"
                   className="relative block aspect-square bg-muted"
                 >
-                  {image ? (
+                  {image && /\.(mp4|mov|webm)$/i.test(image) ? (
+                    <video src={image} className="h-full w-full object-cover" muted playsInline preload="metadata" />
+                  ) : image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
                   ) : (
@@ -109,9 +116,9 @@ export default async function ContentPage({
                       Open on Instagram
                     </span>
                   )}
-                  {post.mediaType === "VIDEO" && (
+                  {(post.mediaType === "VIDEO" || post.source !== "tag") && (
                     <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
-                      Video
+                      {SOURCE_LABELS[post.source] ?? "Video"}
                     </span>
                   )}
                 </a>
