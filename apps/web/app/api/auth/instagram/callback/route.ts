@@ -115,32 +115,43 @@ export async function GET(request: NextRequest) {
     // Step 3: Find user's Pages and linked Instagram accounts
     const pages = await getUserPages(longLivedToken.access_token);
 
-    let igAccountId: string | null = null;
-    let igUsername: string | null = null;
-
+    // Collect every Page with a linked Instagram business account, then pick
+    // the one that matches the brand's website (e.g. sleepkalm.com -> @sleepkalm)
+    // so a user who manages several brands' Pages connects the right account.
+    const candidates: Array<{ igId: string; username: string | null; pageToken: string }> = [];
     for (const page of pages.data) {
-      const igAccount = await getInstagramAccountFromPage(
-        page.id,
-        longLivedToken.access_token
-      );
-
-      if (igAccount) {
-        igAccountId = igAccount.id;
-
-        // Fetch the IG username
-        try {
-          const profile = await getUserProfile(
-            igAccount.id,
-            longLivedToken.access_token
-          );
-          igUsername = profile.username ?? null;
-        } catch {
-          // Profile fetch is best-effort
-        }
-
-        break; // Use the first linked IG account
+      const igAccount = await getInstagramAccountFromPage(page.id, longLivedToken.access_token);
+      if (!igAccount) continue;
+      let username: string | null = null;
+      try {
+        const profile = await getUserProfile(igAccount.id, page.access_token);
+        username = profile.username ?? null;
+      } catch {
+        // Profile fetch is best-effort
       }
+      candidates.push({ igId: igAccount.id, username, pageToken: page.access_token });
     }
+
+    const brandRow = await prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { websiteUrl: true, name: true },
+    });
+    const siteStem = (() => {
+      try {
+        return brandRow?.websiteUrl
+          ? new URL(brandRow.websiteUrl).hostname.replace(/^www\./, "").split(".")[0].toLowerCase()
+          : null;
+      } catch {
+        return null;
+      }
+    })();
+    const chosen =
+      candidates.find((c) => siteStem && c.username?.toLowerCase() === siteStem) ??
+      candidates.find((c) => siteStem && c.username?.toLowerCase().includes(siteStem)) ??
+      candidates[0];
+
+    const igAccountId: string | null = chosen?.igId ?? null;
+    const igUsername: string | null = chosen?.username ?? null;
 
     if (!igAccountId) {
       console.error(
@@ -154,8 +165,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Step 4: Store encrypted credential + connection
+    // Page tokens derived from a long-lived user token do not expire, so the
+    // connection keeps working without the 60-day refresh.
     const credentialPayload = JSON.stringify({
-      accessToken: longLivedToken.access_token,
+      accessToken: chosen?.pageToken ?? longLivedToken.access_token,
+      userAccessToken: longLivedToken.access_token,
       igUserId: igAccountId,
       igUsername,
       expiresIn: longLivedToken.expires_in,

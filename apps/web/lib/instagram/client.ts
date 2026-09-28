@@ -5,6 +5,8 @@
  * Handles rate limiting (200 req/hr), retry with exponential backoff, and error parsing.
  */
 
+// Instagram Login tokens use graph.instagram.com; this app connects through
+// Facebook Login for Business, whose tokens only work on graph.facebook.com.
 const GRAPH_BASE = "https://graph.instagram.com";
 const FACEBOOK_GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
@@ -166,7 +168,7 @@ function sleep(ms: number): Promise<void> {
 export async function getTaggedMedia(
   igUserId: string,
   accessToken: string,
-  fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
+  fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,username,like_count,comments_count"
 ): Promise<InstagramPaginatedResponse<InstagramMedia>> {
   const params = new URLSearchParams({
     fields,
@@ -174,7 +176,7 @@ export async function getTaggedMedia(
   });
 
   return graphFetch<InstagramPaginatedResponse<InstagramMedia>>(
-    `${GRAPH_BASE}/${igUserId}/tags?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}/tags?${params}`
   );
 }
 
@@ -195,7 +197,7 @@ export async function getMentionedMedia(
   });
 
   return graphFetch<InstagramMedia>(
-    `${GRAPH_BASE}/${igUserId}/mentioned_media?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}/mentioned_media?${params}`
   );
 }
 
@@ -218,7 +220,7 @@ export async function getMediaInsights(
   });
 
   return graphFetch<InstagramPaginatedResponse<InstagramInsight>>(
-    `${GRAPH_BASE}/${mediaId}/insights?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${mediaId}/insights?${params}`
   );
 }
 
@@ -237,7 +239,7 @@ export async function getMediaDetails(
   });
 
   return graphFetch<InstagramMedia>(
-    `${GRAPH_BASE}/${mediaId}?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${mediaId}?${params}`
   );
 }
 
@@ -262,7 +264,7 @@ export async function getUserProfile(
   });
 
   return graphFetch(
-    `${GRAPH_BASE}/${igUserId}?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}?${params}`
   );
 }
 
