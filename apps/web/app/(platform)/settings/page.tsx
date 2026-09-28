@@ -26,6 +26,12 @@ const settingsLinks = [
     icon: "🤖",
   },
   {
+    href: "/settings/do-not-send",
+    title: "Do-not-send list",
+    description: "Creators who said no, unsubscribed, or bounced. They're never emailed again.",
+    icon: "🚫",
+  },
+  {
     href: "/settings/automations",
     title: "Automations",
     description: "Schedule recurring creator discovery and other tasks.",

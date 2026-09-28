@@ -100,6 +100,9 @@ export default async function InboxPage() {
             {needsReview.length} drafts to review
           </Badge>
         )}
+        <Link href="/settings/do-not-send">
+          <Badge variant="outline" className="hover:bg-accent">Do-not-send list →</Badge>
+        </Link>
         {decided.length > 0 && (
           <Badge variant="outline">
             AI matched you {aiMatches} of {decided.length}
