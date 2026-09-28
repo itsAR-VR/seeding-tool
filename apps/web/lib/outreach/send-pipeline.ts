@@ -324,6 +324,11 @@ export async function sendOutreachBatch(
             lastOutreachAt: new Date(),
           },
         });
+        // First real send moves a draft campaign to active.
+        await prisma.campaign.updateMany({
+          where: { status: "draft", campaignCreators: { some: { id: draft.campaignCreatorId } } },
+          data: { status: "active" },
+        });
         // Retire the pre-written draft so it is never offered again.
         await prisma.aIDraft.updateMany({
           where: { campaignCreatorId: draft.campaignCreatorId, type: "outreach", status: "draft" },

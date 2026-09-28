@@ -52,7 +52,9 @@ export default async function OrdersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">{orders.length} orders</CardTitle>
+          <CardTitle className="text-base">
+            {orders.length} {orders.length === 1 ? "order" : "orders"}
+          </CardTitle>
           <CardDescription>
             Drafts wait for you in Shopify. Complete one there to ship it.
           </CardDescription>
