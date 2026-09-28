@@ -1210,6 +1210,9 @@ model ContentPost {
   rightsRespondedAt  DateTime? @map("rights_responded_at")
   rightsSignerName   String?   @map("rights_signer_name")
   rightsTermsVersion String?   @map("rights_terms_version")
+  /// How long the rights last, in months. 0 = no end date.
+  rightsMonths       Int?      @map("rights_months")
+  rightsSignerIp     String?   @map("rights_signer_ip")
 
   hidden Boolean @default(false)
 

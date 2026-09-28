@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { rightsEndDate } from "@/lib/content/rights";
 import { SyncContent } from "./sync-content";
+import { RightsAction } from "./rights-action";
 
 const RIGHTS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   none: { label: "No rights yet", variant: "outline" },
@@ -61,7 +63,7 @@ export default async function ContentPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Content</h1>
-          <p className="text-muted-foreground">Posts that tag you on Instagram.</p>
+          <p className="text-muted-foreground">Posts and reels that tag you on Instagram.</p>
         </div>
         <SyncContent />
       </div>
@@ -126,11 +128,21 @@ export default async function ContentPage({
                       {post.postedAt?.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    ♥ {post.likes ?? 0} · 💬 {post.comments ?? 0}
-                    {post.creator ? " · Your creator" : ""}
-                  </p>
                   <Badge variant={rights.variant}>{rights.label}</Badge>
+                  {post.rightsStatus === "approved" && (
+                    <p className="text-xs text-muted-foreground">
+                      By {post.rightsSignerName}
+                      {(() => {
+                        const end = rightsEndDate(post.rightsRespondedAt, post.rightsMonths);
+                        return end
+                          ? ` · until ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                          : " · no end date";
+                      })()}
+                    </p>
+                  )}
+                  {(post.rightsStatus === "none" || post.rightsStatus === "requested") && (
+                    <RightsAction postId={post.id} status={post.rightsStatus} />
+                  )}
                 </CardContent>
               </Card>
             );
