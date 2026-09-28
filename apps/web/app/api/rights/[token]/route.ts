@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { archiveContentPost } from "@/lib/content/archive";
+
+// Saving a copy of an approved video can take a few seconds.
+export const maxDuration = 60;
 
 /**
  * POST /api/rights/:token — public endpoint where a creator approves or
@@ -40,6 +44,12 @@ export async function POST(
       rightsSignerIp: ip,
     },
   });
+
+  if (decision === "approve") {
+    await archiveContentPost(post.id).catch((error) =>
+      console.error("[rights] Could not save a copy of the post:", error)
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

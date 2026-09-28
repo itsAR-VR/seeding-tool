@@ -147,6 +147,16 @@ export default async function ContentPage({
                       })()}
                     </p>
                   )}
+                  {post.mediaUrl && (post.rightsStatus === "approved" || post.source === "story") && (
+                    <a
+                      href={post.mediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block text-xs font-medium underline"
+                    >
+                      Download {post.mediaType === "IMAGE" ? "photo" : "file"}
+                    </a>
+                  )}
                   {(post.rightsStatus === "none" || post.rightsStatus === "requested") && (
                     <RightsAction postId={post.id} status={post.rightsStatus} />
                   )}
