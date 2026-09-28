@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+
+// Classifying and drafting answers for several replies can take a while.
+export const maxDuration = 60;
 import {
   getCurrentBrandMembership,
   BrandAccessError,
