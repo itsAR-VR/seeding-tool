@@ -15,7 +15,7 @@ import {
 const HTML_BODY_TEMPLATE = `<p>Hi {{creator.name}},</p>
 <p>I came across your content and think you would be a great fit to try <strong>{{product.name}}</strong> from {{brand.name}}.</p>
 <p>We would love to send you {{product.name}} (valued at {{product.retailValue}}) to experience firsthand. If you enjoy it, we would be thrilled if you shared your honest thoughts with your audience.</p>
-<p>No obligations — just a genuine product for genuine feedback.</p>
+<p>No obligations, just a genuine product for genuine feedback.</p>
 <p>Would you be interested? Just reply to this email and we can get things moving.</p>
 <p>Best,<br/>The {{brand.name}} Team</p>`;
 
@@ -25,7 +25,7 @@ I came across your content and think you would be a great fit to try {{product.n
 
 We would love to send you {{product.name}} (valued at {{product.retailValue}}) to experience firsthand. If you enjoy it, we would be thrilled if you shared your honest thoughts with your audience.
 
-No obligations — just a genuine product for genuine feedback.
+No obligations, just a genuine product for genuine feedback.
 
 Would you be interested? Just reply to this email and we can get things moving.
 
@@ -58,7 +58,7 @@ export function renderInitialOutreach(
   });
 
   return {
-    subject: `Collaboration with ${vars.brand.name} — ${vars.product.name}`,
+    subject: `Collaboration with ${vars.brand.name}: ${vars.product.name}`,
     bodyHtml,
     bodyText,
   };

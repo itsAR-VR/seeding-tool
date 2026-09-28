@@ -14,7 +14,7 @@ import {
 
 const HTML_BODY_TEMPLATE = `<p>Hi {{creator.name}},</p>
 <p>Just wanted to follow up on my previous email about trying {{product.name}} from {{brand.name}}.</p>
-<p>We think your audience would genuinely appreciate hearing about it, and we would love to send it your way — no strings attached.</p>
+<p>We think your audience would genuinely appreciate hearing about it, and we would love to send it your way, no strings attached.</p>
 <p>If you are interested, just let me know and I can share more details.</p>
 <p>Best,<br/>The {{brand.name}} Team</p>`;
 
@@ -22,7 +22,7 @@ const PLAIN_TEXT_TEMPLATE = `Hi {{creator.name}},
 
 Just wanted to follow up on my previous email about trying {{product.name}} from {{brand.name}}.
 
-We think your audience would genuinely appreciate hearing about it, and we would love to send it your way — no strings attached.
+We think your audience would genuinely appreciate hearing about it, and we would love to send it your way, no strings attached.
 
 If you are interested, just let me know and I can share more details.
 
@@ -51,7 +51,7 @@ export function renderFollowUp(vars: TemplateVariables): TemplateOutput {
   });
 
   return {
-    subject: `Following up — ${vars.product.name} from ${vars.brand.name}`,
+    subject: `Following up: ${vars.product.name} from ${vars.brand.name}`,
     bodyHtml,
     bodyText,
   };

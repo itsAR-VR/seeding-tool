@@ -349,7 +349,7 @@ export default function ThreadDetailPage() {
         <Card className="border-teal-200 bg-teal-50">
           <CardHeader>
             <CardTitle className="text-base text-teal-900">
-              📦 Extracted Address — Review Required
+              📦 Address to review
             </CardTitle>
           </CardHeader>
           <CardContent>
