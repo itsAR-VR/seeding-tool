@@ -51,6 +51,18 @@ Their reply: Could you send 2? One for my husband
 Good answer:
 Of course, happy to send two! You can add your address here and I'll get them out to you: ${ADDRESS_LINK_PLACEHOLDER}
 
+Their reply: I already use mouth tape, what makes yours different?
+Good answer:
+Ours are softer and stretchier than regular mouth tape, and they're infused with aloe, collagen, vitamins E and B5, biotin and CoQ10, so they're much gentler on skin! You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
+
+Their reply: What's in the tape? I have really sensitive skin.
+Good answer:
+We made them to be gentle on sensitive skin, and they're infused with aloe, collagen, vitamins E and B5, biotin and CoQ10! If you'd like, try one on your skin for a little while first. You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
+
+Their reply: I have sleep apnea and use a CPAP. Is it safe for me?
+Good answer:
+I'd recommend checking with your doctor first. If they're comfortable with it, you can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
+
 Their reply: I'm in Toronto, do you ship to Canada?
 Good answer:
 Thanks for asking! We can only ship within the US right now, but I'd love to send you one once we're able to ship to Canada.`;
@@ -73,11 +85,25 @@ export async function createSuggestedReply(params: {
   creatorFirstName: string | null;
   inboundBody: string;
   inboundSubject: string | null;
+  /** When the reply being answered arrived; used to avoid drafting it twice. */
+  inboundAt: Date;
   /** Kam's earlier emails in this thread, oldest first, so the answer doesn't repeat them. */
   earlierOutbound: string[];
 }): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
+
+  const alreadyDrafted = async () =>
+    prisma.aIDraft.findFirst({
+      where: {
+        campaignCreatorId: params.campaignCreatorId,
+        type: "reply",
+        status: { not: "discarded" },
+        createdAt: { gte: params.inboundAt },
+      },
+      select: { id: true },
+    });
+  if (await alreadyDrafted()) return null;
 
   try {
     const response = await openai.chat.completions.create({
@@ -105,6 +131,9 @@ export async function createSuggestedReply(params: {
       ?.replace(/\s*[\u2014\u2013]\s*/g, ", ")
       .trim();
     if (!body) return null;
+
+    // Another sync may have drafted this reply while the model was writing.
+    if (await alreadyDrafted()) return null;
 
     await prisma.aIDraft.create({
       data: {

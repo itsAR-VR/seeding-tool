@@ -173,6 +173,7 @@ export async function syncRepliesForBrand(
         creatorFirstName: thread.campaignCreator.creator.name?.split(" ")[0] ?? null,
         inboundBody: latest.body,
         inboundSubject: latest.subject,
+        inboundAt: latest.createdAt,
         earlierOutbound: thread.messages
           .filter((m) => m.direction === "outbound")
           .reverse()
