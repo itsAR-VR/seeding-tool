@@ -16,7 +16,6 @@ import { createClient } from "@/lib/supabase/server";
  * - instagram_manage_insights: read media insights
  * - pages_show_list: list user's Pages
  * - pages_read_engagement: read Page engagement data
- * - pages_manage_metadata: manage Page metadata
  * - business_management: manage business settings
  */
 export async function GET(request: NextRequest) {
@@ -61,7 +60,6 @@ export async function GET(request: NextRequest) {
     "instagram_manage_insights",
     "pages_show_list",
     "pages_read_engagement",
-    "pages_manage_metadata",
     "business_management",
   ].join(",");
 
