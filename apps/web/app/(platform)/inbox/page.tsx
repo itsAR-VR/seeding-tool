@@ -74,7 +74,10 @@ export default async function InboxPage() {
     (t) => t.campaignCreator.shippingSnapshots.length > 0
   );
   const decided = threads.filter(
-    (t) => t.campaignCreator.replyDecision && t.campaignCreator.aiSuggestion && t.campaignCreator.aiSuggestion !== "unclear"
+    (t) =>
+      (t.campaignCreator.replyDecision === "yes" || t.campaignCreator.replyDecision === "no") &&
+      t.campaignCreator.aiSuggestion &&
+      t.campaignCreator.aiSuggestion !== "unclear"
   );
   const aiMatches = decided.filter(
     (t) => t.campaignCreator.aiSuggestion === t.campaignCreator.replyDecision
@@ -161,6 +164,9 @@ export default async function InboxPage() {
                         )}
                         {thread.campaignCreator.replyDecision === "no" && (
                           <Badge className="bg-red-100 text-red-800">Said no</Badge>
+                        )}
+                        {thread.campaignCreator.replyDecision === "later" && (
+                          <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>
                         )}
                         {!thread.campaignCreator.replyDecision &&
                           lastMessage?.direction === "inbound" && (

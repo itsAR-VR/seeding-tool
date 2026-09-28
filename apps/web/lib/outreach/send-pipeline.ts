@@ -24,7 +24,7 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { DailyLimitExceededError } from "@/lib/outreach/errors";
 import { isInEarlyWarmup } from "@/lib/outreach/warmup";
 import { escapeHtml } from "@/lib/outreach/html-escape";
-import { renderBaseTemplate } from "@/lib/outreach/templates/base";
+import { renderPersonalTemplate } from "@/lib/outreach/templates/personal";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -253,9 +253,8 @@ export async function sendOutreachBatch(
         let resolvedBodyHtml = draft.bodyHtml;
         if (!resolvedBodyHtml) {
           const unsubUrl = buildUnsubscribeUrl(creator.email);
-          resolvedBodyHtml = renderBaseTemplate({
-            bodyContent: `<p>${escapeHtml(draft.body).replace(/\n/g, "<br/>")}</p>`,
-            brandName: "Our Team",
+          resolvedBodyHtml = renderPersonalTemplate({
+            bodyContent: draft.body.split(/\n{2,}/).map((para) => `<p style="margin:0 0 12px 0;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`).join(""),
             unsubscribeUrl: unsubUrl,
           });
         }

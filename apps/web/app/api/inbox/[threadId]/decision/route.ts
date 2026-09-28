@@ -29,8 +29,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
     requireWriteAccess(membership);
 
     const { decision } = (await request.json()) as { decision?: ReplyDecision };
-    if (decision !== "yes" && decision !== "no") {
-      return NextResponse.json({ error: "decision must be yes or no" }, { status: 400 });
+    if (decision !== "yes" && decision !== "no" && decision !== "later") {
+      return NextResponse.json({ error: "decision must be yes, no or later" }, { status: 400 });
     }
 
     const thread = await prisma.conversationThread.findFirst({
@@ -54,7 +54,34 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const aiSuggestion = guessFromIntent(thread.messages[0]?.classification);
     const now = new Date();
 
-    if (decision === "no") {
+    // Leaving a "no": lift only the suppression that "no" created.
+    if (decision !== "no" && cc.replyDecision === "no" && email) {
+      const existing = await prisma.emailSuppression.findUnique({ where: { email } });
+      if (existing?.reason === DECLINED_REASON) {
+        await prisma.emailSuppression.delete({ where: { email } });
+        await prisma.creator.updateMany({
+          where: { email },
+          data: { optedOut: false, optOutDate: null },
+        });
+      }
+    }
+
+    if (decision === "later") {
+      // Park: close the conversation, no suppression, can be emailed in a future campaign.
+      await prisma.campaignCreator.update({
+        where: { id: cc.id },
+        data: {
+          replyDecision: "later",
+          replyDecidedAt: now,
+          aiSuggestion,
+          lifecycleStatus: "stalled",
+        },
+      });
+      await prisma.conversationThread.update({
+        where: { id: thread.id },
+        data: { status: "closed" },
+      });
+    } else if (decision === "no") {
       await prisma.campaignCreator.update({
         where: { id: cc.id },
         data: {
@@ -70,24 +97,15 @@ export async function POST(request: NextRequest, context: RouteContext) {
       });
       if (email) await addSuppression(email, DECLINED_REASON);
     } else {
-      // Changing a "no" back to "yes": lift only the suppression that "no" created.
-      if (cc.replyDecision === "no" && email) {
-        const existing = await prisma.emailSuppression.findUnique({ where: { email } });
-        if (existing?.reason === DECLINED_REASON) {
-          await prisma.emailSuppression.delete({ where: { email } });
-          await prisma.creator.updateMany({
-            where: { email },
-            data: { optedOut: false, optOutDate: null },
-          });
-        }
-      }
       await prisma.campaignCreator.update({
         where: { id: cc.id },
         data: {
           replyDecision: "yes",
           replyDecidedAt: now,
           aiSuggestion,
-          ...(cc.lifecycleStatus === "opted_out" ? { lifecycleStatus: "replied" } : {}),
+          ...(cc.lifecycleStatus === "opted_out" || cc.lifecycleStatus === "stalled"
+            ? { lifecycleStatus: "replied" }
+            : {}),
         },
       });
       await prisma.conversationThread.update({

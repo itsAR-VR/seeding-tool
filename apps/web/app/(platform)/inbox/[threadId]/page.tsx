@@ -55,7 +55,7 @@ type Thread = {
   campaignCreator: {
     id: string;
     lifecycleStatus: string;
-    replyDecision: "yes" | "no" | null;
+    replyDecision: "yes" | "no" | "later" | null;
     creator: {
       id: string;
       name: string | null;
@@ -142,7 +142,7 @@ export default function ThreadDetailPage() {
     if (res.ok) setThread((await res.json()) as Thread);
   }
 
-  async function handleDecision(decision: "yes" | "no") {
+  async function handleDecision(decision: "yes" | "no" | "later") {
     if (decision === "no" && !confirm("Mark as no? They'll go on the do-not-send list and won't be emailed again.")) return;
     setDeciding(true);
     try {
@@ -291,7 +291,9 @@ export default function ThreadDetailPage() {
                 ? "border-green-200 bg-green-50"
                 : decision === "no"
                   ? "border-red-200 bg-red-50"
-                  : "border-amber-200 bg-amber-50"
+                  : decision === "later"
+                    ? "border-slate-200 bg-slate-50"
+                    : "border-amber-200 bg-amber-50"
             }
           >
             <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
@@ -301,7 +303,9 @@ export default function ThreadDetailPage() {
                     ? "✓ They said yes"
                     : decision === "no"
                       ? "✕ They said no · on the do-not-send list"
-                      : "Did they say yes?"}
+                      : decision === "later"
+                        ? "⏸ Not right now · parked, not on the do-not-send list"
+                        : "Did they say yes?"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {aiGuess
@@ -319,6 +323,14 @@ export default function ThreadDetailPage() {
                   onClick={() => void handleDecision("yes")}
                 >
                   They said yes
+                </Button>
+                <Button
+                  size="sm"
+                  variant={decision === "later" ? "secondary" : "outline"}
+                  disabled={deciding || decision === "later"}
+                  onClick={() => void handleDecision("later")}
+                >
+                  Not right now
                 </Button>
                 <Button
                   size="sm"

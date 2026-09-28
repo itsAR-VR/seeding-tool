@@ -1,5 +1,6 @@
 /** Operator's call on a creator's reply. */
-export type ReplyDecision = "yes" | "no";
+/** "later" parks the creator without adding them to the do-not-send list. */
+export type ReplyDecision = "yes" | "no" | "later";
 
 /** The AI's guess, in the same terms the operator decides in. */
 export type AiReplyGuess = "yes" | "no" | "unclear";
