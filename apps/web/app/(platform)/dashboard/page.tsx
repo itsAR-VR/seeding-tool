@@ -244,8 +244,8 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* ── Section 1b: Campaign Health ──────────────────────── */}
-      <CampaignHealthWidget snapshots={healthSnapshots} />
+      {/* ── Section 1b: Campaign Health (only once there is data) ── */}
+      {healthSnapshots.length > 0 && <CampaignHealthWidget snapshots={healthSnapshots} />}
 
       {/* ── Section 2: Two-column layout ────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-5">
