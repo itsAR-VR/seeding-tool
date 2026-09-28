@@ -12,7 +12,7 @@ const KALM_FACTS = `- The gift is Kalm mouth tape (a 30-strip pack). It is compl
 - Kalm's mouth tape helps you breathe through your nose while you sleep, so you sleep deeper and wake up more rested.
 - How to use it: at bedtime, place one strip over closed lips.
 - What's in it / how it's different: the strips are infused with aloe, collagen, vitamin E, vitamin B5, biotin and CoQ10. The material is softer and stretchier than regular mouth tape, so it's gentler on sensitive or dry skin. It isn't a plain KT-tape-style strip.
-- Sensitive skin: Kalm developed it to be gentle on sensitive skin. Suggest they try a strip on their skin for a little while first to see how it feels.
+- Sensitive skin: Kalm developed it to be gentle on sensitive skin. Suggest testing one on a small patch of skin first.
 - Posting: use this answer, word for word: "I'd love for you to try it first, and share only if you love it!" Don't say they don't have to post.
 - Two packs: yes, Kam is happy to send 2 (for example one for a partner).
 - Shipping: US only right now. If they're outside the US, thank them, say we can only ship within the US right now, that Kam would love to send one once we can ship there, and leave the link out.
@@ -57,7 +57,7 @@ Ours are softer and stretchier than regular mouth tape, and they're infused with
 
 Their reply: What's in the tape? I have really sensitive skin.
 Good answer:
-We made them to be gentle on sensitive skin, and they're infused with aloe, collagen, vitamins E and B5, biotin and CoQ10! If you'd like, try one on your skin for a little while first. You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
+We made them to be gentle on sensitive skin, and they're infused with aloe, collagen, vitamins E and B5, biotin and CoQ10! I'd suggest testing one on a small patch of skin first. You can add your address here and I'll get it out to you: ${ADDRESS_LINK_PLACEHOLDER}
 
 Their reply: I have sleep apnea and use a CPAP. Is it safe for me?
 Good answer:
