@@ -1,16 +1,7 @@
 import { inngest } from "@/lib/inngest/client";
-import { prisma } from "@/lib/prisma";
+import { brandsConnectedTo } from "@/lib/cron/brands";
 import { syncContentForBrand } from "@/lib/content/sync";
 import { syncRepliesForBrand } from "@/lib/gmail/sync";
-
-async function brandsConnectedTo(provider: string): Promise<string[]> {
-  const connections = await prisma.brandConnection.findMany({
-    where: { provider, status: "connected" },
-    select: { brandId: true },
-    distinct: ["brandId"],
-  });
-  return connections.map((c) => c.brandId);
-}
 
 /** Every 15 minutes: pull new tagged posts for every brand with Instagram connected. */
 export const contentSyncCron = inngest.createFunction(
