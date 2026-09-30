@@ -3,6 +3,9 @@ import { decrypt } from "@/lib/encryption";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
+/** Name of the one campaign that holds every ad the tool makes. */
+const CAMPAIGN_NAME = "Seed Scale · Creator content";
+
 /** Default budget for the tool's ad set, in cents. The ad set is created paused. */
 const DEFAULT_DAILY_BUDGET_CENTS = 1000;
 
@@ -100,8 +103,21 @@ async function ensureCampaignAndAdSet(ctx: AdsContext): Promise<{ campaignId: st
   if (ctx.campaignId && ctx.adSetId) {
     return { campaignId: ctx.campaignId, adSetId: ctx.adSetId };
   }
+  // Reuse the tool's campaign if it already exists in the account.
+  const existing = await graph<{ data?: Array<{ id: string; adsets?: { data?: Array<{ id: string }> } }> }>(
+    `${ctx.adAccountId}/campaigns?fields=id,adsets{id}&filtering=${encodeURIComponent(
+      JSON.stringify([{ field: "name", operator: "EQUAL", value: CAMPAIGN_NAME }])
+    )}&limit=5`,
+    ctx.token
+  ).catch(() => null);
+  const found = existing?.data?.find((c) => c.adsets?.data?.length);
+  if (found) {
+    const ids = { adsCampaignId: found.id, adsAdSetId: found.adsets!.data![0].id };
+    await saveAdsIds(ctx, ids);
+    return { campaignId: ids.adsCampaignId, adSetId: ids.adsAdSetId };
+  }
   const campaign = await graph<{ id: string }>(`${ctx.adAccountId}/campaigns`, ctx.token, {
-    name: "Seed Scale · Creator content",
+    name: CAMPAIGN_NAME,
     objective: "OUTCOME_TRAFFIC",
     status: "PAUSED",
     special_ad_categories: [],

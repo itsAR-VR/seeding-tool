@@ -201,6 +201,13 @@ export async function GET(request: NextRequest) {
       ? new Date(Date.now() + longLivedToken.expires_in * 1000)
       : null;
 
+    // Keep settings the tool saved earlier (e.g. its ad campaign and ad set IDs).
+    const previous = await prisma.brandConnection.findFirst({
+      where: { brandId, provider: "instagram" },
+      select: { metadata: true },
+    });
+    const previousMetadata = (previous?.metadata ?? {}) as Record<string, unknown>;
+
     await prisma.$transaction(async (tx) => {
       await upsertProviderCredential(tx, {
         brandId,
@@ -218,6 +225,7 @@ export async function GET(request: NextRequest) {
         connectionMethod: "oauth",
         externalId: igUsername ?? igAccountId,
         metadata: {
+          ...previousMetadata,
           igUserId: igAccountId,
           igUsername,
           pageId: chosen?.pageId ?? null,
