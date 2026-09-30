@@ -184,10 +184,11 @@ export async function GET(request: NextRequest) {
 
     const encryptedValue = encrypt(credentialPayload);
 
-    // Calculate expiry (long-lived tokens last ~60 days)
-    const expiresAt = new Date(
-      Date.now() + longLivedToken.expires_in * 1000
-    );
+    // Long-lived user tokens last ~60 days; Meta omits expires_in for tokens
+    // that never expire (the Page token we use for API calls never does).
+    const expiresAt = longLivedToken.expires_in
+      ? new Date(Date.now() + longLivedToken.expires_in * 1000)
+      : null;
 
     await prisma.$transaction(async (tx) => {
       await upsertProviderCredential(tx, {
