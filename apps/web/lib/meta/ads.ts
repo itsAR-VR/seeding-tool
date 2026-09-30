@@ -241,6 +241,52 @@ export async function createPausedBrandAd(
   return { adId: ad.id, adsManagerUrl: adsManagerUrl(ctx, ad.id) };
 }
 
+/**
+ * Makes a PAUSED partnership ad from a creator's partnership ad code. Meta
+ * pulls the post itself, so no file is needed (works for reels with music).
+ * The ad runs with the creator's and the brand's handles in the header.
+ */
+export async function createPausedPartnershipAd(
+  postId: string,
+  adCode: string
+): Promise<{ adId: string; adsManagerUrl: string }> {
+  const post = await prisma.contentPost.findUniqueOrThrow({ where: { id: postId } });
+  if (post.metaAdId) {
+    throw new MetaAdsError("This post already has an ad.");
+  }
+  const code = adCode.trim();
+  if (!/^adcode-[A-Za-z0-9_-]{10,}$/.test(code)) {
+    throw new MetaAdsError("That doesn't look like a partnership ad code. It starts with adcode-");
+  }
+
+  const ctx = await loadAdsContext(post.brandId);
+  const { adSetId } = await ensureCampaignAndAdSet(ctx);
+  const credit = post.username ? ` (@${post.username})` : "";
+
+  const creative = await graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, {
+    name: `Partnership${credit}`,
+    object_id: ctx.pageId,
+    branded_content: {
+      instagram_boost_post_access_token: code,
+      ad_format: 3, // let Meta pick one or both handles, whichever performs better
+    },
+    facebook_branded_content: { sponsor_page_id: ctx.pageId },
+    instagram_branded_content: ctx.igUserId ? { sponsor_id: ctx.igUserId } : undefined,
+  });
+  const ad = await graph<{ id: string }>(`${ctx.adAccountId}/ads`, ctx.token, {
+    name: `Partnership${credit}`,
+    adset_id: adSetId,
+    creative: { creative_id: creative.id },
+    status: "PAUSED",
+  });
+
+  await prisma.contentPost.update({
+    where: { id: post.id },
+    data: { metaAdId: ad.id, metaAdCreatedAt: new Date(), metaAdKind: "partnership" },
+  });
+  return { adId: ad.id, adsManagerUrl: adsManagerUrl(ctx, ad.id) };
+}
+
 export type AdResults = {
   adId: string;
   status: string | null;

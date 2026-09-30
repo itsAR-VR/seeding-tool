@@ -99,6 +99,9 @@ export default async function AdsPage() {
                             <img src={image} alt="" className="h-10 w-10 rounded object-cover" />
                           )}
                           <span>@{post.username}</span>
+                          {post.metaAdKind === "partnership" && (
+                            <Badge variant="secondary">Partnership</Badge>
+                          )}
                         </div>
                       </td>
                       <td className="py-2">

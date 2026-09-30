@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { rightsEndDate } from "@/lib/content/rights";
 import { SyncContent } from "./sync-content";
 import { RightsAction } from "./rights-action";
-import { AdAction } from "./ad-action";
+import { AdAction, PartnershipCodeAction } from "./ad-action";
 
 const RIGHTS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   none: { label: "No rights yet", variant: "outline" },
@@ -158,14 +158,16 @@ export default async function ContentPage({
                       Download {post.mediaType === "IMAGE" ? "photo" : "file"}
                     </a>
                   )}
-                  {post.rightsStatus === "approved" &&
-                    (post.metaAdId ? (
-                      <Link href="/ads" className="block text-xs font-medium underline">
-                        Paused ad created · See ads
-                      </Link>
-                    ) : (
-                      <AdAction postId={post.id} />
-                    ))}
+                  {post.metaAdId ? (
+                    <Link href="/ads" className="block text-xs font-medium underline">
+                      {post.metaAdKind === "partnership" ? "Partnership ad" : "Paused ad"} created · See ads
+                    </Link>
+                  ) : (
+                    <>
+                      {post.rightsStatus === "approved" && <AdAction postId={post.id} />}
+                      <PartnershipCodeAction postId={post.id} />
+                    </>
+                  )}
                   {(post.rightsStatus === "none" || post.rightsStatus === "requested") && (
                     <RightsAction postId={post.id} status={post.rightsStatus} />
                   )}

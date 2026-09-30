@@ -4,14 +4,15 @@ import {
   getCurrentBrandMembership,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
-import { createPausedBrandAd, MetaAdsError } from "@/lib/meta/ads";
+import { createPausedBrandAd, createPausedPartnershipAd, MetaAdsError } from "@/lib/meta/ads";
 
 // Uploading a video to Meta and waiting for it to process takes a while.
 export const maxDuration = 60;
 
 /**
- * POST /api/content/:postId/ad — make a PAUSED Meta ad from an approved post.
- * Body: { message, headline, link }
+ * POST /api/content/:postId/ad — make a PAUSED Meta ad from a post.
+ * Brand ad (approved rights):  { message, headline, link }
+ * Partnership ad (creator code): { adCode }
  */
 export async function POST(
   request: Request,
@@ -24,7 +25,15 @@ export async function POST(
       message?: unknown;
       headline?: unknown;
       link?: unknown;
+      adCode?: unknown;
     };
+
+    if (typeof body.adCode === "string") {
+      const post = await prisma.contentPost.findFirst({ where: { id: postId, brandId }, select: { id: true } });
+      if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json(await createPausedPartnershipAd(post.id, body.adCode));
+    }
+
     const message = typeof body.message === "string" ? body.message.trim() : "";
     const headline = typeof body.headline === "string" ? body.headline.trim() : "";
     const link = typeof body.link === "string" ? body.link.trim() : "";

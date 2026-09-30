@@ -20,6 +20,7 @@ import { createClient } from "@/lib/supabase/server";
  * - business_management: manage business settings
  * - pages_manage_metadata: subscribe the Page to webhooks
  * - ads_management, ads_read: create paused ads from approved posts and read results
+ * - instagram_branded_content_ads_brand: create partnership ads from creators' ad codes
  */
 export async function GET(request: NextRequest) {
   const appUrl = APP_URL;
@@ -68,6 +69,7 @@ export async function GET(request: NextRequest) {
     "pages_manage_metadata",
     "ads_management",
     "ads_read",
+    "instagram_branded_content_ads_brand",
   ].join(",");
 
   const params = new URLSearchParams({

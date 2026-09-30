@@ -11,6 +11,64 @@ const DEFAULT_COPY = {
   link: "https://sleepkalm.com/products/mouth-tape",
 };
 
+/** Makes a paused partnership ad from a creator's ad code. Works on any post. */
+export function PartnershipCodeAction({ postId }: { postId: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function create() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/content/${postId}/ad`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adCode: code }),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setError(data?.error ?? "Couldn't create the ad.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError("Couldn't create the ad.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="block text-xs text-muted-foreground underline">
+        Have a partnership ad code?
+      </button>
+    );
+  }
+
+  return (
+    <div className="space-y-2 rounded-md border p-2">
+      <label className="block text-xs text-muted-foreground">
+        Paste the creator&apos;s code
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="adcode-..."
+          className="mt-1 w-full rounded border bg-background px-2 py-1 text-xs text-foreground"
+        />
+      </label>
+      <Button size="sm" className="w-full" onClick={() => void create()} disabled={busy || !code.trim()}>
+        {busy ? "Creating..." : "Create paused partnership ad"}
+      </Button>
+      <p className="text-xs text-muted-foreground">Runs from their handle and yours. Stays paused until you turn it on.</p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 /** Makes a paused Meta ad from an approved post. */
 export function AdAction({ postId }: { postId: string }) {
   const router = useRouter();
