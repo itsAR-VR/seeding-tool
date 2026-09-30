@@ -407,3 +407,21 @@ export async function getMessagingUser(
     `${FACEBOOK_GRAPH_BASE}/${igScopedId}?${params}`
   );
 }
+
+/**
+ * Ad accounts the connecting user can manage.
+ * GET /me/adaccounts
+ */
+export async function getAdAccounts(
+  userAccessToken: string
+): Promise<Array<{ id: string; name?: string; account_status?: number }>> {
+  const params = new URLSearchParams({
+    fields: "id,name,account_status",
+    limit: "50",
+    access_token: userAccessToken,
+  });
+  const result = await graphFetch<{ data?: Array<{ id: string; name?: string; account_status?: number }> }>(
+    `${FACEBOOK_GRAPH_BASE}/me/adaccounts?${params}`
+  );
+  return result.data ?? [];
+}

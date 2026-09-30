@@ -1214,6 +1214,11 @@ model ContentPost {
   rightsMonths       Int?      @map("rights_months")
   rightsSignerIp     String?   @map("rights_signer_ip")
 
+  /// Paused Meta ad made from this post (Kalm's page, or a partnership ad).
+  metaAdId        String?   @map("meta_ad_id")
+  metaAdCreatedAt DateTime? @map("meta_ad_created_at")
+  metaAdKind      String?   @map("meta_ad_kind") // brand | partnership
+
   hidden Boolean @default(false)
 
   brandId   String  @map("brand_id")

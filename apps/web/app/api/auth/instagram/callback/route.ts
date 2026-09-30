@@ -14,6 +14,7 @@ import {
   getInstagramAccountFromPage,
   getUserProfile,
   subscribePageToWebhooks,
+  getAdAccounts,
 } from "@/lib/instagram/client";
 
 /**
@@ -170,6 +171,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Pick the ad account for "Create ad": an active account whose name matches
+    // the brand, else the first active one. Best-effort; ads are optional.
+    const adAccounts = await getAdAccounts(longLivedToken.access_token).catch(() => []);
+    const activeAccounts = adAccounts.filter((a) => a.account_status === 1);
+    const brandWord = (brandRow?.name ?? siteStem ?? "").toLowerCase().split(/\s+/)[0];
+    const adAccount =
+      activeAccounts.find((a) => brandWord && a.name?.toLowerCase().includes(brandWord)) ??
+      activeAccounts[0] ??
+      null;
+
     // Step 4: Store encrypted credential + connection
     // Page tokens derived from a long-lived user token do not expire, so the
     // connection keeps working without the 60-day refresh.
@@ -210,6 +221,8 @@ export async function GET(request: NextRequest) {
           igUserId: igAccountId,
           igUsername,
           pageId: chosen?.pageId ?? null,
+          adAccountId: adAccount?.id ?? null,
+          adAccountName: adAccount?.name ?? null,
         },
       });
     });

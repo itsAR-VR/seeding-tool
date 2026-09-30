@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/server";
  * - pages_read_engagement: read Page engagement data
  * - business_management: manage business settings
  * - pages_manage_metadata: subscribe the Page to webhooks
+ * - ads_management, ads_read: create paused ads from approved posts and read results
  */
 export async function GET(request: NextRequest) {
   const appUrl = APP_URL;
@@ -65,6 +66,8 @@ export async function GET(request: NextRequest) {
     "pages_read_engagement",
     "business_management",
     "pages_manage_metadata",
+    "ads_management",
+    "ads_read",
   ].join(",");
 
   const params = new URLSearchParams({
