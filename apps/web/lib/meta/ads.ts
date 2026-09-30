@@ -105,6 +105,8 @@ async function ensureCampaignAndAdSet(ctx: AdsContext): Promise<{ campaignId: st
     objective: "OUTCOME_TRAFFIC",
     status: "PAUSED",
     special_ad_categories: [],
+    // Budget lives on the ad set, not the campaign; Meta requires saying so.
+    is_adset_budget_sharing_enabled: false,
   });
   const adSet = await graph<{ id: string }>(`${ctx.adAccountId}/adsets`, ctx.token, {
     name: "Creator content · US",
