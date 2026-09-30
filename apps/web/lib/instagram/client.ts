@@ -382,7 +382,9 @@ export async function subscribePageToWebhooks(
   pageAccessToken: string
 ): Promise<void> {
   const params = new URLSearchParams({
-    subscribed_fields: "feed,messages",
+    // Any Page field enables the app's Instagram webhooks (mentions, story
+    // mentions); "messages" would need pages_messaging, which we don't use.
+    subscribed_fields: "feed",
     access_token: pageAccessToken,
   });
   await graphFetch<{ success: boolean }>(

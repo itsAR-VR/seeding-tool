@@ -4,6 +4,7 @@ import {
   getTaggedMedia,
   fetchNextPage,
   InstagramApiError,
+  subscribePageToWebhooks,
   type InstagramMedia,
   type InstagramPaginatedResponse,
 } from "@/lib/instagram/client";
@@ -18,7 +19,11 @@ export type ContentSyncResult = {
   error?: string;
 };
 
-export type InstagramCredential = { accessToken: string; igUserId: string };
+export type InstagramCredential = {
+  accessToken: string;
+  igUserId: string;
+  pageId: string | null;
+};
 
 export async function loadInstagramCredential(brandId: string): Promise<InstagramCredential | null> {
   const [credential, connection] = await Promise.all([
@@ -36,10 +41,10 @@ export async function loadInstagramCredential(brandId: string): Promise<Instagra
     accessToken?: string;
     igUserId?: string;
   };
-  const metadata = connection.metadata as { igUserId?: string } | null;
+  const metadata = connection.metadata as { igUserId?: string; pageId?: string } | null;
   const igUserId = metadata?.igUserId ?? payload.igUserId;
   if (!payload.accessToken || !igUserId) return null;
-  return { accessToken: payload.accessToken, igUserId };
+  return { accessToken: payload.accessToken, igUserId, pageId: metadata?.pageId ?? null };
 }
 
 /** Finds the brand's creator with this Instagram handle, stored with or without "@". */
@@ -66,6 +71,13 @@ export async function findCreatorId(brandId: string, username: string | undefine
 export async function syncContentForBrand(brandId: string): Promise<ContentSyncResult> {
   const credential = await loadInstagramCredential(brandId);
   if (!credential) return { connected: false, newPosts: 0, updated: 0 };
+
+  // Keep the Page signed up for story and caption-mention webhooks. Idempotent.
+  if (credential.pageId) {
+    await subscribePageToWebhooks(credential.pageId, credential.accessToken).catch((error) =>
+      console.error("[content/sync] Page webhook subscription failed:", error)
+    );
+  }
 
   let newPosts = 0;
   let updated = 0;
