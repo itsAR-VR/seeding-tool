@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, ChevronDownIcon, PlusIcon, XIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { PlusIcon, XIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
@@ -16,234 +15,153 @@ type UnifiedKeywordSelectorProps = {
   groups: KeywordGroup[];
   selected: string[];
   onChange: (next: string[]) => void;
+  /** Text typed but not added yet, so the parent can enable its search button. */
+  onPendingChange?: (text: string) => void;
   className?: string;
 };
 
-type ResolvedOption = {
-  value: string;
-  group: string;
-};
+/** How many suggestions to show before "Show more". */
+const SUGGESTIONS_SHOWN = 12;
 
-function buildDeduplicatedOptions(groups: KeywordGroup[]): ResolvedOption[] {
-  const seen = new Set<string>();
-  const result: ResolvedOption[] = [];
-
-  for (const group of groups) {
-    for (const keyword of group.keywords) {
-      const lower = keyword.toLowerCase();
-      if (!seen.has(lower)) {
-        seen.add(lower);
-        result.push({ value: keyword, group: group.label });
-      }
-    }
-  }
-
-  return result;
-}
-
+/**
+ * Type anything to search for (Enter or comma adds it), or tap a suggestion.
+ * Whatever is typed but not yet added is added when the field loses focus,
+ * so pressing the search button right after typing still counts it.
+ */
 export function UnifiedKeywordSelector({
   groups,
   selected,
   onChange,
+  onPendingChange,
   className,
 }: UnifiedKeywordSelectorProps) {
-  const rootRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQueryState] = useState("");
+  const setQuery = (text: string) => {
+    setQueryState(text);
+    onPendingChange?.(text.trim());
+  };
+  const [showAll, setShowAll] = useState(false);
 
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
+  const selectedLower = useMemo(() => new Set(selected.map((s) => s.toLowerCase())), [selected]);
+
+  const suggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const all: string[] = [];
+    for (const group of groups) {
+      for (const keyword of group.keywords) {
+        const lower = keyword.toLowerCase();
+        if (seen.has(lower) || selectedLower.has(lower)) continue;
+        seen.add(lower);
+        all.push(keyword);
       }
     }
+    const typed = query.trim().toLowerCase();
+    return typed ? all.filter((k) => k.toLowerCase().includes(typed)) : all;
+  }, [groups, selectedLower, query]);
 
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const frame = window.requestAnimationFrame(() => inputRef.current?.focus());
-    return () => window.cancelAnimationFrame(frame);
-  }, [isOpen]);
-
-  const allOptions = useMemo(() => buildDeduplicatedOptions(groups), [groups]);
-
-  const filteredByGroup = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const filtered = normalizedQuery
-      ? allOptions.filter((opt) => opt.value.toLowerCase().includes(normalizedQuery))
-      : allOptions;
-
-    const grouped = new Map<string, ResolvedOption[]>();
-    for (const opt of filtered) {
-      const arr = grouped.get(opt.group) ?? [];
-      arr.push(opt);
-      grouped.set(opt.group, arr);
-    }
-    return grouped;
-  }, [allOptions, query]);
-
-  const selectedLower = useMemo(
-    () => new Set(selected.map((s) => s.toLowerCase())),
-    [selected]
-  );
-
-  const canAddFreeText =
-    query.trim().length > 0 && !selectedLower.has(query.trim().toLowerCase());
-
-  const noGroupMatches = filteredByGroup.size === 0;
-
-  function toggleValue(value: string) {
-    if (selectedLower.has(value.toLowerCase())) {
-      onChange(selected.filter((s) => s.toLowerCase() !== value.toLowerCase()));
-    } else {
-      onChange([...selected, value]);
-    }
-  }
-
-  function addFreeText() {
-    const trimmed = query.trim();
-    if (!trimmed || selectedLower.has(trimmed.toLowerCase())) return;
-    onChange([...selected, trimmed]);
+  function add(raw: string) {
+    const parts = raw
+      .split(",")
+      .map((p) => p.trim())
+      .filter((p) => p && !selectedLower.has(p.toLowerCase()));
+    if (parts.length > 0) onChange([...selected, ...new Set(parts)]);
     setQuery("");
   }
 
-  function removeValue(value: string) {
+  function remove(value: string) {
     onChange(selected.filter((s) => s.toLowerCase() !== value.toLowerCase()));
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      if (canAddFreeText) {
-        addFreeText();
-      }
-    }
-  }
-
-  const triggerLabel =
-    selected.length === 0
-      ? "Choose keywords"
-      : `${selected.length} keyword${selected.length === 1 ? "" : "s"} selected`;
+  const visible = showAll ? suggestions : suggestions.slice(0, SUGGESTIONS_SHOWN);
 
   return (
-    <div ref={rootRef} className={cn("space-y-2", className)}>
-      <div className="flex items-center justify-between gap-3">
-        <label className="text-sm font-medium">Keywords</label>
-        {selected.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            {selected.length} selected
-          </span>
-        )}
-      </div>
-
-      <div className="relative">
-        <Button
-          type="button"
-          variant="outline"
-          className="h-10 w-full justify-between px-3 font-normal"
-          aria-expanded={isOpen}
-          onClick={() => setIsOpen((c) => !c)}
-        >
-          <span className="truncate text-left text-sm text-foreground/80">
-            {triggerLabel}
-          </span>
-          <ChevronDownIcon className="size-4 text-muted-foreground" />
-        </Button>
-
-        {isOpen && (
-          <div className="absolute left-0 right-0 z-30 mt-2 rounded-xl border bg-background p-3 shadow-lg">
-            <div className="flex gap-2">
-              <Input
-                ref={inputRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Search or type a custom keyword…"
-                className="flex-1"
-              />
-              {canAddFreeText && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 gap-1 px-2"
-                  onClick={addFreeText}
-                >
-                  <PlusIcon className="size-3.5" />
-                  Add
-                </Button>
-              )}
-            </div>
-
-            <div className="mt-3 max-h-64 space-y-1 overflow-y-auto">
-              {noGroupMatches && !canAddFreeText && (
-                <p className="px-2 py-3 text-xs text-muted-foreground">
-                  No matching keywords. Type a custom one and press Enter.
-                </p>
-              )}
-
-              {Array.from(filteredByGroup.entries()).map(([groupLabel, options]) => (
-                <div key={groupLabel}>
-                  <p className="sticky top-0 bg-background px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    {groupLabel}
-                  </p>
-                  {options.map((opt) => {
-                    const isSelected = selectedLower.has(opt.value.toLowerCase());
-                    return (
-                      <button
-                        key={`${groupLabel}-${opt.value}`}
-                        type="button"
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted",
-                          isSelected && "bg-muted"
-                        )}
-                        onClick={() => toggleValue(opt.value)}
-                      >
-                        <span className="min-w-0 truncate">{opt.value}</span>
-                        {isSelected && <CheckIcon className="ml-2 size-3.5 shrink-0 text-muted-foreground" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+    <div className={cn("space-y-3", className)}>
+      <div className="space-y-1.5">
+        <label htmlFor="creator-search-words" className="text-sm font-medium">
+          What to search for
+        </label>
+        <div className="flex gap-2">
+          <Input
+            id="creator-search-words"
+            value={query}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value.endsWith(",")) add(value);
+              else setQuery(value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                add(query);
+              } else if (e.key === "Backspace" && !query && selected.length > 0) {
+                remove(selected[selected.length - 1]);
+              }
+            }}
+            onBlur={() => query.trim() && add(query)}
+            placeholder="Anything, like mom entrepreneur or night routine"
+            className="flex-1"
+          />
+          <button
+            type="button"
+            onClick={() => add(query)}
+            disabled={!query.trim()}
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border px-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-40"
+          >
+            <PlusIcon className="size-4" aria-hidden />
+            Add
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">Press Enter after each one. Bios and names are matched against these.</p>
       </div>
 
       {selected.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <ul className="flex flex-wrap gap-2" aria-label="Searching for">
           {selected.map((value) => (
-            <Badge
-              key={`kw-${value}`}
-              variant="secondary"
-              className="gap-1 rounded-full pr-1"
-            >
-              <span>{value}</span>
+            <li key={`kw-${value}`}>
+              <Badge variant="default" className="gap-1 rounded-full py-1 pl-3 pr-1 text-sm">
+                {value}
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 hover:bg-white/20"
+                  onClick={() => remove(value)}
+                  aria-label={`Remove ${value}`}
+                >
+                  <XIcon className="size-3.5" />
+                </button>
+              </Badge>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {visible.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{query.trim() ? "Matching suggestions" : "Suggestions"}</p>
+          <div className="flex flex-wrap gap-2">
+            {visible.map((keyword) => (
+              <button
+                key={keyword}
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange([...selected, keyword]);
+                  setQuery("");
+                }}
+                className="rounded-full border px-3 py-1 text-sm transition-colors hover:bg-muted"
+              >
+                {keyword}
+              </button>
+            ))}
+            {!showAll && suggestions.length > SUGGESTIONS_SHOWN && (
               <button
                 type="button"
-                className="rounded-full p-0.5 hover:bg-black/10"
-                onClick={() => removeValue(value)}
-                aria-label={`Remove ${value}`}
+                onClick={() => setShowAll(true)}
+                className="rounded-full px-3 py-1 text-sm font-medium underline"
               >
-                <XIcon className="size-3" />
+                Show {suggestions.length - SUGGESTIONS_SHOWN} more
               </button>
-            </Badge>
-          ))}
+            )}
+          </div>
         </div>
       )}
     </div>

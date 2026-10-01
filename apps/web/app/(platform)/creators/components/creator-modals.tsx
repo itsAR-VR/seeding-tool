@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -145,6 +146,7 @@ export function SearchModal({
   onClose,
   onNewSearch,
 }: SearchModalProps) {
+  const [pendingWords, setPendingWords] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <Card className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden">
@@ -179,6 +181,7 @@ export function SearchModal({
               setSearchLimit={setSearchLimit}
               searchLimitValidation={searchLimitValidation}
               searchLimitWarning={searchLimitWarning}
+              onPendingWordsChange={setPendingWords}
             />
           )}
 
@@ -214,7 +217,7 @@ export function SearchModal({
               <Button
                 onClick={onStartSearch}
                 disabled={
-                  (selectedKeywords.length === 0 && !searchUsernames.trim()) ||
+                  (selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim()) ||
                   Boolean(searchLimitValidation.error)
                 }
               >
@@ -267,6 +270,7 @@ function SearchForm({
   setSearchLimit,
   searchLimitValidation,
   searchLimitWarning,
+  onPendingWordsChange,
 }: {
   searchSources: Record<SearchSourceKey, boolean>;
   setSearchSources: (fn: (current: Record<SearchSourceKey, boolean>) => Record<SearchSourceKey, boolean>) => void;
@@ -288,6 +292,7 @@ function SearchForm({
   setSearchLimit: (value: string) => void;
   searchLimitValidation: { value: number | null; error: string | null };
   searchLimitWarning: string | null;
+  onPendingWordsChange: (text: string) => void;
 }) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
@@ -333,6 +338,7 @@ function SearchForm({
               groups={keywordGroups}
               selected={selectedKeywords}
               onChange={setSelectedKeywords}
+              onPendingChange={onPendingWordsChange}
             />
           )}
 
