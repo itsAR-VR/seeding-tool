@@ -110,7 +110,12 @@ export default async function DashboardPage() {
     prisma.campaignCreator.count({
       where: {
         campaign: { brandId },
-        shippingSnapshots: { some: { isActive: false, confirmedAt: null } },
+        // An unconfirmed address, and no address confirmed since (a later
+        // claim-form submission confirms itself and settles it).
+        AND: [
+          { shippingSnapshots: { some: { isActive: false, confirmedAt: null } } },
+          { shippingSnapshots: { none: { confirmedAt: { not: null } } } },
+        ],
       },
     }),
     prisma.campaign.findMany({
@@ -136,7 +141,7 @@ export default async function DashboardPage() {
       count: addressesToConfirm,
       text: plural(addressesToConfirm, "shipping address needs a quick check", "shipping addresses need a quick check"),
       action: "Open inbox",
-      href: "/inbox?tab=yes",
+      href: "/inbox",
     },
     {
       count: draftOrders,

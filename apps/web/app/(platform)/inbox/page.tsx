@@ -75,6 +75,9 @@ export default async function InboxPage({
             orderBy: { createdAt: "desc" },
             take: 1,
           },
+          _count: {
+            select: { shippingSnapshots: { where: { confirmedAt: { not: null } } } },
+          },
         },
       },
       messages: {
@@ -164,7 +167,9 @@ export default async function InboxPage({
             const profile = creator.profiles[0];
             const lastMessage = thread.messages[0];
             const hasDraft = thread.campaignCreator.aiDrafts.length > 0;
-            const addressToConfirm = thread.campaignCreator.shippingSnapshots.length > 0;
+            const addressToConfirm =
+              thread.campaignCreator.shippingSnapshots.length > 0 &&
+              thread.campaignCreator._count.shippingSnapshots === 0;
             const decision = thread.campaignCreator.replyDecision;
             const needsCall = !decision && lastMessage?.direction === "inbound";
             const name = creator.name ?? profile?.handle ?? "Unknown creator";

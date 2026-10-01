@@ -65,7 +65,7 @@ export default async function ContentPage({
     }),
     prisma.contentPost.groupBy({
       by: ["rightsStatus"],
-      where: { brandId, hidden: false },
+      where: { brandId, hidden: false, ...(since ? { createdAt: { gte: since } } : {}) },
       _count: true,
     }),
   ]);
@@ -85,11 +85,26 @@ export default async function ContentPage({
         <SyncContent />
       </div>
 
+      {since && (
+        <p className="text-sm text-muted-foreground">
+          Showing posts from the last 7 days.{" "}
+          <Link
+            href={tab === "all" ? "/content" : `/content?tab=${tab}`}
+            className="font-medium text-foreground underline"
+          >
+            Show all
+          </Link>
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={t.key === "all" ? "/content" : `/content?tab=${t.key}`}
+            href={`/content?${new URLSearchParams({
+              ...(t.key === "all" ? {} : { tab: t.key }),
+              ...(since ? { new: "1" } : {}),
+            })}`}
             className={`rounded-full border px-3 py-1 text-sm ${
               tab === t.key ? "bg-foreground text-background" : "hover:bg-muted"
             }`}
