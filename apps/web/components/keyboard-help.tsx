@@ -33,7 +33,9 @@ export function KeyboardHelp() {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     function onKey(event: KeyboardEvent) {
-      if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || isTyping(event.target)) return;
+      // Leave keys alone while a dialog is open (Escape closes it natively).
+      if (document.querySelector("dialog[open]")) return;
       if (event.key === "?") {
         event.preventDefault();
         dialogRef.current?.showModal();

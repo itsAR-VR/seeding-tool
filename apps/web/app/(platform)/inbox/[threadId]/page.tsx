@@ -231,7 +231,9 @@ export default function ThreadDetailPage() {
     if (!canDecide) return;
     function onKey(event: KeyboardEvent) {
       const el = event.target as HTMLElement | null;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      // Not while a dialog (e.g. Help) is open or the key came from inside one.
+      if (document.querySelector("dialog[open]") || el?.closest("dialog")) return;
       if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
       const decision = ({ y: "yes", l: "later", n: "no" } as const)[event.key.toLowerCase() as "y" | "l" | "n"];
       if (!decision) return;
