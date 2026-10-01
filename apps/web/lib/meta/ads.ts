@@ -45,9 +45,14 @@ async function graph<T>(path: string, token: string, body?: Record<string, unkno
     url.searchParams.set("access_token", token);
   }
   const res = await fetch(url, init);
+  // (#222) means the app can't see the creator's post: using other people's
+  // content needs Meta Advanced Access (App Review). Say so plainly.
   const json = (await res.json().catch(() => ({}))) as { error?: { message?: string; error_user_msg?: string } };
   if (!res.ok || json.error) {
-    const message = json.error?.error_user_msg || json.error?.message || `Meta API error ${res.status}`;
+    const raw = json.error?.error_user_msg || json.error?.message || `Meta API error ${res.status}`;
+    const message = /\(#222\)|not visible/i.test(raw)
+      ? "Meta doesn't let the tool use this creator's post yet (it needs Meta's App Review)."
+      : raw;
     throw new MetaAdsError(message);
   }
   return json as T;

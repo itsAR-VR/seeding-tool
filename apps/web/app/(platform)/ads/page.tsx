@@ -30,6 +30,17 @@ export default async function AdsPage() {
     throw error;
   }
 
+  const connection = await prisma.brandConnection.findFirst({
+    where: { brandId, provider: "instagram" },
+    select: { metadata: true },
+  });
+  const meta = (connection?.metadata ?? {}) as { adAccountId?: string; adsAdSetId?: string };
+  const adsManagerUrl = meta.adAccountId
+    ? `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${meta.adAccountId.replace(/^act_/, "")}${
+        meta.adsAdSetId ? `&selected_adset_ids=${meta.adsAdSetId}` : ""
+      }`
+    : null;
+
   const posts = await prisma.contentPost.findMany({
     where: { brandId, metaAdId: { not: null } },
     include: { creator: { select: { id: true } } },
@@ -74,7 +85,7 @@ export default async function AdsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <PartnershipForm />
+          <PartnershipForm adsManagerUrl={adsManagerUrl} />
         </CardContent>
       </Card>
 

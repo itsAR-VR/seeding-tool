@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 /** Paste any creator's partnership ad code to make a paused partnership ad. */
-export function PartnershipForm() {
+export function PartnershipForm({ adsManagerUrl }: { adsManagerUrl: string | null }) {
   const router = useRouter();
   const [adCode, setAdCode] = useState("");
   const [postUrl, setPostUrl] = useState("");
@@ -53,6 +53,24 @@ export function PartnershipForm() {
       </Button>
       {message && (
         <p className={`text-sm sm:col-span-3 ${message.ok ? "text-green-700" : "text-red-600"}`}>{message.text}</p>
+      )}
+      {message && !message.ok && adsManagerUrl && adCode.trim() && (
+        <div className="space-y-1 text-sm sm:col-span-3">
+          <p className="text-muted-foreground">
+            Meta doesn&apos;t let the tool use other people&apos;s posts yet. You can still do it in Ads Manager: open
+            the &quot;Creator content · US&quot; ad set, create an ad, choose &quot;Use partnership ad code&quot;, and paste.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              void navigator.clipboard.writeText(adCode.trim());
+              window.open(adsManagerUrl, "_blank", "noopener");
+            }}
+          >
+            Copy code and open Ads Manager ↗
+          </Button>
+        </div>
       )}
     </div>
   );
