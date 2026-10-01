@@ -257,33 +257,70 @@ export async function createPausedBrandAd(
   return { adId: ad.id, adsManagerUrl: adsManagerUrl(ctx, ad.id) };
 }
 
+export type PartnershipMedia = {
+  mediaId: string;
+  permalink: string | null;
+  username: string | null;
+  mediaType: string | null;
+};
+
 /**
- * The Instagram media a creator's partnership ad code points to, via the
- * Partnership Ads Advertisable Content API (looked up on the Page's business).
+ * The Instagram post a creator's partnership ad code points to, via the
+ * Partnership Ads Advertisable Content API on the Page's business. Tries the
+ * code first, then the post link if one was given.
  */
-async function mediaIdForAdCode(ctx: AdsContext, code: string): Promise<string> {
+export async function lookupPartnershipMedia(
+  brandId: string,
+  code: string,
+  permalink?: string
+): Promise<PartnershipMedia | null> {
+  const ctx = await loadAdsContext(brandId);
   const page = await graph<{ business?: { id: string } }>(`${ctx.pageId}?fields=business`, ctx.token);
   if (!page.business?.id) {
     throw new MetaAdsError("Your Facebook Page isn't in a Meta business account, so Meta can't look up the code.");
   }
-  const params = new URLSearchParams({
-    ig_user_id: ctx.igUserId,
-    ad_codes: JSON.stringify([code]),
-    fields: "content_id,permalink,partnership_info{ad_eligibility,eligibility_errors{message}}",
-  });
-  const result = await graph<{
-    data?: Array<{
-      content_id: string;
-      partnership_info?: Array<{ ad_eligibility?: string; eligibility_errors?: Array<{ message?: string }> }>;
-    }>;
-  }>(`${page.business.id}/partnership-ads-advertisable-content?${params}`, ctx.token);
-  const media = result.data?.[0];
-  if (!media) throw new MetaAdsError("Meta couldn't find the post for this code. Ask the creator for a new code.");
-  const info = media.partnership_info?.[0];
-  if (info?.ad_eligibility === "INELIGIBLE") {
-    throw new MetaAdsError(info.eligibility_errors?.[0]?.message ?? "Meta says this post can't be used in ads.");
+  const fields =
+    "content_id,permalink,media_type,author{display_name},partnership_info{ad_eligibility,eligibility_errors{message}}";
+  const cleanLink = permalink ? permalink.split("?")[0] : undefined;
+  const attempts: Array<Record<string, string>> = [
+    { ad_codes: JSON.stringify([code]) },
+    { ad_codes: code },
+    ...(cleanLink ? [{ permalinks: JSON.stringify([cleanLink]) }] : []),
+  ];
+  for (const attempt of attempts) {
+    const params = new URLSearchParams({ ig_user_id: ctx.igUserId, fields, ...attempt });
+    const result = await graph<{
+      data?: Array<{
+        content_id: string;
+        permalink?: string;
+        media_type?: string;
+        author?: { display_name?: string };
+        partnership_info?: Array<{ ad_eligibility?: string; eligibility_errors?: Array<{ message?: string }> }>;
+      }>;
+    }>(`${page.business.id}/partnership-ads-advertisable-content?${params}`, ctx.token).catch((error) => {
+      console.error("[meta/ads] advertisable content lookup failed", Object.keys(attempt)[0], error);
+      return null;
+    });
+    const media = result?.data?.[0];
+    if (!media) continue;
+    const info = media.partnership_info?.[0];
+    if (info?.ad_eligibility === "INELIGIBLE") {
+      throw new MetaAdsError(info.eligibility_errors?.[0]?.message ?? "Meta says this post can't be used in ads.");
+    }
+    return {
+      mediaId: media.content_id,
+      permalink: media.permalink ?? cleanLink ?? null,
+      username: media.author?.display_name ?? null,
+      mediaType: media.media_type ?? null,
+    };
   }
-  return media.content_id;
+  return null;
+}
+
+async function mediaIdForAdCode(ctx: AdsContext, code: string, permalink?: string | null): Promise<string> {
+  const media = await lookupPartnershipMedia(ctx.brandId, code, permalink ?? undefined);
+  if (!media) throw new MetaAdsError("Meta couldn't find the post for this code. Ask the creator for a new code.");
+  return media.mediaId;
 }
 
 /**
@@ -329,7 +366,7 @@ export async function createPausedPartnershipAd(
     // Meta lets us do that with the creator's code instead of the source file.
     // Prefer Meta's lookup; fall back to the card's own post, since a code is
     // pasted on the post it was made for.
-    const mediaId = await mediaIdForAdCode(ctx, code).catch((lookupError) => {
+    const mediaId = await mediaIdForAdCode(ctx, code, post.permalink).catch((lookupError) => {
       if (post.platform === "instagram" && /^\d+$/.test(post.externalId)) return post.externalId;
       throw lookupError;
     });

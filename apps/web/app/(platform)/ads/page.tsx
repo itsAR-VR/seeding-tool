@@ -4,6 +4,7 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { getAdResults, MetaAdsError, type AdResults } from "@/lib/meta/ads";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { PartnershipForm } from "./partnership-form";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +65,18 @@ export default async function AdsPage() {
           <CardHeader className="pb-2"><CardDescription>Cost per purchase</CardDescription><CardTitle>{totalPurchases > 0 ? money(totalSpend / totalPurchases) : "–"}</CardTitle></CardHeader>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Got a partnership code from a creator?</CardTitle>
+          <CardDescription>
+            Paste it here to make a paused ad that runs from their handle and yours. Works for any post.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PartnershipForm />
+        </CardContent>
+      </Card>
 
       <Card>
         <CardContent className="pt-6">
