@@ -9,6 +9,12 @@ import {
   type InstagramPaginatedResponse,
 } from "@/lib/instagram/client";
 
+/** True when the URL points at our own storage rather than Instagram's CDN. */
+function isStoredCopy(url: string | null): boolean {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return Boolean(url && supabaseUrl && url.startsWith(supabaseUrl));
+}
+
 /** Pages of tags to read per sync. Each page is ~25 posts. */
 const MAX_PAGES = 5;
 
@@ -106,14 +112,20 @@ export async function syncContentForBrand(brandId: string): Promise<ContentSyncR
           where: {
             brandId_platform_externalId: { brandId, platform: "instagram", externalId: media.id },
           },
-          select: { id: true, creatorId: true },
+          select: { id: true, creatorId: true, mediaUrl: true, thumbnailUrl: true },
         });
 
         if (existing) {
+          // Keep permanent copies (approved posts, creator uploads); only refresh
+          // Instagram's expiring links, and never blank out a file we already have.
+          const keepMedia = isStoredCopy(existing.mediaUrl) || (existing.mediaUrl && !fields.mediaUrl);
+          const keepThumb = isStoredCopy(existing.thumbnailUrl) || (existing.thumbnailUrl && !fields.thumbnailUrl);
           await prisma.contentPost.update({
             where: { id: existing.id },
             data: {
               ...fields,
+              mediaUrl: keepMedia ? existing.mediaUrl : fields.mediaUrl,
+              thumbnailUrl: keepThumb ? existing.thumbnailUrl : fields.thumbnailUrl,
               creatorId: existing.creatorId ?? (await findCreatorId(brandId, media.username)),
             },
           });

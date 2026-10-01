@@ -75,7 +75,7 @@ export function KeyboardHelp() {
 
       <dialog
         ref={dialogRef}
-        className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/30"
+        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-2xl border bg-background p-0 text-foreground shadow-xl backdrop:bg-black/30"
         onClick={(e) => {
           if (e.target === dialogRef.current) dialogRef.current?.close();
         }}
