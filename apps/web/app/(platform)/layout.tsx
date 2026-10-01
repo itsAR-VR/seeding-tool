@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CreatorSearchJobsTray } from "@/components/creator-search-jobs-tray";
 import { MobileNav, SidebarNav } from "@/components/platform-nav";
+import { KeyboardHelp } from "@/components/keyboard-help";
 
 
 export default async function PlatformLayout({
@@ -30,7 +31,8 @@ export default async function PlatformLayout({
 
         <SidebarNav />
 
-        <div className="mt-auto pt-8">
+        <div className="mt-auto space-y-4 pt-8">
+          <KeyboardHelp />
           <p className="truncate text-sm text-muted-foreground">
             {user.email}
           </p>

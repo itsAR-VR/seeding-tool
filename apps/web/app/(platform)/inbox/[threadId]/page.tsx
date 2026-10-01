@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -222,6 +222,25 @@ export default function ThreadDetailPage() {
       setDmSending(false);
     }
   }
+
+  // y / l / n mark the decision, like the buttons (skipped while typing).
+  const decisionKeyRef = useRef(handleDecision);
+  decisionKeyRef.current = handleDecision;
+  const canDecide = Boolean(thread?.messages.some((m) => m.direction === "inbound")) && !deciding;
+  useEffect(() => {
+    if (!canDecide) return;
+    function onKey(event: KeyboardEvent) {
+      const el = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      const decision = ({ y: "yes", l: "later", n: "no" } as const)[event.key.toLowerCase() as "y" | "l" | "n"];
+      if (!decision) return;
+      event.preventDefault();
+      void decisionKeyRef.current(decision);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canDecide]);
 
   if (loading) {
     return (

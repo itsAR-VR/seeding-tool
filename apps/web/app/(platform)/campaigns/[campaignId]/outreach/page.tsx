@@ -40,7 +40,7 @@ type CampaignCreator = {
 type Notice = { tone: "success" | "error"; text: string };
 
 const STATUS_LABELS: Record<string, string> = {
-  ready: "Not contacted",
+  ready: "Not emailed yet",
   outreach_sent: "Emailed",
   replied: "Replied",
   address_review: "Address to review",
@@ -373,9 +373,9 @@ export default function OutreachPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Outreach</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Email creators</h1>
         <p className="text-muted-foreground">
-          Review and send emails to approved creators.
+          Pick creators, check each email, then send.
         </p>
       </div>
 
@@ -391,7 +391,7 @@ export default function OutreachPage() {
           <span>{notice.tone === "success" ? "✓ " : ""}{notice.text}</span>
           <button
             type="button"
-            className="text-xs underline underline-offset-2 opacity-70 hover:opacity-100"
+            className="text-sm underline underline-offset-2 opacity-80 hover:opacity-100"
             onClick={() => setNotice(null)}
           >
             Dismiss
@@ -502,7 +502,7 @@ export default function OutreachPage() {
               <CardDescription>
                 {loadingCreators
                   ? "Loading..."
-                  : `Click the creators you want to email. ${sendableCreators.length} of ${approvedCreators.length} haven't been contacted yet.`}
+                  : `Click the creators you want to email. ${sendableCreators.length} of ${approvedCreators.length} haven't been emailed yet.`}
               </CardDescription>
             </div>
             {sendableCreators.length > 0 && (
@@ -510,7 +510,7 @@ export default function OutreachPage() {
                 {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
                   sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
                   ? "Deselect All"
-                  : `Select All (up to ${MAX_BATCH_SIZE})`}
+                  : `Select the first ${MAX_BATCH_SIZE}`}
               </Button>
             )}
           </div>
@@ -846,7 +846,7 @@ export default function OutreachPage() {
                   <>
                     {channel === "email" && (
                       <div className="space-y-1">
-                        <Label className="text-xs">Subject</Label>
+                        <Label className="text-sm">Subject</Label>
                         <input
                           type="text"
                           className="w-full rounded-md border px-3 py-2 text-sm"
@@ -864,7 +864,7 @@ export default function OutreachPage() {
                       </div>
                     )}
                     <div className="space-y-1">
-                      <Label className="text-xs">
+                      <Label className="text-sm">
                         {channel === "email" ? "Body" : "Message"}
                       </Label>
                       <Textarea
@@ -883,7 +883,7 @@ export default function OutreachPage() {
                       />
                     </div>
                     {sendBlocker ? (
-                      <p className="text-xs font-medium text-amber-700">
+                      <p className="text-sm font-medium text-amber-800">
                         {sendBlocker}
                       </p>
                     ) : null}
