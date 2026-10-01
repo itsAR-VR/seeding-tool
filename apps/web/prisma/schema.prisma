@@ -1185,8 +1185,8 @@ model MentionAsset {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  /// Dedupe by platform + mediaUrl
-  @@unique([platform, mediaUrl])
+  /// Dedupe per campaign creator, so two brands can log the same public post.
+  @@unique([campaignCreatorId, platform, mediaUrl])
   @@map("mention_assets")
 }
 

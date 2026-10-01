@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   attributeMention,
   createAndAttributeMention,
+  MentionAccessError,
 } from "@/lib/mentions/attribution";
 import {
   getCurrentBrandMembership,
@@ -83,7 +84,8 @@ export async function POST(request: NextRequest) {
     if (body.mentionAssetId && body.campaignCreatorId) {
       await attributeMention(
         body.mentionAssetId as string,
-        body.campaignCreatorId as string
+        body.campaignCreatorId as string,
+        membership.brandId
       );
       return NextResponse.json({ success: true, action: "attributed" });
     }
@@ -100,6 +102,7 @@ export async function POST(request: NextRequest) {
         views: body.views ? Number(body.views) : undefined,
         postedAt: body.postedAt ? new Date(body.postedAt as string) : undefined,
         campaignCreatorId: body.campaignCreatorId as string,
+        brandId: membership.brandId,
       });
 
       return NextResponse.json({
@@ -119,6 +122,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof MentionAccessError) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const message =
       error instanceof Error ? error.message : "Failed to process mention";
