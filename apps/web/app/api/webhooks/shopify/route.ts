@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
+import { decrypt } from "@/lib/encryption";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 
 /**
@@ -17,8 +18,29 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
 
-function verifyShopifyHmac(body: string, hmacHeader: string): boolean {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+/**
+ * The secret that signs this store's webhooks: the brand's own custom-app
+ * secret when they connected with one, else our Shopify app's secret.
+ */
+async function webhookSecretFor(shopDomain: string): Promise<string | null> {
+  if (shopDomain) {
+    const connection = await prisma.brandConnection.findFirst({
+      where: { provider: "shopify", externalId: shopDomain, status: "connected" },
+      select: { metadata: true },
+    });
+    const enc = (connection?.metadata as { webhookSecretEnc?: string } | null)?.webhookSecretEnc;
+    if (enc) {
+      try {
+        return decrypt(enc);
+      } catch {
+        log("warn", "shopify.webhook.secret_decrypt_failed", { shopDomain });
+      }
+    }
+  }
+  return process.env.SHOPIFY_WEBHOOK_SECRET ?? null;
+}
+
+function verifyShopifyHmac(body: string, hmacHeader: string, secret: string | null): boolean {
   if (!secret) return false;
 
   const computed = createHmac("sha256", secret).update(body).digest("base64");
@@ -40,7 +62,7 @@ export async function POST(request: NextRequest) {
   const shopDomain = request.headers.get("x-shopify-shop-domain") || "";
 
   // Verify HMAC
-  if (!verifyShopifyHmac(rawBody, hmacHeader)) {
+  if (!verifyShopifyHmac(rawBody, hmacHeader, await webhookSecretFor(shopDomain))) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 

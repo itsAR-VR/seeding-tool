@@ -93,6 +93,8 @@ export function ShopifyConnectionCard({
   saving,
   storeDomain,
   accessToken,
+  apiSecret,
+  onApiSecretChange,
   oauthShop,
   onMethodChange,
   onStoreDomainChange,
@@ -109,6 +111,8 @@ export function ShopifyConnectionCard({
   saving: boolean;
   storeDomain: string;
   accessToken: string;
+  apiSecret: string;
+  onApiSecretChange: (value: string) => void;
   oauthShop: string;
   onMethodChange: (method: IntegrationMethod) => void;
   onStoreDomainChange: (value: string) => void;
@@ -192,6 +196,16 @@ export function ShopifyConnectionCard({
               spellCheck={false}
               onChange={(event) => onAccessTokenChange(event.target.value)}
             />
+            <Input
+              type="password"
+              placeholder="API secret key (for order updates)"
+              value={apiSecret}
+              autoComplete="new-password"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              onChange={(event) => onApiSecretChange(event.target.value)}
+            />
             <Button
               type="submit"
               variant="outline"
@@ -202,8 +216,8 @@ export function ShopifyConnectionCard({
             <p className="text-sm text-muted-foreground">
               Use the Shopify admin domain in the form{" "}
               <code className="font-mono">your-store.myshopify.com</code>.
-              Storefront domains like <code className="font-mono">sleepkalm.com</code>{" "}
-              will not work with the admin token flow.
+              Your public store website won&apos;t work here. Paste the custom
+              app&apos;s Admin API token and its API secret key.
             </p>
             <ProviderGuide provider="shopify" />
             <p className="text-sm text-muted-foreground">

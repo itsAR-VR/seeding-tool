@@ -61,6 +61,7 @@ function ConnectionsContent({
   const [shopifyForm, setShopifyForm] = useState({
     storeDomain: "",
     accessToken: "",
+    apiSecret: "",
     oauthShop: "",
   });
   const [unipileForm, setUnipileForm] = useState({
@@ -248,6 +249,7 @@ function ConnectionsContent({
         body: JSON.stringify({
           storeDomain: shopifyForm.storeDomain.trim(),
           accessToken: shopifyForm.accessToken.trim(),
+          apiSecret: shopifyForm.apiSecret.trim(),
         }),
       });
 
@@ -262,6 +264,7 @@ function ConnectionsContent({
         ...current,
         storeDomain: savedStoreDomain,
         accessToken: "",
+        apiSecret: "",
       }));
       setProviderMessage("shopify", {
         tone: "success",
@@ -515,6 +518,10 @@ function ConnectionsContent({
             saving={shopifySaving}
             storeDomain={shopifyForm.storeDomain}
             accessToken={shopifyForm.accessToken}
+            apiSecret={shopifyForm.apiSecret}
+            onApiSecretChange={(value) =>
+              setShopifyForm((current) => ({ ...current, apiSecret: value }))
+            }
             oauthShop={shopifyForm.oauthShop}
             onMethodChange={(method) => void handleMethodChange("shopify", method)}
             onStoreDomainChange={(value) =>

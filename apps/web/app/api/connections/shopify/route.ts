@@ -62,10 +62,14 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       storeDomain?: string;
       accessToken?: string;
+      apiSecret?: string;
     };
 
     const storeDomain = normalizeStoreDomain(body.storeDomain ?? "");
     const accessToken = body.accessToken?.trim() ?? "";
+    // The custom app's API secret key signs this store's webhooks (order and
+    // shipping updates). Optional, but without it those updates are rejected.
+    const apiSecret = body.apiSecret?.trim() ?? "";
 
     if (!storeDomain || !accessToken) {
       return NextResponse.json(
@@ -78,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "Use your Shopify admin domain in the format your-store.myshopify.com. Storefront domains like sleepkalm.com will not work here.",
+            "Use your Shopify admin domain in the format your-store.myshopify.com. Your public store website won't work here.",
         },
         { status: 400 }
       );
@@ -120,6 +124,7 @@ export async function POST(request: NextRequest) {
         status: "connected",
         connectionMethod: "manual",
         externalId: storeDomain,
+        metadata: apiSecret ? { webhookSecretEnc: encrypt(apiSecret) } : undefined,
       });
     });
 
