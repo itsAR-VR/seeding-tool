@@ -30,16 +30,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     });
     if (claimed.count === 0) throw new InviteError("This invite was already used.", 409);
 
-    const user =
-      (await getUserBySupabaseId(authUser.id)) ??
-      (await bootstrapNewUser(authUser.id, invite.email, invite.companyName ?? invite.email.split("@")[0])).user;
+    try {
+      const user =
+        (await getUserBySupabaseId(authUser.id)) ??
+        (await bootstrapNewUser(authUser.id, invite.email, invite.companyName ?? invite.email.split("@")[0])).user;
 
-    if (invite.brandId) {
-      await prisma.brandMembership.upsert({
-        where: { userId_brandId: { userId: user.id, brandId: invite.brandId } },
-        update: {},
-        create: { userId: user.id, brandId: invite.brandId, role: invite.role },
-      });
+      if (invite.brandId) {
+        await prisma.brandMembership.upsert({
+          where: { userId_brandId: { userId: user.id, brandId: invite.brandId } },
+          update: {},
+          create: { userId: user.id, brandId: invite.brandId, role: invite.role },
+        });
+      }
+    } catch (error) {
+      // Joining failed: give the invite back so the link still works.
+      await prisma.brandInvite.update({ where: { id: invite.id }, data: { acceptedAt: null } });
+      throw error;
     }
 
     if (invite.brandId) {

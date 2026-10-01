@@ -12,9 +12,17 @@ export async function GET(request: Request) {
   const rawNext = searchParams.get("next") ?? "/dashboard";
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\") ? rawNext : "/dashboard";
 
-  if (code) {
+  const tokenHash = searchParams.get("token_hash");
+  const type = searchParams.get("type");
+  const otpType = type === "invite" || type === "magiclink" || type === "signup" || type === "email" ? type : null;
+
+  if (code || (tokenHash && otpType)) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    // token_hash links come from our own invite emails (any browser works);
+    // code links come from Supabase's PKCE flow (same browser only).
+    const { error } = code
+      ? await supabase.auth.exchangeCodeForSession(code)
+      : await supabase.auth.verifyOtp({ token_hash: tokenHash!, type: otpType! });
     if (!error) {
       const forwardedHost = request.headers.get("x-forwarded-host");
       const isLocalEnv = process.env.NODE_ENV === "development";

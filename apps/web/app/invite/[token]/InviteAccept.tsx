@@ -19,21 +19,11 @@ export function InviteAccept({ token, email, signedInEmail }: Props) {
   async function sendLink() {
     setBusy(true);
     setError(null);
-    const next = `/invite/${encodeURIComponent(token)}`;
-    const { error: otpError } = await createClient().auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(next)}`,
-      },
-    });
+    const res = await fetch(`/api/invites/${token}/link`, { method: "POST" });
+    const data = (await res.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
-    if (otpError) {
-      setError(
-        /rate|seconds/i.test(otpError.message)
-          ? "We just sent a link. Wait a minute, then try again."
-          : "Couldn't send the email. Try again.",
-      );
+    if (!res.ok) {
+      setError(data?.error ?? "Couldn't send the email. Try again.");
       return;
     }
     setSent(true);
@@ -91,8 +81,7 @@ export function InviteAccept({ token, email, signedInEmail }: Props) {
     return (
       <div className="space-y-3">
         <p className="rounded-lg bg-muted p-4">
-          Check <strong>{email}</strong> for an email from us. Open the link <strong>in this browser</strong> to finish
-          joining.
+          Check <strong>{email}</strong> for an email from us. Open the link in it to finish joining.
         </p>
         <button type="button" disabled={busy} onClick={() => void sendLink()} className="text-sm font-medium underline">
           Send it again
