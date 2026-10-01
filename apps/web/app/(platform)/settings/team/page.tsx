@@ -17,7 +17,7 @@ export default function TeamPage() {
   const [role, setRole] = useState("editor");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [link, setLink] = useState<{ url: string; email: string } | null>(null);
+  const [link, setLink] = useState<{ url: string; email: string; emailed: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/team");
@@ -41,9 +41,9 @@ export default function TeamPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, role }),
       });
-      const body = (await res.json().catch(() => null)) as { link?: string; error?: string } | null;
+      const body = (await res.json().catch(() => null)) as { link?: string; emailed?: boolean; error?: string } | null;
       if (!res.ok || !body?.link) throw new Error(body?.error ?? "Couldn't create the invite.");
-      setLink({ url: body.link, email });
+      setLink({ url: body.link, email, emailed: Boolean(body.emailed) });
       setEmail("");
       await load();
     } catch (e) {
@@ -96,11 +96,11 @@ export default function TeamPage() {
               disabled={busy}
               className="rounded-lg bg-foreground px-4 py-2 font-medium text-background disabled:opacity-50"
             >
-              {busy ? "Creating..." : "Create invite link"}
+              {busy ? "Sending..." : "Send invite"}
             </button>
           </form>
           {error && <p className="text-sm text-red-600">{error}</p>}
-          {link && <InviteLinkBox link={link.url} email={link.email} />}
+          {link && <InviteLinkBox link={link.url} email={link.email} emailed={link.emailed} />}
         </section>
       )}
 

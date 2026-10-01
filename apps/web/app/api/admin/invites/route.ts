@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
+import { sendInviteEmail } from "@/lib/auth/email-link";
 import { createInvite, InviteError, isPlatformAdmin } from "@/lib/invites";
 
 async function requirePlatformAdmin() {
@@ -46,7 +47,17 @@ export async function POST(request: Request) {
       brandId: null,
       invitedById: admin?.id ?? null,
     });
-    return NextResponse.json(result);
+    const emailed = await sendInviteEmail({
+      email: typeof body.email === "string" ? body.email.trim() : "",
+      link: result.link,
+      companyName: typeof body.companyName === "string" ? body.companyName.trim() : "",
+      brandId: null,
+      invitedById: admin?.id ?? null,
+    }).then(() => true, (error) => {
+      console.error("[admin/invites email]", error instanceof Error ? error.message : error);
+      return false;
+    });
+    return NextResponse.json({ ...result, emailed });
   } catch (error) {
     if (error instanceof InviteError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("[admin/invites POST]", error);

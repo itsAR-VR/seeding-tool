@@ -59,47 +59,40 @@ function base64Url(value: string): string {
   return Buffer.from(value).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/**
- * Email a sign-in link to `email`. Sent from the inviting company's inbox,
- * or the inviter's own company when the invite is for a new company.
- */
-export async function sendSignInLink(params: {
-  email: string;
-  /** Same-site page with the Continue button, e.g. /invite/<token>/continue. */
-  continuePath: string;
-  companyName: string;
-  brandId: string | null;
-  invitedById: string | null;
-}): Promise<void> {
-  const brandIds = params.brandId
-    ? [params.brandId]
-    : params.invitedById
+type InviteSender = { brandId: string | null; invitedById: string | null };
+
+/** Send a plain-text email from the inviting company's Gmail. */
+async function sendFromCompanyGmail(to: string, subject: string, body: string, from: InviteSender) {
+  const brandIds = from.brandId
+    ? [from.brandId]
+    : from.invitedById
       ? (
           await prisma.brandMembership.findMany({
-            where: { userId: params.invitedById },
+            where: { userId: from.invitedById },
             select: { brandId: true },
           })
         ).map((m) => m.brandId)
       : [];
   const sender = await findSender(brandIds);
-  if (!sender) throw new EmailLinkError("No connected Gmail inbox to send the link from");
+  if (!sender) throw new EmailLinkError("No connected Gmail inbox to send from");
 
-  const link = await makeSignInUrl(params.email, params.continuePath);
   const clean = (v: string) => v.replace(/[\r\n"]/g, "");
   // Non-ASCII header text (accents, emoji) must be encoded or mail apps garble it.
   const header = (v: string) =>
     /^[\x20-\x7e]*$/.test(v) ? v : `=?UTF-8?B?${Buffer.from(v).toString("base64")}?=`;
   // Encoded names must not sit inside quotes (RFC 2047).
   const quotedName = (v: string) => (header(v) === v ? `"${v}"` : header(v));
-  const from = sender.displayName ? `${quotedName(clean(sender.displayName))} <${sender.address}>` : sender.address;
+  const fromHeader = sender.displayName
+    ? `${quotedName(clean(sender.displayName))} <${sender.address}>`
+    : sender.address;
   const raw = [
-    `From: ${from}`,
-    `To: ${clean(params.email)}`,
-    `Subject: ${header(clean(`Your link to join ${params.companyName} on Seed Scale`))}`,
+    `From: ${fromHeader}`,
+    `To: ${clean(to)}`,
+    `Subject: ${header(clean(subject))}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
     "",
-    `Hi,\r\n\r\nOpen this link to join ${params.companyName} on Seed Scale:\r\n\r\n${link}\r\n\r\nIt works once and expires in about an hour. If you didn't ask for this, you can ignore this email.`,
+    body.replace(/\r?\n/g, "\r\n"),
   ].join("\r\n");
 
   const accessToken = await getGmailAccessToken(sender.refreshToken);
@@ -109,4 +102,35 @@ export async function sendSignInLink(params: {
     body: JSON.stringify({ raw: base64Url(raw) }),
   });
   if (!res.ok) throw new EmailLinkError(`Gmail send failed (${res.status})`);
+}
+
+/** Email the invite link itself, right after the invite is created. */
+export async function sendInviteEmail(params: InviteSender & { email: string; link: string; companyName: string }) {
+  const intro = params.brandId
+    ? `You've been invited to join ${params.companyName} on Seed Scale, where the team runs its creator gifting.`
+    : `You've been invited to set up ${params.companyName} on Seed Scale to run your creator gifting.`;
+  await sendFromCompanyGmail(
+    params.email,
+    `You're invited to ${params.companyName} on Seed Scale`,
+    `Hi,\n\n${intro}\n\nOpen this link to get started:\n\n${params.link}\n\nThe link expires in 14 days.`,
+    params,
+  );
+}
+
+/**
+ * Email a one-time sign-in link to `email`, which proves they own the address.
+ */
+export async function sendSignInLink(params: InviteSender & {
+  email: string;
+  /** Same-site page with the Continue button, e.g. /invite/<token>/continue. */
+  continuePath: string;
+  companyName: string;
+}): Promise<void> {
+  const link = await makeSignInUrl(params.email, params.continuePath);
+  await sendFromCompanyGmail(
+    params.email,
+    `Your link to join ${params.companyName} on Seed Scale`,
+    `Hi,\n\nOpen this link to join ${params.companyName} on Seed Scale:\n\n${link}\n\nIt works once and expires in about an hour. If you didn't ask for this, you can ignore this email.`,
+    params,
+  );
 }
