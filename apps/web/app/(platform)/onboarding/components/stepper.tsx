@@ -1,51 +1,35 @@
-"use client";
+import { Check } from "lucide-react";
+import { ONBOARDING_STEPS, STEP_LABELS, type OnboardingStep } from "./constants";
 
-import { ONBOARDING_STEPS } from "./constants";
-
-export function Stepper({
-  stepIndex,
-  isBrandStep,
-}: {
-  stepIndex: number;
-  isBrandStep: boolean;
-}) {
+/** Where you are in setup, in words. */
+export function Stepper({ current }: { current: OnboardingStep }) {
+  const currentIndex = ONBOARDING_STEPS.indexOf(current);
   return (
-    <div
-      className={`mb-8 flex items-center justify-center gap-2 ${isBrandStep ? "text-stone-200" : ""}`}
-    >
-      {ONBOARDING_STEPS.map((entry, index) => {
-        const isCurrent = index === stepIndex;
-        const isComplete = index < stepIndex;
-
+    <ol className="mb-10 flex flex-wrap items-center gap-x-3 gap-y-2" aria-label="Setup steps">
+      {ONBOARDING_STEPS.map((step, index) => {
+        const done = index < currentIndex;
+        const active = index === currentIndex;
         return (
-          <div key={entry} className="flex items-center gap-2">
-            <div
-              className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${
-                isBrandStep
-                  ? isCurrent
-                    ? "border border-[#d6df9f]/60 bg-[#d6df9f] text-[#161813]"
-                    : isComplete
-                      ? "border border-[#d6df9f]/40 bg-[#d6df9f]/20 text-[#d6df9f]"
-                      : "border border-white/12 bg-white/5 text-stone-400"
-                  : isCurrent
-                    ? "bg-primary text-primary-foreground"
-                    : isComplete
-                      ? "bg-primary/20 text-primary"
-                      : "bg-muted text-muted-foreground"
+          <li key={step} className="flex items-center gap-3" aria-current={active ? "step" : undefined}>
+            <span
+              className={`flex size-7 items-center justify-center rounded-full text-sm font-medium ${
+                active
+                  ? "bg-foreground text-background"
+                  : done
+                    ? "bg-foreground/10 text-foreground"
+                    : "border text-muted-foreground"
               }`}
             >
-              {index + 1}
-            </div>
-            {index < ONBOARDING_STEPS.length - 1 && (
-              <div
-                className={`h-px w-12 ${
-                  isBrandStep ? "bg-white/12" : "bg-border"
-                }`}
-              />
-            )}
-          </div>
+              {done ? <Check className="size-4" aria-hidden /> : index + 1}
+            </span>
+            <span className={active ? "font-medium" : "text-muted-foreground"}>
+              {STEP_LABELS[step]}
+              {done && <span className="sr-only"> (done)</span>}
+            </span>
+            {index < ONBOARDING_STEPS.length - 1 && <span className="h-px w-8 bg-border" aria-hidden />}
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }

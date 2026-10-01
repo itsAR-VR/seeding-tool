@@ -2,7 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
+import { resolveProviderCredential } from "@/lib/integrations/state";
 import { CampaignHealthWidget } from "./components/campaign-health";
 import type { HealthSnapshotData } from "@/lib/health/types";
 
@@ -43,6 +44,30 @@ async function fetchHealthSnapshots(
     metrics: snap.metrics as unknown as HealthSnapshotData["metrics"],
     alerts: snap.alerts as unknown as HealthSnapshotData["alerts"],
   }));
+}
+
+// ── Setup checklist (new companies) ─────────────────────────
+
+type SetupItem = { done: boolean; text: string; href: string; action: string };
+
+async function fetchSetupItems(brandId: string, hasCampaign: boolean): Promise<SetupItem[]> {
+  const [brand, instagram, gmail, shopify] = await Promise.all([
+    prisma.brand.findUnique({
+      where: { id: brandId },
+      select: { productFacts: true, apifyTokenEnc: true, useSharedApify: true },
+    }),
+    resolveProviderCredential(brandId, "instagram"),
+    resolveProviderCredential(brandId, "gmail"),
+    resolveProviderCredential(brandId, "shopify"),
+  ]);
+  return [
+    { done: Boolean(brand?.productFacts?.trim()), text: "Write what creators should know about the gift", href: "/settings/brand-kit", action: "Open brand kit" },
+    { done: gmail.connected, text: "Connect Gmail to send outreach", href: "/settings/connections", action: "Connect" },
+    { done: instagram.connected, text: "Connect Instagram to catch posts that tag you", href: "/settings/connections", action: "Connect" },
+    { done: shopify.connected, text: "Connect Shopify to create gift orders", href: "/settings/connections", action: "Connect" },
+    { done: Boolean(brand?.apifyTokenEnc || brand?.useSharedApify), text: "Turn on creator search", href: "/settings/creator-search", action: "Set up" },
+    { done: hasCampaign, text: "Start your first campaign", href: "/campaigns/new", action: "Start" },
+  ];
 }
 
 // ── Home page ────────────────────────────────────────────────
@@ -127,6 +152,10 @@ export default async function DashboardPage() {
     fetchHealthSnapshots(brandId),
   ]);
 
+  const setupItems = await fetchSetupItems(brandId, campaigns.length > 0);
+  const setupDone = setupItems.filter((i) => i.done).length;
+  const showSetup = setupDone < setupItems.length;
+
   const repliesToAnswer = undecidedThreads.filter((t) => t.messages[0]?.direction === "inbound").length;
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
@@ -177,6 +206,44 @@ export default async function DashboardPage() {
           {todos.length === 0 ? "You're all caught up." : "Here's what needs you today."}
         </p>
       </header>
+
+      {showSetup && (
+        <section aria-labelledby="setup-heading" className="space-y-3">
+          <div className="flex items-baseline justify-between">
+            <h2 id="setup-heading" className="text-lg font-semibold">
+              Finish setting up
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              {setupDone} of {setupItems.length} done
+            </span>
+          </div>
+          <ul className="divide-y rounded-xl border bg-card">
+            {setupItems.map((item) => (
+              <li key={item.text}>
+                {item.done ? (
+                  <div className="flex items-center gap-4 px-5 py-4 text-muted-foreground">
+                    <CheckCircle2 className="size-5 text-green-700" aria-hidden />
+                    <span className="flex-1 line-through decoration-muted-foreground/40">{item.text}</span>
+                    <span className="sr-only">Done</span>
+                  </div>
+                ) : (
+                  <Link
+                    href={item.href}
+                    className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50"
+                  >
+                    <Circle className="size-5 text-muted-foreground" aria-hidden />
+                    <span className="flex-1">{item.text}</span>
+                    <span className="flex items-center gap-1 text-sm font-medium">
+                      {item.action}
+                      <ArrowRight className="size-4" aria-hidden />
+                    </span>
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section aria-labelledby="todo-heading">
         <h2 id="todo-heading" className="sr-only">

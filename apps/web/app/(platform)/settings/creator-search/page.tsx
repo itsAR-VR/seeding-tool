@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type Status = { hasOwnKey: boolean; usesShared: boolean };
 
-export default function CreatorSearchSettingsPage() {
+function CreatorSearchSettings() {
+  const searchParams = useSearchParams();
+  const rawReturn = searchParams.get("returnTo");
+  // Only same-site paths, so this can't send people elsewhere.
+  const returnTo = rawReturn?.startsWith("/") && !rawReturn.startsWith("//") ? rawReturn : null;
   const [status, setStatus] = useState<Status | null>(null);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -100,6 +106,20 @@ export default function CreatorSearchSettingsPage() {
         </form>
         {notice && <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>}
       </section>
+
+      {returnTo && (
+        <Link href={returnTo} className="inline-block font-medium underline">
+          Back to setup
+        </Link>
+      )}
     </div>
+  );
+}
+
+export default function CreatorSearchSettingsPage() {
+  return (
+    <Suspense fallback={<p className="text-muted-foreground">Loading...</p>}>
+      <CreatorSearchSettings />
+    </Suspense>
   );
 }

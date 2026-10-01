@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LearnedReplies } from "./learned-replies";
+import { SHIP_COUNTRIES } from "@/lib/brand/countries";
 
 type Kit = {
   name: string;
@@ -78,12 +79,7 @@ const SECTIONS: Array<{ title: string; intro: string; fields: Field[] }> = [
   },
 ];
 
-const COUNTRIES = [
-  ["US", "United States"],
-  ["CA", "Canada"],
-  ["GB", "United Kingdom"],
-  ["AU", "Australia"],
-] as const;
+const COUNTRIES = SHIP_COUNTRIES;
 
 export default function BrandKitPage() {
   const [kit, setKit] = useState<Kit | null>(null);
