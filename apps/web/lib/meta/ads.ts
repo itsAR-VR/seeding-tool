@@ -327,7 +327,12 @@ export async function createPausedPartnershipAd(
     if (!(error instanceof MetaAdsError) || !/upload it to Facebook/i.test(error.message)) throw error;
     // Video posts must be copied into the ad account's video library first.
     // Meta lets us do that with the creator's code instead of the source file.
-    const mediaId = await mediaIdForAdCode(ctx, code);
+    // Prefer Meta's lookup; fall back to the card's own post, since a code is
+    // pasted on the post it was made for.
+    const mediaId = await mediaIdForAdCode(ctx, code).catch((lookupError) => {
+      if (post.platform === "instagram" && /^\d+$/.test(post.externalId)) return post.externalId;
+      throw lookupError;
+    });
     const video = await graph<{ id: string }>(`${ctx.adAccountId}/advideos`, ctx.token, {
       source_instagram_media_id: mediaId,
       partnership_ad_ad_code: code,
