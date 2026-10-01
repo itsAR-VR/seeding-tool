@@ -4,13 +4,14 @@ import { log } from "@/lib/logger";
 import { AI_MODEL } from "@/lib/ai/config";
 import { ADDRESS_LINK_PLACEHOLDER } from "@/lib/gift-claims/issue";
 import { describeCountries, getBrandKit, type BrandKit } from "@/lib/brand/kit";
+import { learnedExamplesFor } from "@/lib/inbox/learned-replies";
 
 /**
  * Builds the reply-drafting prompt from the brand kit. The voice rules are the
  * same for every brand; facts, examples, sender name and shipping countries
  * come from the brand. Anything outside the facts is left for the operator.
  */
-function buildSystemPrompt(kit: BrandKit): string {
+function buildSystemPrompt(kit: BrandKit, learned: string): string {
   const sender = kit.senderFirstName;
   const countries = describeCountries(kit.shipCountries);
   const about = kit.brandDescription ? ` (${kit.brandDescription})` : "";
@@ -40,6 +41,13 @@ ${ADDRESS_LINK_PLACEHOLDER}
 
 Examples
 ${kit.replyExamples}`
+      : ""
+  }${
+    learned
+      ? `
+
+Recent replies ${sender} actually sent (newest first). Match this voice and these answers when the same question comes up. The facts above still win if they disagree.
+${learned}`
       : ""
   }`;
 }
@@ -75,7 +83,9 @@ export async function createSuggestedReply(params: {
     where: { id: params.campaignCreatorId },
     select: { campaign: { select: { brandId: true } } },
   });
-  const kit = owner ? await getBrandKit(owner.campaign.brandId) : null;
+  if (!owner) return null;
+  const brandId = owner.campaign.brandId;
+  const kit = await getBrandKit(brandId);
   if (!kit?.productFacts) return null;
 
   const alreadyDrafted = async () =>
@@ -94,7 +104,7 @@ export async function createSuggestedReply(params: {
     const response = await openai.chat.completions.create({
       model: AI_MODEL,
       messages: [
-        { role: "system", content: buildSystemPrompt(kit) },
+        { role: "system", content: buildSystemPrompt(kit, await learnedExamplesFor(brandId)) },
         {
           role: "user",
           content: [

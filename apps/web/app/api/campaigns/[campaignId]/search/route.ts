@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest/client";
+import { dispatchCreatorSearch } from "@/lib/creator-search/dispatch";
+import { ApifyKeyMissingError, resolveApifyToken } from "@/lib/apify/token";
 import {
   buildUnifiedDiscoveryQueryFromCampaignRequest,
   type CampaignDiscoveryRequest,
@@ -22,6 +23,9 @@ import {
   CreditInsufficientError,
   isCreditEnforcementEnabled,
 } from "@/lib/credits";
+
+/** Searches run inside this request (no paid scheduler); Apify can take minutes. */
+export const maxDuration = 800;
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
 
@@ -52,6 +56,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Create the job BEFORE consuming credits: if the debit fails, the
     // job is deleted and no balance is consumed for work that never ran.
+    // Fail fast with a clear message when this company has no Apify key yet.
+    await resolveApifyToken(membership.brandId);
+
     const job = await prisma.creatorSearchJob.create({
       data: {
         status: "pending",
@@ -97,15 +104,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
 
     try {
-      await inngest.send({
-        name: "creator-search/requested",
-        data: {
+      await dispatchCreatorSearch({
           jobId: job.id,
           campaignId,
           brandId: membership.brandId,
           query: unifiedQuery,
-        },
-      });
+        });
     } catch (dispatchError) {
       if (!isLocalCreatorSearchFallbackEnabled()) {
         // Dispatch failed with no fallback — refund credits and fail the job
@@ -164,6 +168,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof ApifyKeyMissingError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[campaigns/search/POST]", error);
     return NextResponse.json(

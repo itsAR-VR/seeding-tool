@@ -108,6 +108,12 @@ model Brand {
   /// Countries gifts can ship to (ISO codes).
   shipCountries     String[] @default(["US"]) @map("ship_countries")
 
+  // ── Creator search (Apify) ──
+  /// The company's own Apify API token (encrypted). Used for its creator searches.
+  apifyTokenEnc     String?  @map("apify_token_enc")
+  /// Lets this company use Seed Scale's shared Apify account (set by a platform admin).
+  useSharedApify    Boolean  @default(false) @map("use_shared_apify")
+
   clientId String
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
@@ -116,6 +122,7 @@ model Brand {
   updatedAt DateTime @updatedAt
 
   memberships         BrandMembership[]
+  learnedReplies      LearnedReply[]
   onboarding          BrandOnboarding?
   settings            BrandSettings?
   outreachTemplates   OutreachTemplate[]
@@ -1542,4 +1549,20 @@ model CampaignHealthSnapshot {
 
   @@index([campaignId, createdAt])
   @@map("campaign_health_snapshots")
+}
+
+/// A real answer a brand sent to a creator's question. The newest ones teach
+/// the AI that brand's voice and answers. Never shared between brands.
+model LearnedReply {
+  id       String @id @default(uuid())
+  brandId  String @map("brand_id")
+  question String @db.Text
+  answer   String @db.Text
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([brandId, createdAt])
+  @@map("learned_replies")
 }

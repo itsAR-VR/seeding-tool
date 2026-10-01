@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { enrichCreatorEmails } from "@/lib/enrichment/service";
+import { ApifyKeyMissingError, withBrandApify } from "@/lib/apify/token";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const results = await enrichCreatorEmails(creatorIds, brandId);
+    const ids = creatorIds;
+    const results = await withBrandApify(brandId, () => enrichCreatorEmails(ids, brandId));
 
     const enriched = results.filter((r) => r.status === "found").length;
     const notFound = results.filter((r) => r.status === "not_found").length;
@@ -71,6 +73,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof ApifyKeyMissingError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[creators/enrich/POST]", error);
     return NextResponse.json(

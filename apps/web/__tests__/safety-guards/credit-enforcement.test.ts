@@ -37,6 +37,16 @@ const mockPrisma = {
   $transaction: vi.fn(),
 };
 
+// These tests cover the queued (Inngest) path.
+process.env.INNGEST_EVENT_KEY = "test-event-key";
+
+vi.mock("@/lib/apify/token", () => ({
+  ApifyKeyMissingError: class ApifyKeyMissingError extends Error {},
+  resolveApifyToken: vi.fn().mockResolvedValue("apify-test-token"),
+  withBrandApify: (_brandId: string, fn: () => Promise<unknown>) => fn(),
+  currentApifyToken: () => "apify-test-token",
+}));
+
 vi.mock("@/lib/prisma", () => ({ prisma: mockPrisma }));
 vi.mock("@/lib/integrations/brand-access", () => ({
   getCurrentBrandMembership: vi.fn().mockResolvedValue(mockMembership),

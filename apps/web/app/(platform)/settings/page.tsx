@@ -45,6 +45,11 @@ const settingsLinks = [
     description: "Check that email, Shopify, and Instagram are working.",
   },
   {
+    href: "/settings/creator-search",
+    title: "Creator search",
+    description: "The Apify account your creator searches run on.",
+  },
+  {
     href: "/settings/automations",
     title: "Automations",
     description: "Find new creators on a schedule.",

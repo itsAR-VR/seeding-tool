@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LearnedReplies } from "./learned-replies";
 
 type Kit = {
   name: string;
@@ -221,6 +222,8 @@ export default function BrandKitPage() {
           ))}
         </div>
       </section>
+
+      <LearnedReplies />
 
       <div className="sticky bottom-4 flex items-center gap-4 rounded-xl border bg-background/95 p-4 shadow-sm">
         <button

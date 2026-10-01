@@ -19,7 +19,7 @@ export async function GET() {
     const [companies, invites] = await Promise.all([
       prisma.brand.findMany({
         orderBy: { createdAt: "desc" },
-        select: { id: true, name: true, createdAt: true, _count: { select: { memberships: true } } },
+        select: { id: true, name: true, createdAt: true, useSharedApify: true, apifyTokenEnc: true, _count: { select: { memberships: true } } },
       }),
       prisma.brandInvite.findMany({
         where: { brandId: null, revokedAt: null },
@@ -27,7 +27,9 @@ export async function GET() {
         select: { id: true, email: true, companyName: true, acceptedAt: true, expiresAt: true, createdAt: true },
       }),
     ]);
-    return NextResponse.json({ companies, invites });
+    // Never send the encrypted key to the browser, only whether one exists.
+    const safeCompanies = companies.map(({ apifyTokenEnc, ...c }) => ({ ...c, hasOwnApifyKey: Boolean(apifyTokenEnc) }));
+    return NextResponse.json({ companies: safeCompanies, invites });
   } catch (error) {
     if (error instanceof InviteError) return NextResponse.json({ error: error.message }, { status: error.status });
     console.error("[admin/invites GET]", error);

@@ -13,6 +13,7 @@ import {
   GiftClaimIssueError,
   issueGiftClaimLink,
 } from "@/lib/gift-claims/issue";
+import { learnFromSentReply } from "@/lib/inbox/learned-replies";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -95,6 +96,11 @@ export async function POST(request: NextRequest, context: RouteContext) {
       where: { id: thread.id },
       data: { updatedAt: new Date() },
     });
+
+    // Teach future suggestions this brand's real answer. Never blocks the send.
+    await learnFromSentReply({ brandId: membership.brandId, threadId: thread.id, answer: body }).catch((error) =>
+      console.warn("[inbox/reply] couldn't save learned reply", error),
+    );
 
     // The suggested answer was used (edited or not); retire it.
     if (draftId) {

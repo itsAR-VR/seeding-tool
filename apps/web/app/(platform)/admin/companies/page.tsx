@@ -4,7 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { InviteLinkBox } from "@/components/invite-link-box";
 
 type AdminData = {
-  companies: Array<{ id: string; name: string; createdAt: string; _count: { memberships: number } }>;
+  companies: Array<{
+    id: string;
+    name: string;
+    createdAt: string;
+    useSharedApify: boolean;
+    hasOwnApifyKey: boolean;
+    _count: { memberships: number };
+  }>;
   invites: Array<{ id: string; email: string; companyName: string | null; acceptedAt: string | null; expiresAt: string }>;
 };
 
@@ -28,6 +35,17 @@ export default function CompaniesPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function setSharedApify(brandId: string, useSharedApify: boolean) {
+    setError(null);
+    const res = await fetch(`/api/admin/companies/${brandId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ useSharedApify }),
+    });
+    if (!res.ok) setError("Couldn't change that company's Apify setting.");
+    await load();
+  }
 
   async function invite(event: React.FormEvent) {
     event.preventDefault();
@@ -103,11 +121,25 @@ export default function CompaniesPage() {
         <h2 className="font-semibold">Companies</h2>
         <ul className="divide-y rounded-xl border bg-card">
           {(data?.companies ?? []).map((c) => (
-            <li key={c.id} className="flex items-center justify-between px-5 py-3">
-              <span className="font-medium">{c.name}</span>
-              <span className="text-sm text-muted-foreground">
-                {c._count.memberships} {c._count.memberships === 1 ? "member" : "members"} · since {date(c.createdAt)}
-              </span>
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+              <div>
+                <p className="font-medium">{c.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {c._count.memberships} {c._count.memberships === 1 ? "member" : "members"} · since {date(c.createdAt)}
+                </p>
+              </div>
+              {c.hasOwnApifyKey ? (
+                <span className="text-sm">Uses their own Apify key</span>
+              ) : (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={c.useSharedApify}
+                    onChange={(e) => void setSharedApify(c.id, e.target.checked)}
+                  />
+                  Can use our Apify account
+                </label>
+              )}
             </li>
           ))}
           {!data && <li className="px-5 py-3 text-muted-foreground">Loading...</li>}

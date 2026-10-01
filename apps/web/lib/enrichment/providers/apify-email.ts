@@ -1,3 +1,5 @@
+import { currentApifyToken } from "@/lib/apify/token-store";
+
 /**
  * Apify Instagram Email Finder provider.
  *
@@ -36,10 +38,7 @@ type ApifyDatasetItem = {
 export async function findEmailsByInstagramHandles(
   handles: string[]
 ): Promise<Map<string, string>> {
-  const token = process.env.APIFY_API_TOKEN;
-  if (!token) {
-    throw new Error("APIFY_API_TOKEN is required for email enrichment");
-  }
+  const token = currentApifyToken();
 
   if (handles.length === 0) {
     return new Map();

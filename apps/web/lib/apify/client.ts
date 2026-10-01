@@ -1,9 +1,11 @@
 import { ApifyClient } from "apify-client";
 import type { UnifiedDiscoverySource } from "@/lib/creator-search/contracts";
+import { currentApifyToken } from "@/lib/apify/token-store";
 
-const apifyClient = new ApifyClient({
-  token: process.env.APIFY_API_TOKEN,
-});
+/** A client on the Apify account of the brand whose search is running. */
+function apifyClient() {
+  return new ApifyClient({ token: currentApifyToken() });
+}
 
 const APIFY_PROFILE_ACTOR_ID = "apify/instagram-profile-scraper";
 const APIFY_SEARCH_ACTOR_ID = "apify/instagram-search-scraper";
@@ -148,7 +150,7 @@ async function callActor<TInput extends Record<string, unknown>>(
   actorId: string,
   input: TInput
 ): Promise<ApifyActorRunRef> {
-  const run = (await apifyClient.actor(actorId).call(input)) as ApifyActorCallResult;
+  const run = (await apifyClient().actor(actorId).call(input)) as ApifyActorCallResult;
 
   return {
     datasetId: run.defaultDatasetId,
@@ -224,7 +226,7 @@ export async function runInstagramHashtagScraper(
 export async function getDatasetItems<T = Record<string, unknown>>(
   datasetId: string
 ): Promise<T[]> {
-  const dataset = apifyClient.dataset(datasetId);
+  const dataset = apifyClient().dataset(datasetId);
   const { items } = await dataset.listItems();
   return items as T[];
 }
