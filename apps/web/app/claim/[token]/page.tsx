@@ -51,8 +51,8 @@ export default async function GiftClaimPage({ params }: PageProps) {
     <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
       <div className="mx-auto max-w-xl">
         <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           {brand?.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={brand.logoUrl} alt={brand.name} className="h-8 w-auto" />
           ) : (
             <p className="text-xl font-semibold">{brand?.name ?? ""}</p>

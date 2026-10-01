@@ -280,7 +280,11 @@ export async function POST(request: NextRequest) {
 
         // Mark the invite as used by linking it to the company it created.
         if (companyInvite) {
-          await tx.brandInvite.update({ where: { id: companyInvite.id }, data: { brandId } });
+          const linked = await tx.brandInvite.updateMany({
+            where: { id: companyInvite.id, brandId: null },
+            data: { brandId },
+          });
+          if (linked.count === 0) throw new Error("Company invite was already used");
         }
       }
 

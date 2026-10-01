@@ -68,10 +68,11 @@ export async function POST(request: NextRequest) {
 
   const payload = JSON.parse(rawBody) as Record<string, unknown>;
 
-  // Compute dedupe key
-  const webhookId =
-    request.headers.get("x-shopify-webhook-id") ||
-    `${topic}:${String(payload.id || "")}`;
+  // Compute dedupe key, namespaced by store so one store can't pre-claim
+  // another store's webhook IDs.
+  const webhookId = `${shopDomain}:${
+    request.headers.get("x-shopify-webhook-id") || `${topic}:${String(payload.id || "")}`
+  }`;
 
   // Check for existing WebhookEvent (idempotency)
   const existing = await prisma.webhookEvent.findUnique({
@@ -118,24 +119,27 @@ export async function POST(request: NextRequest) {
       });
 
   try {
-    switch (topic) {
+    // Every handler only touches orders that belong to the store's own brand.
+    if (!brandId) {
+      log("warn", "shopify.webhook.unknown_shop", { topic, shopDomain });
+    } else switch (topic) {
       case "orders/create":
-        await handleOrderCreate(payload);
+        await handleOrderCreate(payload, brandId);
         break;
       case "orders/fulfilled":
-        await handleOrderFulfilled(payload);
+        await handleOrderFulfilled(payload, brandId);
         break;
       case "orders/updated":
-        await handleOrderUpdated(payload);
+        await handleOrderUpdated(payload, brandId);
         break;
       case "fulfillments/create":
-        await handleFulfillmentCreate(payload);
+        await handleFulfillmentCreate(payload, brandId);
         break;
       case "fulfillments/update":
-        await handleFulfillmentUpdate(payload);
+        await handleFulfillmentUpdate(payload, brandId);
         break;
       case "draft_orders/delete":
-        await handleDraftOrderDelete(payload);
+        await handleDraftOrderDelete(payload, brandId);
         break;
       default:
         // Unknown topic — record and skip
@@ -166,17 +170,17 @@ export async function POST(request: NextRequest) {
  * orders/create — Update ShopifyOrder if we have one matching.
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
-async function handleOrderCreate(payload: Record<string, unknown>) {
+async function handleOrderCreate(payload: Record<string, unknown>, brandId: string) {
   const shopifyOrderId = String(payload.id || "");
   if (!shopifyOrderId) return;
 
-  const order = await prisma.shopifyOrder.findUnique({
-    where: { shopifyOrderId },
+  const order = await prisma.shopifyOrder.findFirst({
+    where: brandOrder(shopifyOrderId, brandId),
   });
 
   if (order) {
     await prisma.shopifyOrder.update({
-      where: { shopifyOrderId },
+      where: { id: order.id },
       data: {
         status: "processing",
         shopifyOrderNumber: String(
@@ -191,19 +195,19 @@ async function handleOrderCreate(payload: Record<string, unknown>) {
  * orders/fulfilled — Mark order as shipped, update lifecycle.
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
-async function handleOrderFulfilled(payload: Record<string, unknown>) {
+async function handleOrderFulfilled(payload: Record<string, unknown>, brandId: string) {
   const shopifyOrderId = String(payload.id || "");
   if (!shopifyOrderId) return;
 
-  const order = await prisma.shopifyOrder.findUnique({
-    where: { shopifyOrderId },
+  const order = await prisma.shopifyOrder.findFirst({
+    where: brandOrder(shopifyOrderId, brandId),
     include: { campaignCreator: true },
   });
 
   if (!order) return;
 
   await prisma.shopifyOrder.update({
-    where: { shopifyOrderId },
+    where: { id: order.id },
     data: { status: "shipped" },
   });
 
@@ -245,21 +249,21 @@ async function handleOrderFulfilled(payload: Record<string, unknown>) {
  * draft_orders/delete — a draft was deleted in Shopify, so it will never ship.
  * Only drafts that never became a real order are marked cancelled.
  */
-async function handleDraftOrderDelete(payload: Record<string, unknown>) {
+async function handleDraftOrderDelete(payload: Record<string, unknown>, brandId: string) {
   const draftId = String(payload.id ?? "");
   if (!draftId) return;
   await prisma.shopifyOrder.updateMany({
-    where: { shopifyDraftOrderId: draftId, shopifyOrderId: null },
+    where: { shopifyDraftOrderId: draftId, shopifyOrderId: null, campaignCreator: { campaign: { brandId } } },
     data: { status: "cancelled" },
   });
 }
 
-async function handleOrderUpdated(payload: Record<string, unknown>) {
+async function handleOrderUpdated(payload: Record<string, unknown>, brandId: string) {
   const shopifyOrderId = String(payload.id || "");
   if (!shopifyOrderId) return;
 
-  const order = await prisma.shopifyOrder.findUnique({
-    where: { shopifyOrderId },
+  const order = await prisma.shopifyOrder.findFirst({
+    where: brandOrder(shopifyOrderId, brandId),
   });
 
   if (!order) return;
@@ -279,7 +283,7 @@ async function handleOrderUpdated(payload: Record<string, unknown>) {
 
   if (newStatus !== order.status) {
     await prisma.shopifyOrder.update({
-      where: { shopifyOrderId },
+      where: { id: order.id },
       data: { status: newStatus },
     });
   }
@@ -289,16 +293,16 @@ async function handleOrderUpdated(payload: Record<string, unknown>) {
  * fulfillments/create — Create or update FulfillmentEvent with tracking info.
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
-async function handleFulfillmentCreate(payload: Record<string, unknown>) {
+async function handleFulfillmentCreate(payload: Record<string, unknown>, brandId: string) {
   const externalEventId = String(payload.id || "");
   const shopifyOrderId = String(payload.order_id || "");
   if (!externalEventId || !shopifyOrderId) return;
 
-  const order = await prisma.shopifyOrder.findUnique({
-    where: { shopifyOrderId },
+  const order = await prisma.shopifyOrder.findFirst({
+    where: brandOrder(shopifyOrderId, brandId),
   });
 
-  if (!order) return;
+  if (!order || !(await fulfillmentBelongsTo(externalEventId, order.id))) return;
 
   const trackingNumber = String(payload.tracking_number || "") || null;
   const trackingUrl = String(payload.tracking_url || "") || null;
@@ -329,17 +333,17 @@ async function handleFulfillmentCreate(payload: Record<string, unknown>) {
  * fulfillments/update — Update tracking info and status.
  * // INVARIANT: All Shopify webhook handlers are idempotent — upsert by external ID
  */
-async function handleFulfillmentUpdate(payload: Record<string, unknown>) {
+async function handleFulfillmentUpdate(payload: Record<string, unknown>, brandId: string) {
   const externalEventId = String(payload.id || "");
   const shopifyOrderId = String(payload.order_id || "");
   if (!externalEventId || !shopifyOrderId) return;
 
-  const order = await prisma.shopifyOrder.findUnique({
-    where: { shopifyOrderId },
+  const order = await prisma.shopifyOrder.findFirst({
+    where: brandOrder(shopifyOrderId, brandId),
     include: { campaignCreator: true },
   });
 
-  if (!order) return;
+  if (!order || !(await fulfillmentBelongsTo(externalEventId, order.id))) return;
 
   const trackingNumber = String(payload.tracking_number || "") || null;
   const trackingUrl = String(payload.tracking_url || "") || null;
@@ -393,6 +397,20 @@ async function handleFulfillmentUpdate(payload: Record<string, unknown>) {
     }
 
   }
+}
+
+/** An order with this Shopify ID that belongs to this brand's campaigns. */
+function brandOrder(shopifyOrderId: string, brandId: string) {
+  return { shopifyOrderId, campaignCreator: { campaign: { brandId } } };
+}
+
+/** True unless this fulfillment ID is already stored against a different order. */
+async function fulfillmentBelongsTo(externalEventId: string, orderId: string): Promise<boolean> {
+  const existing = await prisma.fulfillmentEvent.findUnique({
+    where: { externalEventId },
+    select: { orderId: true },
+  });
+  return !existing || existing.orderId === orderId;
 }
 
 /**

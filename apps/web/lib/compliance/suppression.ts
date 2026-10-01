@@ -55,8 +55,9 @@ export async function addSuppression(
   // brandId null with a per-brand reason = a global block (e.g. an old link
   // from someone we can't match to a brand).
 
+  // One row per reason, so undoing a "no" can't lift an unsubscribe.
   const existing = await prisma.emailSuppression.findFirst({
-    where: { email: normalizedEmail, brandId: scope },
+    where: { email: normalizedEmail, brandId: scope, reason },
     select: { id: true },
   });
   if (!existing) {
@@ -99,7 +100,13 @@ export async function removeSuppression(
   const { count } = await prisma.emailSuppression.deleteMany({
     where: { email: normalizedEmail, brandId, reason },
   });
-  if (count > 0) {
+  if (count === 0) return;
+  // Still blocked for another reason (an unsubscribe, a bounce): stay opted out.
+  const stillBlocked = await prisma.emailSuppression.findFirst({
+    where: { email: normalizedEmail, OR: [{ brandId }, { brandId: null }] },
+    select: { id: true },
+  });
+  if (!stillBlocked) {
     await prisma.creator.updateMany({
       where: { email: normalizedEmail, brandId },
       data: { optedOut: false, optOutDate: null },

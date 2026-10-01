@@ -157,7 +157,15 @@ describe("Suppression security hardening", () => {
     expect(mockPrisma.emailSuppression.findFirst).not.toHaveBeenCalled();
   });
 
+  it("removeSuppression keeps the creator opted out while an unsubscribe remains", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue({ id: "es-unsub" });
+    const { removeSuppression } = await import("@/lib/compliance/suppression");
+    await removeSuppression("x@example.com", "DECLINED", "brand-a");
+    expect(mockPrisma.creator.updateMany).not.toHaveBeenCalled();
+  });
+
   it("removeSuppression lifts only this brand's rows of that reason", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue(null);
     const { removeSuppression } = await import("@/lib/compliance/suppression");
     await removeSuppression("x@example.com", "DECLINED", "brand-a");
     expect(mockPrisma.emailSuppression.deleteMany).toHaveBeenCalledWith({

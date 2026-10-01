@@ -114,6 +114,14 @@ export async function createAndAttributeMention(params: {
     throw new MentionAccessError(`CampaignCreator ${params.campaignCreatorId} not found`);
   }
 
+  // Already stored for this exact creator: nothing to do (and re-attributing
+  // another copy onto it would break the one-per-creator rule).
+  const exact = await prisma.mentionAsset.findFirst({
+    where: { platform: params.platform, mediaUrl: params.mediaUrl, campaignCreatorId: params.campaignCreatorId },
+    select: { id: true },
+  });
+  if (exact) return exact.id;
+
   // Dedupe within the same brand only; another brand's copy of the same post is separate.
   const existing = await prisma.mentionAsset.findFirst({
     where: {

@@ -12,7 +12,14 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const membership = requireAdminAccess(await getCurrentBrandMembership());
     const { inviteId } = await params;
     const { count } = await prisma.brandInvite.updateMany({
-      where: { id: inviteId, brandId: membership.brandId, acceptedAt: null, revokedAt: null },
+      where: {
+        id: inviteId,
+        brandId: membership.brandId,
+        acceptedAt: null,
+        revokedAt: null,
+        // Only owners can cancel an owner invite, matching who can send one.
+        ...(membership.role === "owner" ? {} : { role: { not: "owner" as const } }),
+      },
       data: { revokedAt: new Date() },
     });
     if (count === 0) return NextResponse.json({ error: "Invite not found" }, { status: 404 });

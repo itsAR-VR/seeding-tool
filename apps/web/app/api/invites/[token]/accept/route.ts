@@ -21,6 +21,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     if (authUser.email.toLowerCase() !== invite.email) {
       throw new InviteError(`This invite is for ${invite.email}. Sign in with that email.`, 403);
     }
+    if (!authUser.email_confirmed_at) throw new InviteError("Confirm your email first using the link we sent.", 403);
+
+    // Claim the invite first so two tabs can't both use it.
+    const claimed = await prisma.brandInvite.updateMany({
+      where: { id: invite.id, acceptedAt: null, revokedAt: null },
+      data: { acceptedAt: new Date() },
+    });
+    if (claimed.count === 0) throw new InviteError("This invite was already used.", 409);
 
     const user =
       (await getUserBySupabaseId(authUser.id)) ??
@@ -33,7 +41,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
         create: { userId: user.id, brandId: invite.brandId, role: invite.role },
       });
     }
-    await prisma.brandInvite.update({ where: { id: invite.id }, data: { acceptedAt: new Date() } });
 
     if (invite.brandId) {
       (await cookies()).set("seed-active-brand", invite.brandId, {
