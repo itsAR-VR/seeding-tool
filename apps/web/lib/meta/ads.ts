@@ -257,17 +257,33 @@ export async function createPausedBrandAd(
   return { adId: ad.id, adsManagerUrl: adsManagerUrl(ctx, ad.id) };
 }
 
-/** The Instagram media a creator's partnership ad code points to. */
+/**
+ * The Instagram media a creator's partnership ad code points to, via the
+ * Partnership Ads Advertisable Content API (looked up on the Page's business).
+ */
 async function mediaIdForAdCode(ctx: AdsContext, code: string): Promise<string> {
-  const params = new URLSearchParams({ ad_code: code, fields: "id,permalink,eligibility_errors" });
-  const result = await graph<{ data?: Array<{ id: string; eligibility_errors?: string[] }> }>(
-    `${ctx.igUserId}/branded_content_advertisable_medias?${params}`,
-    ctx.token
-  );
+  const page = await graph<{ business?: { id: string } }>(`${ctx.pageId}?fields=business`, ctx.token);
+  if (!page.business?.id) {
+    throw new MetaAdsError("Your Facebook Page isn't in a Meta business account, so Meta can't look up the code.");
+  }
+  const params = new URLSearchParams({
+    ig_user_id: ctx.igUserId,
+    ad_codes: JSON.stringify([code]),
+    fields: "content_id,permalink,partnership_info{ad_eligibility,eligibility_errors{message}}",
+  });
+  const result = await graph<{
+    data?: Array<{
+      content_id: string;
+      partnership_info?: Array<{ ad_eligibility?: string; eligibility_errors?: Array<{ message?: string }> }>;
+    }>;
+  }>(`${page.business.id}/partnership-ads-advertisable-content?${params}`, ctx.token);
   const media = result.data?.[0];
   if (!media) throw new MetaAdsError("Meta couldn't find the post for this code. Ask the creator for a new code.");
-  if (media.eligibility_errors?.length) throw new MetaAdsError(media.eligibility_errors[0]);
-  return media.id;
+  const info = media.partnership_info?.[0];
+  if (info?.ad_eligibility === "INELIGIBLE") {
+    throw new MetaAdsError(info.eligibility_errors?.[0]?.message ?? "Meta says this post can't be used in ads.");
+  }
+  return media.content_id;
 }
 
 /**
