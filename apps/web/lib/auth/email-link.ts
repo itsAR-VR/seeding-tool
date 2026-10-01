@@ -9,14 +9,16 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 /**
  * Sign-in links for invites. Supabase only makes the one-time token; the email
  * goes out through a connected Gmail inbox (Supabase's built-in mailer can't
- * reach people outside the project team). Opening the link proves the person
- * owns the address, signs them in, and brings them to `next`.
+ * reach people outside the project team). The link opens a "Continue" page
+ * (`continuePath`) rather than signing in directly, because email scanners
+ * open links and would use up the one-time token. Pressing Continue proves
+ * the person owns the address and signs them in.
  */
 
 export class EmailLinkError extends Error {}
 
 /** A Supabase one-time link token for this email, creating the login if needed. */
-async function makeSignInUrl(email: string, next: string): Promise<string> {
+async function makeSignInUrl(email: string, continuePath: string): Promise<string> {
   const admin = getSupabaseAdmin();
   // New people get an "invite" token (verifying it confirms the email);
   // people who already have a login get a magic link.
@@ -28,8 +30,8 @@ async function makeSignInUrl(email: string, next: string): Promise<string> {
     throw new EmailLinkError(result.error?.message ?? "Couldn't make a sign-in link");
   }
   const { hashed_token, verification_type } = result.data.properties;
-  const params = new URLSearchParams({ token_hash: hashed_token, type: verification_type, next });
-  return `${APP_URL}/callback?${params.toString()}`;
+  const params = new URLSearchParams({ token_hash: hashed_token, type: verification_type });
+  return `${APP_URL}${continuePath}?${params.toString()}`;
 }
 
 /** The first connected Gmail inbox among these brands (primary inbox first). */
@@ -63,7 +65,8 @@ function base64Url(value: string): string {
  */
 export async function sendSignInLink(params: {
   email: string;
-  next: string;
+  /** Same-site page with the Continue button, e.g. /invite/<token>/continue. */
+  continuePath: string;
   companyName: string;
   brandId: string | null;
   invitedById: string | null;
@@ -81,13 +84,18 @@ export async function sendSignInLink(params: {
   const sender = await findSender(brandIds);
   if (!sender) throw new EmailLinkError("No connected Gmail inbox to send the link from");
 
-  const link = await makeSignInUrl(params.email, params.next);
+  const link = await makeSignInUrl(params.email, params.continuePath);
   const clean = (v: string) => v.replace(/[\r\n"]/g, "");
-  const from = sender.displayName ? `"${clean(sender.displayName)}" <${sender.address}>` : sender.address;
+  // Non-ASCII header text (accents, emoji) must be encoded or mail apps garble it.
+  const header = (v: string) =>
+    /^[\x20-\x7e]*$/.test(v) ? v : `=?UTF-8?B?${Buffer.from(v).toString("base64")}?=`;
+  // Encoded names must not sit inside quotes (RFC 2047).
+  const quotedName = (v: string) => (header(v) === v ? `"${v}"` : header(v));
+  const from = sender.displayName ? `${quotedName(clean(sender.displayName))} <${sender.address}>` : sender.address;
   const raw = [
     `From: ${from}`,
     `To: ${clean(params.email)}`,
-    `Subject: ${clean(`Your link to join ${params.companyName} on Seed Scale`)}`,
+    `Subject: ${header(clean(`Your link to join ${params.companyName} on Seed Scale`))}`,
     "MIME-Version: 1.0",
     'Content-Type: text/plain; charset="UTF-8"',
     "",

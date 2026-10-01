@@ -30,7 +30,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     try {
       await sendSignInLink({
         email: invite.email,
-        next: `/invite/${encodeURIComponent(token)}`,
+        continuePath: `/invite/${encodeURIComponent(token)}/continue`,
         companyName: invite.brand?.name ?? invite.companyName ?? "your company",
         brandId: invite.brandId,
         invitedById: invite.invitedById,
