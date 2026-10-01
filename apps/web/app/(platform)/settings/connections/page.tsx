@@ -182,7 +182,7 @@ function ConnectionsContent({
         tone: "success",
         text:
           method === "oauth"
-            ? "Switched to OAuth. Finish reconnecting to activate this provider."
+            ? "Switched to signing in. Finish connecting to turn it on."
             : "Switched to manual credentials. Finish setup to activate this provider.",
       });
       await refreshConnectionData();
@@ -468,7 +468,7 @@ function ConnectionsContent({
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
           <p className="text-muted-foreground">
-            Manage your connected services and choose how each provider authenticates.
+            The accounts the tool sends email from, creates orders in, and reads posts from.
           </p>
         </div>
       )}
@@ -555,7 +555,32 @@ function ConnectionsContent({
           />
         )}
 
-        {unipile && (
+        {unipile && !unipile.connected && (
+          <details className="rounded-xl border border-dashed p-4 md:col-span-2">
+            <summary className="cursor-pointer font-medium">
+              Optional: send Instagram DMs (Unipile)
+            </summary>
+            <div className="mt-4">
+              <UnipileConnectionCard
+                provider={unipile}
+                message={messages.unipile ?? null}
+                saving={unipileSaving}
+                apiKey={unipileForm.apiKey}
+                accountId={unipileForm.accountId}
+                onApiKeyChange={(value) =>
+                  setUnipileForm((current) => ({ ...current, apiKey: value }))
+                }
+                onAccountIdChange={(value) =>
+                  setUnipileForm((current) => ({ ...current, accountId: value }))
+                }
+                onSave={() => void handleSaveUnipile()}
+                onDisconnect={() => void handleDisconnectUnipile()}
+              />
+            </div>
+          </details>
+        )}
+
+        {unipile && unipile.connected && (
           <UnipileConnectionCard
             provider={unipile}
             message={messages.unipile ?? null}

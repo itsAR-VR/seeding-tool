@@ -570,7 +570,7 @@ export default function OutreachPage() {
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {[
                         cc.creator.email,
                         cc.creator.followerCount
@@ -647,7 +647,7 @@ export default function OutreachPage() {
                   <SelectItem
                     disabled
                     value="__header_builtin"
-                    className="text-xs font-semibold text-muted-foreground"
+                    className="text-sm font-semibold text-muted-foreground"
                   >
                     Built-in
                   </SelectItem>
@@ -662,7 +662,7 @@ export default function OutreachPage() {
                       <SelectItem
                         disabled
                         value="__header_custom"
-                        className="text-xs font-semibold text-muted-foreground"
+                        className="text-sm font-semibold text-muted-foreground"
                       >
                         Custom
                       </SelectItem>
@@ -744,7 +744,7 @@ export default function OutreachPage() {
 
           <div className="space-y-2">
             <Label>AI instructions</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Only used for creators who don&apos;t already have a written email.
             </p>
             <Textarea
@@ -783,7 +783,7 @@ export default function OutreachPage() {
                       </span>
                     </div>
                     {channel === "email" && (
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         {senderAddress ? `From ${senderAddress} · ` : ""}To{" "}
                         {creatorByCcId.get(draft.campaignCreatorId)?.creator.email ?? "no email on file"}
                       </p>

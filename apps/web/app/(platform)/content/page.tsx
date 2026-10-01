@@ -113,7 +113,7 @@ export default async function ContentPage({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
                   ) : (
-                    <span className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                    <span className="flex h-full items-center justify-center text-sm text-muted-foreground">
                       Open on Instagram
                     </span>
                   )}
@@ -132,13 +132,13 @@ export default async function ContentPage({
                     ) : (
                       <span className="truncate font-medium">@{post.username ?? "unknown"}</span>
                     )}
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <span className="shrink-0 text-sm text-muted-foreground">
                       {post.postedAt?.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     </span>
                   </div>
                   <Badge variant={rights.variant}>{rights.label}</Badge>
                   {post.rightsStatus === "approved" && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       By {post.rightsSignerName}
                       {(() => {
                         const end = rightsEndDate(post.rightsRespondedAt, post.rightsMonths);

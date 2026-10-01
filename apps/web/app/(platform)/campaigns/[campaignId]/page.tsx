@@ -343,7 +343,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               >
                 <CardContent className="p-4">
                   <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                  <p className="text-sm text-muted-foreground">{stat.label}</p>
                 </CardContent>
               </Card>
             </Link>

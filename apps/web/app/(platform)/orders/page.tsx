@@ -71,7 +71,7 @@ export default async function OrdersPage() {
                   <th className="pb-2 font-medium">Creator</th>
                   <th className="pb-2 font-medium">Campaign</th>
                   <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Links</th>
+                  <th className="pb-2 font-medium"><span className="sr-only">Open</span></th>
                 </tr>
               </thead>
               <tbody>

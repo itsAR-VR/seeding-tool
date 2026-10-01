@@ -4,7 +4,6 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -17,7 +16,7 @@ const TABS: Array<{ key: InboxTab; label: string }> = [
   { key: "needs", label: "Needs your call" },
   { key: "waiting", label: "Waiting on them" },
   { key: "yes", label: "Said yes" },
-  { key: "no", label: "Said no / Not now" },
+  { key: "no", label: "No or later" },
   { key: "all", label: "All" },
 ];
 
@@ -95,12 +94,6 @@ export default async function InboxPage({
       : "all";
   const visibleThreads = activeTab === "all" ? threads : threads.filter((t) => tabFor(t) === activeTab);
 
-  const needsReview = threads.filter(
-    (t) => t.campaignCreator.aiDrafts.length > 0
-  );
-  const hasAddress = threads.filter(
-    (t) => t.campaignCreator.shippingSnapshots.length > 0
-  );
   const decided = threads.filter(
     (t) =>
       (t.campaignCreator.replyDecision === "yes" || t.campaignCreator.replyDecision === "no") &&
@@ -116,34 +109,14 @@ export default async function InboxPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
-          <p className="text-muted-foreground">
-            Creator replies to your outreach.
+          <p className="mt-1 text-muted-foreground">
+            Replies from creators you emailed.{" "}
+            <Link href="/settings/do-not-send" className="underline hover:text-foreground">
+              Do-not-send list
+            </Link>
           </p>
         </div>
         <SyncReplies />
-      </div>
-
-      {/* Quick stats */}
-      <div className="flex gap-4">
-        <Badge variant="outline">{threads.length} total threads</Badge>
-        {needsReview.length > 0 && (
-          <Badge className="bg-purple-100 text-purple-800">
-            {needsReview.length} drafts to review
-          </Badge>
-        )}
-        <Link href="/settings/do-not-send">
-          <Badge variant="outline" className="hover:bg-accent">Do-not-send list →</Badge>
-        </Link>
-        {decided.length > 0 && (
-          <Badge variant="outline">
-            AI matched you {aiMatches} of {decided.length}
-          </Badge>
-        )}
-        {hasAddress.length > 0 && (
-          <Badge className="bg-teal-100 text-teal-800">
-            {hasAddress.length} addresses to confirm
-          </Badge>
-        )}
       </div>
 
       <div className="flex flex-wrap gap-2 border-b pb-3">
@@ -162,8 +135,16 @@ export default async function InboxPage({
         ))}
       </div>
 
+      {decided.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          The AI guessed yes or no the same way you did {aiMatches} of {decided.length} times.
+        </p>
+      )}
+
       {threads.length > 0 && visibleThreads.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nothing here right now.</p>
+        <p className="text-muted-foreground">
+          {activeTab === "needs" ? "No replies need you right now." : "Nothing here right now."}
+        </p>
       )}
 
       {threads.length === 0 ? (
@@ -177,77 +158,61 @@ export default async function InboxPage({
           </CardHeader>
         </Card>
       ) : (
-        <div className="grid gap-2">
+        <ul className="divide-y rounded-xl border bg-card">
           {visibleThreads.map((thread) => {
             const creator = thread.campaignCreator.creator;
             const profile = creator.profiles[0];
             const lastMessage = thread.messages[0];
             const hasDraft = thread.campaignCreator.aiDrafts.length > 0;
-            const hasAddr =
-              thread.campaignCreator.shippingSnapshots.length > 0;
+            const decision = thread.campaignCreator.replyDecision;
+            const needsCall = !decision && lastMessage?.direction === "inbound";
+            const name = creator.name ?? profile?.handle ?? "Unknown creator";
 
             return (
-              <div key={thread.id} className="relative">
-                <Card className="transition-colors hover:bg-muted/50">
-                  <Link
-                    href={`/inbox/${thread.id}`}
-                    aria-label={`Open conversation with ${creator.name ?? profile?.handle ?? "creator"}`}
-                    className="absolute inset-0 z-0 rounded-xl"
-                  />
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">
-                          {creator.name ?? profile?.handle ?? "Unknown"}
-                        </p>
-                        {thread.campaignCreator.replyDecision === "yes" && (
-                          <Badge className="bg-green-100 text-green-800">Said yes</Badge>
-                        )}
-                        {thread.campaignCreator.replyDecision === "no" && (
-                          <Badge className="bg-red-100 text-red-800">Said no</Badge>
-                        )}
-                        {thread.campaignCreator.replyDecision === "later" && (
-                          <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>
-                        )}
-                        {!thread.campaignCreator.replyDecision &&
-                          lastMessage?.direction === "inbound" && (
-                            <Badge className="bg-amber-100 text-amber-800">Needs your call</Badge>
-                          )}
-                        {hasDraft && (
-                          <Badge className="bg-purple-100 text-purple-800">
-                            Suggested reply ready
-                          </Badge>
-                        )}
-                        {hasAddr && (
-                          <Badge className="bg-teal-100 text-teal-800">
-                            Address
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="relative z-10 mt-1 truncate text-sm text-muted-foreground">
-                        <Link
-                          href={`/campaigns/${thread.campaignCreator.campaign.id}`}
-                          className="hover:text-foreground hover:underline"
-                        >
-                          {thread.campaignCreator.campaign.name}
-                        </Link>
+              <li key={thread.id} className="relative transition-colors hover:bg-muted/50">
+                <Link
+                  href={`/inbox/${thread.id}`}
+                  aria-label={`Open conversation with ${name}`}
+                  className="absolute inset-0 z-0"
+                />
+                <div className="flex items-start justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="truncate font-medium">{name}</p>
+                      {decision === "yes" && <Badge className="bg-green-100 text-green-800">Said yes</Badge>}
+                      {decision === "no" && <Badge className="bg-red-100 text-red-800">Said no</Badge>}
+                      {decision === "later" && <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>}
+                      {needsCall && <Badge className="bg-amber-100 text-amber-900">Needs your call</Badge>}
+                      {hasDraft && <Badge variant="outline">Reply drafted</Badge>}
+                    </div>
+                    {lastMessage && (
+                      <p className="mt-1 truncate text-muted-foreground">
+                        <span className="font-medium text-foreground/70">
+                          {lastMessage.direction === "inbound" ? "They wrote: " : "You wrote: "}
+                        </span>
+                        {lastMessage.body.slice(0, 120)}
                       </p>
-                      {lastMessage && (
-                        <p className="mt-1 truncate text-sm text-muted-foreground">
-                          {lastMessage.direction === "inbound" ? "↙ " : "↗ "}
-                          {lastMessage.body.slice(0, 100)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="ml-4 shrink-0 text-xs text-muted-foreground">
-                      {new Date(thread.updatedAt).toLocaleDateString()}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    )}
+                    <p className="relative z-10 mt-1 text-sm text-muted-foreground">
+                      <Link
+                        href={`/campaigns/${thread.campaignCreator.campaign.id}`}
+                        className="hover:text-foreground hover:underline"
+                      >
+                        {thread.campaignCreator.campaign.name}
+                      </Link>
+                    </p>
+                  </div>
+                  <time
+                    dateTime={new Date(thread.updatedAt).toISOString()}
+                    className="shrink-0 text-sm text-muted-foreground"
+                  >
+                    {new Date(thread.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </time>
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

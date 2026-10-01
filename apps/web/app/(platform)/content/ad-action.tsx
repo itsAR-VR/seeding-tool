@@ -43,7 +43,7 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
 
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="block text-xs text-muted-foreground underline">
+      <button type="button" onClick={() => setOpen(true)} className="block text-sm text-muted-foreground underline">
         Have a partnership ad code?
       </button>
     );
@@ -51,20 +51,20 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
 
   return (
     <div className="space-y-2 rounded-md border p-2">
-      <label className="block text-xs text-muted-foreground">
+      <label className="block text-sm text-muted-foreground">
         Paste the creator&apos;s code
         <input
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="adcode-..."
-          className="mt-1 w-full rounded border bg-background px-2 py-1 text-xs text-foreground"
+          className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm text-foreground"
         />
       </label>
       <Button size="sm" className="w-full" onClick={() => void create()} disabled={busy || !code.trim()}>
         {busy ? "Creating..." : "Create paused partnership ad"}
       </Button>
-      <p className="text-xs text-muted-foreground">Runs from their handle and yours. Stays paused until you turn it on.</p>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      <p className="text-sm text-muted-foreground">Runs from their handle and yours. Stays paused until you turn it on.</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }
@@ -107,10 +107,10 @@ export function AdAction({ postId }: { postId: string }) {
     );
   }
 
-  const field = "mt-1 w-full rounded border bg-background px-2 py-1 text-xs text-foreground";
+  const field = "mt-1 w-full rounded border bg-background px-2 py-1 text-sm text-foreground";
   return (
     <div className="space-y-2 rounded-md border p-2">
-      <label className="block text-xs text-muted-foreground">
+      <label className="block text-sm text-muted-foreground">
         Ad text
         <textarea
           value={copy.message}
@@ -119,19 +119,19 @@ export function AdAction({ postId }: { postId: string }) {
           className={field}
         />
       </label>
-      <label className="block text-xs text-muted-foreground">
+      <label className="block text-sm text-muted-foreground">
         Headline
         <input value={copy.headline} onChange={(e) => setCopy({ ...copy, headline: e.target.value })} className={field} />
       </label>
-      <label className="block text-xs text-muted-foreground">
+      <label className="block text-sm text-muted-foreground">
         Link
         <input value={copy.link} onChange={(e) => setCopy({ ...copy, link: e.target.value })} className={field} />
       </label>
       <Button size="sm" className="w-full" onClick={() => void create()} disabled={busy}>
         {busy ? "Creating (up to a minute)..." : "Create paused ad"}
       </Button>
-      <p className="text-xs text-muted-foreground">It stays paused. Nothing spends until you turn it on in Ads Manager.</p>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      <p className="text-sm text-muted-foreground">It stays paused. Nothing spends until you turn it on in Ads Manager.</p>
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

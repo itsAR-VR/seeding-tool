@@ -37,7 +37,7 @@ const PROVIDER_GUIDES: Record<
     bullets: [
       "Start with the Gmail account you want to send from.",
       "If Google shows an approval or test-user warning, contact our team and we will help finish the connection.",
-      "Once OAuth is fully approved, this will collapse down to a standard Google connect button.",
+      "Google may show an \"unverified app\" warning. Click Advanced, then Continue.",
     ],
   },
   shopify: {
@@ -102,12 +102,9 @@ export function MethodSelector({
   disabled: boolean;
   onChange: (method: IntegrationMethod) => void;
 }) {
+  // One way to connect: nothing to choose, so show nothing.
   if (methods.length === 1) {
-    return (
-      <div className="rounded-lg border bg-muted/20 px-3 py-1 text-xs text-muted-foreground">
-        Setup method: {methods[0] === "oauth" ? "OAuth" : "Manual credentials"}
-      </div>
-    );
+    return null;
   }
 
   return (
@@ -121,14 +118,14 @@ export function MethodSelector({
             disabled={disabled}
             onClick={() => onChange(method)}
             className={cn(
-              "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+              "rounded-md px-3 py-1 text-sm font-medium transition-colors",
               selected
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
               disabled && "opacity-60",
             )}
           >
-            {method === "oauth" ? "OAuth" : "Manual"}
+            {method === "oauth" ? "Sign in" : "Paste a token"}
           </button>
         );
       })}
@@ -199,7 +196,7 @@ export function ConnectionsErrorState({
                 : "Something went wrong loading your connections. Please try again."}
           </p>
           {!isAuthError && !isNotFound && loadError?.message && (
-            <p className="mt-2 text-xs text-muted-foreground/70">
+            <p className="mt-2 text-sm text-muted-foreground/70">
               Error: {loadError.message}
             </p>
           )}

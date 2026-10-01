@@ -61,7 +61,7 @@ export function RightsAction({ postId, status }: Props) {
     <div className="space-y-2 rounded-md border p-2">
       {!message ? (
         <>
-          <label className="block text-xs text-muted-foreground">
+          <label className="block text-sm text-muted-foreground">
             How long
             <select
               value={months}
@@ -85,10 +85,10 @@ export function RightsAction({ postId, status }: Props) {
           <Button size="sm" className="w-full" onClick={() => void copy()}>
             {copied ? "Copied" : "Copy message"}
           </Button>
-          <p className="text-xs text-muted-foreground">Send it to them in an Instagram DM.</p>
+          <p className="text-sm text-muted-foreground">Send it to them in an Instagram DM.</p>
         </>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }

@@ -1,22 +1,9 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CreatorSearchJobsTray } from "@/components/creator-search-jobs-tray";
+import { MobileNav, SidebarNav } from "@/components/platform-nav";
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/campaigns", label: "Campaigns", icon: "📢" },
-  { href: "/creators", label: "Creators", icon: "👤" },
-  { href: "/discover", label: "Discover", icon: "🧭" },
-  { href: "/inbox", label: "Inbox", icon: "📬" },
-  { href: "/orders", label: "Orders", icon: "📦" },
-  { href: "/content", label: "Content", icon: "🎞️" },
-  { href: "/ads", label: "Ads", icon: "📈" },
-  { href: "/interventions", label: "Needs attention", icon: "🚨" },
-  { href: "/admin/health", label: "System status", icon: "🏥" },
-  { href: "/settings", label: "Settings", icon: "⚙️" },
-];
 
 export default async function PlatformLayout({
   children,
@@ -35,46 +22,37 @@ export default async function PlatformLayout({
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 border-r bg-muted/40 p-6 md:block">
+      <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 p-6 md:flex">
         <div className="mb-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/kalm-logo.png" alt="Kalm" className="h-7 w-auto" />
-          <p className="mt-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
-            Creator seeding
-          </p>
         </div>
 
-        <nav className="space-y-1">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <SidebarNav />
 
         <div className="mt-auto pt-8">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-sm text-muted-foreground">
             {user.email}
           </p>
           <form action="/api/auth/logout" method="POST" className="mt-3">
             <button
               type="submit"
-              className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
-              Logout
+              Log out
             </button>
           </form>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto p-6">
-        {children}
+      <main className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="mb-4 md:hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/kalm-logo.png" alt="Kalm" className="mb-3 h-6 w-auto" />
+          <MobileNav />
+        </div>
+        <div className="mx-auto max-w-6xl">{children}</div>
         <CreatorSearchJobsTray />
       </main>
     </div>
