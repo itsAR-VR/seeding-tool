@@ -44,6 +44,8 @@ export async function updateSession(request: NextRequest) {
     "/settings",
     "/creators",
     "/orders",
+    "/content",
+    "/ads",
   ];
   const isProtected = platformPrefixes.some((p) => pathname.startsWith(p));
 

@@ -10,6 +10,14 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
+const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
+  draft: "Not started",
+  active: "Sending",
+  paused: "Paused",
+  completed: "Finished",
+  archived: "Archived",
+};
+
 const statusColors: Record<string, string> = {
   draft: "bg-gray-100 text-gray-800",
   active: "bg-green-100 text-green-800",
@@ -58,11 +66,11 @@ export default async function CampaignsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
           <p className="text-muted-foreground">
-            Create and manage your seeding campaigns.
+            Each campaign is one product sent to a list of creators.
           </p>
         </div>
         <Link href="/campaigns/new">
-          <Button>+ New Campaign</Button>
+          <Button>New campaign</Button>
         </Link>
       </div>
 
@@ -101,7 +109,7 @@ export default async function CampaignsPage() {
                         statusColors[campaign.status] ?? statusColors.draft
                       }
                     >
-                      {campaign.status}
+                      {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
                     </Badge>
                   </div>
                   <div className="mt-3 flex gap-4 text-sm text-muted-foreground">

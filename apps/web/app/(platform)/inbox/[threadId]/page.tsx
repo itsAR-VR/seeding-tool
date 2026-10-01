@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -223,6 +223,27 @@ export default function ThreadDetailPage() {
     }
   }
 
+  // y / l / n mark the decision, like the buttons (skipped while typing).
+  const decisionKeyRef = useRef(handleDecision);
+  decisionKeyRef.current = handleDecision;
+  const canDecide = Boolean(thread?.messages.some((m) => m.direction === "inbound")) && !deciding;
+  useEffect(() => {
+    if (!canDecide) return;
+    function onKey(event: KeyboardEvent) {
+      const el = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      // Not while a dialog (e.g. Help) is open or the key came from inside one.
+      if (document.querySelector("dialog[open]") || el?.closest("dialog")) return;
+      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      const decision = ({ y: "yes", l: "later", n: "no" } as const)[event.key.toLowerCase() as "y" | "l" | "n"];
+      if (!decision) return;
+      event.preventDefault();
+      void decisionKeyRef.current(decision);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canDecide]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -259,12 +280,10 @@ export default function ThreadDetailPage() {
                 {creator.name ?? profile?.handle ?? "Unknown Creator"}
               </Link>
             </h1>
-            <Badge>{thread.status}</Badge>
-            <Badge variant="outline">
-              {thread.channel === "instagram_dm" ? "📱 DM" : "📧 Email"}
-            </Badge>
+            {thread.status === "closed" && <Badge variant="outline">Closed</Badge>}
+            {thread.channel === "instagram_dm" && <Badge variant="outline">Instagram DM</Badge>}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="mt-1 text-muted-foreground">
             <Link href={`/campaigns/${thread.campaignCreator.campaign.id}`} className="hover:underline">
               {thread.campaignCreator.campaign.name}
             </Link>
@@ -274,7 +293,7 @@ export default function ThreadDetailPage() {
           </p>
         </div>
         <Button variant="outline" onClick={() => router.push("/inbox")}>
-          ← Back
+          Back to inbox
         </Button>
       </div>
 
@@ -297,21 +316,21 @@ export default function ThreadDetailPage() {
           >
             <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium">
+                <p className="font-medium">
                   {decision === "yes"
-                    ? "✓ They said yes"
+                    ? "They said yes"
                     : decision === "no"
-                      ? "✕ They said no · on the do-not-send list"
+                      ? "They said no. They're on the do-not-send list."
                       : decision === "later"
-                        ? "⏸ Not right now · parked, not on the do-not-send list"
+                        ? "Not right now. They're not on the do-not-send list."
                         : "Did they say yes?"}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {aiGuess
-                    ? `AI guess: ${aiGuess === "yes" ? "yes" : aiGuess === "no" ? "no" : "unclear"}${
+                <p className="text-sm text-muted-foreground">
+                  {aiGuess && aiGuess !== "unclear"
+                    ? `The AI thinks this is a ${aiGuess}${
                         latestInbound?.confidence != null ? ` (${Math.round(latestInbound.confidence * 100)}% sure)` : ""
-                      }${decision && aiGuess !== "unclear" ? (aiGuess === decision ? " · matches you" : " · different from you") : ""}`
-                    : "AI guess: not available yet"}
+                      }.${decision ? (aiGuess === decision ? " You agreed." : " You decided differently.") : ""} You can change this anytime.`
+                    : "Pick one. You can change it anytime."}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -350,7 +369,7 @@ export default function ThreadDetailPage() {
         <Card className="border-teal-200 bg-teal-50">
           <CardHeader>
             <CardTitle className="text-base text-teal-900">
-              📦 Address to review
+              Address to review
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -400,7 +419,7 @@ export default function ThreadDetailPage() {
                     </p>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Source: {addr.source}
                 </p>
                 <div className="flex gap-2">
@@ -449,7 +468,7 @@ export default function ThreadDetailPage() {
               placeholder="Write your reply…"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 {replyText.includes(ADDRESS_LINK)
                   ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
                   : `To: ${creator.email ?? "no email on file"}`}
@@ -490,7 +509,7 @@ export default function ThreadDetailPage() {
               onChange={(e) => setDmText(e.target.value)}
             />
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Sending to @{creator.instagramHandle || "unknown"}
               </p>
               <Button
@@ -526,7 +545,7 @@ export default function ThreadDetailPage() {
                       : "bg-blue-50 ml-8"
                   }`}
                 >
-                  <div className="mb-1 flex items-center gap-2 text-xs text-muted-foreground">
+                  <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
                     <span className="font-medium">
                       {msg.direction === "inbound" ? "↙ Reply" : "↗ You sent"}
                     </span>

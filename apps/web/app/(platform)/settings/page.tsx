@@ -11,31 +11,31 @@ const settingsLinks = [
     href: "/settings/brand",
     title: "Brand",
     description: "Update your brand name, website, and logo.",
-    icon: "🏷️",
   },
   {
     href: "/settings/connections",
     title: "Connections",
-    description: "Manage Gmail, Shopify, and other integrations.",
-    icon: "🔌",
+    description: "Gmail, Shopify, and Instagram.",
   },
   {
     href: "/settings/ai-personas",
     title: "AI Personas",
-    description: "Manage AI outreach personas and customize message styles.",
-    icon: "🤖",
+    description: "How AI-drafted outreach emails sound.",
   },
   {
     href: "/settings/do-not-send",
     title: "Do-not-send list",
     description: "Creators who said no, unsubscribed, or bounced. They're never emailed again.",
-    icon: "🚫",
+  },
+  {
+    href: "/admin/health",
+    title: "System status",
+    description: "Check that email, Shopify, and Instagram are working.",
   },
   {
     href: "/settings/automations",
     title: "Automations",
-    description: "Schedule recurring creator discovery and other tasks.",
-    icon: "⚡",
+    description: "Find new creators on a schedule.",
   },
 ];
 
@@ -45,7 +45,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">
-          Manage your workspace, billing, and integrations.
+          Your brand, connected accounts, and the do-not-send list.
         </p>
       </div>
 
@@ -54,10 +54,7 @@ export default function SettingsPage() {
           <Link key={link.href} href={link.href}>
             <Card className="transition-colors hover:bg-accent/50">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <span>{link.icon}</span>
-                  {link.title}
-                </CardTitle>
+                <CardTitle>{link.title}</CardTitle>
                 <CardDescription>{link.description}</CardDescription>
               </CardHeader>
             </Card>

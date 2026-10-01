@@ -12,10 +12,10 @@ export function TriggerSearchButton({ campaignId }: Props) {
 
   return (
     <Button
-      variant="outline"
+      variant="ghost"
       onClick={() => router.push(`/campaigns/${campaignId}/discover`)}
     >
-      🔍 Discover Creators
+      Find more creators
     </Button>
   );
 }
