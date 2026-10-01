@@ -68,13 +68,7 @@ export function GmailConnectionCard({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Outreach emails will be sent from{" "}
-                <strong>
-                  {provider.details?.gmailAddress ??
-                    provider.externalId ??
-                    "your Gmail account"}
-                </strong>
-                .
+                Outreach emails send from this address.
               </p>
             )}
             <Button variant="outline" onClick={onConnect}>
@@ -137,22 +131,18 @@ export function ShopifyConnectionCard({
         <CardDescription>{provider.summary}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <MethodSelector
-          methods={provider.availableMethods}
-          activeMethod={provider.activeMethod}
-          disabled={switching}
-          onChange={onMethodChange}
-        />
+        {!provider.connected && (
+          <MethodSelector
+            methods={provider.availableMethods}
+            activeMethod={provider.activeMethod}
+            disabled={switching}
+            onChange={onMethodChange}
+          />
+        )}
         <FeedbackBanner message={message} />
 
         {provider.connected ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Connected store:{" "}
-              <strong>
-                {provider.details?.storeDomain ?? provider.externalId ?? "Unknown store"}
-              </strong>
-            </p>
             {provider.details?.lastSyncAt && (
               <p className="text-sm text-muted-foreground">
                 {typeof provider.details.lastSyncedCount === "number"
@@ -280,13 +270,7 @@ export function InstagramConnectionCard({
         {provider.connected ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Connected account:{" "}
-              <strong>
-                @{provider.details?.instagramUsername ?? provider.externalId ?? "unknown"}
-              </strong>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              New tagged posts show up on the Content page.
+              Posts, reels, and stories that tag this account show up on the Content page.
             </p>
             <Button variant="destructive" onClick={onDisconnect} disabled={loading}>
               {loading ? "Disconnecting..." : "Disconnect"}
