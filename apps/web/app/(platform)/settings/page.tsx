@@ -15,6 +15,11 @@ const settingsLinks = [
     description: "Update your brand name, website, and logo.",
   },
   {
+    href: "/settings/brand-kit",
+    title: "Brand kit",
+    description: "Logo, product facts for AI replies, your \"yes\" message, and ad defaults.",
+  },
+  {
     href: "/settings/team",
     title: "Team",
     description: "Invite teammates and see who has access.",

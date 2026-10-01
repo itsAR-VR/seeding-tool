@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { decrypt } from "@/lib/encryption";
+import { getBrandKit } from "@/lib/brand/kit";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -130,7 +131,7 @@ async function ensureCampaignAndAdSet(ctx: AdsContext): Promise<{ campaignId: st
     is_adset_budget_sharing_enabled: false,
   });
   const adSet = await graph<{ id: string }>(`${ctx.adAccountId}/adsets`, ctx.token, {
-    name: "Creator content · US",
+    name: "Creator content",
     campaign_id: campaign.id,
     daily_budget: String(DEFAULT_DAILY_BUDGET_CENTS),
     billing_event: "IMPRESSIONS",
@@ -138,7 +139,8 @@ async function ensureCampaignAndAdSet(ctx: AdsContext): Promise<{ campaignId: st
     bid_strategy: "LOWEST_COST_WITHOUT_CAP",
     destination_type: "WEBSITE",
     targeting: {
-      geo_locations: { countries: ["US"] },
+      // Advertise where the brand can ship.
+      geo_locations: { countries: (await getBrandKit(ctx.brandId))?.shipCountries ?? ["US"] },
       age_min: 18,
       targeting_automation: { advantage_audience: 1 },
     },

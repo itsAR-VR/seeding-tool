@@ -19,7 +19,7 @@ export default async function GiftClaimPage({ params }: PageProps) {
       },
       campaignCreator: {
         include: {
-          campaign: { include: { brand: { select: { name: true, logoUrl: true } } } },
+          campaign: { include: { brand: { select: { name: true, logoUrl: true, shipCountries: true } } } },
         },
       },
     },
@@ -73,11 +73,11 @@ export default async function GiftClaimPage({ params }: PageProps) {
                 <span className="font-medium">
                   {claim.campaignProduct?.product.name ?? `a gift from ${brandName}`}
                 </span>
-                . Add your U.S. shipping details below and we&apos;ll get it ready
+                . Add your shipping details below and we&apos;ll get it ready
                 to ship.
               </p>
               <div className="mt-6">
-                <ClaimForm token={token} brandName={brandName} />
+                <ClaimForm token={token} brandName={brandName} shipCountries={brand?.shipCountries?.length ? brand.shipCountries : ["US"]} />
               </div>
             </>
           )}

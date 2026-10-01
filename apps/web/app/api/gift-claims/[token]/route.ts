@@ -31,13 +31,16 @@ const claimSchema = z.object({
   line1: z.string().trim().min(3).max(160),
   line2: textField(160).optional(),
   city: z.string().trim().min(2).max(100),
-  state: z
-    .string()
-    .trim()
-    .regex(/^[A-Za-z]{2}$/)
-    .transform((value) => value.toUpperCase()),
-  postalCode: z.string().trim().regex(/^\d{5}(-\d{4})?$/),
+  state: z.string().trim().min(2).max(60),
+  postalCode: z.string().trim().min(3).max(12),
+  country: z.string().trim().length(2).transform((v) => v.toUpperCase()).optional(),
 });
+
+/** US addresses keep the strict state + ZIP format; other countries are looser. */
+function isValidForCountry(data: z.infer<typeof claimSchema>, country: string): boolean {
+  if (country !== "US") return true;
+  return /^[A-Za-z]{2}$/.test(data.state) && /^\d{5}(-\d{4})?$/.test(data.postalCode);
+}
 
 async function findClaim(token: string) {
   return prisma.creatorGiftClaim.findUnique({
@@ -56,7 +59,7 @@ async function findClaim(token: string) {
               brandId: true,
               name: true,
               brand: {
-                select: { name: true },
+                select: { name: true, shipCountries: true },
               },
             },
           },
@@ -127,12 +130,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
   const parsed = claimSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Please enter a complete U.S. shipping address" },
+      { error: "Please enter a complete shipping address" },
       { status: 400, headers: NO_STORE_HEADERS }
     );
   }
 
   const data = parsed.data;
+  const shipCountries = claim.campaignCreator.campaign.brand.shipCountries?.length
+    ? claim.campaignCreator.campaign.brand.shipCountries
+    : ["US"];
+  const country = data.country ?? shipCountries[0];
+  if (!shipCountries.includes(country) || !isValidForCountry(data, country)) {
+    return NextResponse.json(
+      { error: "Please enter a complete shipping address in a country we ship to" },
+      { status: 400, headers: NO_STORE_HEADERS }
+    );
+  }
+  if (country === "US") data.state = data.state.toUpperCase();
 
   let snapshotId: string | null = null;
   try {
@@ -169,7 +183,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           city: data.city,
           state: data.state,
           postalCode: data.postalCode,
-          country: "US",
+          country,
           phone: data.phone ?? null,
           source: "creator_provided",
           isActive: false,

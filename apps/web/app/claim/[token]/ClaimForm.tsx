@@ -6,9 +6,19 @@ import { Button } from "@/components/ui/button";
 type ClaimFormProps = {
   token: string;
   brandName: string;
+  shipCountries: string[];
 };
 
-export function ClaimForm({ token, brandName }: ClaimFormProps) {
+const COUNTRY_NAMES: Record<string, string> = {
+  US: "United States",
+  CA: "Canada",
+  GB: "United Kingdom",
+  AU: "Australia",
+};
+
+export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
+  const [country, setCountry] = useState(shipCountries[0] ?? "US");
+  const isUS = country === "US";
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">(
     "idle"
   );
@@ -111,6 +121,27 @@ export function ClaimForm({ token, brandName }: ClaimFormProps) {
         />
       </label>
 
+      {shipCountries.length > 1 ? (
+        <label className="block text-sm font-medium">
+          Country
+          <select
+            name="country"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            autoComplete="country"
+            className="mt-1 w-full rounded-xl border bg-white px-3 py-3 text-base"
+          >
+            {shipCountries.map((code) => (
+              <option key={code} value={code}>
+                {COUNTRY_NAMES[code] ?? code}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <input type="hidden" name="country" value={country} />
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block text-sm font-medium sm:col-span-1">
           City
@@ -124,26 +155,27 @@ export function ClaimForm({ token, brandName }: ClaimFormProps) {
           />
         </label>
         <label className="block text-sm font-medium">
-          State
+          {isUS ? "State" : "State / province"}
           <input
             name="state"
             autoComplete="address-level1"
             required
             minLength={2}
-            maxLength={2}
-            placeholder="FL"
-            className="mt-1 w-full rounded-xl border px-3 py-3 text-base uppercase"
+            maxLength={isUS ? 2 : 60}
+            placeholder={isUS ? "FL" : ""}
+            className={`mt-1 w-full rounded-xl border px-3 py-3 text-base ${isUS ? "uppercase" : ""}`}
           />
         </label>
         <label className="block text-sm font-medium">
-          ZIP
+          {isUS ? "ZIP" : "Postal code"}
           <input
             name="postalCode"
             autoComplete="postal-code"
             required
-            pattern="[0-9]{5}(-[0-9]{4})?"
-            inputMode="numeric"
-            title="5-digit ZIP code"
+            pattern={isUS ? "[0-9]{5}(-[0-9]{4})?" : undefined}
+            inputMode={isUS ? "numeric" : "text"}
+            title={isUS ? "5-digit ZIP code" : undefined}
+            maxLength={12}
             className="mt-1 w-full rounded-xl border px-3 py-3 text-base"
           />
         </label>
