@@ -18,7 +18,13 @@ const mockAddSuppression = vi.fn().mockResolvedValue(undefined);
 const mockVerifyToken = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { creator: { findFirst: vi.fn().mockResolvedValue(null) } },
+  prisma: {
+    creator: {
+      findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([{ brandId: "brand-a", brand: { name: "Brand A" } }]),
+    },
+    brand: { findUnique: vi.fn().mockResolvedValue({ name: "Brand A" }) },
+  },
 }));
 
 vi.mock("@/lib/compliance/suppression", () => ({
@@ -74,10 +80,28 @@ describe("Unsubscribe endpoint", () => {
       const res = await mod.GET(req);
 
       expect(res.status).toBe(200);
+      // Legacy link (no brand): opts out of each brand that has this person.
       expect(mockAddSuppression).toHaveBeenCalledWith(
         "test@example.com",
-        "UNSUBSCRIBE"
+        "UNSUBSCRIBE",
+        "brand-a"
       );
+    });
+  });
+
+  describe("brand-scoped links", () => {
+    it("opts out of only the brand in the link", async () => {
+      mockVerifyToken.mockReturnValue(true);
+      const mod = await import("@/app/api/webhooks/unsubscribe/route");
+      const req = new NextRequest(
+        "http://localhost:3000/api/webhooks/unsubscribe?email=b%40example.com&b=brand-z&token=t",
+        { method: "GET" }
+      );
+      const res = await mod.GET(req);
+      expect(res.status).toBe(200);
+      expect(mockVerifyToken).toHaveBeenCalledWith("b@example.com", "t", "brand-z");
+      expect(mockAddSuppression).toHaveBeenCalledTimes(1);
+      expect(mockAddSuppression).toHaveBeenCalledWith("b@example.com", "UNSUBSCRIBE", "brand-z");
     });
   });
 
@@ -126,7 +150,8 @@ describe("Unsubscribe endpoint", () => {
       expect(res.status).toBe(200);
       expect(mockAddSuppression).toHaveBeenCalledWith(
         "oneclick@example.com",
-        "UNSUBSCRIBE"
+        "UNSUBSCRIBE",
+        "brand-a"
       );
     });
   });

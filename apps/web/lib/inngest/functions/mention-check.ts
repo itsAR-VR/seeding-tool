@@ -115,7 +115,7 @@ export const handleReminderSend = inngest.createFunction(
     }
 
     // INVARIANT: Suppressed recipients never receive email — checked before every send
-    if (await isSuppressed(creatorEmail)) {
+    if (await isSuppressed(creatorEmail, brandId)) {
       // Mark reminder as suppressed
       await prisma.reminderSchedule.updateMany({
         where: {
@@ -178,7 +178,7 @@ export const handleReminderSend = inngest.createFunction(
         .replace("{{reminder_number}}", String(reminderNumber));
 
       // Wrap plain-text reminder body in HTML base template
-      const unsubUrl = buildUnsubscribeUrl(creatorEmail);
+      const unsubUrl = buildUnsubscribeUrl(creatorEmail, brandId);
       const safeCreatorName = escapeHtml(creatorName);
       const safeCampaignName = escapeHtml(campaignName);
       const htmlBody = template.body

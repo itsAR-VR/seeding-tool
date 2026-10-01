@@ -5,7 +5,7 @@ import {
   requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
-import { addSuppression } from "@/lib/compliance/suppression";
+import { addSuppression, removeSuppression } from "@/lib/compliance/suppression";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { guessFromIntent, type ReplyDecision } from "@/lib/inbox/decision";
 
@@ -56,14 +56,8 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Leaving a "no": lift only the suppression that "no" created.
     if (decision !== "no" && cc.replyDecision === "no" && email) {
-      const existing = await prisma.emailSuppression.findUnique({ where: { email } });
-      if (existing?.reason === DECLINED_REASON) {
-        await prisma.emailSuppression.delete({ where: { email } });
-        await prisma.creator.updateMany({
-          where: { email },
-          data: { optedOut: false, optOutDate: null },
-        });
-      }
+      // Only this brand's "no"; other brands' opt-outs and global blocks stay.
+      await removeSuppression(email, DECLINED_REASON, thread.brandId);
     }
 
     if (decision === "later") {
@@ -95,7 +89,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         where: { id: thread.id },
         data: { status: "closed" },
       });
-      if (email) await addSuppression(email, DECLINED_REASON);
+      if (email) await addSuppression(email, DECLINED_REASON, thread.brandId);
     } else {
       await prisma.campaignCreator.update({
         where: { id: cc.id },

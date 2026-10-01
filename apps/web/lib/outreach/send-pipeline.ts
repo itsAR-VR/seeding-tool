@@ -252,7 +252,7 @@ export async function sendOutreachBatch(
         // Resolve HTML body: use provided, or wrap plain text in base template
         let resolvedBodyHtml = draft.bodyHtml;
         if (!resolvedBodyHtml) {
-          const unsubUrl = buildUnsubscribeUrl(creator.email);
+          const unsubUrl = buildUnsubscribeUrl(creator.email, brandId);
           resolvedBodyHtml = renderPersonalTemplate({
             bodyContent: draft.body.split(/\n{2,}/).map((para) => `<p style="margin:0 0 12px 0;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`).join(""),
             unsubscribeUrl: unsubUrl,

@@ -25,10 +25,11 @@ const GMAIL_SIZE_WARN_BYTES = 100 * 1024;
  * Build the unsubscribe URL for a given recipient email.
  * Shared by both the List-Unsubscribe MIME header and the visible HTML footer link.
  */
-export function buildUnsubscribeUrl(recipientEmail: string): string {
+export function buildUnsubscribeUrl(recipientEmail: string, brandId?: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seedscale.io";
-  const token = generateUnsubscribeToken(recipientEmail);
-  return `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
+  const token = generateUnsubscribeToken(recipientEmail, brandId);
+  const brandParam = brandId ? `&b=${encodeURIComponent(brandId)}` : "";
+  return `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(recipientEmail)}${brandParam}&token=${token}`;
 }
 
 /**
@@ -46,8 +47,10 @@ export function buildRawEmail(params: {
   bodyHtml?: string;
   inReplyTo?: string;
   references?: string;
+  /** Brand sending the email; the unsubscribe link only opts out of this brand. */
+  brandId?: string;
 }): string {
-  const unsubUrl = buildUnsubscribeUrl(params.to);
+  const unsubUrl = buildUnsubscribeUrl(params.to, params.brandId);
 
   // Sanitize header values to prevent CRLF injection
   const sanitize = (v: string) => v.replace(/[\r\n]/g, "");
@@ -192,11 +195,6 @@ async function sendWithRetryOn401(
  * 4. Persist Message row with direction: "outbound"
  */
 export async function sendEmail(params: SendEmailParams) {
-  // INVARIANT: Suppressed recipients never receive email — checked before every send
-  if (await isSuppressed(params.to)) {
-    throw new SuppressedRecipientError(params.to);
-  }
-
   // 1. Look up alias with pause/limit fields
   const alias = await prisma.emailAlias.findUnique({
     where: { id: params.aliasId },
@@ -215,6 +213,12 @@ export async function sendEmail(params: SendEmailParams) {
 
   if (!alias) {
     throw new Error("Email alias not found");
+  }
+
+  // INVARIANT: Suppressed recipients never receive email — checked before every send.
+  // Opt-outs are per brand, so check against the sending alias's brand.
+  if (await isSuppressed(params.to, alias.brandId)) {
+    throw new SuppressedRecipientError(params.to);
   }
 
   // Safety: reject paused aliases
@@ -322,6 +326,7 @@ export async function sendEmail(params: SendEmailParams) {
     subject: params.subject,
     body: params.body,
     bodyHtml: params.bodyHtml,
+    brandId: alias.brandId,
   });
 
   const sendBody: Record<string, string> = {

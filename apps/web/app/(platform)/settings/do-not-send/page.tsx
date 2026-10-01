@@ -20,7 +20,7 @@ export default async function DoNotSendPage() {
     throw error;
   }
 
-  // Suppressions are global by email; show the ones that belong to this brand's creators.
+  // This brand's opt-outs, plus global blocks (bounces, complaints) for its creators.
   const creators = await prisma.creator.findMany({
     where: { brandId, email: { not: null } },
     select: { email: true, name: true, instagramHandle: true },
@@ -29,7 +29,9 @@ export default async function DoNotSendPage() {
     creators.filter((c) => c.email).map((c) => [c.email!.toLowerCase().trim(), c])
   );
   const suppressions = await prisma.emailSuppression.findMany({
-    where: { email: { in: [...byEmail.keys()] } },
+    where: {
+      OR: [{ brandId }, { brandId: null, email: { in: [...byEmail.keys()] } }],
+    },
     orderBy: { suppressedAt: "desc" },
   });
 
@@ -38,7 +40,7 @@ export default async function DoNotSendPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Do-not-send list</h1>
         <p className="text-muted-foreground">
-          These people are never emailed again, from any campaign. Someone lands here when you
+          These people are never emailed again by your brand, from any campaign. Someone lands here when you
           mark &ldquo;They said no&rdquo;, they unsubscribe, or their email bounces.
         </p>
       </div>

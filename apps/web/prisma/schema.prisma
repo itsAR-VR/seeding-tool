@@ -414,12 +414,16 @@ model SendingMetric {
 
 model EmailSuppression {
   id           String   @id @default(uuid())
-  email        String   @unique
-  reason       String // UNSUBSCRIBE | BOUNCE | COMPLAINT | MANUAL
+  email        String
+  reason       String // UNSUBSCRIBE | DECLINED | BOUNCE | COMPLAINT | MANUAL
   suppressedAt DateTime @default(now())
+
+  /// The brand this applies to. Null = every brand (bounces, complaints).
+  brandId String? @map("brand_id")
 
   createdAt DateTime @default(now())
 
+  @@index([email, brandId])
   @@map("email_suppressions")
 }
 
