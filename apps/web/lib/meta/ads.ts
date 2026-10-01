@@ -370,13 +370,40 @@ export async function createPausedPartnershipAd(
       if (post.platform === "instagram" && /^\d+$/.test(post.externalId)) return post.externalId;
       throw lookupError;
     });
-    const video = await graph<{ id: string }>(`${ctx.adAccountId}/advideos`, ctx.token, {
-      source_instagram_media_id: mediaId,
-      partnership_ad_ad_code: code,
-      is_partnership_ad: "true",
-    });
-    await waitForVideo(ctx, video.id);
-    creative = await graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody(mediaId));
+    const attempts: Array<[string, () => Promise<{ id: string }>]> = [
+      ["creative with media id", () =>
+        graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody(mediaId))],
+      ["video copy with code", async () => {
+        const video = await graph<{ id: string }>(`${ctx.adAccountId}/advideos`, ctx.token, {
+          source_instagram_media_id: mediaId,
+          partnership_ad_ad_code: code,
+          is_partnership_ad: "true",
+        });
+        await waitForVideo(ctx, video.id);
+        return graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody(mediaId));
+      }],
+      ["video copy without code", async () => {
+        const video = await graph<{ id: string }>(`${ctx.adAccountId}/advideos`, ctx.token, {
+          source_instagram_media_id: mediaId,
+          is_partnership_ad: "true",
+        });
+        await waitForVideo(ctx, video.id);
+        return graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody(mediaId));
+      }],
+    ];
+    let lastError: unknown = error;
+    let made: { id: string } | null = null;
+    for (const [label, attempt] of attempts) {
+      try {
+        made = await attempt();
+        break;
+      } catch (attemptError) {
+        console.error(`[meta/ads] partnership ${label} failed:`, attemptError instanceof Error ? attemptError.message : attemptError);
+        lastError = attemptError;
+      }
+    }
+    if (!made) throw lastError;
+    creative = made;
   }
   const ad = await graph<{ id: string }>(`${ctx.adAccountId}/ads`, ctx.token, {
     name: `Partnership${credit}`,
