@@ -86,7 +86,7 @@ export function requireOwnerAccess(
 
 // ── Auth helpers ────────────────────────────────────────────
 
-async function getCurrentUserRecord() {
+export async function getCurrentUserRecord() {
   const supabase = await createClient();
   const {
     data: { user: authUser },

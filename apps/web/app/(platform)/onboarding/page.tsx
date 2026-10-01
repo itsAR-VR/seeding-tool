@@ -36,9 +36,9 @@ function OnboardingContent() {
             router.replace("/dashboard");
             return;
           }
-          // Kalm's instance is invite-only: someone without a brand membership
-          // is told to ask for access instead of being walked into creating a brand.
-          if (!cancelled && data.hasBrand === false) {
+          // Invite-only: without a company and without an accepted company
+          // invite, there's nothing to set up yet.
+          if (!cancelled && data.hasBrand === false && !data.canCreateBrand) {
             setNoAccess(true);
           }
         }
@@ -68,8 +68,8 @@ function OnboardingContent() {
   if (noAccess) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 text-center">
-        <h1 className="text-xl font-semibold">You don&apos;t have access to Kalm yet</h1>
-        <p className="text-muted-foreground">Ask Kam to add you to the creator seeding workspace.</p>
+        <h1 className="text-xl font-semibold">You don&apos;t have a workspace yet</h1>
+        <p className="text-muted-foreground">Open the invite link you were sent, or ask your team to invite you.</p>
       </div>
     );
   }

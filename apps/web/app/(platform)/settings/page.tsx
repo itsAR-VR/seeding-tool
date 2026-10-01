@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { isPlatformAdmin } from "@/lib/invites";
 import {
   Card,
   CardDescription,
@@ -11,6 +13,11 @@ const settingsLinks = [
     href: "/settings/brand",
     title: "Brand",
     description: "Update your brand name, website, and logo.",
+  },
+  {
+    href: "/settings/team",
+    title: "Team",
+    description: "Invite teammates and see who has access.",
   },
   {
     href: "/settings/connections",
@@ -39,7 +46,20 @@ const settingsLinks = [
   },
 ];
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  const links = isPlatformAdmin(user?.email)
+    ? [
+        ...settingsLinks,
+        {
+          href: "/admin/companies",
+          title: "Companies",
+          description: "Invite new companies to Seed Scale. Only you see this.",
+        },
+      ]
+    : settingsLinks;
+
   return (
     <div className="space-y-6">
       <div>
@@ -50,7 +70,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {settingsLinks.map((link) => (
+        {links.map((link) => (
           <Link key={link.href} href={link.href}>
             <Card className="transition-colors hover:bg-accent/50">
               <CardHeader>

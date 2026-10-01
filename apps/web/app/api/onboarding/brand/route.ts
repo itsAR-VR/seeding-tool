@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId, requireOrg } from "@/lib/tenancy";
+import { findOpenCompanyInvite, isPlatformAdmin } from "@/lib/invites";
 import { prisma } from "@/lib/prisma";
 import {
   fetchBrandProfile,
@@ -182,6 +183,16 @@ export async function POST(request: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
+    // Invite-only: a brand-new company needs an accepted company invite
+    // (or a platform admin). Retrying an unfinished setup is always allowed.
+    const companyInvite = existingIncompleteMembership ? null : await findOpenCompanyInvite(user.email);
+    if (!existingIncompleteMembership && !companyInvite && !isPlatformAdmin(user.email)) {
+      return NextResponse.json(
+        { error: "Seed Scale is invite-only. Use the invite link you were sent." },
+        { status: 403 }
+      );
+    }
+
     // Reuse the latest incomplete onboarding brand instead of creating duplicates
     // when a user retries the brand step.
     const result = await prisma.$transaction(async (tx) => {
@@ -266,6 +277,11 @@ export async function POST(request: NextRequest) {
             role: "owner",
           },
         });
+
+        // Mark the invite as used by linking it to the company it created.
+        if (companyInvite) {
+          await tx.brandInvite.update({ where: { id: companyInvite.id }, data: { brandId } });
+        }
       }
 
       const staleBrandIds = staleIncompleteMemberships

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { findOpenCompanyInvite, isPlatformAdmin } from "@/lib/invites";
 
 /**
  * GET /api/onboarding/status
@@ -31,7 +32,13 @@ export async function GET() {
     });
 
     if (!membership) {
-      return NextResponse.json({ isComplete: false, hasBrand: false });
+      const invite = await findOpenCompanyInvite(user.email);
+      return NextResponse.json({
+        isComplete: false,
+        hasBrand: false,
+        canCreateBrand: Boolean(invite) || isPlatformAdmin(user.email),
+        companyName: invite?.companyName ?? null,
+      });
     }
 
     const onboarding = await prisma.brandOnboarding.findUnique({

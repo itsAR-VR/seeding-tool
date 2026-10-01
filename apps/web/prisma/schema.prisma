@@ -137,6 +137,7 @@ model Brand {
   automations         Automation[]
   shopifyProducts     ShopifyProduct[]
   contentPosts        ContentPost[]
+  invites             BrandInvite[]
   creditBalance       BrandCreditBalance?
 
   @@map("brands")
@@ -161,6 +162,31 @@ model BrandMembership {
 }
 
 // ACTIVE — used by app/api/billing/webhook/route.ts
+/// Invite-only access. brandId null = invite to create a NEW company (from a
+/// platform admin); brandId set = invite a teammate into an existing company.
+model BrandInvite {
+  id          String    @id @default(uuid())
+  email       String
+  role        String    @default("editor") // owner | editor | viewer
+  /// Name for the new company (company invites only).
+  companyName String?   @map("company_name")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  revokedAt   DateTime? @map("revoked_at")
+
+  brandId     String? @map("brand_id")
+  invitedById String? @map("invited_by_id")
+
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([brandId])
+  @@map("brand_invites")
+}
+
 model SubscriptionPlan {
   id            String  @id @default(uuid())
   name          String // Free | Starter | Growth | Enterprise
