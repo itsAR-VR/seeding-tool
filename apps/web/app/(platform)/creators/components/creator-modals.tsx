@@ -78,8 +78,6 @@ export function CampaignModal({
 // ── Search Modal ────────────────────────────────────────────────────────
 
 type SearchModalProps = {
-  discoveryApprovalMode: "recommend" | "auto";
-  discoveryApprovalThreshold: number;
   searchResults: SearchResult[];
   searching: boolean;
   searchStatus: string | null;
@@ -115,8 +113,6 @@ type SearchModalProps = {
 };
 
 export function SearchModal({
-  discoveryApprovalMode,
-  discoveryApprovalThreshold,
   searchResults,
   searching,
   searchStatus,
@@ -153,18 +149,10 @@ export function SearchModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <Card className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden">
         <CardHeader className="shrink-0 border-b pb-4">
-          <CardTitle>Search Creators</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Discovered creators will use{" "}
-            <span className={`font-medium ${discoveryApprovalMode === "recommend" ? "text-green-700" : "text-yellow-700"}`}>
-              {discoveryApprovalMode === "recommend" ? "Recommend" : "Auto"} mode
-            </span>
-            {" "}&middot;{" "}
-            <span className="font-medium">{(discoveryApprovalThreshold * 100).toFixed(0)}% threshold</span>
-            {" "}&middot;{" "}
-            <a href="/settings/brand" className="underline hover:text-foreground">
-              Change in Brand Settings &rarr;
-            </a>
+          <CardTitle>Find creators</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Pick a few words that describe the creators you want. We search Instagram and Collabstr, then score each
+            creator against your brand.
           </p>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col">
@@ -198,12 +186,11 @@ export function SearchModal({
           {searching && (
             <div className="flex flex-1 items-center justify-center py-8 text-center">
               <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
-              <p className="text-sm text-muted-foreground">
-                Running unified creator discovery...
+              <p className="font-medium">Finding creators...</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                This takes a few minutes. You can close this and keep working; results stay on the Creators page.
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Status: {searchStatus || "starting"}
-              </p>
+              <span className="sr-only">Status: {searchStatus || "starting"}</span>
             </div>
           )}
 
@@ -231,22 +218,22 @@ export function SearchModal({
                   Boolean(searchLimitValidation.error)
                 }
               >
-                Search
+                Find creators
               </Button>
             )}
 
             {searchResults.length > 0 && !searching && (
               <>
                 <Button variant="outline" onClick={onNewSearch}>
-                  New Search
+                  New search
                 </Button>
                 <Button
                   onClick={onImportSelected}
                   disabled={selectedResults.size === 0 || importing}
                 >
                   {importing
-                    ? "Importing..."
-                    : `Import Selected (${selectedResults.size})`}
+                    ? "Adding..."
+                    : `Add ${selectedResults.size} to my creators`}
                 </Button>
               </>
             )}
@@ -306,21 +293,14 @@ function SearchForm({
     <div className="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_320px]">
         <div className="space-y-5">
-          <div className="rounded-lg border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-            Run one background discovery query across Collabstr,
-            Apify search, and optional seed expansion. Add exact
-            usernames only when you already know specific handles
-            you want to validate.
-          </div>
-
           <div className="space-y-2">
-            <label className="text-sm font-medium">Sources</label>
+            <p className="text-sm font-medium">Where to look</p>
             <div className="flex flex-wrap gap-2">
               {([
-                ["collabstr", "Collabstr"],
-                ["apify_search", "Apify Search"],
-                ["approved_seed_following", "Approved Seed Following"],
-                ["apify_keyword_email", "Keyword Email"],
+                ["collabstr", "Collabstr marketplace"],
+                ["apify_search", "Instagram search"],
+                ["approved_seed_following", "Who your approved creators follow"],
+                ["apify_keyword_email", "Instagram, with emails (slower)"],
               ] as Array<[SearchSourceKey, string]>).map(
                 ([src, label]) => (
                   <Button
@@ -329,6 +309,7 @@ function SearchForm({
                     size="sm"
                     variant={searchSources[src] ? "default" : "outline"}
                     className="rounded-full"
+                    aria-pressed={searchSources[src]}
                     onClick={() =>
                       setSearchSources((current) => ({
                         ...current,
@@ -367,8 +348,8 @@ function SearchForm({
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Exact usernames{" "}
-                <span className="text-xs font-normal text-muted-foreground">
+                Specific creators to check{" "}
+                <span className="font-normal text-muted-foreground">
                   (optional)
                 </span>
               </label>
@@ -379,7 +360,7 @@ function SearchForm({
                 onChange={(e) => setSearchUsernames(e.target.value)}
               />
               {usernameSuggestions.length > 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm text-muted-foreground">
                   Recent handles:{" "}
                   {usernameSuggestions
                     .slice(0, 4)
@@ -391,7 +372,7 @@ function SearchForm({
 
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Follower range
+                Followers
               </label>
               <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
                 <Input
@@ -415,7 +396,7 @@ function SearchForm({
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Creators per day
+                How many creators
               </label>
               <Input
                 type="number"
@@ -433,33 +414,22 @@ function SearchForm({
                   {searchLimitWarning}
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Use any positive integer. Values above 100 will still
-                  save.
+                <p className="text-sm text-muted-foreground">
+                  Start with 10 to 25. Bigger searches take longer and use more Apify credit.
                 </p>
               )}
             </div>
-            <div className="space-y-2 md:pt-7">
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="default">Instagram</Badge>
-                <Badge variant="outline" className="opacity-60">
-                  TikTok later
-                </Badge>
-              </div>
-            </div>
+
           </div>
         </div>
 
         <aside className="space-y-4">
           <div className="rounded-lg border bg-muted/15 p-4">
-            <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              How it works
-            </p>
-            <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
-              <li>Keywords combine your brand profile, creator data, and discovery categories.</li>
-              <li>Type custom keywords or pick from the suggestions.</li>
-              <li>Use the X on selected chips to remove them.</li>
-              <li>Exact usernames are for known handles only.</li>
+            <p className="text-sm font-medium">Tips</p>
+            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
+              <li>The suggested words come from your brand. Type your own too.</li>
+              <li>Two or three words work better than ten.</li>
+              <li>Only fill in specific creators when you already know their handles.</li>
             </ul>
           </div>
         </aside>

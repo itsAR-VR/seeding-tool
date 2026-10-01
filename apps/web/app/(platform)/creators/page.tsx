@@ -1,137 +1,144 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { useCreatorsState } from "./hooks/use-creators-state";
 import { CreatorFilters } from "./components/creator-filters";
 import { CreatorsTable } from "./components/creators-table";
 import { CampaignModal, SearchModal } from "./components/creator-modals";
 
-export default function CreatorsPage() {
+function CreatorsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const state = useCreatorsState();
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const missingEmail = state.creators.filter((c) => !c.email);
+  const { resetSearchState, setShowSearchModal } = state;
+
+  // "Find creators" in the menu opens the search straight away.
+  const openFind = searchParams.get("find") === "1";
+  const openedFind = useRef(false);
+  useEffect(() => {
+    if (!openFind) {
+      openedFind.current = false;
+      return;
+    }
+    if (openedFind.current) return;
+    openedFind.current = true;
+    resetSearchState();
+    setShowSearchModal(true);
+    router.replace("/creators");
+  }, [openFind, resetSearchState, setShowSearchModal, router]);
+
+  async function findMissingEmails() {
+    if (missingEmail.length === 0) return;
+    state.setEnriching(true);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/creators/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ creatorIds: missingEmail.map((c) => c.id) }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotice({ ok: false, text: data.error || "Couldn't look up emails. Try again." });
+      } else {
+        setNotice({
+          ok: true,
+          text: `Found ${data.enriched} ${data.enriched === 1 ? "email" : "emails"}. ${data.notFound} ${data.notFound === 1 ? "creator has" : "creators have"} no public email.`,
+        });
+        state.fetchCreators();
+      }
+    } catch {
+      setNotice({ ok: false, text: "Couldn't look up emails. Check your connection and try again." });
+    } finally {
+      state.setEnriching(false);
+    }
+  }
+
+  const job = state.activeSearchJob;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Creators</h1>
           <p className="text-muted-foreground">
-            Search, filter, and manage your creator database.
-            {state.total > 0 && ` ${state.total} creators total.`}
+            Everyone you&apos;ve found or imported{state.total > 0 ? `: ${state.total} creators` : ""}.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
-            variant="outline"
-            onClick={() => router.push("/creators/identity-review")}
-          >
-            Identity Review
-          </Button>
-          <Button
-            variant="outline"
             onClick={() => {
               state.resetSearchState();
               state.setShowSearchModal(true);
             }}
           >
-            Search Creators
+            Find creators
           </Button>
-          <Button onClick={() => router.push("/creators/import")}>
-            Import CSV
+          <Button variant="outline" onClick={() => router.push("/creators/import")}>
+            Import a list
           </Button>
           <Button
             variant="outline"
-            disabled={state.enriching || state.creators.filter((c) => !c.email).length === 0}
-            onClick={async () => {
-              const withoutEmail = state.creators.filter((c) => !c.email);
-              if (withoutEmail.length === 0) {
-                alert("All visible creators already have emails.");
-                return;
-              }
-              state.setEnriching(true);
-              try {
-                const res = await fetch("/api/creators/enrich", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    creatorIds: withoutEmail.map((c) => c.id),
-                  }),
-                });
-                const data = await res.json();
-                if (!res.ok) {
-                  alert(data.error || "Enrichment failed");
-                } else {
-                  alert(
-                    `Enrichment complete: ${data.enriched} found, ${data.notFound} not found, ${data.alreadyHasEmail || 0} already had email, ${data.skipped} skipped`
-                  );
-                  state.fetchCreators();
-                }
-              } catch {
-                alert("Enrichment request failed");
-              } finally {
-                state.setEnriching(false);
-              }
-            }}
+            disabled={state.enriching || missingEmail.length === 0}
+            onClick={() => void findMissingEmails()}
           >
-            {state.enriching ? "Enriching..." : `Enrich Emails (${state.creators.filter((c) => !c.email).length})`}
+            {state.enriching ? "Looking up emails..." : `Find missing emails (${missingEmail.length})`}
+          </Button>
+          <Button variant="ghost" onClick={() => router.push("/creators/identity-review")}>
+            Review duplicates
           </Button>
         </div>
       </div>
 
-      {state.activeSearchJob ? (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="space-y-3 pt-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-blue-900">
-                  Background creator search
-                </p>
-                <p className="text-xs text-blue-800">
-                  Job {state.activeSearchJob.jobId} is running in the background. You
-                  can keep using the platform while it completes.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {state.searchResults.length > 0 ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => state.setShowSearchModal(true)}
-                  >
-                    View Results
-                  </Button>
-                ) : null}
-                <Button size="sm" variant="ghost" onClick={state.resetSearchState}>
-                  Dismiss
-                </Button>
-              </div>
+      {notice && (
+        <p role="status" className={`text-sm ${notice.ok ? "text-green-800" : "text-destructive"}`}>
+          {notice.text}
+        </p>
+      )}
+
+      {job ? (
+        <section className="space-y-3 rounded-xl border bg-card p-5" aria-live="polite">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="font-medium">
+                {job.status === "failed"
+                  ? "The search stopped"
+                  : job.status === "completed"
+                    ? `Search finished: ${job.resultCount ?? 0} creators found`
+                    : "Finding creators..."}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {job.status === "failed"
+                  ? job.error ?? "Something went wrong. Try a smaller search."
+                  : job.status === "completed"
+                    ? "Pick the ones you want to keep."
+                    : `${job.resultCount ?? 0} found so far. You can keep working while this runs.`}
+              </p>
             </div>
-            <div className="h-2 overflow-hidden rounded-full bg-white/70">
+            <div className="flex gap-2">
+              {state.searchResults.length > 0 ? (
+                <Button size="sm" onClick={() => state.setShowSearchModal(true)}>
+                  See results
+                </Button>
+              ) : null}
+              <Button size="sm" variant="ghost" onClick={state.resetSearchState}>
+                Dismiss
+              </Button>
+            </div>
+          </div>
+          {job.status !== "failed" && job.status !== "completed" && (
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full bg-blue-700 transition-all"
-                style={{ width: `${state.activeSearchJob.progressPercent ?? 0}%` }}
+                className="h-full rounded-full bg-foreground/70 transition-[width] duration-500 motion-reduce:transition-none"
+                style={{ width: `${Math.max(job.progressPercent ?? 0, 5)}%` }}
               />
             </div>
-            <div className="grid gap-2 text-xs text-blue-900 sm:grid-cols-3 lg:grid-cols-6">
-              <span>Status: {state.activeSearchJob.status}</span>
-              <span>Requested: {state.activeSearchJob.requestedCount ?? "\u2014"}</span>
-              <span>Ready: {state.activeSearchJob.resultCount ?? 0}</span>
-              <span>Validated: {state.activeSearchJob.validatedCount ?? 0}</span>
-              <span>Invalid: {state.activeSearchJob.invalidCount ?? 0}</span>
-              <span>
-                ETA:{" "}
-                {typeof state.activeSearchJob.etaSeconds === "number"
-                  ? `${state.activeSearchJob.etaSeconds}s`
-                  : "\u2014"}
-              </span>
-            </div>
-            {state.activeSearchJob.error ? (
-              <p className="text-xs text-red-700">{state.activeSearchJob.error}</p>
-            ) : null}
-          </CardContent>
-        </Card>
+          )}
+        </section>
       ) : null}
 
       <CreatorFilters
@@ -176,8 +183,6 @@ export default function CreatorsPage() {
 
       {state.showSearchModal && (
         <SearchModal
-          discoveryApprovalMode={state.discoveryApprovalMode}
-          discoveryApprovalThreshold={state.discoveryApprovalThreshold}
           searchResults={state.searchResults}
           searching={state.searching}
           searchStatus={state.searchStatus}
@@ -215,5 +220,13 @@ export default function CreatorsPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function CreatorsPage() {
+  return (
+    <Suspense fallback={<p className="text-muted-foreground">Loading...</p>}>
+      <CreatorsContent />
+    </Suspense>
   );
 }

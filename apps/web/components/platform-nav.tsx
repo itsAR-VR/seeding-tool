@@ -31,7 +31,7 @@ const PRIMARY: NavItem[] = [
 
 const SECONDARY: NavItem[] = [
   { href: "/creators", label: "Creators", icon: Users },
-  { href: "/discover", label: "Find creators", icon: Compass },
+  { href: "/creators?find=1", label: "Find creators", icon: Compass },
   { href: "/interventions", label: "Needs attention", icon: LifeBuoy },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
