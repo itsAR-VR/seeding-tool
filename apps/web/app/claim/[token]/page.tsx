@@ -19,12 +19,14 @@ export default async function GiftClaimPage({ params }: PageProps) {
       },
       campaignCreator: {
         include: {
-          campaign: true,
+          campaign: { include: { brand: { select: { name: true, logoUrl: true } } } },
         },
       },
     },
   });
 
+  const brand = claim?.campaignCreator.campaign.brand;
+  const brandName = brand?.name ?? "the team";
   const now = new Date();
   const unavailableReason = !claim
     ? "missing"
@@ -38,19 +40,23 @@ export default async function GiftClaimPage({ params }: PageProps) {
   const isUnavailable = unavailableReason !== null;
   const unavailableMessage =
     unavailableReason === "revoked"
-      ? "This link was cancelled by the Kalm team. Ask them for a new one if you were expecting a gift."
+      ? `This link was cancelled by ${brandName}. Ask them for a new one if you were expecting a gift.`
       : unavailableReason === "submitted"
-        ? "Your details were already submitted, so there is nothing left to do here. The Kalm team will be in touch."
+        ? `Your details were already submitted, so there is nothing left to do here. ${brandName} will be in touch.`
         : unavailableReason === "expired"
-          ? "This link has expired. Ask the Kalm team for a fresh one."
-          : "It may have expired or already been used. Please ask the Kalm team for a fresh link.";
+          ? `This link has expired. Ask ${brandName} for a fresh one.`
+          : "It may have expired or already been used. Please ask the brand that sent it for a fresh link.";
 
   return (
     <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
       <div className="mx-auto max-w-xl">
         <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kalm-logo.png" alt="Kalm" className="h-8 w-auto" />
+          {brand?.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} className="h-8 w-auto" />
+          ) : (
+            <p className="text-xl font-semibold">{brand?.name ?? ""}</p>
+          )}
           <h1 className="mt-6 text-3xl font-semibold tracking-tight">
             Claim your gift
           </h1>
@@ -65,13 +71,13 @@ export default async function GiftClaimPage({ params }: PageProps) {
               <p className="mt-3 text-sm leading-6 text-neutral-700">
                 You’re receiving{" "}
                 <span className="font-medium">
-                  {claim.campaignProduct?.product.name ?? "a Kalm product"}
+                  {claim.campaignProduct?.product.name ?? `a gift from ${brandName}`}
                 </span>
                 . Add your U.S. shipping details below and we&apos;ll get it ready
                 to ship.
               </p>
               <div className="mt-6">
-                <ClaimForm token={token} />
+                <ClaimForm token={token} brandName={brandName} />
               </div>
             </>
           )}

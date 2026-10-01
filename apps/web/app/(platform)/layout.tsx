@@ -4,6 +4,20 @@ import { createClient } from "@/lib/supabase/server";
 import { CreatorSearchJobsTray } from "@/components/creator-search-jobs-tray";
 import { MobileNav, SidebarNav } from "@/components/platform-nav";
 import { KeyboardHelp } from "@/components/keyboard-help";
+import { prisma } from "@/lib/prisma";
+import { getCurrentBrandMembership } from "@/lib/integrations/brand-access";
+
+/** The signed-in company's logo, or its name when it has no logo yet. */
+async function BrandMark({ className }: { className: string }) {
+  const brand = await getCurrentBrandMembership()
+    .then((m) => prisma.brand.findUnique({ where: { id: m.brandId }, select: { name: true, logoUrl: true } }))
+    .catch(() => null);
+  if (brand?.logoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={brand.logoUrl} alt={brand.name} className={className} />;
+  }
+  return <p className="text-lg font-semibold tracking-tight">{brand?.name ?? "Seed Scale"}</p>;
+}
 
 
 export default async function PlatformLayout({
@@ -25,8 +39,7 @@ export default async function PlatformLayout({
       {/* Sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/40 p-6 md:flex">
         <div className="mb-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kalm-logo.png" alt="Kalm" className="h-7 w-auto" />
+          <BrandMark className="h-7 w-auto" />
         </div>
 
         <SidebarNav />
@@ -50,8 +63,9 @@ export default async function PlatformLayout({
       {/* Main content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="mb-4 md:hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kalm-logo.png" alt="Kalm" className="mb-3 h-6 w-auto" />
+          <div className="mb-3">
+            <BrandMark className="h-6 w-auto" />
+          </div>
           <MobileNav />
         </div>
         <div className="mx-auto max-w-6xl">{children}</div>

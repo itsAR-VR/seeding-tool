@@ -4,6 +4,7 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { rightsEndDate } from "@/lib/content/rights";
+import { getBrandKit } from "@/lib/brand/kit";
 import { SyncContent } from "./sync-content";
 import { RightsAction } from "./rights-action";
 import { AdAction, PartnershipCodeAction } from "./ad-action";
@@ -50,6 +51,13 @@ export default async function ContentPage({
   // ?new=1 narrows to the last 7 days, matching the "new posts this week" count on Home.
   const since = onlyNew ? daysAgo(7) : null;
   const tab: TabKey = TABS.some((t) => t.key === rawTab) ? (rawTab as TabKey) : "all";
+
+  const kit = await getBrandKit(brandId);
+  const adDefaults = {
+    message: kit?.adDefaultText ?? "",
+    headline: kit?.adDefaultHeadline ?? "",
+    link: kit?.adDefaultLink ?? "",
+  };
 
   const [posts, counts] = await Promise.all([
     prisma.contentPost.findMany({
@@ -190,7 +198,7 @@ export default async function ContentPage({
                     </Link>
                   ) : (
                     <>
-                      {post.rightsStatus === "approved" && <AdAction postId={post.id} />}
+                      {post.rightsStatus === "approved" && <AdAction postId={post.id} defaults={adDefaults} />}
                       <PartnershipCodeAction postId={post.id} />
                     </>
                   )}

@@ -4,6 +4,7 @@ import {
   getCurrentBrandMembership,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
+import { DEFAULT_FOLLOW_UP_TEMPLATE, getBrandKit } from "@/lib/brand/kit";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -41,7 +42,11 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       );
     }
 
-    return NextResponse.json(thread);
+    const kit = await getBrandKit(membership.brandId);
+    return NextResponse.json({
+      ...thread,
+      followUpTemplate: kit?.followUpTemplate ?? DEFAULT_FOLLOW_UP_TEMPLATE,
+    });
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

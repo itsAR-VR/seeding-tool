@@ -85,10 +85,6 @@ type BrandData = {
 };
 
 const ADDRESS_LINK = "{address link}";
-const DEFAULT_FOLLOW_UP = `Yay! Can't wait for you to try it. Here's a link to add your shipping info, and I'll get it out to you shortly:
-${ADDRESS_LINK}
-
-I'll let you know when it ships.`;
 
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
@@ -99,7 +95,9 @@ export default function ThreadDetailPage() {
   const [dmText, setDmText] = useState("");
   const [dmSending, setDmSending] = useState(false);
   const [dmError, setDmError] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState(DEFAULT_FOLLOW_UP);
+  const [replyText, setReplyText] = useState("");
+  // The brand's "they said yes" message, from its brand kit.
+  const [followUp, setFollowUp] = useState("");
   const [suggestionId, setSuggestionId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
   const [deciding, setDeciding] = useState(false);
@@ -114,14 +112,17 @@ export default function ThreadDetailPage() {
         ]);
 
         if (threadRes.ok) {
-          const loaded = (await threadRes.json()) as Thread;
+          const loaded = (await threadRes.json()) as Thread & { followUpTemplate: string };
           setThread(loaded);
+          setFollowUp(loaded.followUpTemplate);
           const suggestion = loaded.campaignCreator.aiDrafts.find(
             (d) => d.type === "reply" && d.status === "draft"
           );
           if (suggestion) {
             setReplyText(suggestion.body);
             setSuggestionId(suggestion.id);
+          } else {
+            setReplyText(loaded.followUpTemplate);
           }
         }
         if (brandRes.ok) {
@@ -475,7 +476,7 @@ export default function ThreadDetailPage() {
               </p>
               <div className="flex gap-2">
                 {!replyText.includes(ADDRESS_LINK) && (
-                  <Button size="sm" variant="outline" onClick={() => setReplyText(DEFAULT_FOLLOW_UP)}>
+                  <Button size="sm" variant="outline" onClick={() => setReplyText(followUp)}>
                     Use address-link message
                   </Button>
                 )}

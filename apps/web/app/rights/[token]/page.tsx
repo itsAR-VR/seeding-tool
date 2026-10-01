@@ -13,10 +13,10 @@ export default async function RightsPage({
   const { token } = await params;
   const post = await prisma.contentPost.findUnique({
     where: { rightsToken: token },
-    include: { brand: { select: { name: true } } },
+    include: { brand: { select: { name: true, logoUrl: true } } },
   });
 
-  const brandName = post?.brand.name ?? "Kalm";
+  const brandName = post?.brand.name ?? "the brand";
   const image = post?.mediaType === "VIDEO" ? post.thumbnailUrl : post?.mediaUrl;
 
   return (
@@ -24,7 +24,11 @@ export default async function RightsPage({
       <div className="mx-auto max-w-xl">
         <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kalm-logo.png" alt={brandName} className="h-8 w-auto" />
+          {post?.brand.logoUrl ? (
+            <img src={post.brand.logoUrl} alt={brandName} className="h-8 w-auto" />
+          ) : (
+            <p className="text-xl font-semibold">{post?.brand.name ?? ""}</p>
+          )}
           <h1 className="mt-6 text-3xl font-semibold tracking-tight">Share your post with us</h1>
 
           {!post ? (

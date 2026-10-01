@@ -89,6 +89,25 @@ model Brand {
   slug       String  @unique
   websiteUrl String? @map("website_url")
 
+  // ── Brand kit: everything creator-facing that differs per brand ──
+  /// Logo shown on creator pages (claim, rights) and in the app.
+  logoUrl           String?  @map("logo_url")
+  /// First name the founder signs emails with, e.g. "Kam".
+  senderFirstName   String?  @map("sender_first_name")
+  /// One line describing the brand and gift, e.g. "a women's wellness brand; the gift is Kalm mouth tape".
+  brandDescription  String?  @map("brand_description") @db.Text
+  /// Facts the AI may use when answering creator questions (one per line).
+  productFacts      String?  @map("product_facts") @db.Text
+  /// Example question/answer pairs that teach the AI the brand's voice.
+  replyExamples     String?  @map("reply_examples") @db.Text
+  /// Reply prefilled after a creator says yes. Use {address link}.
+  followUpTemplate  String?  @map("follow_up_template") @db.Text
+  adDefaultText     String?  @map("ad_default_text") @db.Text
+  adDefaultHeadline String?  @map("ad_default_headline")
+  adDefaultLink     String?  @map("ad_default_link")
+  /// Countries gifts can ship to (ISO codes).
+  shipCountries     String[] @default(["US"]) @map("ship_countries")
+
   clientId String
 
   client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)

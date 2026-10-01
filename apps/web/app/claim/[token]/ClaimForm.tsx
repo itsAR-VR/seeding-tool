@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button";
 
 type ClaimFormProps = {
   token: string;
+  brandName: string;
 };
 
-export function ClaimForm({ token }: ClaimFormProps) {
+export function ClaimForm({ token, brandName }: ClaimFormProps) {
   const [status, setStatus] = useState<"idle" | "submitting" | "submitted">(
     "idle"
   );
@@ -151,7 +152,7 @@ export function ClaimForm({ token }: ClaimFormProps) {
       <div className="rounded-2xl bg-neutral-50 p-4 text-sm leading-6 text-neutral-700">
         <p>
           We only use these details to ship your gift. Submitting this form
-          doesn&apos;t give Kalm rights to any of your content.
+          doesn&apos;t give {brandName} rights to any of your content.
         </p>
       </div>
 

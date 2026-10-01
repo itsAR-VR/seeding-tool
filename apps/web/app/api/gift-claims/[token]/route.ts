@@ -97,7 +97,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     {
       brandName: claim.campaignCreator.campaign.brand.name,
       campaignName: claim.campaignCreator.campaign.name,
-      giftName: claim.campaignProduct?.product.name ?? "Kalm gift",
+      giftName: claim.campaignProduct?.product.name ?? "your gift",
       expiresAt: claim.expiresAt.toISOString(),
     },
     { headers: NO_STORE_HEADERS }

@@ -4,12 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-const DEFAULT_COPY = {
-  message:
-    "Kalm mouth tape helps you breathe through your nose while you sleep, so you wake up more rested.",
-  headline: "Support better sleep, naturally",
-  link: "https://sleepkalm.com/products/mouth-tape",
-};
+type AdCopy = { message: string; headline: string; link: string };
 
 /** Makes a paused partnership ad from a creator's ad code. Works on any post. */
 export function PartnershipCodeAction({ postId }: { postId: string }) {
@@ -70,10 +65,10 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
 }
 
 /** Makes a paused Meta ad from an approved post. */
-export function AdAction({ postId }: { postId: string }) {
+export function AdAction({ postId, defaults }: { postId: string; defaults: AdCopy }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [copy, setCopy] = useState(DEFAULT_COPY);
+  const [copy, setCopy] = useState<AdCopy>(defaults);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

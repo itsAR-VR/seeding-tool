@@ -42,10 +42,10 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/kalm-logo.png" alt="Kalm" className="mx-auto h-8 w-auto" />
+          <p className="text-center text-2xl font-semibold tracking-tight">Seed Scale</p>
           <CardTitle className="text-2xl font-bold">Creator seeding</CardTitle>
           <CardDescription>
-            Sign in with your Kalm account
+            Sign in to your workspace
           </CardDescription>
         </CardHeader>
         <CardContent>
