@@ -112,10 +112,13 @@ const rawGmailMessage = {
   internalDate: String(Date.now()),
 };
 
-async function callGmailWebhook(payload: Record<string, unknown>) {
+const PUSH_TOKEN = "test-push-token";
+
+async function callGmailWebhook(payload: Record<string, unknown>, token: string | null = PUSH_TOKEN) {
   const { POST } = await import("@/app/api/gmail/webhook/route");
 
-  const req = new NextRequest("http://localhost:3000/api/gmail/webhook", {
+  const query = token === null ? "" : `?token=${token}`;
+  const req = new NextRequest(`http://localhost:3000/api/gmail/webhook${query}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -129,6 +132,7 @@ async function callGmailWebhook(payload: Record<string, unknown>) {
 describe("Gmail webhook handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.GMAIL_PUSH_TOKEN = PUSH_TOKEN;
 
     // Default: brand resolves
     mockResolveBrandByEmail.mockResolvedValue({ id: "brand-1" });
@@ -327,6 +331,24 @@ describe("Gmail webhook handler", () => {
       expect(res.status).toBe(200);
       const json = await res.json();
       expect(json.processed).toBe(0);
+    });
+  });
+  describe("authentication", () => {
+    it("returns 404 without the push token", async () => {
+      const res = await callGmailWebhook(makeGmailPubSubPayload(), null);
+      expect(res.status).toBe(404);
+      expect(mockFetchNewMessages).not.toHaveBeenCalled();
+    });
+
+    it("returns 404 with a wrong token", async () => {
+      const res = await callGmailWebhook(makeGmailPubSubPayload(), "wrong-token-value");
+      expect(res.status).toBe(404);
+    });
+
+    it("is off when GMAIL_PUSH_TOKEN is unset", async () => {
+      delete process.env.GMAIL_PUSH_TOKEN;
+      const res = await callGmailWebhook(makeGmailPubSubPayload());
+      expect(res.status).toBe(404);
     });
   });
 });

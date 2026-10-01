@@ -60,6 +60,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Only this brand's products can be attached.
+    if (body.productIds?.length) {
+      const owned = await prisma.brandProduct.count({
+        where: { id: { in: body.productIds }, brandId: membership.brandId },
+      });
+      if (owned !== new Set(body.productIds).size) {
+        return NextResponse.json({ error: "One or more products weren't found" }, { status: 400 });
+      }
+    }
+
     const campaign = await prisma.campaign.create({
       data: {
         name: body.name.trim(),

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { normalizeInboundMessage, persistMessage } from "@/lib/inbox/messages";
@@ -20,6 +21,14 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
  * // INVARIANT: Message dedupe on externalId prevents replay duplicates.
  */
 export async function POST(request: NextRequest) {
+  // Google Pub/Sub push must be configured with ?token=<GMAIL_PUSH_TOKEN>.
+  // Without the env var the endpoint is off (replies sync on a schedule instead).
+  const expected = process.env.GMAIL_PUSH_TOKEN;
+  const given = request.nextUrl.searchParams.get("token") ?? "";
+  if (!expected || given.length !== expected.length || !timingSafeEqual(Buffer.from(given), Buffer.from(expected))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   try {
     const body = (await request.json()) as {
       message?: {
