@@ -72,10 +72,20 @@ export async function GET(request: Request) {
           const metadata =
             state.connection?.metadata &&
             typeof state.connection.metadata === "object"
-              ? (state.connection.metadata as { igUsername?: string | null })
+              ? (state.connection.metadata as {
+                  igUsername?: string | null;
+                  igUserId?: string | null;
+                  igOptions?: Array<{ igId: string; username: string | null }>;
+                  adAccountId?: string | null;
+                  adAccountOptions?: Array<{ id: string; name: string | null }>;
+                })
               : null;
           details.instagramUsername =
             metadata?.igUsername ?? state.connection?.externalId ?? null;
+          details.igUserId = metadata?.igUserId ?? null;
+          details.igOptions = metadata?.igOptions ?? [];
+          details.adAccountId = metadata?.adAccountId ?? null;
+          details.adAccountOptions = metadata?.adAccountOptions ?? [];
           if (details.instagramUsername && state.connected) {
             summary = `Connected as @${details.instagramUsername}`;
           }

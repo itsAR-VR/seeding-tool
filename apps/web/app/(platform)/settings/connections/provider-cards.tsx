@@ -1,6 +1,6 @@
 "use client";
 
-import type { FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -286,6 +286,7 @@ export function InstagramConnectionCard({
             <p className="text-sm text-muted-foreground">
               Posts, reels, and stories that tag this account show up on the Content page.
             </p>
+            <AccountPicker provider={provider} />
             <Button variant="destructive" onClick={onDisconnect} disabled={loading}>
               {loading ? "Disconnecting..." : "Disconnect"}
             </Button>
@@ -386,5 +387,73 @@ export function UnipileConnectionCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** Lets a brand choose its Instagram account and ad account when it has several. */
+function AccountPicker({ provider }: { provider: ConnectionOverviewItem }) {
+  const igOptions = provider.details?.igOptions ?? [];
+  const adOptions = provider.details?.adAccountOptions ?? [];
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (igOptions.length <= 1 && adOptions.length <= 1) return null;
+
+  async function save(body: { igUserId?: string; adAccountId?: string }) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/connections/instagram/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) throw new Error(data?.error ?? "Couldn't save your choice.");
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save your choice.");
+      setSaving(false);
+    }
+  }
+
+  const select = "mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm";
+  return (
+    <div className="space-y-3 rounded-lg border p-3">
+      {igOptions.length > 1 && (
+        <label className="block text-sm font-medium">
+          Instagram account
+          <select
+            className={select}
+            disabled={saving}
+            value={provider.details?.igUserId ?? ""}
+            onChange={(e) => void save({ igUserId: e.target.value })}
+          >
+            {igOptions.map((o) => (
+              <option key={o.igId} value={o.igId}>
+                @{o.username ?? o.igId}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {adOptions.length > 1 && (
+        <label className="block text-sm font-medium">
+          Ad account for new ads
+          <select
+            className={select}
+            disabled={saving}
+            value={provider.details?.adAccountId ?? ""}
+            onChange={(e) => void save({ adAccountId: e.target.value })}
+          >
+            {adOptions.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name ?? o.id}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+    </div>
   );
 }

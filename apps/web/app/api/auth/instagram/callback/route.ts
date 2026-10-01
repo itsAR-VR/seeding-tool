@@ -152,7 +152,14 @@ export async function GET(request: NextRequest) {
         return null;
       }
     })();
+    // Keep an earlier manual pick if that account is still available.
+    const prior = await prisma.brandConnection.findFirst({
+      where: { brandId, provider: "instagram" },
+      select: { metadata: true },
+    });
+    const priorMeta = (prior?.metadata ?? {}) as { igUserId?: string; adAccountId?: string };
     const chosen =
+      candidates.find((c) => priorMeta.igUserId && c.igId === priorMeta.igUserId) ??
       candidates.find((c) => siteStem && c.username?.toLowerCase() === siteStem) ??
       candidates.find((c) => siteStem && c.username?.toLowerCase().includes(siteStem)) ??
       candidates[0];
@@ -177,6 +184,7 @@ export async function GET(request: NextRequest) {
     const activeAccounts = adAccounts.filter((a) => a.account_status === 1);
     const brandWord = (brandRow?.name ?? siteStem ?? "").toLowerCase().split(/\s+/)[0];
     const adAccount =
+      activeAccounts.find((a) => priorMeta.adAccountId && a.id === priorMeta.adAccountId) ??
       activeAccounts.find((a) => brandWord && a.name?.toLowerCase().includes(brandWord)) ??
       activeAccounts[0] ??
       null;
@@ -189,6 +197,8 @@ export async function GET(request: NextRequest) {
       userAccessToken: longLivedToken.access_token,
       igUserId: igAccountId,
       igUsername,
+      // Every Page with an Instagram account, so the brand can switch later.
+      pages: candidates,
       expiresIn: longLivedToken.expires_in,
       connectedAt: new Date().toISOString(),
     });
@@ -231,6 +241,12 @@ export async function GET(request: NextRequest) {
           pageId: chosen?.pageId ?? null,
           adAccountId: adAccount?.id ?? null,
           adAccountName: adAccount?.name ?? null,
+          igOptions: candidates.map((c) => ({ igId: c.igId, username: c.username })),
+          adAccountOptions: activeAccounts.map((a) => ({ id: a.id, name: a.name ?? null })),
+          // A different ad account means the tool's campaign must be found again.
+          ...(previousMetadata.adAccountId !== (adAccount?.id ?? null)
+            ? { adsCampaignId: null, adsAdSetId: null }
+            : {}),
         },
       });
     });
