@@ -159,7 +159,7 @@ export async function runCreatorSearchJob(
     if (!(error instanceof ApifyKeyMissingError)) throw error;
     await prisma.creatorSearchJob.updateMany({
       where: { id: input.jobId, brandId: input.brandId, status: "pending" },
-      data: { status: "failed" },
+      data: { status: "failed", error: error.message, finishedAt: new Date() },
     });
     return { status: "skipped", reason: "apify_key_missing" as const };
   }

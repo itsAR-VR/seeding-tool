@@ -21,6 +21,8 @@ type RouteContext = { params: Promise<{ jobId: string }> };
 /**
  * GET /api/creators/search/[jobId] — Poll search job status and results.
  */
+const STALE_SEARCH_MS = 15 * 60 * 1000;
+
 export async function GET(_request: NextRequest, context: RouteContext) {
   try {
     const { jobId } = await context.params;
@@ -40,6 +42,22 @@ export async function GET(_request: NextRequest, context: RouteContext) {
 
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    // A search runs inside its request for at most ~13 minutes. One still
+    // unfinished after 15 was cut off, so stop showing it as in progress.
+    if (
+      (job.status === "running" || job.status === "pending") &&
+      job.createdAt.getTime() < Date.now() - STALE_SEARCH_MS
+    ) {
+      const stale = await prisma.creatorSearchJob.updateMany({
+        where: { id: job.id, status: { in: ["running", "pending"] } },
+        data: { status: "failed", error: "The search took too long and stopped. Try a narrower search.", finishedAt: new Date() },
+      });
+      if (stale.count > 0) {
+        job.status = "failed";
+        job.error = "The search took too long and stopped. Try a narrower search.";
+      }
     }
 
     if (

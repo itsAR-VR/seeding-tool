@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { publicBrand } from "@/lib/brand/public";
 import {
   assertBrandAccess,
   requireOwnerAccess,
@@ -55,7 +56,7 @@ export async function GET(
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    return NextResponse.json(brand);
+    return NextResponse.json(publicBrand(brand));
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -232,7 +233,7 @@ export async function PATCH(
       include: { settings: true },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(updated && publicBrand(updated));
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
