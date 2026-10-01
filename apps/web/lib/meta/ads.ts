@@ -257,6 +257,19 @@ export async function createPausedBrandAd(
   return { adId: ad.id, adsManagerUrl: adsManagerUrl(ctx, ad.id) };
 }
 
+/** The Instagram media a creator's partnership ad code points to. */
+async function mediaIdForAdCode(ctx: AdsContext, code: string): Promise<string> {
+  const params = new URLSearchParams({ ad_code: code, fields: "id,permalink,eligibility_errors" });
+  const result = await graph<{ data?: Array<{ id: string; eligibility_errors?: string[] }> }>(
+    `${ctx.igUserId}/branded_content_advertisable_medias?${params}`,
+    ctx.token
+  );
+  const media = result.data?.[0];
+  if (!media) throw new MetaAdsError("Meta couldn't find the post for this code. Ask the creator for a new code.");
+  if (media.eligibility_errors?.length) throw new MetaAdsError(media.eligibility_errors[0]);
+  return media.id;
+}
+
 /**
  * Makes a PAUSED partnership ad from a creator's partnership ad code. Meta
  * pulls the post itself, so no file is needed (works for reels with music).
@@ -279,9 +292,10 @@ export async function createPausedPartnershipAd(
   const { adSetId } = await ensureCampaignAndAdSet(ctx);
   const credit = post.username ? ` (@${post.username})` : "";
 
-  const creative = await graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, {
+  const creativeBody = (sourceMediaId?: string) => ({
     name: `Partnership${credit}`,
     object_id: ctx.pageId,
+    source_instagram_media_id: sourceMediaId,
     branded_content: {
       instagram_boost_post_access_token: code,
       ad_format: 3, // let Meta pick one or both handles, whichever performs better
@@ -289,6 +303,23 @@ export async function createPausedPartnershipAd(
     facebook_branded_content: { sponsor_page_id: ctx.pageId },
     instagram_branded_content: ctx.igUserId ? { sponsor_id: ctx.igUserId } : undefined,
   });
+
+  let creative: { id: string };
+  try {
+    creative = await graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody());
+  } catch (error) {
+    if (!(error instanceof MetaAdsError) || !/upload it to Facebook/i.test(error.message)) throw error;
+    // Video posts must be copied into the ad account's video library first.
+    // Meta lets us do that with the creator's code instead of the source file.
+    const mediaId = await mediaIdForAdCode(ctx, code);
+    const video = await graph<{ id: string }>(`${ctx.adAccountId}/advideos`, ctx.token, {
+      source_instagram_media_id: mediaId,
+      partnership_ad_ad_code: code,
+      is_partnership_ad: "true",
+    });
+    await waitForVideo(ctx, video.id);
+    creative = await graph<{ id: string }>(`${ctx.adAccountId}/adcreatives`, ctx.token, creativeBody(mediaId));
+  }
   const ad = await graph<{ id: string }>(`${ctx.adAccountId}/ads`, ctx.token, {
     name: `Partnership${credit}`,
     adset_id: adSetId,
