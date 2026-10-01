@@ -91,6 +91,7 @@ export default async function DashboardPage() {
     newPosts,
     rightsWaiting,
     openProblems,
+    addressesToConfirm,
     campaigns,
     healthSnapshots,
   ] = await Promise.all([
@@ -104,8 +105,14 @@ export default async function DashboardPage() {
     prisma.contentPost.count({
       where: { brandId, hidden: false, rightsStatus: "none", createdAt: { gte: weekAgo } },
     }),
-    prisma.contentPost.count({ where: { brandId, rightsStatus: "requested" } }),
+    prisma.contentPost.count({ where: { brandId, hidden: false, rightsStatus: "requested" } }),
     prisma.interventionCase.count({ where: { brandId, status: { in: ["open", "in_progress"] } } }),
+    prisma.campaignCreator.count({
+      where: {
+        campaign: { brandId },
+        shippingSnapshots: { some: { isActive: false, confirmedAt: null } },
+      },
+    }),
     prisma.campaign.findMany({
       where: { brandId, status: { not: "archived" } },
       orderBy: { updatedAt: "desc" },
@@ -126,6 +133,12 @@ export default async function DashboardPage() {
       href: "/inbox",
     },
     {
+      count: addressesToConfirm,
+      text: plural(addressesToConfirm, "shipping address needs a quick check", "shipping addresses need a quick check"),
+      action: "Open inbox",
+      href: "/inbox?tab=yes",
+    },
+    {
       count: draftOrders,
       text: plural(draftOrders, "gift order is ready to complete in Shopify", "gift orders are ready to complete in Shopify"),
       action: "See orders",
@@ -135,7 +148,7 @@ export default async function DashboardPage() {
       count: newPosts,
       text: plural(newPosts, "new post tagged you this week", "new posts tagged you this week"),
       action: "See posts",
-      href: "/content?tab=none",
+      href: "/content?tab=none&new=1",
     },
     {
       count: rightsWaiting,

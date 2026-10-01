@@ -29,10 +29,14 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
+function daysAgo(days: number): Date {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+}
+
 export default async function ContentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; new?: string }>;
 }) {
   let brandId: string;
   try {
@@ -42,12 +46,19 @@ export default async function ContentPage({
     throw error;
   }
 
-  const { tab: rawTab } = await searchParams;
+  const { tab: rawTab, new: onlyNew } = await searchParams;
+  // ?new=1 narrows to the last 7 days, matching the "new posts this week" count on Home.
+  const since = onlyNew ? daysAgo(7) : null;
   const tab: TabKey = TABS.some((t) => t.key === rawTab) ? (rawTab as TabKey) : "all";
 
   const [posts, counts] = await Promise.all([
     prisma.contentPost.findMany({
-      where: { brandId, hidden: false, ...(tab === "all" ? {} : { rightsStatus: tab }) },
+      where: {
+        brandId,
+        hidden: false,
+        ...(tab === "all" ? {} : { rightsStatus: tab }),
+        ...(since ? { createdAt: { gte: since } } : {}),
+      },
       include: { creator: { select: { id: true, name: true } } },
       orderBy: { postedAt: "desc" },
       take: 200,

@@ -164,6 +164,7 @@ export default async function InboxPage({
             const profile = creator.profiles[0];
             const lastMessage = thread.messages[0];
             const hasDraft = thread.campaignCreator.aiDrafts.length > 0;
+            const addressToConfirm = thread.campaignCreator.shippingSnapshots.length > 0;
             const decision = thread.campaignCreator.replyDecision;
             const needsCall = !decision && lastMessage?.direction === "inbound";
             const name = creator.name ?? profile?.handle ?? "Unknown creator";
@@ -184,6 +185,9 @@ export default async function InboxPage({
                       {decision === "later" && <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>}
                       {needsCall && <Badge className="bg-amber-100 text-amber-900">Needs your call</Badge>}
                       {hasDraft && <Badge variant="outline">Reply drafted</Badge>}
+                      {addressToConfirm && (
+                        <Badge className="bg-teal-100 text-teal-900">Address to check</Badge>
+                      )}
                     </div>
                     {lastMessage && (
                       <p className="mt-1 truncate text-muted-foreground">

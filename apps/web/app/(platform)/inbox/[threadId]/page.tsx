@@ -259,6 +259,7 @@ export default function ThreadDetailPage() {
                 {creator.name ?? profile?.handle ?? "Unknown Creator"}
               </Link>
             </h1>
+            {thread.status === "closed" && <Badge variant="outline">Closed</Badge>}
             {thread.channel === "instagram_dm" && <Badge variant="outline">Instagram DM</Badge>}
           </div>
           <p className="mt-1 text-muted-foreground">
