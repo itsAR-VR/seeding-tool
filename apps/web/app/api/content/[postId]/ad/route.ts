@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentBrandMembership,
+  requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
 import { createPausedBrandAd, createPausedPartnershipAd, MetaAdsError } from "@/lib/meta/ads";
@@ -19,7 +20,8 @@ export async function POST(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const { brandId } = await getCurrentBrandMembership();
+    const membership = requireWriteAccess(await getCurrentBrandMembership());
+    const { brandId } = membership;
     const { postId } = await params;
     const body = (await request.json().catch(() => ({}))) as {
       message?: unknown;
@@ -30,7 +32,7 @@ export async function POST(
 
     if (typeof body.adCode === "string") {
       const post = await prisma.contentPost.findFirst({ where: { id: postId, brandId }, select: { id: true } });
-      if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      if (!post) return NextResponse.json({ error: "That post wasn't found. Refresh the page." }, { status: 404 });
       return NextResponse.json(await createPausedPartnershipAd(post.id, body.adCode));
     }
 
@@ -42,7 +44,7 @@ export async function POST(
     }
 
     const post = await prisma.contentPost.findFirst({ where: { id: postId, brandId }, select: { id: true } });
-    if (!post) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+    if (!post) return NextResponse.json({ error: "That post wasn't found. Refresh the page." }, { status: 404 });
 
     const result = await createPausedBrandAd(post.id, { message, headline, link });
     return NextResponse.json(result);
@@ -54,6 +56,6 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[content/ad]", error);
-    return NextResponse.json({ error: "Could not create the ad" }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't make the ad. Try again in a minute." }, { status: 500 });
   }
 }

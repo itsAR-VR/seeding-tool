@@ -73,16 +73,34 @@ export async function createInvite(params: {
   return { id: invite.id, link: inviteLink(token) };
 }
 
-/** A usable invite for this token, or an error explaining why not. */
-export async function findUsableInvite(token: string) {
+async function findInviteByToken(token: string) {
   const invite = await prisma.brandInvite.findUnique({
     where: { tokenHash: hashInviteToken(token) },
     include: { brand: { select: { id: true, name: true, logoUrl: true } } },
   });
   if (!invite || invite.revokedAt) throw new InviteError("This invite link isn't valid. Ask for a new one.", 404);
+  return invite;
+}
+
+/** A usable invite for this token, or an error explaining why not. */
+export async function findUsableInvite(token: string) {
+  const invite = await findInviteByToken(token);
   if (invite.acceptedAt) throw new InviteError("This invite was already used. Sign in instead.", 410);
   if (invite.expiresAt < new Date()) throw new InviteError("This invite expired. Ask for a new one.", 410);
   return invite;
+}
+
+/**
+ * The invite behind this link and whether it can still be accepted ("open")
+ * or was already accepted ("joined"). A joined invite still works as a way
+ * to email its owner a sign-in link: people who joined without setting a
+ * password have no other way back in.
+ */
+export async function findInviteForLink(token: string) {
+  const invite = await findInviteByToken(token);
+  if (invite.acceptedAt) return { invite, state: "joined" as const };
+  if (invite.expiresAt < new Date()) throw new InviteError("This invite expired. Ask for a new one.", 410);
+  return { invite, state: "open" as const };
 }
 
 /**

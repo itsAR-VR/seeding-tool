@@ -11,6 +11,7 @@ import {
   DailyLimitExceededError,
   AliasPausedError,
   CrossBrandAliasError,
+  GmailNotConnectedError,
 } from "@/lib/outreach/errors";
 import { getEffectiveDailyLimit } from "@/lib/outreach/warmup";
 import {
@@ -212,7 +213,7 @@ export async function sendEmail(params: SendEmailParams) {
   });
 
   if (!alias) {
-    throw new Error("Email alias not found");
+    throw new GmailNotConnectedError();
   }
 
   // INVARIANT: Suppressed recipients never receive email — checked before every send.
@@ -310,7 +311,7 @@ export async function sendEmail(params: SendEmailParams) {
     ? decrypt(alias.encryptedRefreshToken)
     : (await resolveProviderCredential(alias.brandId, "gmail")).decryptedValue;
   if (!refreshToken) {
-    throw new Error("No valid Gmail credential for this brand");
+    throw new GmailNotConnectedError();
   }
 
   const accessToken = await getGmailAccessToken(refreshToken);

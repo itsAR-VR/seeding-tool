@@ -60,29 +60,88 @@ export interface BrandProfileSnapshot {
   imageCandidates?: string[];
 }
 
+/** Websites bigger than this are cut off; the useful signals are near the top. */
+const MAX_HTML_BYTES = 1_500_000;
+const FETCH_TIMEOUT_MS = 8_000;
+
 export function normalizeBrandWebsiteUrl(rawUrl?: string | null): string | null {
-  if (!rawUrl?.trim()) {
+  const trimmed = rawUrl?.trim();
+  if (!trimmed) {
     return null;
   }
 
+  // People type "yourbrand.com" far more often than "https://yourbrand.com".
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
   let url: URL;
   try {
-    url = new URL(rawUrl.trim());
+    url = new URL(withScheme);
   } catch {
-    throw new Error("Website URL must be a valid http(s) URL");
+    throw new Error("Enter a website like yourbrand.com, or leave it empty.");
   }
 
   if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("Website URL must start with http:// or https://");
+    throw new Error("Use a website address that starts with http:// or https://.");
+  }
+
+  // A real public site has a dot in its name ("asdf" or "my brand" isn't one).
+  if (!url.hostname.includes(".") || /\s/.test(trimmed)) {
+    throw new Error("Enter a website like yourbrand.com, or leave it empty.");
   }
 
   url.hash = "";
   return url.toString();
 }
 
+/** Never read the server's own network (localhost, private ranges, cloud metadata). */
+function isPrivateHost(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local")) {
+    return true;
+  }
+  if (host.includes(":")) {
+    // IPv6 literal: loopback, unique-local, link-local, or IPv4-mapped.
+    return host === "::1" || /^(fc|fd|fe8|fe9|fea|feb)/.test(host) || host.startsWith("::ffff:");
+  }
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!v4) return false;
+  const [a, b] = [Number(v4[1]), Number(v4[2])];
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 100 && b >= 64 && b <= 127)
+  );
+}
+
+/** Reads at most `maxBytes` of the body, so a huge page can't exhaust memory. */
+async function readCappedText(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return response.text();
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let received = 0;
+  let html = "";
+  while (received < maxBytes) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    html += decoder.decode(value, { stream: true });
+  }
+  await reader.cancel().catch(() => undefined);
+  return html + decoder.decode();
+}
+
 export async function fetchBrandProfile(
   websiteUrl: string
 ): Promise<BrandProfileSnapshot> {
+  if (isPrivateHost(new URL(websiteUrl).hostname)) {
+    throw new Error("Website is not a public address");
+  }
+
+  // One deadline covers connecting, redirects and reading the body.
   const response = await fetch(websiteUrl, {
     headers: {
       "user-agent": "SeedScale/brand-profile-fetcher (+https://seedscale.local)",
@@ -90,8 +149,12 @@ export async function fetchBrandProfile(
     },
     redirect: "follow",
     cache: "no-store",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
+
+  if (response.url && isPrivateHost(new URL(response.url).hostname)) {
+    throw new Error("Website redirected to a non-public address");
+  }
 
   if (!response.ok) {
     throw new Error(`Website fetch failed with ${response.status}`);
@@ -102,7 +165,7 @@ export async function fetchBrandProfile(
     throw new Error("Website fetch did not return HTML");
   }
 
-  const html = await response.text();
+  const html = await readCappedText(response, MAX_HTML_BYTES);
   return extractBrandProfileFromHtml(html, response.url || websiteUrl);
 }
 

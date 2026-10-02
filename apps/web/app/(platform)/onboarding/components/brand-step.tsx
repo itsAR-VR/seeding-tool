@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  MAX_BRAND_NAME_LENGTH,
   READING_MESSAGES,
   buildOnboardingParams,
   formatKeywordsDraft,
@@ -24,10 +25,18 @@ const EMPTY_DRAFT: Draft = { summary: "", audience: "", voice: "", keywords: "" 
  * to pre-fill who the brand is for, how it sounds, and the words used to find
  * creators. Everything stays editable.
  */
-export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
+export function BrandStep({
+  initialBrandName,
+  initialWebsiteUrl = "",
+}: {
+  initialBrandName: string;
+  initialWebsiteUrl?: string;
+}) {
   const router = useRouter();
   const [name, setName] = useState(initialBrandName);
-  const [websiteUrl, setWebsiteUrl] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState(initialWebsiteUrl);
+  // Blocks a second request while one is running (double click, Enter twice).
+  const busy = useRef(false);
   const [mode, setMode] = useState<"entry" | "reading" | "review">("entry");
   const [messageIndex, setMessageIndex] = useState(0);
   const [result, setResult] = useState<BrandCreationResponse | null>(null);
@@ -50,10 +59,16 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (busy.current) return;
     if (!name.trim()) {
       setError("Enter your brand name.");
       return;
     }
+    if (name.trim().length > MAX_BRAND_NAME_LENGTH) {
+      setError(`Keep the brand name under ${MAX_BRAND_NAME_LENGTH} characters.`);
+      return;
+    }
+    busy.current = true;
     setError("");
     setMessageIndex(0);
     setMode(websiteUrl.trim() ? "reading" : "entry");
@@ -76,15 +91,23 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
       });
       setMode("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save your brand. Try again.");
+      setError(
+        err instanceof TypeError
+          ? "Couldn't reach Seed Scale. Check your connection and try again."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save your brand. Try again.",
+      );
       setMode("entry");
     } finally {
+      busy.current = false;
       setSaving(false);
     }
   }
 
   async function continueToKit() {
-    if (!result) return;
+    if (!result || busy.current) return;
+    busy.current = true;
     setSaving(true);
     setError("");
     try {
@@ -99,10 +122,15 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
           keywords: parseKeywordsDraft(draft.keywords),
         }),
       });
-      if (!profileRes.ok) throw new Error("Couldn't save these details. Try again.");
+      if (!profileRes.ok) {
+        const data = (await profileRes.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Couldn't save these details. Try again.");
+      }
 
       // Give the next step a head start, without overwriting anything already written.
-      const kit = (await fetch("/api/brand-kit").then((r) => (r.ok ? r.json() : null))) as {
+      const kit = (await fetch("/api/brand-kit")
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null)) as {
         brandDescription?: string | null;
         productFacts?: string | null;
       } | null;
@@ -110,16 +138,24 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
       if (!kit?.brandDescription && draft.summary.trim()) prefill.brandDescription = draft.summary.trim();
       if (!kit?.productFacts) prefill.productFacts = starterProductFacts(result.brandProfile, websiteUrl);
       if (Object.keys(prefill).length > 0) {
+        // A head start only: if it fails, the next step is simply empty.
         await fetch("/api/brand-kit", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(prefill),
-        });
+        }).catch(() => undefined);
       }
 
-      router.push(`/onboarding?${buildOnboardingParams("kit", { brandName: name, brandId: result.brandId })}`);
+      router.push(`/onboarding?${buildOnboardingParams("kit", { brandName: name.trim() })}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save these details. Try again.");
+      setError(
+        err instanceof TypeError
+          ? "Couldn't reach Seed Scale. Check your connection and try again."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't save these details. Try again.",
+      );
+      busy.current = false;
       setSaving(false);
     }
   }
@@ -127,8 +163,8 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
   if (mode === "reading") {
     return (
       <section className="space-y-6" aria-live="polite">
-        <h1 className="text-3xl font-bold tracking-tight text-balance">Reading your website</h1>
-        <div className="space-y-3 rounded-xl border bg-card p-6">
+        <h1 className="text-2xl font-bold tracking-tight text-balance break-words sm:text-3xl">Reading your website</h1>
+        <div className="space-y-3 rounded-xl border bg-card p-4 sm:p-6">
           <p className="font-medium">{READING_MESSAGES[messageIndex]}...</p>
           <div className="h-1.5 overflow-hidden rounded-full bg-muted">
             <div className="onboarding-progress h-full w-1/3 rounded-full bg-foreground/70" />
@@ -144,7 +180,7 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
     return (
       <section className="space-y-6">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-balance">
+          <h1 className="text-2xl font-bold tracking-tight text-balance break-words sm:text-3xl">
             {fromSite ? "Here's what we learned" : `Tell us about ${name}`}
           </h1>
           <p className="max-w-prose text-muted-foreground">
@@ -156,7 +192,7 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
           </p>
         </div>
 
-        <div className="space-y-5 rounded-xl border bg-card p-6">
+        <div className="space-y-5 rounded-xl border bg-card p-4 sm:p-6">
           <Field id="summary" label="What you sell" hint="One or two sentences, like you'd tell a creator.">
             <Textarea
               id="summary"
@@ -186,7 +222,11 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
           </Field>
         </div>
 
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => setMode("entry")} disabled={saving}>
             Back
@@ -202,29 +242,40 @@ export function BrandStep({ initialBrandName }: { initialBrandName: string }) {
   return (
     <form onSubmit={(e) => void submit(e)} className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-balance">Set up your brand</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-balance break-words sm:text-3xl">Set up your brand</h1>
         <p className="max-w-prose text-muted-foreground">
           Three short steps, about 10 minutes. You can change everything later in Settings.
         </p>
       </div>
 
-      <div className="space-y-5 rounded-xl border bg-card p-6">
+      <div className="space-y-5 rounded-xl border bg-card p-4 sm:p-6">
         <Field id="brandName" label="Brand name">
-          <Input id="brandName" value={name} onChange={(e) => setName(e.target.value)} autoComplete="organization" required />
+          <Input
+            id="brandName"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="organization"
+            maxLength={MAX_BRAND_NAME_LENGTH}
+            required
+          />
         </Field>
         <Field id="websiteUrl" label="Website (optional)" hint="We'll read it and fill in the next part for you.">
           <Input
             id="websiteUrl"
             inputMode="url"
             autoComplete="url"
-            placeholder="https://yourbrand.com"
+            placeholder="yourbrand.com"
             value={websiteUrl}
             onChange={(e) => setWebsiteUrl(e.target.value)}
           />
         </Field>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <Button type="submit" disabled={saving}>
         {saving ? "Saving..." : "Continue"}
       </Button>

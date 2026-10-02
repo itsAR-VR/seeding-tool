@@ -68,12 +68,14 @@ async function loadAdsContext(brandId: string): Promise<AdsContext> {
     prisma.brandConnection.findFirst({ where: { brandId, provider: "instagram", status: "connected" } }),
   ]);
   if (!credential || !connection) {
-    throw new MetaAdsError("Connect Instagram in Settings first.");
+    throw new MetaAdsError("Connect Instagram in Settings > Connections first.");
   }
-  const payload = JSON.parse(decrypt(credential.encryptedValue)) as {
-    userAccessToken?: string;
-    igUserId?: string;
-  };
+  let payload: { userAccessToken?: string; igUserId?: string };
+  try {
+    payload = JSON.parse(decrypt(credential.encryptedValue)) as typeof payload;
+  } catch {
+    throw new MetaAdsError("Reconnect Instagram in Settings > Connections to allow ads.");
+  }
   const meta = (connection.metadata ?? {}) as ConnectionMetadata;
   if (!meta.adAccountId) {
     throw new MetaAdsError("No ad account found. Reconnect Instagram in Settings to allow ads.");

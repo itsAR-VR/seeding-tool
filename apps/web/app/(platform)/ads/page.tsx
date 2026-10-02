@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { NoCompanyNotice } from "@/components/no-company-notice";
 import { getAdResults, MetaAdsError, type AdResults } from "@/lib/meta/ads";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,14 +27,15 @@ export default async function AdsPage() {
   try {
     brandId = (await getCurrentBrandMembership()).brandId;
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
+    if (error instanceof BrandAccessError) return <NoCompanyNotice title="Ads" />;
     throw error;
   }
 
   const connection = await prisma.brandConnection.findFirst({
     where: { brandId, provider: "instagram" },
-    select: { metadata: true },
+    select: { metadata: true, status: true },
   });
+  const instagramConnected = connection?.status === "connected";
   const meta = (connection?.metadata ?? {}) as { adAccountId?: string; adsAdSetId?: string };
   const adsManagerUrl = meta.adAccountId
     ? `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${meta.adAccountId.replace(/^act_/, "")}${
@@ -65,6 +67,16 @@ export default async function AdsPage() {
         <p className="text-muted-foreground">Ads made from creator posts, with results from Meta.</p>
       </div>
 
+      {!instagramConnected && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Ads run through your Instagram and Meta ad account.{" "}
+          <Link href="/settings/connections" className="font-medium underline underline-offset-2">
+            Connect Instagram in Settings &gt; Connections
+          </Link>{" "}
+          to make ads from creator posts.
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2"><CardDescription>Ads</CardDescription><CardTitle>{posts.length}</CardTitle></CardHeader>
@@ -91,7 +103,7 @@ export default async function AdsPage() {
 
       <Card>
         <CardContent className="pt-6">
-          {loadError && <p className="mb-4 text-sm text-red-600">{loadError}</p>}
+          {loadError && <p role="alert" className="mb-4 text-sm text-red-700">{loadError}</p>}
           {posts.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No ads yet. Approve usage rights on a post in <Link href="/content" className="underline">Content</Link>, then click Create ad.

@@ -43,10 +43,14 @@ export async function loadInstagramCredential(brandId: string): Promise<Instagra
   ]);
   if (!credential || !connection) return null;
 
-  const payload = JSON.parse(decrypt(credential.encryptedValue)) as {
-    accessToken?: string;
-    igUserId?: string;
-  };
+  let payload: { accessToken?: string; igUserId?: string };
+  try {
+    payload = JSON.parse(decrypt(credential.encryptedValue)) as typeof payload;
+  } catch (error) {
+    // An unreadable saved sign-in is the same as no sign-in: ask to reconnect.
+    console.error("[content/sync] couldn't read the saved Instagram sign-in", error);
+    return null;
+  }
   const metadata = connection.metadata as { igUserId?: string; pageId?: string } | null;
   const igUserId = metadata?.igUserId ?? payload.igUserId;
   if (!payload.accessToken || !igUserId) return null;

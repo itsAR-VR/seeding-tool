@@ -6,6 +6,20 @@ export const LOGIN_BOOTSTRAP_ERROR_MESSAGE =
 export const LOGIN_USER_CONFIRMATION_ERROR_MESSAGE =
   "We couldn't confirm your login details. Please try again.";
 
+export const LOGIN_WRONG_PASSWORD_MESSAGE =
+  "That email and password don't match. If you joined from an invite and never set a password, open your invite email and use its link to get a sign-in link.";
+
+export const LOGIN_UNCONFIRMED_MESSAGE =
+  "This email isn't confirmed yet. Open your invite email and use its link to finish joining.";
+
+/** Supabase's sign-in errors, in plain words with what to do next. */
+export function friendlyLoginError(message: string): string {
+  if (/invalid login credentials/i.test(message)) return LOGIN_WRONG_PASSWORD_MESSAGE;
+  if (/email not confirmed/i.test(message)) return LOGIN_UNCONFIRMED_MESSAGE;
+  if (/rate limit|too many/i.test(message)) return "Too many tries. Wait a minute, then try again.";
+  return message;
+}
+
 type LoginSupabaseClient = {
   auth: {
     signInWithPassword(credentials: {
@@ -74,7 +88,7 @@ export async function signInAndBootstrapLogin({
   });
 
   if (authError) {
-    return { ok: false, error: authError.message };
+    return { ok: false, error: friendlyLoginError(authError.message) };
   }
 
   if (!data?.user) {

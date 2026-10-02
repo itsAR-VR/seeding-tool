@@ -3,14 +3,20 @@
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Props = { token: string; email: string; signedInEmail: string | null };
+type Props = {
+  token: string;
+  email: string;
+  signedInEmail: string | null;
+  /** "signin" when the invite was already accepted and they're signing back in. */
+  mode?: "join" | "signin";
+};
 
 /**
  * Joining needs proof the person owns the invited email: they get a sign-in
  * link at that address, which brings them back here signed in. Then they can
  * set a password (optional) and accept.
  */
-export function InviteAccept({ token, email, signedInEmail }: Props) {
+export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Props) {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -48,7 +54,7 @@ export function InviteAccept({ token, email, signedInEmail }: Props) {
     }
   }
 
-  if (signedInEmail === email) {
+  if (mode === "join" && signedInEmail === email) {
     return (
       <form onSubmit={(e) => void accept(e)} className="space-y-4">
         <label className="block text-sm font-medium">
@@ -81,7 +87,7 @@ export function InviteAccept({ token, email, signedInEmail }: Props) {
     return (
       <div className="space-y-3">
         <p className="rounded-lg bg-muted p-4">
-          Check <strong>{email}</strong> for an email from us. Open the link in it to finish joining.
+          Check <strong>{email}</strong> for an email from us. {mode === "signin" ? "Open the link in it to sign in." : "Open the link in it to finish joining."}
         </p>
         <button type="button" disabled={busy} onClick={() => void sendLink()} className="text-sm font-medium underline">
           Send it again
@@ -108,7 +114,7 @@ export function InviteAccept({ token, email, signedInEmail }: Props) {
         onClick={() => void sendLink()}
         className="w-full rounded-lg bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
       >
-        {busy ? "Sending..." : "Email me a link to join"}
+        {busy ? "Sending..." : mode === "signin" ? "Email me a sign-in link" : "Email me a link to join"}
       </button>
     </div>
   );

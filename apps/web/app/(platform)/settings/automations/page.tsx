@@ -74,7 +74,8 @@ export default function AutomationsPage() {
       .catch(() => setAutomations([]));
     void fetch("/api/settings/apify")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { hasOwnKey: boolean; usesShared: boolean } | null) => setSearchReady(Boolean(d?.hasOwnKey || d?.usesShared)));
+      .then((d: { hasOwnKey: boolean; usesShared: boolean } | null) => setSearchReady(Boolean(d?.hasOwnKey || d?.usesShared)))
+      .catch(() => setSearchReady(false));
   }, []);
 
   async function create(event: React.FormEvent) {

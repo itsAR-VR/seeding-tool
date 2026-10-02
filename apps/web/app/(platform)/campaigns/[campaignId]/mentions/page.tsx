@@ -36,6 +36,20 @@ type CreatorOption = {
   creator: { name: string | null; email: string | null };
 };
 
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  twitter: "Twitter / X",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  post: "Post",
+  story: "Story",
+  reel: "Reel",
+  video: "Video",
+};
+
 const platformColors: Record<string, string> = {
   instagram: "bg-pink-100 text-pink-800",
   tiktok: "bg-gray-900 text-white",
@@ -52,6 +66,8 @@ export default function MentionsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -68,6 +84,7 @@ export default function MentionsPage() {
 
   async function loadData() {
     setLoading(true);
+    setLoadError(null);
     try {
       const [mentionsRes, creatorsRes] = await Promise.all([
         fetch(`/api/mentions?campaignId=${campaignId}`),
@@ -75,13 +92,19 @@ export default function MentionsPage() {
       ]);
 
       if (mentionsRes.ok) {
-        setMentions((await mentionsRes.json()) as Mention[]);
+        const data = (await mentionsRes.json()) as unknown;
+        setMentions(Array.isArray(data) ? (data as Mention[]) : []);
+      } else {
+        const data = (await mentionsRes.json().catch(() => null)) as { error?: string } | null;
+        setLoadError(data?.error ?? "Couldn't load posts. Refresh the page to try again.");
       }
       if (creatorsRes.ok) {
-        setCreators((await creatorsRes.json()) as CreatorOption[]);
+        const data = (await creatorsRes.json()) as unknown;
+        setCreators(Array.isArray(data) ? (data as CreatorOption[]) : []);
       }
     } catch (error) {
       console.error("Failed to load mentions:", error);
+      setLoadError("Couldn't load posts. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -92,6 +115,7 @@ export default function MentionsPage() {
     if (!form.mediaUrl || !form.campaignCreatorId) return;
 
     setSubmitting(true);
+    setFormError(null);
     try {
       const res = await fetch("/api/mentions", {
         method: "POST",
@@ -100,8 +124,8 @@ export default function MentionsPage() {
       });
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Failed to create mention");
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error || "Couldn't save that post. Try again.");
       }
 
       setShowForm(false);
@@ -114,8 +138,8 @@ export default function MentionsPage() {
       });
       await loadData();
     } catch (error) {
-      alert(
-        error instanceof Error ? error.message : "Failed to create mention"
+      setFormError(
+        error instanceof Error ? error.message : "Couldn't save that post. Try again."
       );
     } finally {
       setSubmitting(false);
@@ -125,7 +149,7 @@ export default function MentionsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Loading mentions…</p>
+        <p className="text-muted-foreground">Loading posts…</p>
       </div>
     );
   }
@@ -134,13 +158,13 @@ export default function MentionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Mentions</h1>
+          <h1 className="text-2xl font-bold">Posts</h1>
           <p className="text-muted-foreground">
-            Track and attribute creator mentions
+            Posts creators made about your gift. Add one by hand if we missed it.
           </p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "Add Mention"}
+          {showForm ? "Cancel" : "Add a post"}
         </Button>
       </div>
 
@@ -148,7 +172,7 @@ export default function MentionsPage() {
       {showForm && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Add Mention</CardTitle>
+            <CardTitle className="text-lg">Add a post</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -186,7 +210,7 @@ export default function MentionsPage() {
               </div>
 
               <div className="space-y-2">
-                <Label>Media URL</Label>
+                <Label>Link to the post</Label>
                 <Input
                   placeholder="https://instagram.com/p/..."
                   value={form.mediaUrl}
@@ -230,8 +254,18 @@ export default function MentionsPage() {
                 />
               </div>
 
-              <Button type="submit" disabled={submitting}>
-                {submitting ? "Adding…" : "Add Mention"}
+              {formError && (
+                <p role="alert" className="text-sm text-red-700">
+                  {formError}
+                </p>
+              )}
+              {creators.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Add creators to this campaign first, then you can link their posts here.
+                </p>
+              )}
+              <Button type="submit" disabled={submitting || creators.length === 0}>
+                {submitting ? "Adding…" : "Add post"}
               </Button>
             </form>
           </CardContent>
@@ -242,13 +276,18 @@ export default function MentionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">
-            All Mentions ({mentions.length})
+            All posts ({mentions.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {mentions.length === 0 ? (
+          {loadError ? (
+            <p role="alert" className="py-8 text-center text-red-700">
+              {loadError}
+            </p>
+          ) : mentions.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              No mentions yet
+              No posts yet. Posts that tag you show up here once Instagram is connected in
+              Settings &gt; Connections. You can also add one by hand with Add a post.
             </p>
           ) : (
             <div className="space-y-4">
@@ -265,10 +304,10 @@ export default function MentionsPage() {
                           "bg-gray-100 text-gray-800"
                         }
                       >
-                        {m.platform}
+                        {PLATFORM_LABELS[m.platform] ?? m.platform}
                       </Badge>
                       {m.type && (
-                        <Badge variant="outline">{m.type}</Badge>
+                        <Badge variant="outline">{TYPE_LABELS[m.type] ?? m.type}</Badge>
                       )}
                     </div>
                     <p className="text-sm font-medium">
@@ -281,7 +320,7 @@ export default function MentionsPage() {
                         {m.caption}
                       </p>
                     )}
-                    <div className="flex gap-4 text-xs text-muted-foreground">
+                    <div className="flex gap-4 text-sm text-muted-foreground">
                       {m.likes != null && <span>❤️ {m.likes}</span>}
                       {m.comments != null && (
                         <span>💬 {m.comments}</span>

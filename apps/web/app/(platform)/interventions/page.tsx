@@ -27,13 +27,31 @@ type Intervention = {
 };
 
 const typeLabels: Record<string, string> = {
-  captcha: "🔒 Captcha",
-  auth_failure: "🔑 Auth Failure",
-  duplicate_order: "📦 Order Failed",
-  unclear_reply: "❓ Reply Unclear",
-  manual_review: "👀 Manual Review",
-  other: "📋 Other",
+  captcha: "Blocked by a security check",
+  auth_failure: "Account needs reconnecting",
+  duplicate_order: "Order didn't go through",
+  unclear_reply: "Reply is unclear",
+  manual_review: "Needs a look",
+  other: "Other",
 };
+
+const priorityLabels: Record<string, string> = {
+  low: "Low priority",
+  normal: "Normal",
+  high: "High priority",
+  critical: "Urgent",
+};
+
+const statusLabels: Record<string, string> = {
+  open: "Open",
+  in_progress: "In progress",
+  resolved: "Resolved",
+  reopened: "Reopened",
+};
+
+function plain(map: Record<string, string>, value: string): string {
+  return map[value] ?? value.replace(/_/g, " ");
+}
 
 const priorityColors: Record<string, string> = {
   low: "bg-gray-100 text-gray-600",
@@ -55,6 +73,7 @@ export default function InterventionsPage() {
   const [filter, setFilter] = useState<string>("open");
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [resolutionText, setResolutionText] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadInterventions();
@@ -62,16 +81,22 @@ export default function InterventionsPage() {
 
   async function loadInterventions() {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams();
       if (filter) params.set("status", filter);
 
       const res = await fetch(`/api/interventions?${params}`);
       if (res.ok) {
-        setInterventions((await res.json()) as Intervention[]);
+        const data = (await res.json()) as unknown;
+        setInterventions(Array.isArray(data) ? (data as Intervention[]) : []);
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't load this list. Refresh the page to try again.");
       }
-    } catch (error) {
-      console.error("Failed to load interventions:", error);
+    } catch (err) {
+      console.error("Failed to load interventions:", err);
+      setError("Couldn't load this list. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -80,6 +105,7 @@ export default function InterventionsPage() {
   async function resolveIntervention(id: string) {
     if (!resolutionText.trim()) return;
 
+    setError(null);
     try {
       const res = await fetch(`/api/interventions/${id}`, {
         method: "PATCH",
@@ -91,16 +117,20 @@ export default function InterventionsPage() {
         setResolvingId(null);
         setResolutionText("");
         await loadInterventions();
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't mark it resolved. Try again.");
       }
-    } catch (error) {
-      console.error("Failed to resolve:", error);
+    } catch (err) {
+      console.error("Failed to resolve:", err);
+      setError("Couldn't mark it resolved. Check your connection and try again.");
     }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Loading interventions…</p>
+        <p className="text-muted-foreground">Loading…</p>
       </div>
     );
   }
@@ -128,14 +158,20 @@ export default function InterventionsPage() {
         ))}
       </div>
 
+      {error && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+
       {/* Intervention list */}
       {interventions.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
               {filter === "open"
-                ? "Nothing needs your attention 🎉"
-                : "Nothing here"}
+                ? "Nothing needs your attention right now. Problems with emails, orders, or connections show up here."
+                : "Nothing here."}
             </p>
           </CardContent>
         </Card>
@@ -148,7 +184,7 @@ export default function InterventionsPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm">
-                        {typeLabels[i.type] || `📋 ${i.type}`}
+                        {plain(typeLabels, i.type)}
                       </span>
                       <Badge
                         className={
@@ -156,7 +192,7 @@ export default function InterventionsPage() {
                           "bg-gray-100 text-gray-800"
                         }
                       >
-                        {i.priority}
+                        {plain(priorityLabels, i.priority)}
                       </Badge>
                       <Badge
                         className={
@@ -164,7 +200,7 @@ export default function InterventionsPage() {
                           "bg-gray-100 text-gray-800"
                         }
                       >
-                        {i.status}
+                        {plain(statusLabels, i.status)}
                       </Badge>
                     </div>
                     <CardTitle className="text-base">{i.title}</CardTitle>
@@ -174,7 +210,7 @@ export default function InterventionsPage() {
                       </Link>
                     )}
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span className="shrink-0 text-sm text-muted-foreground">
                     {new Date(i.createdAt).toLocaleDateString()}
                   </span>
                 </div>
@@ -201,7 +237,7 @@ export default function InterventionsPage() {
                       <div className="space-y-2">
                         <textarea
                           className="w-full rounded-md border p-2 text-sm"
-                          placeholder="Enter resolution…"
+                          placeholder="What did you do to fix it?"
                           rows={2}
                           value={resolutionText}
                           onChange={(e) =>

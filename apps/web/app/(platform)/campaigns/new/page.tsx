@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +14,23 @@ export default function NewCampaignPage() {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // null while checking; true/false once we know if Shopify is connected.
+  const [shopifyConnected, setShopifyConnected] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/connections/shopify/status")
+      .then(async (res) => {
+        const data = (await res.json().catch(() => null)) as { connected?: boolean } | null;
+        if (!cancelled) setShopifyConnected(res.ok ? Boolean(data?.connected) : null);
+      })
+      .catch(() => {
+        // Unknown is fine: the form still works, we just skip the hint.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,14 +45,14 @@ export default function NewCampaignPage() {
       });
 
       if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Failed to create campaign");
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Couldn't create the campaign. Try again.");
       }
 
       const campaign = (await res.json()) as { id: string };
       router.push(`/campaigns/${campaign.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(err instanceof Error ? err.message : "Couldn't create the campaign. Try again.");
     } finally {
       setLoading(false);
     }
@@ -45,9 +63,22 @@ export default function NewCampaignPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">New Campaign</h1>
         <p className="text-muted-foreground">
-          Set up a new seeding campaign for your brand.
+          Name it now. Next you&apos;ll pick the product you&apos;re gifting and find creators.
         </p>
       </div>
+
+      {shopifyConnected === false && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <p className="font-medium">Shopify isn&apos;t connected yet</p>
+          <p className="mt-1">
+            You can create the campaign now. To pick a product and make gift orders, connect
+            Shopify first.{" "}
+            <Link href="/settings/connections" className="font-medium underline underline-offset-2">
+              Connect Shopify in Settings &gt; Connections
+            </Link>
+          </p>
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -81,7 +112,7 @@ export default function NewCampaignPage() {
             </div>
 
             {error && (
-              <p className="text-sm text-red-600">{error}</p>
+              <p role="alert" className="text-sm text-red-700">{error}</p>
             )}
 
             <div className="flex gap-3">

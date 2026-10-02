@@ -48,14 +48,14 @@ export default async function InboxPage({
             <CardHeader>
               <CardTitle>No brand found</CardTitle>
               <CardDescription>
-                Complete onboarding to access your inbox.
+                Finish setting up your company to use the inbox.
               </CardDescription>
             </CardHeader>
           </Card>
         </div>
       );
     }
-    return null;
+    throw error;
   }
 
   const threads = await prisma.conversationThread.findMany({
@@ -155,9 +155,18 @@ export default async function InboxPage({
           <CardHeader>
             <CardTitle>No conversations yet</CardTitle>
             <CardDescription>
-              When you send outreach to creators and they reply, their
-              conversations will appear here.
+              When you email creators and they reply, the conversation shows up here. Start by
+              emailing creators from a campaign. Replies come in through Gmail, so connect it first
+              if you haven&apos;t.
             </CardDescription>
+            <div className="flex flex-wrap gap-3 pt-2 text-sm">
+              <Link href="/campaigns" className="font-medium text-blue-600 hover:underline">
+                Go to campaigns
+              </Link>
+              <Link href="/settings/connections" className="font-medium text-blue-600 hover:underline">
+                Connect Gmail in Settings &gt; Connections
+              </Link>
+            </div>
           </CardHeader>
         </Card>
       ) : (

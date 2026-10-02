@@ -91,15 +91,14 @@ export async function PUT(request: NextRequest, context: RouteContext) {
 
       if (!brandProduct) {
         const firstVariant = sp.variants[0];
+        const price = firstVariant ? parseFloat(firstVariant.price) : NaN;
         brandProduct = await prisma.brandProduct.create({
           data: {
             name: sp.title,
             description: sp.description,
             shopifyProductId: sp.shopifyId,
             shopifyVariantId: firstVariant?.shopifyVariantId || null,
-            retailValue: firstVariant
-              ? Math.round(parseFloat(firstVariant.price) * 100)
-              : null,
+            retailValue: Number.isFinite(price) ? Math.round(price * 100) : null,
             brandId,
           },
         });

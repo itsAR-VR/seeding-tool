@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -132,9 +133,13 @@ export default function OutreachPage() {
         // data might be array or { creators: [...] }
         const list = Array.isArray(data) ? data : data.creators ?? [];
         setCreators(list);
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setNotice({ tone: "error", text: data?.error ?? "Couldn't load this campaign's creators. Refresh the page." });
       }
     } catch (err) {
       console.error("Failed to load creators:", err);
+      setNotice({ tone: "error", text: "Couldn't load this campaign's creators. Check your connection and refresh." });
     } finally {
       setLoadingCreators(false);
     }
@@ -251,8 +256,8 @@ export default function OutreachPage() {
     ? "Attach at least one campaign product before sending outreach."
     : !selectedChannelConnected
       ? channel === "email"
-        ? "Connect Gmail in Settings → Connections before sending emails."
-        : "Connect Unipile in Settings → Connections before sending Instagram DMs."
+        ? "Connect Gmail in Settings > Connections before sending emails."
+        : "Connect Instagram messages in Settings > Connections before sending DMs."
       : null;
 
   const toggleCreator = (id: string) => {
@@ -277,7 +282,10 @@ export default function OutreachPage() {
   const generateDrafts = async () => {
     if (selectedIds.size === 0) return;
     if (selectedIds.size > MAX_BATCH_SIZE) {
-      alert(`Please select ${MAX_BATCH_SIZE} or fewer creators per batch. You have ${selectedIds.size} selected.`);
+      setNotice({
+        tone: "error",
+        text: `You can email up to ${MAX_BATCH_SIZE} creators at a time. You picked ${selectedIds.size}, so unselect a few.`,
+      });
       return;
     }
     setGenerating(true);
@@ -334,7 +342,7 @@ export default function OutreachPage() {
   ) => {
     setEditedDrafts((prev) => ({
       ...prev,
-      [ccId]: { ...prev[ccId]!, [field]: value },
+      [ccId]: { ...(prev[ccId] ?? { body: "" }), [field]: value },
     }));
   };
 
@@ -482,7 +490,7 @@ export default function OutreachPage() {
                     window.location.href = "/settings/connections";
                   }}
                 >
-                  Open connections
+                  {channel === "email" ? "Connect Gmail" : "Connect Instagram messages"}
                 </Button>
               ) : null}
             </div>
@@ -521,9 +529,23 @@ export default function OutreachPage() {
               Loading creators...
             </p>
           ) : approvedCreators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No approved creators in this campaign yet.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No approved creators in this campaign yet. Add creators, then approve the ones you
+                want to email.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/campaigns/${campaignId}/review`} className={buttonVariants({ size: "sm" })}>
+                  Review creators
+                </Link>
+                <Link
+                  href={`/campaigns/${campaignId}/discover`}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  Find creators
+                </Link>
+              </div>
+            </div>
           ) : (
             <div className="space-y-2">
               {approvedCreators.map((cc) => {

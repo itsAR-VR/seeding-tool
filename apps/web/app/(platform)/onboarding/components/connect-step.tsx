@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Circle } from "lucide-react";
@@ -28,14 +28,26 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
   const [rows, setRows] = useState<Row[] | null>(null);
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState("");
+  // Some account checks failed to load; rows show as not connected.
+  const [checkFailed, setCheckFailed] = useState(false);
+  const finishBusy = useRef(false);
 
   useEffect(() => {
-    const here = `/onboarding?${buildOnboardingParams("connect", { brandName, brandId })}`;
+    let cancelled = false;
+    const here = `/onboarding?${buildOnboardingParams("connect", { brandName })}`;
     const connectHref = `/settings/connections?returnTo=${encodeURIComponent(here)}`;
+    // Each check can fail on its own (an account's API is down, or we're
+    // offline). That must never block finishing setup.
+    const load = <T,>(url: string): Promise<T | null> =>
+      fetch(url)
+        .then((r) => (r.ok ? (r.json() as Promise<T>) : null))
+        .catch(() => null);
     void Promise.all([
-      fetch("/api/connections/overview").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/settings/apify").then((r) => (r.ok ? r.json() : null)),
-    ]).then(([overview, apify]: [{ providers?: Provider[] } | null, { hasOwnKey: boolean; usesShared: boolean } | null]) => {
+      load<{ providers?: Provider[] }>("/api/connections/overview"),
+      load<{ hasOwnKey: boolean; usesShared: boolean }>("/api/settings/apify"),
+    ]).then(([overview, apify]) => {
+      if (cancelled) return;
+      setCheckFailed(!overview || !apify);
       const find = (p: string) => overview?.providers?.find((x) => x.provider === p);
       const row = (key: string, title: string, what: string): Row => {
         const p = find(key);
@@ -65,23 +77,39 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
         },
       ]);
     });
-  }, [brandName, brandId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [brandName]);
 
   async function finish() {
+    if (finishBusy.current) return;
+    finishBusy.current = true;
     setFinishing(true);
     setError("");
-    const res = await fetch("/api/onboarding/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ brandId: brandId || undefined }),
-    });
-    if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "Couldn't finish setup. Try again.");
+    try {
+      const res = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: brandId || undefined }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Couldn't finish setup. Try again.");
+      }
+      // replace, so the browser Back button doesn't land on a finished wizard.
+      router.replace("/dashboard");
+    } catch (err) {
+      setError(
+        err instanceof TypeError
+          ? "Couldn't reach Seed Scale. Check your connection and try again."
+          : err instanceof Error
+            ? err.message
+            : "Couldn't finish setup. Try again.",
+      );
+      finishBusy.current = false;
       setFinishing(false);
-      return;
     }
-    router.push("/dashboard");
   }
 
   const remaining = rows?.filter((r) => !r.connected).length ?? 0;
@@ -89,7 +117,7 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
   return (
     <section className="space-y-6">
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight text-balance">Connect your accounts</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-balance break-words sm:text-3xl">Connect your accounts</h1>
         <p className="max-w-prose text-muted-foreground">
           Seed Scale works through your own accounts, so emails come from you and gifts ship from your store. Connect
           what you can now. Home will remind you about the rest.
@@ -101,7 +129,7 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
       ) : (
         <ul className="divide-y rounded-xl border bg-card">
           {rows.map((r) => (
-            <li key={r.key} className="flex flex-wrap items-center gap-4 px-5 py-4">
+            <li key={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
               {r.connected ? (
                 <CheckCircle2 className="size-5 shrink-0 text-green-700" aria-hidden />
               ) : (
@@ -112,7 +140,7 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
                 <p className="text-sm text-muted-foreground">{r.what}</p>
               </div>
               {r.connected ? (
-                <span className="text-sm text-green-800">{r.status}</span>
+                <span className="min-w-0 break-words text-sm text-green-800">{r.status}</span>
               ) : (
                 <Link href={r.href} className={buttonVariants({ variant: "outline" })}>
                   {r.action}
@@ -124,11 +152,20 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
         </ul>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {checkFailed && rows && (
+        <p className="text-sm text-muted-foreground">
+          We couldn&apos;t check every account just now. You can still finish, and Home will show what&apos;s left.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="ghost"
-          onClick={() => router.push(`/onboarding?${buildOnboardingParams("kit", { brandName, brandId })}`)}
+          onClick={() => router.push(`/onboarding?${buildOnboardingParams("kit", { brandName })}`)}
           disabled={finishing}
         >
           Back

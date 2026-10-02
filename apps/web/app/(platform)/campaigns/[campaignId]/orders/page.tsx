@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { orderStatusLabel } from "@/lib/shopify/order-labels";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -66,6 +67,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [eligible, setEligible] = useState<EligibleCreator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -73,6 +75,7 @@ export default function OrdersPage() {
 
   async function loadData() {
     setLoading(true);
+    setLoadError(null);
     try {
       // Fetch creators to build order list and eligible list
       const creatorsRes = await fetch(
@@ -116,6 +119,7 @@ export default function OrdersPage() {
       setEligible(eligibleRows);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setLoadError("Couldn't load orders. Refresh the page to try again.");
     } finally {
       setLoading(false);
     }
@@ -134,7 +138,7 @@ export default function OrdersPage() {
       <div>
         <h1 className="text-2xl font-bold">Orders</h1>
         <p className="text-muted-foreground">
-          Review Shopify gift drafts, then complete approved drafts into real orders
+          Gift orders for this campaign. Drafts wait for you in Shopify; complete one there to ship it.
         </p>
       </div>
 
@@ -143,7 +147,7 @@ export default function OrdersPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">
-              Address Confirmed, No Draft Yet ({eligible.length})
+              Address in, order not started ({eligible.length})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -158,7 +162,7 @@ export default function OrdersPage() {
                       {cc.creator.name || cc.creator.email || "Unknown"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      Address confirmed; Shopify draft has not been prepared yet
+                      We have their address. The Shopify draft order isn&apos;t made yet.
                     </p>
                   </div>
                 </div>
@@ -176,9 +180,14 @@ export default function OrdersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {orders.length === 0 ? (
+          {loadError ? (
+            <p role="alert" className="py-8 text-center text-red-700">
+              {loadError}
+            </p>
+          ) : orders.length === 0 ? (
             <p className="py-8 text-center text-muted-foreground">
-              No orders yet
+              No orders yet. An order starts when a creator sends their address. Make sure Shopify
+              is connected in Settings &gt; Connections.
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -186,7 +195,7 @@ export default function OrdersPage() {
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-2 pr-4 font-medium">Creator</th>
-                    <th className="pb-2 pr-4 font-medium">Shopify Ref</th>
+                    <th className="pb-2 pr-4 font-medium">Shopify order</th>
                     <th className="pb-2 pr-4 font-medium">Status</th>
                     <th className="pb-2 pr-4 font-medium">Tracking</th>
                     <th className="pb-2 pr-4 font-medium">Date</th>
@@ -208,7 +217,7 @@ export default function OrdersPage() {
                               "Unknown"}
                           </Link>
                         </td>
-                        <td className="py-3 pr-4 font-mono text-xs">
+                        <td className="py-3 pr-4 font-mono text-sm">
                           {isDraft
                             ? order.shopifyDraftOrderName ||
                               order.shopifyDraftOrderId
@@ -223,8 +232,8 @@ export default function OrdersPage() {
                             }
                           >
                             {isDraft
-                              ? "draft awaiting review"
-                              : order.status.replace(/_/g, " ")}
+                              ? "Draft, waiting for you"
+                              : orderStatusLabel(order.status)}
                           </Badge>
                         </td>
                         <td className="py-3 pr-4">
@@ -233,14 +242,14 @@ export default function OrdersPage() {
                               Not shipped
                             </span>
                           ) : order.fulfillmentEvents?.[0]?.trackingNumber ? (
-                            <span className="font-mono text-xs">
+                            <span className="font-mono text-sm">
                               {order.fulfillmentEvents[0].carrier &&
                                 `${order.fulfillmentEvents[0].carrier}: `}
                               {order.fulfillmentEvents[0].trackingNumber}
                             </span>
                           ) : (
                             <span className="text-muted-foreground">
-                              No carrier proof
+                              No tracking yet
                             </span>
                           )}
                         </td>

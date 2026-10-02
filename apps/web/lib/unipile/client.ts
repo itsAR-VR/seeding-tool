@@ -13,6 +13,14 @@ export type UnipileClient = {
   ) => Promise<Response>;
 };
 
+/** Thrown when a brand has not connected Instagram messaging (Unipile) yet. */
+export class UnipileNotConnectedError extends Error {
+  constructor() {
+    super("Connect Instagram messages in Settings > Connections to send DMs.");
+    this.name = "UnipileNotConnectedError";
+  }
+}
+
 /**
  * Get a configured Unipile HTTP client for a brand.
  *
@@ -25,9 +33,7 @@ export async function getUnipileClient(
   const resolved = await resolveProviderCredential(brandId, "unipile");
 
   if (!resolved.decryptedValue) {
-    throw new Error(
-      `No Unipile credential found for brand ${brandId}. Connect Unipile in Settings → Connections.`
-    );
+    throw new UnipileNotConnectedError();
   }
 
   const decrypted = resolved.decryptedValue;

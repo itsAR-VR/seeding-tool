@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/safe-return-path";
 
 type Status = { hasOwnKey: boolean; usesShared: boolean };
 
@@ -10,33 +11,52 @@ function CreatorSearchSettings() {
   const searchParams = useSearchParams();
   const rawReturn = searchParams.get("returnTo");
   // Only same-site paths, so this can't send people elsewhere.
-  const returnTo = rawReturn?.startsWith("/") && !rawReturn.startsWith("//") ? rawReturn : null;
+  const returnTo = safeReturnPath(rawReturn);
   const [status, setStatus] = useState<Status | null>(null);
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [loadFailed, setLoadFailed] = useState(false);
+
   async function load() {
-    const res = await fetch("/api/settings/apify");
-    if (res.ok) setStatus((await res.json()) as Status);
+    const data = await fetch("/api/settings/apify")
+      .then((res) => (res.ok ? (res.json() as Promise<Status>) : null))
+      .catch(() => null);
+    if (data) setStatus(data);
+    setLoadFailed(!data);
   }
   useEffect(() => {
+    let cancelled = false;
     void fetch("/api/settings/apify")
       .then((res) => (res.ok ? (res.json() as Promise<Status>) : null))
-      .then((data) => data && setStatus(data));
+      .catch(() => null)
+      .then((data) => {
+        if (cancelled) return;
+        if (data) setStatus(data);
+        setLoadFailed(!data);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setNotice(null);
     const res = await fetch("/api/settings/apify", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),
-    });
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
+    }).catch(() => null);
+    const data = (await res?.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
+    if (!res) {
+      setNotice({ ok: false, text: "Couldn't reach Seed Scale. Check your connection and try again." });
+      return;
+    }
     if (!res.ok) {
       setNotice({ ok: false, text: data?.error ?? "Couldn't save the key." });
       return;
@@ -49,14 +69,16 @@ function CreatorSearchSettings() {
   async function remove() {
     setBusy(true);
     setNotice(null);
-    const res = await fetch("/api/settings/apify", { method: "DELETE" });
+    const res = await fetch("/api/settings/apify", { method: "DELETE" }).catch(() => null);
     setBusy(false);
-    setNotice(res.ok ? { ok: true, text: "Key removed." } : { ok: false, text: "Couldn't remove the key." });
+    setNotice(res?.ok ? { ok: true, text: "Key removed." } : { ok: false, text: "Couldn't remove the key." });
     await load();
   }
 
   const current = !status
-    ? "Loading..."
+    ? loadFailed
+      ? "Couldn't load this. Refresh the page to try again."
+      : "Loading..."
     : status.hasOwnKey
       ? "Searches use your own Apify account."
       : status.usesShared
@@ -66,7 +88,7 @@ function CreatorSearchSettings() {
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Creator search</h1>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Creator search</h1>
         <p className="mt-1 text-muted-foreground">
           Finding creators and their emails runs on Apify. Searches are billed to your Apify account.
         </p>
@@ -83,13 +105,13 @@ function CreatorSearchSettings() {
               onChange={(e) => setToken(e.target.value)}
               placeholder="apify_api_..."
               autoComplete="off"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
+              className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2"
             />
             <span className="mt-1 block text-sm text-muted-foreground">
               In Apify, go to Settings, then API &amp; Integrations, and copy your personal API token.
             </span>
           </label>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-4">
             <button
               type="submit"
               disabled={busy || !token.trim()}

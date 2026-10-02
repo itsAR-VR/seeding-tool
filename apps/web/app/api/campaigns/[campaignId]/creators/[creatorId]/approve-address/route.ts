@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const flags = await getFeatureFlags(brandId);
     if (!flags.shopifyOrderEnabled) {
       return NextResponse.json(
-        { error: "Shopify order creation is disabled for this brand" },
+        { error: "Gift orders are turned off. Turn on 'Create Shopify gift orders' in Settings > Features." },
         { status: 403 }
       );
     }
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ) {
       return NextResponse.json(
         {
-          error: `Cannot approve address in lifecycle state "${status}". Allowed: ${ALLOWED_LIFECYCLE_STATUSES.join(", ")}`,
+          error: "This creator isn't at the address step yet, so there is no address to approve.",
         },
         { status: 409 }
       );
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!shopifyConnection || shopifyConnection.status !== "connected") {
       return NextResponse.json(
-        { error: "No active Shopify connection found for this brand" },
+        { error: "Connect Shopify in Settings > Connections to make gift orders." },
         { status: 422 }
       );
     }
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         {
           error:
-            "No campaign product with a Shopify variant configured. Add a product first.",
+            "Pick a Shopify product for this campaign first, on the campaign's Products page.",
         },
         { status: 422 }
       );

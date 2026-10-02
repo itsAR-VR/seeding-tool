@@ -2,27 +2,25 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { getShopifyStoreDomain, shopifyAdminOrderUrl } from "@/lib/shopify/admin-links";
+import { orderStatusLabel } from "@/lib/shopify/order-labels";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-const STATUS_LABELS: Record<string, string> = {
-  draft_pending: "Preparing draft",
-  draft_created: "Draft, waiting for you",
-  draft_completing: "Completing",
-  created: "Order placed",
-  processing: "Processing",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  cancelled: "Cancelled",
-  error_needs_reconciliation: "Needs a look",
-};
 
 export default async function OrdersPage() {
   let brandId: string;
   try {
     brandId = (await getCurrentBrandMembership()).brandId;
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
+    if (error instanceof BrandAccessError) {
+      return (
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+          <p className="text-muted-foreground">
+            We couldn&apos;t find your company. Sign out and back in, or ask your team owner for an invite.
+          </p>
+        </div>
+      );
+    }
     throw error;
   }
 
@@ -61,9 +59,20 @@ export default async function OrdersPage() {
         </CardHeader>
         <CardContent>
           {orders.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No orders yet. They appear here when a creator submits their address.
-            </p>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No orders yet. They appear here when a creator sends their address.
+              </p>
+              {!storeDomain && (
+                <p className="text-sm">
+                  Gift orders are made in Shopify.{" "}
+                  <Link href="/settings/connections" className="text-blue-600 hover:underline">
+                    Connect Shopify in Settings &gt; Connections
+                  </Link>{" "}
+                  before your first creator says yes.
+                </p>
+              )}
+            </div>
           ) : (
             <table className="w-full text-sm">
               <thead>
@@ -91,7 +100,7 @@ export default async function OrdersPage() {
                         </Link>
                       </td>
                       <td className="py-2">
-                        <Badge variant="outline">{STATUS_LABELS[order.status] ?? order.status}</Badge>
+                        <Badge variant="outline">{orderStatusLabel(order.status)}</Badge>
                       </td>
                       <td className="space-x-4 py-2">
                         {shopifyUrl && (

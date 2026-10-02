@@ -54,7 +54,9 @@ export default function TeamPage() {
   }
 
   async function cancel(id: string) {
-    await fetch(`/api/team/invites/${id}`, { method: "DELETE" });
+    setError(null);
+    const res = await fetch(`/api/team/invites/${id}`, { method: "DELETE" });
+    if (!res.ok) setError("Couldn't cancel that invite. Refresh the page and try again.");
     await load();
   }
 
@@ -69,7 +71,7 @@ export default function TeamPage() {
         <section className="space-y-3 rounded-xl border bg-card p-5">
           <h2 className="font-semibold">Invite someone</h2>
           <form onSubmit={(e) => void invite(e)} className="flex flex-wrap items-end gap-3">
-            <label className="min-w-64 flex-1 text-sm font-medium">
+            <label className="w-full min-w-0 flex-1 text-sm font-medium sm:min-w-64">
               Email
               <input
                 type="email"
@@ -99,7 +101,7 @@ export default function TeamPage() {
               {busy ? "Sending..." : "Send invite"}
             </button>
           </form>
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>}
           {link && <InviteLinkBox link={link.url} email={link.email} emailed={link.emailed} />}
         </section>
       )}
@@ -108,9 +110,9 @@ export default function TeamPage() {
         <h2 className="font-semibold">Members</h2>
         <ul className="divide-y rounded-xl border bg-card">
           {(data?.members ?? []).map((m) => (
-            <li key={m.id} className="flex items-center justify-between px-5 py-3">
-              <span>{m.email}</span>
-              <span className="text-sm text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
+            <li key={m.id} className="flex items-center justify-between gap-4 px-5 py-3">
+              <span className="min-w-0 [overflow-wrap:anywhere]">{m.email}</span>
+              <span className="shrink-0 text-sm text-muted-foreground">{ROLE_LABELS[m.role] ?? m.role}</span>
             </li>
           ))}
           {!data && <li className="px-5 py-3 text-muted-foreground">Loading...</li>}
@@ -123,8 +125,8 @@ export default function TeamPage() {
           <ul className="divide-y rounded-xl border bg-card">
             {data.invites.map((i) => (
               <li key={i.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                <span>{i.email}</span>
-                <span className="flex items-center gap-4 text-sm text-muted-foreground">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{i.email}</span>
+                <span className="flex shrink-0 items-center gap-4 text-sm text-muted-foreground">
                   {ROLE_LABELS[i.role] ?? i.role}
                   {canInvite && (
                     <button type="button" onClick={() => void cancel(i.id)} className="font-medium text-foreground underline">

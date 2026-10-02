@@ -113,9 +113,34 @@ describe("getCurrentBrandMembership with cookie", () => {
     });
   });
 
-  it("throws 403 when cookie brand is not user's", async () => {
+  it("ignores a cookie for a brand that isn't the user's and uses their own", async () => {
     mockCookieStore.set("seed-active-brand", { value: "brand-999" });
     mockPrisma.brandMembership.findUnique.mockResolvedValue(null);
+    mockPrisma.brandMembership.findFirst.mockResolvedValue({
+      id: "bm-1",
+      userId: "user-1",
+      brandId: "brand-1",
+      role: "owner",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { getCurrentBrandMembership } = await import(
+      "@/lib/integrations/brand-access"
+    );
+
+    const membership = await getCurrentBrandMembership();
+    expect(membership.brandId).toBe("brand-1");
+    expect(mockPrisma.brandMembership.findFirst).toHaveBeenCalledWith({
+      where: { userId: "user-1" },
+      orderBy: { createdAt: "asc" },
+    });
+  });
+
+  it("throws when the cookie brand isn't theirs and they have no brand at all", async () => {
+    mockCookieStore.set("seed-active-brand", { value: "brand-999" });
+    mockPrisma.brandMembership.findUnique.mockResolvedValue(null);
+    mockPrisma.brandMembership.findFirst.mockResolvedValue(null);
 
     const { getCurrentBrandMembership, BrandAccessError } = await import(
       "@/lib/integrations/brand-access"

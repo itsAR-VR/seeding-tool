@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/gmail/send";
-import { AliasPausedError, DailyLimitExceededError } from "@/lib/outreach/errors";
-import { SuppressedRecipientError } from "@/lib/compliance/suppression";
+import { emailSendErrorResponse } from "@/lib/outreach/error-response";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -53,7 +52,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     const recipient = thread.campaignCreator.creator.email;
     if (!recipient) {
-      return NextResponse.json({ error: "This creator has no email address" }, { status: 400 });
+      return NextResponse.json({ error: "This creator has no email address. Add one on their creator page first." }, { status: 400 });
     }
 
     const firstOutbound = thread.messages[0];
@@ -69,7 +68,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
           select: { id: true },
         });
     if (!alias) {
-      return NextResponse.json({ error: "No connected Gmail to send from" }, { status: 400 });
+      return NextResponse.json({ error: "Connect Gmail in Settings > Connections to send emails." }, { status: 400 });
     }
 
     let finalBody = body.trim();
@@ -118,16 +117,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (error instanceof GiftClaimIssueError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    if (error instanceof DailyLimitExceededError) {
-      return NextResponse.json({ error: "Today's sending limit is reached. Try again tomorrow." }, { status: 429 });
-    }
-    if (error instanceof AliasPausedError) {
-      return NextResponse.json({ error: "This inbox is paused" }, { status: 409 });
-    }
-    if (error instanceof SuppressedRecipientError) {
-      return NextResponse.json({ error: "This creator unsubscribed" }, { status: 409 });
-    }
+    const known = emailSendErrorResponse(error);
+    if (known) return known;
     console.error("[inbox/reply]", error);
-    return NextResponse.json({ error: "Reply failed to send" }, { status: 500 });
+    return NextResponse.json({ error: "Your reply didn't send. Try again in a minute." }, { status: 500 });
   }
 }

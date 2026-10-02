@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { findUsableInvite, InviteError } from "@/lib/invites";
+import { findInviteForLink, InviteError } from "@/lib/invites";
 import { EmailLinkError, sendSignInLink } from "@/lib/auth/email-link";
 
 /** One link per invite per minute, so a leaked invite can't spam the inbox. */
@@ -9,12 +9,14 @@ const RESEND_AFTER_MS = 60 * 1000;
 /**
  * POST /api/invites/:token/link — email a sign-in link to the invited
  * address. Opening it proves they own the email and brings them back to the
- * invite signed in, where they accept.
+ * invite signed in, where they accept. For an invite they already accepted,
+ * it is how they sign back in (people who never set a password have no other
+ * way, since Supabase's own emails can't reach them).
  */
 export async function POST(_request: Request, { params }: { params: Promise<{ token: string }> }) {
   try {
     const { token } = await params;
-    const invite = await findUsableInvite(token);
+    const { invite, state } = await findInviteForLink(token);
 
     const reserved = await prisma.brandInvite.updateMany({
       where: {
@@ -34,6 +36,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
         companyName: invite.brand?.name ?? invite.companyName ?? "your company",
         brandId: invite.brandId,
         invitedById: invite.invitedById,
+        purpose: state === "joined" ? "signin" : "join",
       });
     } catch (error) {
       await prisma.brandInvite.update({ where: { id: invite.id }, data: { linkSentAt: null } });

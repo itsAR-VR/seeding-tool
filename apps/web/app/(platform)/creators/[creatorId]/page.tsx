@@ -28,7 +28,6 @@ type ProvenancePayload = {
       platform: string;
       handle: string;
       profileUrl: string | null;
-      contactPoints: Array<{ contactType: string; contactValue: string; confidence: number }>;
     }>;
   } | null;
 };

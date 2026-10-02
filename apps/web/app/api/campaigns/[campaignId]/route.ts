@@ -105,6 +105,14 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       senderAliasId?: string | null;
     };
 
+    const CAMPAIGN_STATUSES = ["draft", "active", "paused", "completed", "archived"];
+    if (body.status !== undefined && !CAMPAIGN_STATUSES.includes(body.status)) {
+      return NextResponse.json(
+        { error: "Pick a campaign status: not started, sending, paused, finished, or archived." },
+        { status: 400 }
+      );
+    }
+
     if (body.senderAliasId) {
       const alias = await prisma.emailAlias.findFirst({
         where: {

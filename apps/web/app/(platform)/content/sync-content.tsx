@@ -22,7 +22,7 @@ export function SyncContent() {
         return;
       }
       if (!data.connected) {
-        setStatus("Connect Instagram in Settings to see posts.");
+        setStatus("Connect Instagram in Settings > Connections to see posts that tag you.");
       } else if (data.error) {
         setStatus(data.error);
       } else {

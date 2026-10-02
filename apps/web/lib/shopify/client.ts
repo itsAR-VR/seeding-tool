@@ -16,16 +16,26 @@ export interface ShopifyClient {
   fetch(path: string, options?: RequestInit): Promise<Response>;
 }
 
+/** Thrown when a brand has no usable Shopify connection yet. */
+export class ShopifyNotConnectedError extends Error {
+  constructor(
+    message = "Connect Shopify in Settings > Connections first, so we can bring in your products and make gift orders."
+  ) {
+    super(message);
+    this.name = "ShopifyNotConnectedError";
+  }
+}
+
 /**
  * Get a configured Shopify client for a brand.
  *
- * @throws if no valid Shopify credential exists for the brand.
+ * @throws ShopifyNotConnectedError if no valid Shopify credential exists for the brand.
  */
 export async function getShopifyClient(brandId: string): Promise<ShopifyClient> {
   const resolved = await resolveProviderCredential(brandId, "shopify");
 
   if (!resolved.decryptedValue) {
-    throw new Error(`No valid Shopify credential found for brand ${brandId}`);
+    throw new ShopifyNotConnectedError();
   }
 
   const accessToken = resolved.decryptedValue;
@@ -33,7 +43,9 @@ export async function getShopifyClient(brandId: string): Promise<ShopifyClient> 
   const connection = resolved.connection;
 
   if (!connection?.externalId) {
-    throw new Error(`No connected Shopify store found for brand ${brandId}`);
+    throw new ShopifyNotConnectedError(
+      "Shopify is connected without a store address. Reconnect Shopify in Settings > Connections."
+    );
   }
 
   const storeDomain = connection.externalId; // e.g. "my-store.myshopify.com"

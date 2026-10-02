@@ -125,12 +125,17 @@ export async function sendSignInLink(params: InviteSender & {
   /** Same-site page with the Continue button, e.g. /invite/<token>/continue. */
   continuePath: string;
   companyName: string;
+  /** "signin" for someone who already joined and is signing back in. */
+  purpose?: "join" | "signin";
 }): Promise<void> {
   const link = await makeSignInUrl(params.email, params.continuePath);
+  const signingIn = params.purpose === "signin";
   await sendFromCompanyGmail(
     params.email,
-    `Your link to join ${params.companyName} on Seed Scale`,
-    `Hi,\n\nOpen this link to join ${params.companyName} on Seed Scale:\n\n${link}\n\nIt works once and expires in about an hour. If you didn't ask for this, you can ignore this email.`,
+    signingIn
+      ? `Your sign-in link for ${params.companyName} on Seed Scale`
+      : `Your link to join ${params.companyName} on Seed Scale`,
+    `Hi,\n\nOpen this link to ${signingIn ? "sign in to" : "join"} ${params.companyName} on Seed Scale:\n\n${link}\n\nIt works once and expires in about an hour. If you didn't ask for this, you can ignore this email.`,
     params,
   );
 }

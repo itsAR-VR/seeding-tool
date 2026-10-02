@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getCurrentBrandMembership } from "@/lib/integrations/brand-access";
+import { BrandAccessError, getCurrentBrandMembership } from "@/lib/integrations/brand-access";
 import {
   isIntegrationMethod,
   isIntegrationProvider,
@@ -29,7 +29,7 @@ export async function PATCH(
 
     if (!supportsMethod(provider, body.method)) {
       return NextResponse.json(
-        { error: `${provider} does not support ${body.method}` },
+        { error: "That way of connecting isn't available for this account." },
         { status: 400 }
       );
     }
@@ -43,17 +43,13 @@ export async function PATCH(
       method: body.method,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to update method";
-    const status =
-      message === "Unauthorized"
-        ? 401
-        : message === "User not found" || message === "No brand found"
-          ? 404
-          : message === "Admin access required"
-            ? 403
-            : 500;
-
-    return NextResponse.json({ error: message }, { status });
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("[connections/method]", error);
+    return NextResponse.json(
+      { error: "Couldn't change how this account connects. Try again." },
+      { status: 500 }
+    );
   }
 }

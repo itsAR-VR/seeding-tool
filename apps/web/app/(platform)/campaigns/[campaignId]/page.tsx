@@ -159,9 +159,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       : null,
     !hasAnyOutreachChannel
       ? {
-          label: "Connect Gmail or Unipile before outreach can be sent",
+          label: "Connect Gmail in Settings > Connections so you can email creators",
           href: "/settings/connections",
-          cta: "Open connections",
+          cta: "Connect Gmail",
         }
       : null,
   ].filter(
@@ -271,11 +271,11 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                 helper: hasAnyOutreachChannel
                   ? [
                       hasEmailSender ? "Gmail" : null,
-                      hasDmSender ? "Unipile" : null,
+                      hasDmSender ? "Instagram DMs" : null,
                     ]
                       .filter(Boolean)
                       .join(" + ")
-                  : "Connect Gmail or Unipile",
+                  : "Connect Gmail to email creators",
               },
             ].map((item) => (
               <Link
@@ -371,7 +371,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No products added yet. Add products from your Shopify catalog.
+              No products yet. Pick the product you are gifting. If the list is empty, connect Shopify in Settings &gt; Connections first.
             </p>
           )}
         </CardContent>
@@ -424,6 +424,16 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   </tr>
                 </thead>
                 <tbody>
+                  {visibleCreators.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="py-6 text-center text-muted-foreground">
+                        No creators at this step right now.{" "}
+                        <Link href={`/campaigns/${campaignId}#creators`} scroll={false} className="text-blue-600 hover:underline">
+                          Show everyone
+                        </Link>
+                      </td>
+                    </tr>
+                  )}
                   {visibleCreators.map((cc) => {
                     const profile = cc.creator.profiles[0];
                     const status = creatorStatus(cc);

@@ -1,3 +1,4 @@
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -46,7 +47,9 @@ export async function bootstrapNewUser(
     const org = await tx.organization.create({
       data: {
         name: orgName,
-        slug: slugify(orgName),
+        // Slugs are unique, and two people can share a name ("hello@a.com" and
+        // "hello@b.com"), so a short random suffix keeps signup from failing.
+        slug: `${slugify(orgName) || "workspace"}-${randomBytes(4).toString("hex")}`,
       },
     });
 

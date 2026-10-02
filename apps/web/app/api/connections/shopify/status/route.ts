@@ -25,15 +25,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    const message =
-      error instanceof Error ? error.message : "Failed to load Shopify status";
-    const status =
-      message === "Unauthorized"
-        ? 401
-        : message === "No brand found"
-          ? 404
-          : 500;
-
-    return NextResponse.json({ error: message }, { status });
+    console.error("[connections/shopify/status]", error);
+    return NextResponse.json(
+      { error: "Couldn't check your Shopify connection. Refresh the page to try again." },
+      { status: 500 }
+    );
   }
 }

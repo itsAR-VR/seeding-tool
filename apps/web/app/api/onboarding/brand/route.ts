@@ -13,6 +13,16 @@ import {
   mergeBrandProfileWithBusinessDna,
   synthesizeBusinessDna,
 } from "@/lib/brands/synthesis";
+import { brandSlug } from "@/lib/onboarding/brand-slug";
+import { findBrandInSetup, setActiveBrandCookie } from "@/lib/onboarding/setup-state";
+
+// Reading the site (8s cap) plus the Business DNA pass (35s cap) stays well
+// under this, so a slow or huge website can never time the whole step out.
+export const maxDuration = 60;
+
+const MAX_NAME_LENGTH = 80;
+
+class InviteAlreadyUsedError extends Error {}
 
 type OnboardingAnalysisStatus = "complete" | "partial" | "failed" | "skipped";
 
@@ -24,25 +34,32 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Your session ended. Sign in again to keep going." }, { status: 401 });
     }
 
     const user = await getOrAcceptInvitedUser(authUser);
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "We couldn't find an invite for this account. Open the invite link you were emailed." },
+        { status: 404 }
+      );
     }
 
     const org = await requireOrg(user.id);
 
-    const body = await request.json();
-    const { name, websiteUrl } = body as {
-      name?: string;
-      websiteUrl?: string;
+    const body = (await request.json().catch(() => ({}))) as {
+      name?: unknown;
+      websiteUrl?: unknown;
     };
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    const websiteUrl = typeof body.websiteUrl === "string" ? body.websiteUrl : undefined;
 
-    if (!name || !name.trim()) {
+    if (!name) {
+      return NextResponse.json({ error: "Enter your brand name." }, { status: 400 });
+    }
+    if (name.length > MAX_NAME_LENGTH) {
       return NextResponse.json(
-        { error: "Brand name is required" },
+        { error: `Keep the brand name under ${MAX_NAME_LENGTH} characters.` },
         { status: 400 }
       );
     }
@@ -60,9 +77,40 @@ export async function POST(request: NextRequest) {
           error:
             error instanceof Error
               ? error.message
-              : "Website URL must be a valid http(s) URL",
+              : "Enter a website like yourbrand.com, or leave it empty.",
         },
         { status: 400 }
+      );
+    }
+
+    // Retrying the brand step (Back, refresh, double submit) reuses the company
+    // already being set up instead of creating another one.
+    const brandInSetup = await findBrandInSetup(user.id);
+
+    const staleIncompleteMemberships = await prisma.brandMembership.findMany({
+      where: {
+        userId: user.id,
+        role: "owner",
+        brand: {
+          client: {
+            organizationId: org.id,
+          },
+          onboarding: {
+            isComplete: false,
+          },
+        },
+      },
+      select: { brandId: true },
+    });
+
+    // Invite-only, checked before the slow website read: a brand-new company
+    // needs an accepted company invite (or a platform admin). Retrying an
+    // unfinished setup is always allowed.
+    const companyInvite = brandInSetup ? null : await findOpenCompanyInvite(user.email);
+    if (!brandInSetup && !companyInvite && !isPlatformAdmin(user.email)) {
+      return NextResponse.json(
+        { error: "Seed Scale is invite-only. Use the invite link you were sent." },
+        { status: 403 }
       );
     }
 
@@ -79,7 +127,7 @@ export async function POST(request: NextRequest) {
 
         if (process.env.OPENAI_API_KEY) {
           const businessDna = await synthesizeBusinessDna({
-            brandName: name.trim(),
+            brandName: name,
             websiteUrl: normalizedWebsiteUrl,
             profile: rawProfile,
           });
@@ -133,78 +181,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const slug = name
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-
-    const existingIncompleteMembership = await prisma.brandMembership.findFirst({
-      where: {
-        userId: user.id,
-        brand: {
-          client: {
-            organizationId: org.id,
-          },
-          onboarding: {
-            isComplete: false,
-          },
-        },
-      },
-      include: {
-        brand: {
-          include: {
-            onboarding: true,
-            settings: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    const staleIncompleteMemberships = await prisma.brandMembership.findMany({
-      where: {
-        userId: user.id,
-        brand: {
-          client: {
-            organizationId: org.id,
-          },
-          onboarding: {
-            isComplete: false,
-          },
-        },
-      },
-      include: {
-        brand: {
-          include: {
-            onboarding: true,
-          },
-        },
-      },
-      orderBy: { createdAt: "desc" },
-    });
-
-    // Invite-only: a brand-new company needs an accepted company invite
-    // (or a platform admin). Retrying an unfinished setup is always allowed.
-    const companyInvite = existingIncompleteMembership ? null : await findOpenCompanyInvite(user.email);
-    if (!existingIncompleteMembership && !companyInvite && !isPlatformAdmin(user.email)) {
-      return NextResponse.json(
-        { error: "Seed Scale is invite-only. Use the invite link you were sent." },
-        { status: 403 }
-      );
-    }
-
     // Reuse the latest incomplete onboarding brand instead of creating duplicates
     // when a user retries the brand step.
     const result = await prisma.$transaction(async (tx) => {
-      let brandId = existingIncompleteMembership?.brandId;
+      let brandId = brandInSetup?.id;
 
       if (brandId) {
         await tx.brand.update({
           where: { id: brandId },
           data: {
-            name: name.trim(),
-            slug: `${slug}-${Date.now().toString(36)}`,
+            name,
+            // Keep the slug stable unless the brand was renamed.
+            ...(brandInSetup?.name === name ? {} : { slug: brandSlug(name) }),
             websiteUrl: normalizedWebsiteUrl,
             clientId: client.id,
           },
@@ -244,8 +232,8 @@ export async function POST(request: NextRequest) {
       } else {
         const brand = await tx.brand.create({
           data: {
-            name: name.trim(),
-            slug: `${slug}-${Date.now().toString(36)}`,
+            name,
+            slug: brandSlug(name),
             websiteUrl: normalizedWebsiteUrl,
             clientId: client.id,
           },
@@ -285,7 +273,7 @@ export async function POST(request: NextRequest) {
             where: { id: companyInvite.id, brandId: null },
             data: { brandId },
           });
-          if (linked.count === 0) throw new Error("Company invite was already used");
+          if (linked.count === 0) throw new InviteAlreadyUsedError();
         }
       }
 
@@ -308,6 +296,10 @@ export async function POST(request: NextRequest) {
       });
     });
 
+    // Brand kit, connections and Home all follow the active-brand cookie, so
+    // point it at the company being set up (matters for people with two).
+    await setActiveBrandCookie(result.id);
+
     return NextResponse.json({
       brandId: result.id,
       slug: result.slug,
@@ -316,9 +308,16 @@ export async function POST(request: NextRequest) {
       analysisNote,
     });
   } catch (error) {
+    if (error instanceof InviteAlreadyUsedError) {
+      // A second click raced the first one; the first one created the brand.
+      return NextResponse.json(
+        { error: "Your brand is already being saved. Refresh the page to keep going." },
+        { status: 409 }
+      );
+    }
     console.error("[onboarding/brand]", error);
     return NextResponse.json(
-      { error: "Failed to create brand" },
+      { error: "Couldn't save your brand. Try again in a minute." },
       { status: 500 }
     );
   }

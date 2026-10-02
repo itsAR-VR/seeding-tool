@@ -50,6 +50,11 @@ const settingsLinks = [
     description: "The Apify account your creator searches run on.",
   },
   {
+    href: "/settings/feature-flags",
+    title: "Features",
+    description: "Turn parts of the tool on or off, like Shopify gift orders and Instagram messages.",
+  },
+  {
     href: "/settings/automations",
     title: "Scheduled searches",
     description: "Find new creators every day or week, automatically.",

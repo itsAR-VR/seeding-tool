@@ -26,14 +26,14 @@ export async function POST(request: NextRequest) {
 
     if (!drafts || !Array.isArray(drafts) || drafts.length === 0) {
       return NextResponse.json(
-        { error: "drafts array is required and must be non-empty" },
+        { error: "Pick at least one creator to email." },
         { status: 400 }
       );
     }
 
     if (drafts.length > 20) {
       return NextResponse.json(
-        { error: "Maximum 20 sends per batch" },
+        { error: "You can send up to 20 at a time. Pick fewer creators." },
         { status: 400 }
       );
     }
@@ -55,9 +55,23 @@ export async function POST(request: NextRequest) {
 
     if (validDrafts.length === 0) {
       return NextResponse.json(
-        { error: "No valid campaign creators found for this brand" },
+        { error: "We couldn't find those creators in this campaign. Refresh the page." },
         { status: 404 }
       );
+    }
+
+    // Day one: nothing to send from yet. Say so plainly instead of failing
+    // every draft one by one.
+    if (validDrafts.every((d) => d.channel === "email")) {
+      const aliasCount = await prisma.emailAlias.count({
+        where: { brandId: membership.brandId },
+      });
+      if (aliasCount === 0) {
+        return NextResponse.json(
+          { error: "Connect Gmail in Settings > Connections to send emails." },
+          { status: 400 }
+        );
+      }
     }
 
     const results = await sendOutreachBatch(validDrafts, membership.brandId);
@@ -81,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
     console.error("[outreach/send/POST]", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Sending didn't finish. Check the list for who was emailed, then try again." },
       { status: 500 }
     );
   }

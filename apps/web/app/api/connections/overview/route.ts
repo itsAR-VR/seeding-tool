@@ -157,7 +157,12 @@ export async function GET(request: Request) {
       console.warn("[connections/overview]", message);
     }
 
-    const body: Record<string, unknown> = { error: message };
+    const body: Record<string, unknown> = {
+      error:
+        status === 500
+          ? "Couldn't load your connections. Refresh the page to try again."
+          : message,
+    };
     if (status === 500 && process.env.NODE_ENV !== "production") {
       body.debug = error instanceof Error ? error.stack : String(error);
     }

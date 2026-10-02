@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { downloadCSV } from "@/lib/analytics/csv-export";
 import type { AnalyticsResponse } from "@/lib/analytics/types";
 import { Button } from "@/components/ui/button";
@@ -21,15 +22,15 @@ export function CSVExportButton({
     try {
       const res = await fetch(`/api/campaigns/${campaignId}/analytics`);
       if (!res.ok) {
-        throw new Error("Failed to fetch analytics for export");
+        throw new Error("Couldn't export the results. Try again in a minute.");
       }
       const data = (await res.json()) as AnalyticsResponse;
       const safeName = campaignName.replace(/[^a-zA-Z0-9-_]/g, "_");
       downloadCSV(data, `${safeName}-analytics.csv`);
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Export failed";
-      alert(message);
+      toast.error(
+        error instanceof Error ? error.message : "Couldn't export the results. Try again."
+      );
     } finally {
       setLoading(false);
     }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { NoCompanyNotice } from "@/components/no-company-notice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { rightsEndDate } from "@/lib/content/rights";
@@ -43,7 +44,7 @@ export default async function ContentPage({
   try {
     brandId = (await getCurrentBrandMembership()).brandId;
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
+    if (error instanceof BrandAccessError) return <NoCompanyNotice title="Content" />;
     throw error;
   }
 
@@ -125,7 +126,12 @@ export default async function ContentPage({
       {posts.length === 0 ? (
         <Card>
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            No posts here yet. When someone tags you in a post, it shows up here.
+            No posts here yet. When someone tags you on Instagram, the post shows up here. If you
+            haven&apos;t yet,{" "}
+            <Link href="/settings/connections" className="font-medium text-foreground underline">
+              connect Instagram in Settings &gt; Connections
+            </Link>
+            .
           </CardContent>
         </Card>
       ) : (
@@ -152,7 +158,7 @@ export default async function ContentPage({
                     </span>
                   )}
                   {(post.mediaType === "VIDEO" || post.source !== "tag") && (
-                    <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-xs text-white">
+                    <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-sm text-white">
                       {SOURCE_LABELS[post.source] ?? "Video"}
                     </span>
                   )}
@@ -187,13 +193,13 @@ export default async function ContentPage({
                       href={post.mediaUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="block text-xs font-medium underline"
+                      className="block text-sm font-medium underline"
                     >
                       Download {post.mediaType === "IMAGE" ? "photo" : "file"}
                     </a>
                   )}
                   {post.metaAdId ? (
-                    <Link href="/ads" className="block text-xs font-medium underline">
+                    <Link href="/ads" className="block text-sm font-medium underline">
                       {post.metaAdKind === "partnership" ? "Partnership ad" : "Paused ad"} created · See ads
                     </Link>
                   ) : (

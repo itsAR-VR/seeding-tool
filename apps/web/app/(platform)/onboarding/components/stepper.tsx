@@ -26,7 +26,7 @@ export function Stepper({ current }: { current: OnboardingStep }) {
               {STEP_LABELS[step]}
               {done && <span className="sr-only"> (done)</span>}
             </span>
-            {index < ONBOARDING_STEPS.length - 1 && <span className="h-px w-8 bg-border" aria-hidden />}
+            {index < ONBOARDING_STEPS.length - 1 && <span className="hidden h-px w-8 bg-border sm:block" aria-hidden />}
           </li>
         );
       })}

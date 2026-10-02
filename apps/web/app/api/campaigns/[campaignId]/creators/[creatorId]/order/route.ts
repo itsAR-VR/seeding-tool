@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { completeDraftOrder } from "@/lib/shopify/orders";
+import { ShopifyNotConnectedError } from "@/lib/shopify/client";
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import {
@@ -28,7 +29,7 @@ export async function POST(_request: NextRequest, context: RouteContext) {
     // Feature flag guard: Shopify order creation must be enabled
     const flags = await getFeatureFlags(membership.brandId);
     if (!flags.shopifyOrderEnabled) {
-      return NextResponse.json({ error: "Shopify order creation is disabled for this brand" }, { status: 403 });
+      return NextResponse.json({ error: "Gift orders are turned off. Turn on 'Create Shopify gift orders' in Settings > Features." }, { status: 403 });
     }
 
     // Verify campaign belongs to brand
@@ -63,6 +64,9 @@ export async function POST(_request: NextRequest, context: RouteContext) {
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof ShopifyNotConnectedError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
     const message =

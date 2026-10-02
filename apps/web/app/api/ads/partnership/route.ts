@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentBrandMembership,
+  requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
 import {
@@ -19,7 +20,8 @@ export const maxDuration = 60;
  */
 export async function POST(request: Request) {
   try {
-    const { brandId } = await getCurrentBrandMembership();
+    const membership = requireWriteAccess(await getCurrentBrandMembership());
+    const { brandId } = membership;
     const body = (await request.json().catch(() => ({}))) as { adCode?: unknown; postUrl?: unknown };
     const adCode = typeof body.adCode === "string" ? body.adCode.trim() : "";
     const postUrl = typeof body.postUrl === "string" ? body.postUrl.trim() : "";
@@ -56,6 +58,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[ads/partnership]", error);
-    return NextResponse.json({ error: "Could not create the ad" }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't make the ad. Try again in a minute." }, { status: 500 });
   }
 }

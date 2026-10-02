@@ -9,6 +9,7 @@ import {
   type FormEvent,
 } from "react";
 import { useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/safe-return-path";
 
 import {
   type ConnectionOverviewItem,
@@ -66,7 +67,8 @@ function ConnectionsContent({
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
-  const returnTo = initialReturnTo ?? searchParams.get("returnTo");
+  // Only ever send people back to a path on this site (never "javascript:" or another domain).
+  const returnTo = safeReturnPath(initialReturnTo ?? searchParams.get("returnTo"));
   const authReturnTo = useMemo(() => {
     if (!returnTo) {
       return undefined;

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
-import { bootstrapNewUser, getUserBySupabaseId } from "@/lib/tenancy";
+import { joinInvite } from "@/lib/invite-user";
 import { findUsableInvite, InviteError } from "@/lib/invites";
 
 /**
@@ -23,30 +22,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ to
     }
     if (!authUser.email_confirmed_at) throw new InviteError("Confirm your email first using the link we sent.", 403);
 
-    // Claim the invite first so two tabs can't both use it.
-    const claimed = await prisma.brandInvite.updateMany({
-      where: { id: invite.id, acceptedAt: null, revokedAt: null },
-      data: { acceptedAt: new Date() },
-    });
-    if (claimed.count === 0) throw new InviteError("This invite was already used.", 409);
-
-    try {
-      const user =
-        (await getUserBySupabaseId(authUser.id)) ??
-        (await bootstrapNewUser(authUser.id, invite.email, invite.companyName ?? invite.email.split("@")[0])).user;
-
-      if (invite.brandId) {
-        await prisma.brandMembership.upsert({
-          where: { userId_brandId: { userId: user.id, brandId: invite.brandId } },
-          update: {},
-          create: { userId: user.id, brandId: invite.brandId, role: invite.role },
-        });
-      }
-    } catch (error) {
-      // Joining failed: give the invite back so the link still works.
-      await prisma.brandInvite.update({ where: { id: invite.id }, data: { acceptedAt: null } });
-      throw error;
-    }
+    // Claims the invite first, so two tabs can't both use it.
+    const user = await joinInvite(invite, authUser.id);
+    if (!user) throw new InviteError("This invite was already used. Sign in instead.", 409);
 
     if (invite.brandId) {
       (await cookies()).set("seed-active-brand", invite.brandId, {

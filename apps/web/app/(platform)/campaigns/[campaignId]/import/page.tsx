@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
+import { sourceLabel } from "../../../creators/components/creator-filters";
 
 type Creator = {
   id: string;
@@ -40,16 +41,20 @@ export default function CampaignImportPage() {
     invalid: number;
   } | null>(null);
   const [campaignName, setCampaignName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       // Fetch all brand creators
       const creatorsRes = await fetch("/api/creators?limit=100");
-      if (creatorsRes.ok) {
-        const data = await creatorsRes.json();
+      if (!creatorsRes.ok) {
+        setError("Couldn't load your creators. Refresh the page to try again.");
+      } else {
+        const data = (await creatorsRes.json()) as { creators?: Creator[] };
         // Filter out creators already in this campaign
-        const available = (data.creators as Creator[]).filter(
+        const available = (data.creators ?? []).filter(
           (c) =>
             !c.campaignCreators.some(
               (cc) => cc.campaignId === params.campaignId
@@ -59,15 +64,13 @@ export default function CampaignImportPage() {
       }
 
       // Fetch campaign name
-      const campaignRes = await fetch(
-        `/api/campaigns/${params.campaignId}/creators?reviewStatus=pending`
-      );
+      const campaignRes = await fetch(`/api/campaigns/${params.campaignId}`);
       if (campaignRes.ok) {
-        // We just need to know the campaign exists
-        setCampaignName(params.campaignId);
+        const campaign = (await campaignRes.json()) as { name?: string };
+        setCampaignName(campaign.name ?? "");
       }
     } catch {
-      // ignore
+      setError("Couldn't load your creators. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -101,6 +104,7 @@ export default function CampaignImportPage() {
     if (selected.size === 0) return;
 
     setImporting(true);
+    setError(null);
     try {
       const res = await fetch(
         `/api/campaigns/${params.campaignId}/import`,
@@ -117,9 +121,12 @@ export default function CampaignImportPage() {
         setSelected(new Set());
         // Refresh list to remove imported creators
         fetchData();
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't add those creators. Try again.");
       }
     } catch {
-      alert("Import failed");
+      setError("Couldn't add those creators. Check your connection and try again.");
     } finally {
       setImporting(false);
     }
@@ -138,10 +145,11 @@ export default function CampaignImportPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Import Creators to Campaign
+            Add creators from your list
           </h1>
           <p className="text-muted-foreground">
-            Select existing creators to add to campaign {campaignName}.
+            Pick creators you already saved to add them to{" "}
+            {campaignName ? campaignName : "this campaign"}.
           </p>
         </div>
         <Button
@@ -154,10 +162,16 @@ export default function CampaignImportPage() {
         </Button>
       </div>
 
+      {error && (
+        <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+
       {result && (
         <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          ✅ {result.added} creators added, {result.skipped} already in
-          campaign, {result.invalid} invalid
+          {result.added} added. {result.skipped} were already in this campaign
+          {result.invalid > 0 ? `, ${result.invalid} couldn't be added` : ""}.
         </div>
       )}
 
@@ -184,17 +198,26 @@ export default function CampaignImportPage() {
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Avg Views means the average of the latest 12 reels/video posts when
-            that enrichment is available.
+          <p className="text-sm text-muted-foreground">
+            Avg views is the average of their latest 12 videos, when we have it.
           </p>
         </CardHeader>
         <CardContent>
           {creators.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              All creators are already in this campaign, or no creators exist
-              yet.
-            </p>
+            <div className="space-y-3 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No saved creators to add. Everyone you saved is already in this campaign, or you
+                haven&apos;t saved any yet.
+              </p>
+              <div className="flex justify-center gap-2">
+                <Button size="sm" onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}>
+                  Find creators
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => router.push("/creators/import")}>
+                  Upload a list
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -242,25 +265,25 @@ export default function CampaignImportPage() {
                         <InstagramHandleLink
                           handle={creator.instagramHandle}
                           url={instagramProfile?.url}
-                          className="font-mono text-xs text-blue-600 hover:underline"
+                          className="font-mono text-sm text-blue-600 hover:underline"
                         >
                           {creator.instagramHandle
                             ? `@${creator.instagramHandle.replace(/^@/, "")}`
                             : creator.name || "—"}
                         </InstagramHandleLink>
                       </td>
-                      <td className="py-2 pr-4 text-xs">
+                      <td className="py-2 pr-4">
                         {creator.followerCount?.toLocaleString() ?? "—"}
                       </td>
-                      <td className="py-2 pr-4 text-xs">
+                      <td className="py-2 pr-4">
                         {creator.avgViews?.toLocaleString() ?? "—"}
                       </td>
-                      <td className="py-2 pr-4 text-xs">
+                      <td className="py-2 pr-4">
                         {creator.bioCategory || "—"}
                       </td>
                       <td className="py-2">
-                        <Badge variant="outline" className="text-xs">
-                          {creator.discoverySource}
+                        <Badge variant="outline">
+                          {sourceLabel(creator.discoverySource)}
                         </Badge>
                       </td>
                       </tr>

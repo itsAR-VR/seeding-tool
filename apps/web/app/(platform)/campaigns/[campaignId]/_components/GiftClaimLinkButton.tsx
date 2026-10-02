@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
 type GiftClaimLinkButtonProps = {
@@ -30,7 +31,7 @@ export function GiftClaimLinkButton({
       };
 
       if (!response.ok || !body.claimUrl) {
-        throw new Error(body.error ?? "Failed to generate claim link");
+        throw new Error(body.error ?? "Couldn't make the address link. Try again.");
       }
 
       await navigator.clipboard.writeText(body.claimUrl);
@@ -38,7 +39,7 @@ export function GiftClaimLinkButton({
       window.setTimeout(() => setState("idle"), 2500);
     } catch (error) {
       setState("idle");
-      alert(error instanceof Error ? error.message : "Failed to copy claim link");
+      toast.error(error instanceof Error ? error.message : "Couldn't copy the address link. Try again.");
     }
   }
 
@@ -54,7 +55,7 @@ export function GiftClaimLinkButton({
         ? "Generating…"
         : state === "copied"
           ? "Copied"
-          : "Copy claim link"}
+          : "Copy address link"}
     </Button>
   );
 }

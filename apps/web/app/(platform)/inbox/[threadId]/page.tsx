@@ -153,10 +153,12 @@ export default function ThreadDetailPage() {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setReplyNotice({ tone: "error", text: data.error ?? "Could not save your decision" });
+        setReplyNotice({ tone: "error", text: data.error ?? "Couldn't save your decision. Try again." });
         return;
       }
       await reloadThread();
+    } catch {
+      setReplyNotice({ tone: "error", text: "Couldn't save your decision. Check your connection and try again." });
     } finally {
       setDeciding(false);
     }
@@ -175,7 +177,7 @@ export default function ThreadDetailPage() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setReplyNotice({ tone: "error", text: data.error ?? "Reply failed to send" });
+        setReplyNotice({ tone: "error", text: data.error ?? "Your reply didn't send. Try again." });
         return;
       }
       setReplyNotice({
@@ -188,7 +190,7 @@ export default function ThreadDetailPage() {
       setSuggestionId(null);
       await reloadThread();
     } catch {
-      setReplyNotice({ tone: "error", text: "Reply failed to send" });
+      setReplyNotice({ tone: "error", text: "Your reply didn't send. Check your connection and try again." });
     } finally {
       setReplySending(false);
     }
@@ -214,11 +216,11 @@ export default function ThreadDetailPage() {
           setThread((await threadRes.json()) as Thread);
         }
       } else {
-        const data = await res.json();
-        setDmError(data.error || "Failed to send DM");
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setDmError(data?.error || "Your Instagram message didn't send. Try again.");
       }
     } catch {
-      setDmError("Network error sending DM");
+      setDmError("Your Instagram message didn't send. Check your connection and try again.");
     } finally {
       setDmSending(false);
     }
@@ -256,7 +258,11 @@ export default function ThreadDetailPage() {
   if (!thread) {
     return (
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Thread not found</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Conversation not found</h1>
+        <p className="text-muted-foreground">
+          It may have been removed, or it belongs to a different company. Go back to your inbox to
+          see your conversations.
+        </p>
         <Button variant="outline" onClick={() => router.push("/inbox")}>
           ← Back to Inbox
         </Button>

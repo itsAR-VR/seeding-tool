@@ -99,8 +99,9 @@ export async function POST(request: NextRequest) {
         ? row.discoverySource!
         : "csv_import";
       const searchResult = row.searchResultId
-        ? await prisma.creatorSearchResult.findUnique({
-            where: { id: row.searchResultId },
+        ? await prisma.creatorSearchResult.findFirst({
+            // Only this brand's search results; never another company's.
+            where: { id: row.searchResultId, searchJob: { brandId: membership.brandId } },
             select: {
               id: true,
               searchJobId: true,

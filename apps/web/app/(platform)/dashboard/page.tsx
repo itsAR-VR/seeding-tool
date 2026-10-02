@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { getCurrentUserRecord, BrandAccessError } from "@/lib/integrations/brand-access";
+import { getActiveMembership, isBrandInSetup } from "@/lib/onboarding/setup-state";
 import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { CampaignHealthWidget } from "./components/campaign-health";
@@ -50,15 +51,29 @@ async function fetchHealthSnapshots(
 
 type SetupItem = { done: boolean; text: string; href: string; action: string };
 
+/** A broken or expired integration shows as "not connected" instead of crashing Home. */
+async function connectedOrFalse(
+  brandId: string,
+  provider: Parameters<typeof resolveProviderCredential>[1],
+): Promise<{ connected: boolean }> {
+  try {
+    const credential = await resolveProviderCredential(brandId, provider);
+    return { connected: Boolean(credential?.connected) };
+  } catch (error) {
+    console.warn("[dashboard] couldn't check connection", { brandId, provider, error });
+    return { connected: false };
+  }
+}
+
 async function fetchSetupItems(brandId: string, hasCampaign: boolean): Promise<SetupItem[]> {
   const [brand, instagram, gmail, shopify] = await Promise.all([
     prisma.brand.findUnique({
       where: { id: brandId },
       select: { productFacts: true, apifyTokenEnc: true, useSharedApify: true },
     }),
-    resolveProviderCredential(brandId, "instagram"),
-    resolveProviderCredential(brandId, "gmail"),
-    resolveProviderCredential(brandId, "shopify"),
+    connectedOrFalse(brandId, "instagram"),
+    connectedOrFalse(brandId, "gmail"),
+    connectedOrFalse(brandId, "shopify"),
   ]);
   return [
     { done: Boolean(brand?.productFacts?.trim()), text: "Write what creators should know about the gift", href: "/settings/brand-kit", action: "Open brand kit" },
@@ -86,25 +101,25 @@ function daysAgo(days: number): Date {
 }
 
 export default async function DashboardPage() {
-  let membership;
+  let user;
   try {
-    membership = await getCurrentBrandMembership();
+    user = await getCurrentUserRecord();
   } catch (error) {
-    if (error instanceof BrandAccessError) {
-      redirect("/onboarding");
-    }
-    return null;
+    // No app account yet: the setup page explains what to do (invite link).
+    if (error instanceof BrandAccessError) redirect("/onboarding");
+    throw error;
   }
+
+  // Cookie brand, or the oldest one when the cookie is missing or stale.
+  const membership = await getActiveMembership(user.id);
+  if (!membership) redirect("/onboarding");
 
   const brandId = membership.brandId;
 
-  // Gate: onboarding must be complete before accessing the dashboard
-  const onboarding = await prisma.brandOnboarding.findUnique({
-    where: { brandId },
-    select: { isComplete: true },
-  });
-
-  if (!onboarding?.isComplete) {
+  // Only a company this person is still setting up sends them to setup. It's
+  // the same rule /api/onboarding/status uses, so the two pages can't bounce
+  // between each other. Teams someone was invited into always open Home.
+  if (await isBrandInSetup(user.id, brandId)) {
     redirect("/onboarding");
   }
 

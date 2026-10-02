@@ -3,6 +3,9 @@ import type { User } from "@supabase/supabase-js";
 
 import {
   LOGIN_BOOTSTRAP_ERROR_MESSAGE,
+  LOGIN_UNCONFIRMED_MESSAGE,
+  LOGIN_WRONG_PASSWORD_MESSAGE,
+  friendlyLoginError,
   resolveLoginBootstrapOrgName,
   signInAndBootstrapLogin,
 } from "@/app/(auth)/login/login-bootstrap";
@@ -78,7 +81,7 @@ describe("login bootstrap recovery", () => {
     });
   });
 
-  it("returns the Supabase auth error without bootstrapping", async () => {
+  it("explains a wrong password in plain words, without bootstrapping", async () => {
     const signInWithPassword = vi.fn().mockResolvedValue({
       data: { user: null },
       error: { message: "Invalid login credentials" },
@@ -94,7 +97,7 @@ describe("login bootstrap recovery", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "Invalid login credentials",
+      error: LOGIN_WRONG_PASSWORD_MESSAGE,
     });
     expect(fetcher).not.toHaveBeenCalled();
   });
@@ -105,5 +108,10 @@ describe("login bootstrap recovery", () => {
         makeUser({ user_metadata: {}, email: "kamila@kalm.test" })
       )
     ).toBe("kamila");
+  });
+
+  it("tells an unconfirmed invitee to use their invite email", () => {
+    expect(friendlyLoginError("Email not confirmed")).toBe(LOGIN_UNCONFIRMED_MESSAGE);
+    expect(friendlyLoginError("Something else")).toBe("Something else");
   });
 });

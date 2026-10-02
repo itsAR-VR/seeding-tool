@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -85,6 +86,19 @@ function parsePositiveInteger(value: string) {
   }
 
   return { value: parsed, error: null };
+}
+
+const JOB_STATUS_LABELS: Record<string, string> = {
+  pending: "Starting",
+  queued: "Starting",
+  running: "Searching",
+  completed: "Done",
+  completed_with_shortfall: "Done, fewer than asked",
+  failed: "Didn't finish",
+};
+
+function jobStatusLabel(status: string): string {
+  return JOB_STATUS_LABELS[status] ?? status.replace(/_/g, " ");
 }
 
 export default function DiscoverCreatorsPage() {
@@ -185,10 +199,19 @@ export default function DiscoverCreatorsPage() {
   }
 
   async function pollJob(jobId: string) {
+    const stop = () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
+      setLoading(false);
+    };
     const response = await fetch(
       `/api/campaigns/${params.campaignId}/search/${jobId}`
     );
     if (!response.ok) {
+      if (response.status === 404) {
+        stop();
+        setError("We lost track of this search. Start it again.");
+      }
       return;
     }
 
@@ -200,9 +223,7 @@ export default function DiscoverCreatorsPage() {
       payload.status === "completed_with_shortfall" ||
       payload.status === "failed"
     ) {
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = null;
-      setLoading(false);
+      stop();
     }
   }
 
@@ -270,7 +291,7 @@ export default function DiscoverCreatorsPage() {
 
       const data = (await response.json()) as SearchJob | { error: string };
       if (!response.ok) {
-        setError((data as { error: string }).error ?? "Search failed");
+        setError((data as { error: string }).error ?? "The search didn't start. Try again.");
         setLoading(false);
         return;
       }
@@ -284,7 +305,7 @@ export default function DiscoverCreatorsPage() {
 
       void pollJob(queuedJob.jobId);
     } catch {
-      setError("Network error — please try again.");
+      setError("The search didn't start. Check your connection and try again.");
       setLoading(false);
     }
   }
@@ -438,7 +459,15 @@ export default function DiscoverCreatorsPage() {
       {error ? (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-4">
-            <p className="text-sm text-red-700">{error}</p>
+            <p role="alert" className="text-sm text-red-700">{error}</p>
+            {/apify/i.test(error) ? (
+              <Link
+                href="/settings/creator-search"
+                className="mt-2 inline-block text-sm font-medium text-red-900 underline underline-offset-2"
+              >
+                Open Settings &gt; Creator search
+              </Link>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}
@@ -453,21 +482,17 @@ export default function DiscoverCreatorsPage() {
           <CardContent className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-xs text-muted-foreground">Job</p>
-                <p className="truncate text-xs font-mono">{job.jobId}</p>
+                <p className="text-sm text-muted-foreground">Status</p>
+                <p className="text-sm font-semibold">{jobStatusLabel(job.status)}</p>
               </div>
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-xs text-muted-foreground">Status</p>
-                <p className="text-sm font-semibold">{job.status}</p>
-              </div>
-              <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-xs text-muted-foreground">Requested</p>
+                <p className="text-sm text-muted-foreground">Requested</p>
                 <p className="text-sm font-semibold">
                   {job.requestedCount ?? "—"}
                 </p>
               </div>
               <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-xs text-muted-foreground">Ready</p>
+                <p className="text-sm text-muted-foreground">Ready</p>
                 <p className="text-sm font-semibold">
                   {job.resultCount ?? 0}
                 </p>
@@ -493,17 +518,14 @@ export default function DiscoverCreatorsPage() {
               ) : null}
             </div>
 
-            <div className="grid gap-2 text-xs text-green-900 sm:grid-cols-3 lg:grid-cols-6">
-              <span>Validated: {job.validatedCount ?? 0}</span>
-              <span>Invalid: {job.invalidCount ?? 0}</span>
-              <span>Cached: {job.cachedCount ?? 0}</span>
-              <span>Requested: {job.requestedCount ?? "—"}</span>
-              <span>Ready: {job.resultCount ?? 0}</span>
-              <span>Status: {job.status}</span>
+            <div className="grid gap-2 text-sm text-green-900 sm:grid-cols-3">
+              <span>Checked: {job.validatedCount ?? 0}</span>
+              <span>Skipped: {job.invalidCount ?? 0}</span>
+              <span>Ready to review: {job.resultCount ?? 0}</span>
             </div>
 
             {job.error ? (
-              <p className="text-xs text-red-700">{job.error}</p>
+              <p role="alert" className="text-sm text-red-700">{job.error}</p>
             ) : null}
 
             <div className="flex justify-end">

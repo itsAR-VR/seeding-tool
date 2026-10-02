@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/gmail/send";
-import {
-  DailyLimitExceededError,
-  CrossBrandAliasError,
-} from "@/lib/outreach/errors";
+import { emailSendErrorResponse } from "@/lib/outreach/error-response";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -51,9 +48,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
       aliasId: string;
     };
 
-    if (!body.draftId || !body.aliasId) {
+    if (!body.draftId) {
       return NextResponse.json(
-        { error: "draftId and aliasId are required" },
+        { error: "Pick a draft to send." },
         { status: 400 }
       );
     }
@@ -69,7 +66,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!draft) {
       return NextResponse.json(
-        { error: "Draft not found or already sent" },
+        { error: "This draft was already sent or removed. Refresh the page." },
         { status: 404 }
       );
     }
@@ -78,7 +75,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const recipientEmail = thread.campaignCreator.creator.email;
     if (!recipientEmail) {
       return NextResponse.json(
-        { error: "Creator has no email address" },
+        { error: "This creator has no email address. Add one on their creator page first." },
         { status: 400 }
       );
     }
@@ -101,10 +98,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
           select: { id: true },
         })
       : null;
+    const aliasId = threadAlias?.id ?? body.aliasId;
+    if (!aliasId) {
+      return NextResponse.json(
+        { error: "Connect Gmail in Settings > Connections to send emails." },
+        { status: 400 }
+      );
+    }
 
     // INVARIANT: AI drafts are NEVER auto-sent.
     const result = await sendEmail({
-      aliasId: threadAlias?.id ?? body.aliasId,
+      aliasId,
       to: recipientEmail,
       subject: draft.subject ?? "Re: Collaboration",
       body: draft.body,
@@ -146,28 +150,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    if (error instanceof CrossBrandAliasError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 403 }
-      );
-    }
-
-    if (error instanceof DailyLimitExceededError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 429 }
-      );
-    }
+    const known = emailSendErrorResponse(error);
+    if (known) return known;
 
     console.error("[inbox/send/POST]", error);
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to send message",
-      },
+      { error: "Your email didn't send. Try again in a minute." },
       { status: 500 }
     );
   }

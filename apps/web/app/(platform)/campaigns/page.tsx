@@ -46,7 +46,7 @@ export default async function CampaignsPage() {
         </div>
       );
     }
-    return null;
+    throw error;
   }
 
   const campaigns = await prisma.campaign.findMany({
@@ -79,8 +79,14 @@ export default async function CampaignsPage() {
           <CardHeader>
             <CardTitle>No campaigns yet</CardTitle>
             <CardDescription>
-              Create your first campaign to start seeding products to creators.
+              A campaign is one product gifted to a list of creators. Start one, then pick your
+              product and find creators.
             </CardDescription>
+            <div className="pt-2">
+              <Link href="/campaigns/new">
+                <Button>Start your first campaign</Button>
+              </Link>
+            </div>
           </CardHeader>
         </Card>
       ) : (

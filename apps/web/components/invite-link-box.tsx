@@ -7,18 +7,26 @@ export function InviteLinkBox({ link, email, emailed }: { link: string; email: s
   const [copied, setCopied] = useState(false);
   return (
     <div className="space-y-2 rounded-xl border border-green-200 bg-green-50 p-4">
-      <p className="font-medium text-green-900">
+      <p className="font-medium text-green-900 [overflow-wrap:anywhere]">
         {emailed
           ? `Invite emailed to ${email}. You can also send them this link yourself:`
-          : `Invite ready, but we couldn't email it. Send this link to ${email}:`}
+          : `Invite ready, but we couldn't email it (check your Gmail connection in Settings). Copy this link and send it to ${email} yourself:`}
       </p>
       <div className="flex gap-2">
-        <input readOnly value={link} className="w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+        <input
+          readOnly
+          value={link}
+          aria-label="Invite link"
+          onFocus={(e) => e.currentTarget.select()}
+          className="w-full min-w-0 rounded-lg border bg-background px-3 py-2 text-sm"
+        />
         <button
           type="button"
           onClick={() => {
-            void navigator.clipboard.writeText(link);
-            setCopied(true);
+            navigator.clipboard.writeText(link).then(
+              () => setCopied(true),
+              () => setCopied(false),
+            );
           }}
           className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"
         >

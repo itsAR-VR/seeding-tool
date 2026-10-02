@@ -87,15 +87,34 @@ export default function BrandKitPage() {
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   useEffect(() => {
     void fetch("/api/brand-kit")
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        if (r.ok) return (await r.json()) as Kit;
+        const err = (await r.json().catch(() => null)) as { error?: string } | null;
+        setLoadError(err?.error ?? "Couldn't load your brand kit. Refresh the page to try again.");
+        return null;
+      })
       .then((data: Kit | null) => {
         if (data) setKit({ ...data, followUpTemplate: data.followUpTemplate ?? data.defaultFollowUp });
-      });
+      })
+      .catch(() => setLoadError("Couldn't load your brand kit. Check your connection and refresh the page."));
   }, []);
 
-  if (!kit) return <p className="text-muted-foreground">Loading...</p>;
+  if (!kit) {
+    return loadError ? (
+      <div className="max-w-3xl space-y-3">
+        <h1 className="text-3xl font-bold tracking-tight">Brand kit</h1>
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {loadError}
+        </p>
+      </div>
+    ) : (
+      <p className="text-muted-foreground">Loading...</p>
+    );
+  }
 
   const set = (key: keyof Kit, value: string) => setKit({ ...kit, [key]: value });
 

@@ -41,14 +41,14 @@ export async function POST(request: NextRequest) {
       campaignCreatorIds.length === 0
     ) {
       return NextResponse.json(
-        { error: "campaignCreatorIds is required and must be a non-empty array" },
+        { error: "Pick at least one creator to write to." },
         { status: 400 }
       );
     }
 
     if (campaignCreatorIds.length > 20) {
       return NextResponse.json(
-        { error: "Maximum 20 creators per batch" },
+        { error: "You can write to up to 20 creators at a time. Pick fewer." },
         { status: 400 }
       );
     }
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       const builtIn = getBuiltInPersona(personaId);
       if (!builtIn) {
         return NextResponse.json(
-          { error: "Invalid built-in persona ID" },
+          { error: "That writing style wasn't found. Pick another one." },
           { status: 400 }
         );
       }
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       });
       if (!dbPersona) {
         return NextResponse.json(
-          { error: "Persona not found" },
+          { error: "That writing style wasn't found. Pick another one." },
           { status: 404 }
         );
       }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
 
     if (campaignCreators.length === 0) {
       return NextResponse.json(
-        { error: "No matching campaign creators found" },
+        { error: "We couldn't find those creators in this campaign. Refresh the page." },
         { status: 404 }
       );
     }
@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
             subject: null,
             body: null,
             tokens: 0,
-            error: "Failed to generate draft",
+            error: "Couldn't write this email. Try again, or write it yourself.",
           };
         }
       })
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
     }
     console.error("[outreach/draft/POST]", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Couldn't write the emails. Try again in a minute." },
       { status: 500 }
     );
   }

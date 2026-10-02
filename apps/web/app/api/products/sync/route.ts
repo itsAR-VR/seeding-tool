@@ -6,7 +6,7 @@ import {
 } from "@/lib/integrations/brand-access";
 import { syncProducts, getProducts } from "@/lib/shopify/products";
 import { updateShopifyConnectionStatus } from "@/lib/shopify/status";
-import { getShopifyClient } from "@/lib/shopify/client";
+import { getShopifyClient, ShopifyNotConnectedError } from "@/lib/shopify/client";
 import { registerWebhooks } from "@/lib/shopify/webhooks";
 import { WEBHOOK_CALLBACK_URL } from "@/lib/config";
 
@@ -33,9 +33,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    const message = error instanceof Error ? error.message : "Failed to fetch products";
-    const status = message === "Unauthorized" ? 401 : message === "No brand found" ? 404 : 500;
-    return NextResponse.json({ error: message }, { status });
+    console.error("[products/sync/GET]", error);
+    return NextResponse.json({ error: "Couldn't load your products. Refresh the page to try again." }, { status: 500 });
   }
 }
 
@@ -66,6 +65,9 @@ export async function POST(request: NextRequest) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof ShopifyNotConnectedError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
 
     const message = error instanceof Error ? error.message : "Product sync failed";
     try {
@@ -88,8 +90,10 @@ export async function POST(request: NextRequest) {
     } catch {
       // ignore status update failures
     }
-    const status = message === "Unauthorized" ? 401 : 500;
     console.error("[products/sync/POST]", error);
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json(
+      { error: "Couldn't bring in your Shopify products. Try again, or reconnect Shopify in Settings > Connections." },
+      { status: 502 }
+    );
   }
 }

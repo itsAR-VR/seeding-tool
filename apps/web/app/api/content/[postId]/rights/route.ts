@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentBrandMembership,
+  requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
 import {
@@ -23,7 +24,8 @@ export async function POST(
   { params }: { params: Promise<{ postId: string }> }
 ) {
   try {
-    const { brandId } = await getCurrentBrandMembership();
+    const membership = requireWriteAccess(await getCurrentBrandMembership());
+    const { brandId } = membership;
     const { postId } = await params;
     const body = (await request.json().catch(() => ({}))) as { months?: unknown };
     const months = isValidRightsMonths(body.months) ? body.months : DEFAULT_RIGHTS_MONTHS;
@@ -36,7 +38,7 @@ export async function POST(
       },
     });
     if (!post) {
-      return NextResponse.json({ error: "Post not found" }, { status: 404 });
+      return NextResponse.json({ error: "That post wasn't found. Refresh the page." }, { status: 404 });
     }
     if (post.rightsStatus === "approved") {
       return NextResponse.json({ error: "Rights are already approved" }, { status: 409 });
@@ -63,6 +65,6 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("[content/rights]", error);
-    return NextResponse.json({ error: "Could not create the request" }, { status: 500 });
+    return NextResponse.json({ error: "Couldn't make the rights link. Try again in a minute." }, { status: 500 });
   }
 }

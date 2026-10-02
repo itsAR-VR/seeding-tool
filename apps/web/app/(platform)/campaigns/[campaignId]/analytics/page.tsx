@@ -57,8 +57,8 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   try {
     membership = await getCurrentBrandMembership();
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
-    return null;
+    if (error instanceof BrandAccessError) notFound();
+    throw error;
   }
 
   const campaign = await prisma.campaign.findFirst({
@@ -298,12 +298,22 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
             <span>/</span>
             <span>Analytics</span>
           </div>
-          <h1 className="text-2xl font-bold">{campaign.name} — Analytics</h1>
+          <h1 className="text-2xl font-bold">{campaign.name}: results</h1>
         </div>
         <Link href={`/campaigns/${campaignId}`}>
           <Button variant="outline">&larr; Back to Campaign</Button>
         </Link>
       </div>
+
+      {totalCreators === 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          No results yet. Add creators to this campaign and email them, and their replies, orders,
+          and posts will show up here.{" "}
+          <Link href={`/campaigns/${campaignId}/discover`} className="font-medium underline underline-offset-2">
+            Find creators
+          </Link>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -318,7 +328,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
             <CardDescription>Posted</CardDescription>
             <CardTitle className="text-3xl">{postedCount}</CardTitle>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
+          <CardContent className="text-sm text-muted-foreground">
             {totalCreators > 0
               ? `${Math.round((postedCount / totalCreators) * 100)}% conversion`
               : "\u2014"}
@@ -335,7 +345,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
             <CardDescription>Orders Created</CardDescription>
             <CardTitle className="text-3xl">{totalOrders}</CardTitle>
           </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
+          <CardContent className="text-sm text-muted-foreground">
             {totalProductValueCents > 0
               ? formatCurrency(totalProductValueCents) + " product value"
               : "\u2014"}

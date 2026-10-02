@@ -2,13 +2,25 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { normalizeStep } from "./components/constants";
+import { buildOnboardingParams, normalizeStep } from "./components/constants";
 import { Stepper } from "./components/stepper";
 import { BrandStep } from "./components/brand-step";
 import { KitStep } from "./components/kit-step";
 import { ConnectStep } from "./components/connect-step";
+import { Button } from "@/components/ui/button";
 
-type Status = { isComplete: boolean; hasBrand: boolean; canCreateBrand?: boolean; companyName?: string | null };
+type Status = {
+  isComplete: boolean;
+  hasBrand: boolean;
+  canCreateBrand?: boolean;
+  companyName?: string | null;
+  /** The company being set up. Always from the server, never the URL. */
+  brandId?: string;
+  brandName?: string;
+  websiteUrl?: string | null;
+};
+
+type LoadState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; status: Status };
 
 function Loading() {
   return (
@@ -23,37 +35,65 @@ function OnboardingContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const step = normalizeStep(searchParams.get("step"));
-  const brandName = searchParams.get("brandName") ?? "";
-  const brandId = searchParams.get("brandId") ?? "";
-  const [status, setStatus] = useState<Status | null>(null);
+  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/onboarding/status")
-      .then((r) =>
-        r.ok
-          ? (r.json() as Promise<Status>)
-          : // No account here and no invite to accept.
-            r.status === 404
-            ? ({ isComplete: false, hasBrand: false, canCreateBrand: false } as Status)
-            : null,
-      )
+      .then(async (r) => {
+        if (r.status === 401) {
+          router.replace("/login");
+          return null;
+        }
+        // No account here and no invite to accept.
+        if (r.status === 404) return { isComplete: false, hasBrand: false, canCreateBrand: false } as Status;
+        if (!r.ok) throw new Error("status failed");
+        return (await r.json()) as Status;
+      })
       .then((data) => {
-        if (cancelled) return;
+        if (cancelled || !data) return;
         // Finished companies go Home; the Accounts step stays reachable for adding connections.
-        if (data?.isComplete && step !== "connect") {
+        if (data.isComplete && step !== "connect") {
           router.replace("/dashboard");
           return;
         }
-        setStatus(data ?? { isComplete: false, hasBrand: true });
+        // Steps 2 and 3 need a saved brand. Without one (a typed or old link),
+        // start at step 1 instead of showing a step that can't load.
+        if (!data.isComplete && !data.brandId && step !== "brand") {
+          router.replace(`/onboarding?${buildOnboardingParams("brand", {})}`);
+          return;
+        }
+        setState({ kind: "ready", status: data });
       })
-      .catch(() => !cancelled && setStatus({ isComplete: false, hasBrand: true }));
+      .catch(() => !cancelled && setState({ kind: "error" }));
     return () => {
       cancelled = true;
     };
-  }, [router, step]);
+  }, [router, step, attempt]);
 
-  if (!status) return <Loading />;
+  if (state.kind === "loading") return <Loading />;
+
+  if (state.kind === "error") {
+    return (
+      <div className="mx-auto flex min-h-[50vh] max-w-md flex-col justify-center gap-3 py-12">
+        <h1 className="text-2xl font-semibold">We couldn&apos;t load your setup</h1>
+        <p className="text-muted-foreground">Check your connection, then try again. Nothing you saved is lost.</p>
+        <div>
+          <Button
+            onClick={() => {
+              setState({ kind: "loading" });
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const { status } = state;
 
   if (status.hasBrand === false && !status.canCreateBrand) {
     return (
@@ -66,11 +106,21 @@ function OnboardingContent() {
     );
   }
 
+  // The brand comes from the server. A brandId typed into the URL is ignored.
+  const brandId = status.brandId ?? "";
+  const brandName = status.brandName ?? searchParams.get("brandName") ?? "";
+
   return (
-    <div className="mx-auto max-w-2xl py-10 sm:py-14">
+    <div className="mx-auto max-w-2xl min-w-0 py-6 sm:py-14">
       <Stepper current={step} />
-      {step === "brand" && <BrandStep initialBrandName={brandName || status.companyName || ""} />}
-      {step === "kit" && <KitStep brandName={brandName} brandId={brandId} />}
+      {step === "brand" && (
+        <BrandStep
+          key={brandId || "new"}
+          initialBrandName={brandName || status.companyName || ""}
+          initialWebsiteUrl={status.websiteUrl ?? ""}
+        />
+      )}
+      {step === "kit" && <KitStep brandName={brandName} />}
       {step === "connect" && <ConnectStep brandName={brandName} brandId={brandId} />}
     </div>
   );

@@ -52,12 +52,13 @@ interface ShopifyStatus {
 }
 
 function normalizeErrorMessage(message: string) {
+  // Older servers sent internal wording; keep translating it for safety.
   if (message.includes("No valid Shopify credential found")) {
-    return "Shopify is not connected for this brand yet.";
+    return "Shopify is not connected yet. Connect it in Settings > Connections.";
   }
 
   if (message.includes("No connected Shopify store found")) {
-    return "Shopify is connected without a store domain. Reconnect it from Settings.";
+    return "Shopify is connected without a store address. Reconnect it in Settings > Connections.";
   }
 
   return message;
@@ -220,15 +221,15 @@ export function ProductPicker({
           </div>
           <h3 className="text-lg font-semibold">Shopify not connected</h3>
           <p className="mt-1 max-w-sm text-center text-sm text-muted-foreground">
-            Connect your Shopify admin domain and access token before syncing
-            products into this campaign.
+            Connect Shopify in Settings &gt; Connections so we can bring in
+            your products. Then come back here to pick what you are gifting.
           </p>
           {showSyncButton && (
             <Link
               href="/settings/connections"
               className={buttonVariants({ className: "mt-4" })}
             >
-              Open Shopify settings
+              Connect Shopify
             </Link>
           )}
         </CardContent>

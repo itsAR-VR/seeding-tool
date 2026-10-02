@@ -33,16 +33,20 @@ export default function ReviewQueuePage() {
   const [creators, setCreators] = useState<CampaignCreator[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchCreators() {
     try {
       const res = await fetch(`/api/campaigns/${params.campaignId}/creators`);
       if (res.ok) {
         const data = (await res.json()) as CampaignCreator[];
-        setCreators(data);
+        setCreators(Array.isArray(data) ? data : []);
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't load creators. Refresh the page to try again.");
       }
     } catch {
-      // ignore
+      setError("Couldn't load creators. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -58,6 +62,7 @@ export default function ReviewQueuePage() {
     action: "approve" | "decline" | "defer"
   ) {
     setActionLoading(creatorId);
+    setError(null);
     try {
       const res = await fetch(
         `/api/campaigns/${params.campaignId}/creators/${creatorId}/review`,
@@ -72,9 +77,12 @@ export default function ReviewQueuePage() {
         setCreators((prev) =>
           prev.filter((c) => c.creatorId !== creatorId)
         );
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't save that. Try again.");
       }
     } catch {
-      // ignore
+      setError("Couldn't save that. Check your connection and try again.");
     } finally {
       setActionLoading(null);
     }
@@ -111,6 +119,12 @@ export default function ReviewQueuePage() {
         </Button>
       </div>
 
+      {error && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </p>
+      )}
+
       {pendingCreators.length === 0 ? (
         <Card>
           <CardHeader>
@@ -118,7 +132,8 @@ export default function ReviewQueuePage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Pending is empty right now. That usually means this campaign has already been triaged or nothing has been added yet.
+              Everyone in this campaign has been reviewed, or no creators were added yet. Find
+              creators to add more.
             </p>
             <div className="grid gap-3 sm:grid-cols-3">
               {[
@@ -127,7 +142,7 @@ export default function ReviewQueuePage() {
                 { label: "Deferred", value: deferredCount },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border p-3">
-                  <p className="text-xs text-muted-foreground">{item.label}</p>
+                  <p className="text-sm text-muted-foreground">{item.label}</p>
                   <p className="text-2xl font-semibold">{item.value}</p>
                 </div>
               ))}

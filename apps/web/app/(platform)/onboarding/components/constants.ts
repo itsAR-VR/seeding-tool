@@ -9,6 +9,9 @@ export const STEP_LABELS: Record<OnboardingStep, string> = {
   connect: "Accounts",
 };
 
+/** Same limit the brand route enforces. */
+export const MAX_BRAND_NAME_LENGTH = 80;
+
 /** Shown one after another while the website is read (takes up to a minute). */
 export const READING_MESSAGES = [
   "Opening your website",
@@ -35,10 +38,13 @@ export function normalizeStep(step: string | null): OnboardingStep {
   return "brand";
 }
 
-export function buildOnboardingParams(step: OnboardingStep, values: { brandName?: string; brandId?: string }) {
+/**
+ * The wizard's URL. It never carries a brandId: which company is being set up
+ * comes from /api/onboarding/status, so a copied or edited link can't change it.
+ */
+export function buildOnboardingParams(step: OnboardingStep, values: { brandName?: string }) {
   const params = new URLSearchParams({ step });
   if (values.brandName?.trim()) params.set("brandName", values.brandName.trim());
-  if (values.brandId?.trim()) params.set("brandId", values.brandId.trim());
   return params.toString();
 }
 

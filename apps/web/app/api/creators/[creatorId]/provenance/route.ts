@@ -139,7 +139,8 @@ export async function GET(_request: Request, context: RouteContext) {
               platform: profile.platform,
               handle: profile.handle,
               profileUrl: profile.profileUrl,
-              contactPoints: profile.contactPoints,
+              // Contact points live on the shared identity graph and can come
+              // from other companies' searches, so they are never returned here.
             })),
           }
         : null,

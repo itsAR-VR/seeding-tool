@@ -22,7 +22,7 @@ export function SyncReplies() {
         return;
       }
       if (data.inboxes === 0) {
-        setStatus("Connect Gmail in Settings to see replies.");
+        setStatus("Connect Gmail in Settings > Connections to see replies.");
       } else if (data.errors.length > 0) {
         setStatus(`Couldn't read ${data.errors.length} inbox${data.errors.length === 1 ? "" : "es"}. Try reconnecting Gmail.`);
       } else {

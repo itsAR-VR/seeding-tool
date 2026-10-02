@@ -149,7 +149,8 @@ describe("POST /api/campaigns/[campaignId]/creators/[creatorId]/approve-address"
     expect(res.status).toBe(409);
 
     const body = await res.json();
-    expect(body.error).toContain("opted_out");
+    expect(body.error).toContain("isn't at the address step");
+    expect(body.error).not.toContain("opted_out");
   });
 
   it("returns 409 when lifecycle is completed", async () => {
@@ -193,7 +194,7 @@ describe("POST /api/campaigns/[campaignId]/creators/[creatorId]/approve-address"
     expect(res.status).toBe(422);
 
     const body = await res.json();
-    expect(body.error).toContain("Shopify connection");
+    expect(body.error).toContain("Connect Shopify in Settings > Connections");
   });
 
   it("returns 422 when Shopify connection is disconnected", async () => {

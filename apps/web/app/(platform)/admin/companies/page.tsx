@@ -87,11 +87,11 @@ export default function CompaniesPage() {
       <section className="space-y-3 rounded-xl border bg-card p-5">
         <h2 className="font-semibold">Invite a company</h2>
         <form onSubmit={(e) => void invite(e)} className="flex flex-wrap items-end gap-3">
-          <label className="min-w-56 flex-1 text-sm font-medium">
+          <label className="w-full min-w-0 flex-1 text-sm font-medium sm:min-w-56">
             Company name
             <input required value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
-          <label className="min-w-64 flex-1 text-sm font-medium">
+          <label className="w-full min-w-0 flex-1 text-sm font-medium sm:min-w-64">
             Their email
             <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="mt-1 w-full rounded-lg border px-3 py-2 font-normal" />
           </label>
@@ -108,9 +108,11 @@ export default function CompaniesPage() {
           <h2 className="font-semibold">Invited, not joined yet</h2>
           <ul className="divide-y rounded-xl border bg-card">
             {open.map((i) => (
-              <li key={i.id} className="flex items-center justify-between px-5 py-3">
-                <span>{i.companyName} · {i.email}</span>
-                <span className="text-sm text-muted-foreground">Expires {date(i.expiresAt)}</span>
+              <li key={i.id} className="flex items-center justify-between gap-4 px-5 py-3">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{i.companyName} · {i.email}</span>
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  {new Date(i.expiresAt) < new Date() ? "Expired, send a new invite" : `Expires ${date(i.expiresAt)}`}
+                </span>
               </li>
             ))}
           </ul>
@@ -122,8 +124,8 @@ export default function CompaniesPage() {
         <ul className="divide-y rounded-xl border bg-card">
           {(data?.companies ?? []).map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-              <div>
-                <p className="font-medium">{c.name}</p>
+              <div className="min-w-0">
+                <p className="font-medium [overflow-wrap:anywhere]">{c.name}</p>
                 <p className="text-sm text-muted-foreground">
                   {c._count.memberships} {c._count.memberships === 1 ? "member" : "members"} · since {date(c.createdAt)}
                 </p>

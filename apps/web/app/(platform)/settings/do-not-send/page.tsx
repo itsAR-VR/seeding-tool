@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { NoCompanyNotice } from "@/components/no-company-notice";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -16,7 +17,7 @@ export default async function DoNotSendPage() {
   try {
     brandId = (await getCurrentBrandMembership()).brandId;
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
+    if (error instanceof BrandAccessError) return <NoCompanyNotice title="Do-not-send list" />;
     throw error;
   }
 
