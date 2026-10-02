@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { sourceLabel } from "../components/creator-filters";
 
 type ParsedRow = {
   username: string;
@@ -51,19 +51,49 @@ function parseCSV(text: string): ParsedRow[] {
   return rows;
 }
 
+type ImportResult = {
+  requested: number;
+  validImported: number;
+  created: number;
+  updated: number;
+  invalidDropped: number;
+  skipped: number;
+};
+
+function plural(n: number, one: string, many: string) {
+  return `${n.toLocaleString()} ${n === 1 ? one : many}`;
+}
+
+function resultSentences(result: ImportResult): string[] {
+  const lines = [
+    result.updated > 0
+      ? `Added ${plural(result.created, "new creator", "new creators")} and updated ${result.updated.toLocaleString()} you already had.`
+      : `Added ${plural(result.created, "new creator", "new creators")}.`,
+  ];
+  if (result.invalidDropped > 0) {
+    lines.push(
+      `${plural(result.invalidDropped, "handle wasn't", "handles weren't")} found on Instagram, so we left ${result.invalidDropped === 1 ? "it" : "them"} out. Check the spelling and import ${result.invalidDropped === 1 ? "it" : "them"} again.`
+    );
+  }
+  if (result.skipped > 0) {
+    lines.push(`${plural(result.skipped, "row had", "rows had")} no handle and ${result.skipped === 1 ? "was" : "were"} skipped.`);
+  }
+  return lines;
+}
+
+const COLUMN_HELP: Array<[string, string]> = [
+  ["username", "Their Instagram handle. Required. You can also call this column handle or instagram."],
+  ["email", "Their email, if you have it."],
+  ["followers", "Follower count."],
+  ["views", "Average views per reel."],
+  ["category", "What they post about, like skincare or fitness."],
+];
+
 export default function CreatorImportPage() {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{
-    requested: number;
-    validImported: number;
-    created: number;
-    updated: number;
-    invalidDropped: number;
-    skipped: number;
-  } | null>(null);
+  const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = useCallback(
@@ -81,7 +111,7 @@ export default function CreatorImportPage() {
 
       if (rows.length === 0) {
         setError(
-          "No valid rows found. CSV must have a header row with at least a 'username' column."
+          "We couldn't read any creators from that file. Make sure the first row has column names and one of them is username."
         );
       }
     },
@@ -102,15 +132,19 @@ export default function CreatorImportPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Import failed");
+        const data = await res.json().catch(() => ({}));
+        setError(
+          typeof data.error === "string" && data.error !== "Failed to import creators"
+            ? `${data.error}. Fix the file and try again.`
+            : "The import didn't finish. Try again in a minute."
+        );
         return;
       }
 
-      const data = await res.json();
+      const data = (await res.json()) as ImportResult;
       setResult(data);
     } catch {
-      setError("Network error during import");
+      setError("The import didn't finish. Check your connection and try again.");
     } finally {
       setImporting(false);
     }
@@ -118,126 +152,120 @@ export default function CreatorImportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Import Creators</h1>
-          <p className="text-muted-foreground">
-            Upload a CSV file to bulk import creators into the platform.
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => router.push("/creators")}>
-          ← Back to Creators
-        </Button>
+      <div className="space-y-2">
+        <Link
+          href="/creators"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          All creators
+        </Link>
+        <h1 className="text-3xl font-bold tracking-tight">Import a list</h1>
+        <p className="text-muted-foreground">
+          Add creators you already know from a spreadsheet. Save it as a CSV file first.
+        </p>
       </div>
 
-      {/* Instructions */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">CSV Format</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-2">
-            Your CSV should include a header row with these columns:
-          </p>
-          <code className="block rounded bg-muted p-2 text-xs">
-            username, email, followerCount, avgViews, bioCategory, discoverySource
-          </code>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Only <strong>username</strong> is required. discoverySource defaults
-            to &quot;csv_import&quot;.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Upload */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Upload CSV</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input
-            type="file"
-            accept=".csv,text/csv"
-            onChange={handleFileChange}
-          />
+      <section className="rounded-xl border bg-card">
+        <h2 className="border-b px-5 py-4 font-semibold">Choose your file</h2>
+        <div className="space-y-4 px-5 py-4">
+          <div className="space-y-1.5">
+            <label htmlFor="import-file" className="text-sm font-medium">
+              CSV file
+            </label>
+            <Input
+              id="import-file"
+              type="file"
+              accept=".csv,text/csv"
+              onChange={handleFileChange}
+            />
+            {file && parsedRows.length > 0 && !result ? (
+              <p className="text-sm text-muted-foreground">
+                {file.name}: {plural(parsedRows.length, "creator", "creators")} ready to import.
+              </p>
+            ) : null}
+          </div>
 
           {error && (
-            <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
               {error}
-            </div>
+            </p>
           )}
 
           {result && (
-            <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-              ✅ Import complete — {result.validImported} valid imported,{" "}
-              {result.created} created, {result.updated} updated,{" "}
-              {result.invalidDropped} invalid dropped, {result.skipped} skipped
+            <div role="status" className="space-y-1 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+              <p className="font-medium">Import finished.</p>
+              {resultSentences(result).map((line) => (
+                <p key={line}>{line}</p>
+              ))}
+              <Link href="/creators" className={`${buttonVariants({ variant: "outline" })} mt-2`}>
+                See your creators
+              </Link>
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Preview Table */}
+          <details className="text-sm">
+            <summary className="cursor-pointer font-medium">What columns can the file have?</summary>
+            <dl className="mt-2 divide-y rounded-lg border">
+              {COLUMN_HELP.map(([col, help]) => (
+                <div key={col} className="grid gap-1 px-3 py-2 sm:grid-cols-[120px_1fr]">
+                  <dt className="font-mono">{col}</dt>
+                  <dd className="text-muted-foreground">{help}</dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        </div>
+      </section>
+
       {parsedRows.length > 0 && !result && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                Preview ({parsedRows.length} rows)
-              </CardTitle>
-              <Button onClick={handleImport} disabled={importing}>
-                {importing ? "Importing…" : `Import ${parsedRows.length} Creators`}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-2 pr-4 font-medium">Username</th>
-                    <th className="pb-2 pr-4 font-medium">Email</th>
-                    <th className="pb-2 pr-4 font-medium">Followers</th>
-                    <th className="pb-2 pr-4 font-medium">Avg Views</th>
-                    <th className="pb-2 pr-4 font-medium">Category</th>
-                    <th className="pb-2 font-medium">Source</th>
+        <section className="rounded-xl border bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
+            <h2 className="font-semibold">Check before importing</h2>
+            <Button onClick={handleImport} disabled={importing}>
+              {importing ? "Importing..." : `Import ${plural(parsedRows.length, "creator", "creators")}`}
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th scope="col" className="px-4 py-3 pl-5 font-medium">Handle</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Email</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Followers</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Average views</th>
+                  <th scope="col" className="px-4 py-3 font-medium">Category</th>
+                  <th scope="col" className="px-4 py-3 pr-5 font-medium">Found through</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {parsedRows.slice(0, 50).map((row, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-2.5 pl-5">@{row.username}</td>
+                    <td className="px-4 py-2.5">
+                      {row.email || <span className="text-muted-foreground">None</span>}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {row.followerCount?.toLocaleString() ?? <span className="text-muted-foreground">Unknown</span>}
+                    </td>
+                    <td className="px-4 py-2.5 tabular-nums">
+                      {row.avgViews?.toLocaleString() ?? <span className="text-muted-foreground">Unknown</span>}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      {row.bioCategory || <span className="text-muted-foreground">None</span>}
+                    </td>
+                    <td className="px-4 py-2.5 pr-5">{sourceLabel(row.discoverySource || "csv_import")}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {parsedRows.slice(0, 50).map((row, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="py-2 pr-4 font-mono text-xs">
-                        @{row.username}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {row.email || "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {row.followerCount?.toLocaleString() ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {row.avgViews?.toLocaleString() ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {row.bioCategory || "—"}
-                      </td>
-                      <td className="py-2">
-                        <Badge variant="outline" className="text-xs">
-                          {row.discoverySource || "csv_import"}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {parsedRows.length > 50 && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Showing first 50 of {parsedRows.length} rows
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {parsedRows.length > 50 && (
+            <p className="border-t px-5 py-3 text-sm text-muted-foreground">
+              Showing the first 50 of {parsedRows.length.toLocaleString()}. All of them will be imported.
+            </p>
+          )}
+        </section>
       )}
     </div>
   );

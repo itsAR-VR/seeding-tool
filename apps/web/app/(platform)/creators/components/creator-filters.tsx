@@ -1,6 +1,5 @@
 "use client";
 
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import type { useCreatorsState } from "../hooks/use-creators-state";
 
@@ -24,14 +23,35 @@ type FilterProps = Pick<
   | "facets"
 >;
 
+/** Plain names for where a creator came from. Keys are the stored source values. */
+export const SOURCE_LABELS: Record<string, string> = {
+  apify: "Instagram search",
+  apify_search: "Instagram search",
+  apify_keyword_email: "Instagram search",
+  phantombuster: "Instagram list",
+  collabstr: "Collabstr",
+  creator_marketplace: "Collabstr",
+  approved_seed_following: "Followed by your creators",
+  csv_import: "Imported list",
+  manual: "Added by hand",
+};
+
+export function sourceLabel(source: string | null | undefined): string {
+  if (!source) return "Added by hand";
+  return SOURCE_LABELS[source] ?? source.replace(/_/g, " ");
+}
+
 const SOURCE_OPTIONS = [
-  { value: "", label: "All Sources" },
-  { value: "phantombuster", label: "PhantomBuster" },
-  { value: "apify", label: "Apify" },
-  { value: "csv_import", label: "CSV Import" },
-  { value: "manual", label: "Manual" },
-  { value: "creator_marketplace", label: "Marketplace" },
+  { value: "", label: "Any source" },
+  { value: "apify", label: "Instagram search" },
+  { value: "creator_marketplace", label: "Collabstr" },
+  { value: "phantombuster", label: "Instagram list" },
+  { value: "csv_import", label: "Imported list" },
+  { value: "manual", label: "Added by hand" },
 ];
+
+const selectClass =
+  "h-9 w-full rounded-md border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 export function CreatorFilters({
   search,
@@ -52,21 +72,30 @@ export function CreatorFilters({
   facets,
 }: FilterProps) {
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label="Filter creators" className="rounded-xl border bg-card p-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="space-y-1.5">
+          <label htmlFor="creator-search" className="text-sm font-medium">
+            Name or handle
+          </label>
           <Input
-            placeholder="Search by handle or name..."
+            id="creator-search"
+            placeholder="Search creators"
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
               setPage(1);
             }}
           />
+        </div>
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-medium">Followers</legend>
           <div className="flex gap-2">
             <Input
               type="number"
-              placeholder="Min followers"
+              min={0}
+              aria-label="Fewest followers"
+              placeholder="From"
               value={minFollowers}
               onChange={(e) => {
                 setMinFollowers(e.target.value);
@@ -75,7 +104,9 @@ export function CreatorFilters({
             />
             <Input
               type="number"
-              placeholder="Max followers"
+              min={0}
+              aria-label="Most followers"
+              placeholder="To"
               value={maxFollowers}
               onChange={(e) => {
                 setMaxFollowers(e.target.value);
@@ -83,10 +114,15 @@ export function CreatorFilters({
               }}
             />
           </div>
+        </fieldset>
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-medium">Average views</legend>
           <div className="flex gap-2">
             <Input
               type="number"
-              placeholder="Min views"
+              min={0}
+              aria-label="Fewest average views"
+              placeholder="From"
               value={minViews}
               onChange={(e) => {
                 setMinViews(e.target.value);
@@ -95,7 +131,9 @@ export function CreatorFilters({
             />
             <Input
               type="number"
-              placeholder="Max views"
+              min={0}
+              aria-label="Most average views"
+              placeholder="To"
               value={maxViews}
               onChange={(e) => {
                 setMaxViews(e.target.value);
@@ -103,24 +141,36 @@ export function CreatorFilters({
               }}
             />
           </div>
-          <div className="flex gap-2">
+        </fieldset>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1.5">
+            <label htmlFor="creator-category" className="text-sm font-medium">
+              Category
+            </label>
             <select
-              className="w-full rounded-md border px-3 py-2 text-sm"
+              id="creator-category"
+              className={selectClass}
               value={category}
               onChange={(e) => {
                 setCategory(e.target.value);
                 setPage(1);
               }}
             >
-              <option value="">All categories</option>
+              <option value="">Any</option>
               {facets.categories.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.value} ({option.count})
                 </option>
               ))}
             </select>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="creator-source" className="text-sm font-medium">
+              Found through
+            </label>
             <select
-              className="rounded-md border px-3 py-2 text-sm"
+              id="creator-source"
+              className={selectClass}
               value={source}
               onChange={(e) => {
                 setSource(e.target.value);
@@ -135,7 +185,7 @@ export function CreatorFilters({
             </select>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   );
 }

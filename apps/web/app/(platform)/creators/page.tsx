@@ -94,6 +94,12 @@ function CreatorsContent() {
         </div>
       </div>
 
+      {state.flash && (
+        <p role="status" className={`text-sm ${state.flash.ok ? "text-green-800" : "text-destructive"}`}>
+          {state.flash.text}
+        </p>
+      )}
+
       {notice && (
         <p role="status" className={`text-sm ${notice.ok ? "text-green-800" : "text-destructive"}`}>
           {notice.text}
@@ -208,6 +214,7 @@ function CreatorsContent() {
           setSearchLimit={state.setSearchLimit}
           searchLimitValidation={state.searchLimitValidation}
           searchLimitWarning={state.searchLimitWarning}
+          searchError={state.searchError}
           onStartSearch={state.startSearch}
           onToggleResult={state.toggleResultSelection}
           onToggleAll={state.toggleAllResults}

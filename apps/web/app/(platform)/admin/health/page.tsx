@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 
 /**
- * Admin Health Dashboard — Server Component
+ * System status (admin health), server component.
  *
  * Shows:
  * - Stuck CampaignCreators (lifecycleStatus not updated in >72h and not closed)
@@ -93,195 +93,216 @@ export default async function AdminHealthPage() {
     take: 50,
   });
 
+  const allClear =
+    stuckCreators.length === 0 &&
+    openInterventions.length === 0 &&
+    failedWebhooks.length === 0 &&
+    staleDrafts.length === 0;
+
   return (
-    <div className="mx-auto max-w-5xl space-y-8 p-8">
-      <h1 className="text-2xl font-bold">System Health</h1>
-
-      {/* Stuck CampaignCreators */}
-      <section className="rounded-lg border p-6">
-        <h2 className="mb-4 text-lg font-semibold">
-          🔴 Stuck CampaignCreators ({stuckCreators.length})
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Creators not updated in &gt;72h and not in a closed state
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">System status</h1>
+        <p className="mt-1 text-muted-foreground">
+          Things that may be stuck or waiting on you. To check that Gmail, Shopify, and Instagram
+          are connected, open{" "}
+          <Link href="/settings/connections" className="font-medium text-foreground underline">
+            Connections
+          </Link>
+          .
         </p>
-        {stuckCreators.length === 0 ? (
-          <p className="text-sm text-green-600">✅ None stuck</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2">Creator</th>
-                <th className="pb-2">Campaign</th>
-                <th className="pb-2">Status</th>
-                <th className="pb-2">Last Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stuckCreators.map((cc) => (
-                <tr key={cc.id} className="border-b">
-                  <td className="py-2">
-                    {cc.creator.name || cc.creator.instagramHandle || "—"}
-                  </td>
-                  <td className="py-2">
-                    <Link
-                      href={`/campaigns/${cc.campaign.id}`}
-                      className="text-blue-600 underline"
-                    >
-                      {cc.campaign.name}
-                    </Link>
-                  </td>
-                  <td className="py-2">
-                    <span className="rounded bg-yellow-100 px-2 py-0.5 text-yellow-800">
-                      {cc.lifecycleStatus}
-                    </span>
-                  </td>
-                  <td className="py-2 text-muted-foreground">
-                    {cc.updatedAt.toISOString().slice(0, 16)}
-                  </td>
+      </header>
+
+      {allClear && (
+        <p className="rounded-xl border bg-card p-5 font-medium">
+          Everything looks fine. Nothing is stuck or waiting on you.
+        </p>
+      )}
+
+      <section className="space-y-3 rounded-xl border bg-card p-5">
+        <div>
+          <h2 className="font-semibold">Creators with no progress for 3 days</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Open the campaign to see if they need an email, a reply, or an order.
+          </p>
+        </div>
+        <StatusLine count={stuckCreators.length} okText="None. Every creator has moved recently." />
+        {stuckCreators.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">Creator</th>
+                  <th className="pb-2 font-medium">Campaign</th>
+                  <th className="pb-2 font-medium">Where they are</th>
+                  <th className="pb-2 font-medium">Last change</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {stuckCreators.map((cc) => (
+                  <tr key={cc.id} className="border-b last:border-0">
+                    <td className="py-2">{creatorName(cc.creator)}</td>
+                    <td className="py-2">
+                      <Link href={`/campaigns/${cc.campaign.id}`} className="underline">
+                        {cc.campaign.name}
+                      </Link>
+                    </td>
+                    <td className="py-2">{PROGRESS_LABELS[cc.lifecycleStatus] ?? cc.lifecycleStatus}</td>
+                    <td className="py-2 text-muted-foreground">{formatWhen(cc.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
-      {/* Open Interventions */}
-      <section className="rounded-lg border p-6">
-        <h2 className="mb-4 text-lg font-semibold">
-          🚨 Open Interventions ({openInterventions.length})
-        </h2>
-        {openInterventions.length === 0 ? (
-          <p className="text-sm text-green-600">✅ None open</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Title</th>
-                <th className="pb-2">Priority</th>
-                <th className="pb-2">Created</th>
-              </tr>
-            </thead>
-            <tbody>
+      <section className="space-y-3 rounded-xl border bg-card p-5">
+        <div>
+          <h2 className="font-semibold">Things that need attention</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Replies and problems the tool couldn&apos;t handle by itself.
+          </p>
+        </div>
+        <StatusLine count={openInterventions.length} okText="Nothing waiting on you." />
+        {openInterventions.length > 0 && (
+          <>
+            <ul className="divide-y">
               {openInterventions.map((ic) => (
-                <tr key={ic.id} className="border-b">
-                  <td className="py-2">
-                    <span className="rounded bg-gray-100 px-2 py-0.5">
-                      {ic.type}
-                    </span>
-                  </td>
-                  <td className="py-2">
-                    <Link
-                      href="/interventions"
-                      className="text-blue-600 underline"
-                    >
-                      {ic.title}
-                    </Link>
-                  </td>
-                  <td className="py-2">
-                    <span
-                      className={`rounded px-2 py-0.5 ${
-                        ic.priority === "critical"
-                          ? "bg-red-100 text-red-800"
-                          : ic.priority === "high"
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-gray-100"
-                      }`}
-                    >
-                      {ic.priority}
-                    </span>
-                  </td>
-                  <td className="py-2 text-muted-foreground">
-                    {ic.createdAt.toISOString().slice(0, 16)}
-                  </td>
-                </tr>
+                <li key={ic.id} className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm">
+                  <span>
+                    {ic.title}
+                    {(ic.priority === "critical" || ic.priority === "high") && (
+                      <span className="ml-2 font-medium text-red-700 dark:text-red-400">Urgent</span>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">{formatWhen(ic.createdAt)}</span>
+                </li>
               ))}
-            </tbody>
-          </table>
+            </ul>
+            <Link href="/interventions" className="inline-block text-sm font-medium underline">
+              Go to Needs attention
+            </Link>
+          </>
         )}
       </section>
 
-      {/* Failed Webhooks */}
-      <section className="rounded-lg border p-6">
-        <h2 className="mb-4 text-lg font-semibold">
-          ⚠️ Failed Webhooks (24h) ({failedWebhooks.length})
-        </h2>
-        {failedWebhooks.length === 0 ? (
-          <p className="text-sm text-green-600">✅ No failures</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2">Provider</th>
-                <th className="pb-2">Event Type</th>
-                <th className="pb-2">Error</th>
-                <th className="pb-2">Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {failedWebhooks.map((wh) => (
-                <tr key={wh.id} className="border-b">
-                  <td className="py-2">{wh.provider}</td>
-                  <td className="py-2">{wh.eventType}</td>
-                  <td className="max-w-xs truncate py-2 text-red-600">
-                    {wh.error || "—"}
-                  </td>
-                  <td className="py-2 text-muted-foreground">
-                    {wh.createdAt.toISOString().slice(0, 16)}
-                  </td>
+      <section className="space-y-3 rounded-xl border bg-card p-5">
+        <div>
+          <h2 className="font-semibold">Updates that failed in the last day</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Messages from Gmail, Shopify, or Instagram that the tool couldn&apos;t process. If this
+            keeps happening, email us.
+          </p>
+        </div>
+        <StatusLine count={failedWebhooks.length} okText="None. Everything came through." />
+        {failedWebhooks.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">From</th>
+                  <th className="pb-2 font-medium">What went wrong</th>
+                  <th className="pb-2 font-medium">When</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {failedWebhooks.map((wh) => (
+                  <tr key={wh.id} className="border-b last:border-0">
+                    <td className="py-2">{providerName(wh.provider)}</td>
+                    <td className="max-w-xs truncate py-2" title={wh.error ?? undefined}>
+                      {wh.error || "No details"}
+                    </td>
+                    <td className="py-2 text-muted-foreground">{formatWhen(wh.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
 
-      {/* Stale Drafts */}
-      <section className="rounded-lg border p-6">
-        <h2 className="mb-4 text-lg font-semibold">
-          📝 Stale AI Drafts (&gt;48h) ({staleDrafts.length})
-        </h2>
-        <p className="mb-3 text-sm text-muted-foreground">
-          Drafts pending human review for over 48 hours
-        </p>
-        {staleDrafts.length === 0 ? (
-          <p className="text-sm text-green-600">✅ No stale drafts</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="pb-2">Creator</th>
-                <th className="pb-2">Campaign</th>
-                <th className="pb-2">Type</th>
-                <th className="pb-2">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {staleDrafts.map((draft) => (
-                <tr key={draft.id} className="border-b">
-                  <td className="py-2">
-                    {draft.campaignCreator.creator.name ||
-                      draft.campaignCreator.creator.instagramHandle ||
-                      "—"}
-                  </td>
-                  <td className="py-2">
-                    {draft.campaignCreator.campaign.name}
-                  </td>
-                  <td className="py-2">
-                    <span className="rounded bg-blue-100 px-2 py-0.5 text-blue-800">
-                      {draft.type}
-                    </span>
-                  </td>
-                  <td className="py-2 text-muted-foreground">
-                    {draft.createdAt.toISOString().slice(0, 16)}
-                  </td>
+      <section className="space-y-3 rounded-xl border bg-card p-5">
+        <div>
+          <h2 className="font-semibold">Drafts waiting more than 2 days</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            AI-written emails no one has sent or thrown away yet. Review them in the inbox.
+          </p>
+        </div>
+        <StatusLine count={staleDrafts.length} okText="None. No drafts are waiting." />
+        {staleDrafts.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">Creator</th>
+                  <th className="pb-2 font-medium">Campaign</th>
+                  <th className="pb-2 font-medium">Written</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {staleDrafts.map((draft) => (
+                  <tr key={draft.id} className="border-b last:border-0">
+                    <td className="py-2">{creatorName(draft.campaignCreator.creator)}</td>
+                    <td className="py-2">{draft.campaignCreator.campaign.name}</td>
+                    <td className="py-2 text-muted-foreground">{formatWhen(draft.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
+  );
+}
+
+const PROGRESS_LABELS: Record<string, string> = {
+  ready: "Not emailed yet",
+  outreach_sent: "Emailed",
+  replied: "Replied",
+  address_review: "Address to review",
+  address_confirmed: "Address confirmed",
+  order_created: "Order drafted",
+  shipped: "Shipped",
+  delivered: "Delivered",
+  stalled: "No reply for a while",
+};
+
+const PROVIDER_NAMES: Record<string, string> = {
+  gmail: "Gmail",
+  shopify: "Shopify",
+  instagram: "Instagram",
+  meta: "Instagram",
+  unipile: "Unipile",
+};
+
+function providerName(provider: string): string {
+  return PROVIDER_NAMES[provider.toLowerCase()] ?? provider;
+}
+
+function creatorName(creator: { name: string | null; instagramHandle: string | null }): string {
+  if (creator.name) return creator.name;
+  if (creator.instagramHandle) return `@${creator.instagramHandle.replace(/^@/, "")}`;
+  return "Unnamed creator";
+}
+
+function formatWhen(date: Date): string {
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function StatusLine({ count, okText }: { count: number; okText: string }) {
+  if (count === 0) {
+    return <p className="font-medium text-green-700 dark:text-green-400">{okText}</p>;
+  }
+  return (
+    <p className="font-medium text-amber-800 dark:text-amber-300">
+      {count >= 50 ? "50 or more" : count} to look at
+    </p>
   );
 }

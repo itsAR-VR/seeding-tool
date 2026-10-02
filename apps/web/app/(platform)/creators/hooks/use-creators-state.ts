@@ -148,6 +148,8 @@ export function useCreatorsState() {
   // Search Creators modal state
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchUsernames, setSearchUsernames] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [searchMinFollowers, setSearchMinFollowers] = useState("");
@@ -309,10 +311,10 @@ export function useCreatorsState() {
         setShowCampaignModal(false);
         fetchCreators();
       } else if (res.status === 409) {
-        alert("Creator is already in this campaign");
+        setFlash({ ok: false, text: "That creator is already in this campaign." });
       }
     } catch {
-      alert("Failed to add creator to campaign");
+      setFlash({ ok: false, text: "Couldn't add them to the campaign. Try again." });
     } finally {
       setAddingToCampaign(false);
     }
@@ -351,9 +353,10 @@ export function useCreatorsState() {
   }
 
   async function startSearch() {
+    setSearchError(null);
     const limitState = parsePositiveInteger(searchLimit);
     if (limitState.error) {
-      alert(limitState.error);
+      setSearchError(limitState.error);
       return;
     }
 
@@ -364,7 +367,7 @@ export function useCreatorsState() {
       .map(([src]) => src);
 
     if (selectedSources.length === 0) {
-      alert("Select at least one discovery source.");
+      setSearchError("Pick at least one place to look.");
       return;
     }
 
@@ -379,7 +382,7 @@ export function useCreatorsState() {
       selectedKeywords.length === 0 &&
       usernames.length === 0
     ) {
-      alert("Add keywords, categories, or exact usernames before searching.");
+      setSearchError("Add something to search for first.");
       return;
     }
 
@@ -423,7 +426,7 @@ export function useCreatorsState() {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to start search");
+        setSearchError(err.error || "Couldn't start the search. Try again.");
         setSearching(false);
         setSearchStatus(null);
         return;
@@ -440,7 +443,7 @@ export function useCreatorsState() {
 
       void pollCreatorSearchJob(queuedJob.jobId);
     } catch {
-      alert("Failed to start search");
+      setSearchError("Couldn't start the search. Check your connection and try again.");
       setSearching(false);
       setSearchStatus(null);
     }
@@ -495,17 +498,18 @@ export function useCreatorsState() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(
-          `Imported: ${data.validImported} valid, ${data.created} new, ${data.updated} updated, ${data.invalidDropped} invalid dropped, ${data.skipped} skipped`
-        );
+        setFlash({
+          ok: true,
+          text: `Added ${data.created} new ${data.created === 1 ? "creator" : "creators"}${data.updated ? ` and updated ${data.updated}` : ""}.`,
+        });
         setShowSearchModal(false);
         resetSearchState();
         fetchCreators();
       } else {
-        alert("Failed to import creators");
+        setFlash({ ok: false, text: "Couldn't add those creators. Try again." });
       }
     } catch {
-      alert("Failed to import creators");
+      setFlash({ ok: false, text: "Couldn't add those creators. Try again." });
     } finally {
       setImporting(false);
     }
@@ -638,6 +642,10 @@ export function useCreatorsState() {
     setEnriching,
     discoveryApprovalMode,
     discoveryApprovalThreshold,
+    flash,
+    setFlash,
+    searchError,
+    setSearchError,
 
     // Search actions
     startSearch,

@@ -4,58 +4,94 @@ import { useState, useEffect, useCallback } from "react";
 import type { FeatureFlags } from "@/lib/feature-flags";
 
 /**
- * Feature Flags Settings Page
+ * Feature switches for this brand.
  *
- * Admin-only toggles for per-brand feature flags.
- * Flags fail-CLOSED: if the flag system breaks, everything is disabled.
+ * Admin-only toggles for per-brand feature flags. Flag semantics live in
+ * lib/feature-flags.ts and are unchanged here; this page only explains them.
+ *
+ * `available: false` marks flags that are only read by background tasks that
+ * run on Inngest, which is not running. Only content sync and reply sync run
+ * (Supabase pg_cron calling /api/cron/*), and neither reads these flags.
  */
 
-const FLAG_LABELS: Record<keyof FeatureFlags, { label: string; description: string }> = {
-  aiReplyEnabled: {
-    label: "AI Reply Drafts",
-    description: "Enable AI-generated reply drafts for inbound messages. When disabled, all replies require manual intervention.",
-  },
-  unipileDmEnabled: {
-    label: "Instagram DM (Unipile)",
-    description: "Enable Instagram DM sending via Unipile. When disabled, DM endpoints return 403.",
+type FlagCopy = {
+  label: string;
+  description: string;
+  available: boolean;
+  /** Shown under "Not available yet": what happens today instead. */
+  note?: string;
+};
+
+const FLAG_COPY: Record<keyof FeatureFlags, FlagCopy> = {
+  claimAutoDraftEnabled: {
+    label: "Start the Shopify order when a creator sends their address",
+    description:
+      "Creates a draft gift order in Shopify as soon as a creator fills in the gift form. You still finish the order yourself.",
+    available: true,
   },
   shopifyOrderEnabled: {
-    label: "Shopify Order Creation",
-    description: "Enable automated Shopify draft order creation. When disabled, order endpoints return 403.",
+    label: "Create Shopify gift orders",
+    description:
+      "Lets you create gift orders in Shopify from this tool. When off, the order button won't work.",
+    available: true,
   },
-  reminderEmailEnabled: {
-    label: "Reminder Emails",
-    description: "Enable scheduled reminder emails for post-delivery follow-ups. When disabled, reminders are silently skipped.",
-  },
-  identityGraphEnabled: {
-    label: "Identity Graph",
-    description: "Enable the global internal identity layer and review queue surfaces.",
-  },
-  identityAutoLinkEnabled: {
-    label: "Identity Auto-Link",
-    description: "Allow high-confidence identity matches to merge automatically. Keep this off during review-first rollout.",
+  unipileDmEnabled: {
+    label: "Send Instagram messages",
+    description:
+      "Lets you message creators on Instagram from the inbox. Needs a connected Unipile account, which is a separate paid service.",
+    available: true,
   },
   decisionEngineScoringEnabled: {
-    label: "Decision Engine Scoring",
-    description: "Enable evidence-rich scoring and score decomposition beside the current discovery ranking.",
+    label: "Detailed match scores",
+    description:
+      "Shows why each creator is or isn't a good match for your brand, not just a single score.",
+    available: true,
   },
   portfolioOptimizerEnabled: {
-    label: "Portfolio Optimizer",
-    description: "Enable portfolio preview generation beside the current ranked seed list.",
+    label: "Suggested creator mix",
+    description:
+      "Suggests a balanced group of creators for each campaign. Needs Detailed match scores turned on too.",
+    available: true,
   },
   outcomeLearningEnabled: {
-    label: "Outcome Learning",
-    description: "Enable campaign outcome capture, provenance, and KPI calibration surfaces.",
+    label: "Learn from past campaigns",
+    description:
+      "Tracks which creators posted and how their posts did, so results and future suggestions get better over time.",
+    available: true,
+  },
+  identityGraphEnabled: {
+    label: "Spot the same creator across accounts",
+    description:
+      "Notices when two creator records look like the same person and lists them for you to check.",
+    available: true,
+  },
+  identityAutoLinkEnabled: {
+    label: "Merge obvious duplicates for me",
+    description:
+      "Joins creator records automatically when they are clearly the same person. Merges can't be undone, so leave this off until you trust the matches.",
+    available: true,
+  },
+  aiReplyEnabled: {
+    label: "Instant reply suggestions",
+    description: "Drafts a suggested answer the moment a creator replies.",
+    available: false,
+    note: "Suggested replies still appear in your inbox after the regular reply check, whether this is on or off.",
+  },
+  reminderEmailEnabled: {
+    label: "Reminder emails after delivery",
+    description: "Emails creators a gentle reminder to post once their gift has arrived.",
+    available: false,
+    note: "No reminders are sent right now, whether this is on or off.",
   },
   instagramMentionPollEnabled: {
-    label: "Instagram Mention Polling",
-    description: "Poll for @-mentions on Instagram. Defaults ON (fail-open). Turning this off stops all mention detection.",
-  },
-  claimAutoDraftEnabled: {
-    label: "Auto-draft Shopify orders from claim forms",
-    description: "When a creator submits their address, create a Shopify draft order right away. Drafts are never completed automatically.",
+    label: "Extra check for Instagram mentions",
+    description: "An additional check for posts that mention your brand.",
+    available: false,
+    note: "Tagged posts are still found by the regular content check, whether this is on or off.",
   },
 };
+
+const FLAG_ORDER = Object.keys(FLAG_COPY) as Array<keyof FeatureFlags>;
 
 export default function FeatureFlagsPage() {
   const [flags, setFlags] = useState<FeatureFlags | null>(null);
@@ -68,14 +104,14 @@ export default function FeatureFlagsPage() {
       const res = await fetch("/api/settings/feature-flags");
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Failed to load flags");
+        setError(data.error || "Couldn't load these settings. Refresh the page to try again.");
         return;
       }
       const data = await res.json();
       setFlags(data.flags);
       setError(null);
     } catch {
-      setError("Failed to load feature flags");
+      setError("Couldn't load these settings. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -98,7 +134,7 @@ export default function FeatureFlagsPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        setError(data.error || "Failed to update flag");
+        setError(data.error || "Couldn't save that change. Try again.");
         return;
       }
 
@@ -106,16 +142,25 @@ export default function FeatureFlagsPage() {
       setFlags(data.flags);
       setError(null);
     } catch {
-      setError("Failed to update feature flag");
+      setError("Couldn't save that change. Check your connection and try again.");
     } finally {
       setUpdating(null);
     }
   };
 
+  const header = (
+    <header>
+      <h1 className="text-3xl font-bold tracking-tight">Features</h1>
+      <p className="mt-1 text-muted-foreground">
+        Turn parts of the tool on or off for your brand.
+      </p>
+    </header>
+  );
+
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl p-8">
-        <h1 className="mb-6 text-2xl font-bold">Feature Flags</h1>
+      <div className="space-y-8">
+        {header}
         <p className="text-muted-foreground">Loading...</p>
       </div>
     );
@@ -123,67 +168,83 @@ export default function FeatureFlagsPage() {
 
   if (error && !flags) {
     return (
-      <div className="mx-auto max-w-3xl p-8">
-        <h1 className="mb-6 text-2xl font-bold">Feature Flags</h1>
-        <p className="text-red-600">{error}</p>
+      <div className="space-y-8">
+        {header}
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+          {error}
+        </p>
       </div>
     );
   }
 
+  const renderRow = (flag: keyof FeatureFlags) => {
+    const copy = FLAG_COPY[flag];
+    const on = Boolean(flags?.[flag]);
+    const busy = updating === flag;
+    return (
+      <li key={flag} className="flex items-start justify-between gap-6 px-5 py-4">
+        <div className="space-y-1">
+          <p className="font-medium">{copy.label}</p>
+          <p className="text-sm text-muted-foreground">{copy.description}</p>
+          {copy.note && <p className="text-sm text-muted-foreground">{copy.note}</p>}
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="w-8 text-sm font-medium">{on ? "On" : "Off"}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            aria-label={copy.label}
+            onClick={() => toggleFlag(flag)}
+            disabled={busy}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+              on ? "bg-green-600" : "bg-muted-foreground/30"
+            } ${busy ? "opacity-50" : ""}`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 ${
+                on ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </li>
+    );
+  };
+
+  const working = FLAG_ORDER.filter((flag) => FLAG_COPY[flag].available);
+  const notYet = FLAG_ORDER.filter((flag) => !FLAG_COPY[flag].available);
+
   return (
-    <div className="mx-auto max-w-3xl p-8">
-      <h1 className="mb-2 text-2xl font-bold">Feature Flags</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        Control which subsystems are active for your brand. All flags default to
-        OFF (fail-closed). Enable one at a time during rollout.
-      </p>
+    <div className="space-y-8">
+      {header}
 
       {error && (
-        <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
           {error}
-        </div>
+        </p>
       )}
 
-      <div className="space-y-4">
-        {flags &&
-          (Object.keys(FLAG_LABELS) as Array<keyof FeatureFlags>).map((flag) => (
-            <div
-              key={flag}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
-              <div>
-                <h3 className="font-medium">{FLAG_LABELS[flag].label}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {FLAG_LABELS[flag].description}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggleFlag(flag)}
-                disabled={updating === flag}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
-                  flags[flag] ? "bg-green-600" : "bg-gray-200"
-                } ${updating === flag ? "opacity-50" : ""}`}
-                aria-label={`Toggle ${FLAG_LABELS[flag].label}`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform duration-200 ${
-                    flags[flag] ? "translate-x-5" : "translate-x-0"
-                  }`}
-                />
-              </button>
-            </div>
-          ))}
-      </div>
+      <section className="space-y-3">
+        <h2 className="font-semibold">Available</h2>
+        <ul className="divide-y rounded-xl border bg-card">{working.map(renderRow)}</ul>
+      </section>
 
-      <div className="mt-8 rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-        <h3 className="font-medium text-yellow-800">⚠️ Fail-Closed Design</h3>
-        <p className="mt-1 text-sm text-yellow-700">
-          If the flag system encounters an error reading flags, all features
-          default to <strong>disabled</strong>. This prevents accidental
-          auto-sends or API calls if configuration is corrupted.
-        </p>
-      </div>
+      <section className="space-y-3">
+        <div>
+          <h2 className="font-semibold">Not available yet</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            These need background tasks that aren&apos;t set up yet, so the switch has no effect
+            for now.
+          </p>
+        </div>
+        <ul className="divide-y rounded-xl border bg-card">{notYet.map(renderRow)}</ul>
+      </section>
+
+      <p className="text-sm text-muted-foreground">
+        If these settings ever fail to load, every feature stays off to be safe, so nothing gets
+        sent or ordered by mistake.
+      </p>
     </div>
   );
 }

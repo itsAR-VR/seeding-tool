@@ -1,7 +1,10 @@
 "use client";
 
+import { type ReactNode } from "react";
+
 import { Button } from "@/components/ui/button";
 import {
+  type ConnectionOverviewItem,
   type IntegrationMethod,
   type IntegrationProvider,
 } from "@/lib/integrations/methods";
@@ -22,6 +25,14 @@ export type LoadError = {
 export const SUPPORT_MAILTO =
   "mailto:ar@soramedia.co?subject=Seed%20Scale%20connection%20help";
 
+/** One plain sentence per account: what the app uses it for. */
+const PROVIDER_PURPOSE: Record<IntegrationProvider, string> = {
+  gmail: "Sends your emails to creators from your own Gmail address.",
+  shopify: "Creates the gift orders and shows your products to pick from.",
+  instagram: "Finds the posts creators make about you, and turns approved posts into ads.",
+  unipile: "Sends Instagram messages to creators. This is a separate paid service.",
+};
+
 const PROVIDER_GUIDES: Record<
   IntegrationProvider,
   {
@@ -31,46 +42,74 @@ const PROVIDER_GUIDES: Record<
   }
 > = {
   gmail: {
-    title: "Need help connecting Gmail?",
-    summary:
-      "Use the Gmail account you want outreach to send from. If Google blocks the flow or your workspace is not approved yet, our team can help complete the setup.",
+    title: "Help connecting Gmail",
+    summary: "Sign in with the Gmail account you want your creator emails to come from.",
     bullets: [
-      "Start with the Gmail account you want to send from.",
-      "If Google shows an approval or test-user warning, contact our team and we will help finish the connection.",
-      "Google may show an \"unverified app\" warning. Click Advanced, then Continue.",
+      "Google may say the app is unverified. Click Advanced, then Continue.",
+      "If Google blocks you or asks for approval, email us and we'll finish it with you.",
     ],
   },
   shopify: {
-    title: "Need help connecting Shopify?",
+    title: "Help connecting Shopify",
     summary:
-      "This manual setup needs your Shopify admin domain and an Admin API access token from your custom app.",
+      "You need your store's Shopify address and a token from a custom app in your Shopify admin.",
     bullets: [
-      "Use your admin domain in the form your-store.myshopify.com.",
-      "Create or open your Shopify custom app and copy the Admin API access token.",
-      "Storefront domains like sleepkalm.com will not work for this admin-token flow.",
+      "Your Shopify address ends in .myshopify.com. Your public website address won't work.",
+      "In Shopify admin, open Settings, then Apps, then Develop apps. Create an app and copy its Admin API access token.",
+      "Copy the API secret key from the same app so order updates reach this tool.",
     ],
   },
   instagram: {
-    title: "Need help connecting Instagram / Meta?",
+    title: "Help connecting Instagram",
     summary:
-      "Connect the Instagram Business account that is linked to the correct Facebook page. If the Meta flow is not ready for your account, our team can guide you through the remaining steps.",
+      "Sign in with Facebook and pick the Instagram account that belongs to your brand.",
     bullets: [
-      "Make sure the Instagram account is a Business or Creator account.",
-      "Confirm that Instagram is linked to the Facebook page you want to monitor.",
-      "If Meta blocks the flow or permissions are missing, contact our team for support.",
+      "The Instagram account must be a Business or Creator account.",
+      "It must be linked to your brand's Facebook page.",
+      "If Facebook says a permission is missing, email us and we'll walk you through it.",
     ],
   },
   unipile: {
-    title: "Need help connecting Unipile?",
-    summary:
-      "Use the API key from your Unipile workspace. The account ID is optional, but helps us target the exact mailbox or social account faster.",
+    title: "Help with Unipile",
+    summary: "Unipile is a separate paid service. You only need it to send Instagram messages.",
     bullets: [
       "Copy the API key from your Unipile dashboard.",
-      "Paste the account ID too if you already know which account should handle DMs.",
-      "If you are unsure which account to use, contact our team and we will help map it.",
+      "If you're not sure which account to use, email us and we'll help.",
     ],
   },
 };
+
+/** Shared card frame: name, status in words, and what the account is for. */
+export function ProviderCardShell({
+  provider,
+  children,
+}: {
+  provider: ConnectionOverviewItem;
+  children: ReactNode;
+}) {
+  return (
+    <section className="space-y-4 rounded-xl border bg-card p-5">
+      <div className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold">{provider.label}</h2>
+          <span
+            className={cn(
+              "text-sm font-medium",
+              provider.connected ? "text-green-700 dark:text-green-400" : "text-muted-foreground",
+            )}
+          >
+            {provider.connected ? "Connected" : "Not connected yet"}
+          </span>
+        </div>
+        <p className="text-muted-foreground">{PROVIDER_PURPOSE[provider.provider]}</p>
+        {provider.connected && provider.summary && provider.summary !== "Connected" && (
+          <p className="text-sm font-medium">{provider.summary}</p>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
 
 export function FeedbackBanner({ message }: { message: FlashMessage }) {
   if (!message) {
@@ -79,6 +118,7 @@ export function FeedbackBanner({ message }: { message: FlashMessage }) {
 
   return (
     <div
+      role={message.tone === "error" ? "alert" : "status"}
       className={cn(
         "rounded-lg border px-3 py-2 text-sm",
         message.tone === "error"
@@ -108,27 +148,32 @@ export function MethodSelector({
   }
 
   return (
-    <div className="inline-flex rounded-lg border bg-muted/30 p-1">
-      {methods.map((method) => {
-        const selected = method === activeMethod;
-        return (
-          <button
-            key={method}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(method)}
-            className={cn(
-              "rounded-md px-3 py-1 text-sm font-medium transition-colors",
-              selected
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-              disabled && "opacity-60",
-            )}
-          >
-            {method === "oauth" ? "Sign in" : "Paste a token"}
-          </button>
-        );
-      })}
+    <div className="space-y-1">
+      <p className="text-sm font-medium">How do you want to connect?</p>
+      <div className="inline-flex rounded-lg border bg-muted/30 p-1" role="radiogroup">
+        {methods.map((method) => {
+          const selected = method === activeMethod;
+          return (
+            <button
+              key={method}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              disabled={disabled}
+              onClick={() => onChange(method)}
+              className={cn(
+                "rounded-md px-3 py-1 text-sm font-medium transition-colors",
+                selected
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+                disabled && "opacity-60",
+              )}
+            >
+              {method === "oauth" ? "Sign in" : "Paste a token"}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -137,10 +182,8 @@ export function ProviderGuide({ provider }: { provider: IntegrationProvider }) {
   const guide = PROVIDER_GUIDES[provider];
 
   return (
-    <details className="rounded-lg border border-dashed border-border/80 bg-muted/10 px-3 py-2 text-sm">
-      <summary className="cursor-pointer list-none font-medium text-foreground">
-        {guide.title}
-      </summary>
+    <details className="rounded-lg border px-3 py-2 text-sm">
+      <summary className="cursor-pointer font-medium text-foreground">{guide.title}</summary>
       <div className="mt-2 space-y-2 text-muted-foreground">
         <p>{guide.summary}</p>
         <ul className="list-disc space-y-1 pl-5">
@@ -152,7 +195,7 @@ export function ProviderGuide({ provider }: { provider: IntegrationProvider }) {
           href={SUPPORT_MAILTO}
           className="inline-flex text-sm font-medium text-foreground underline underline-offset-4"
         >
-          Contact our team for support
+          Email us for help
         </a>
       </div>
     </details>
@@ -184,73 +227,65 @@ export function ConnectionsErrorState({
   const isNotFound = loadError?.status === 404;
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-6"}>
+    <div className={embedded ? "space-y-4" : "space-y-8"}>
       {!embedded && <h1 className="text-3xl font-bold tracking-tight">Connections</h1>}
-      <div className="rounded-xl border bg-card">
-        <div className="py-8 text-center">
-          <p className="text-muted-foreground">
-            {isAuthError
-              ? "Your session has expired. Please refresh the page or log in again."
-              : isNotFound
-                ? "No brand found. Visit the dashboard to get started."
-                : "Something went wrong loading your connections. Please try again."}
-          </p>
-          {!isAuthError && !isNotFound && loadError?.message && (
-            <p className="mt-2 text-sm text-muted-foreground/70">
-              Error: {loadError.message}
-            </p>
+      <section className="rounded-xl border bg-card py-8 text-center">
+        <p className="text-muted-foreground">
+          {isAuthError
+            ? "You've been signed out. Refresh the page to sign in again."
+            : isNotFound
+              ? "You haven't set up your brand yet. Go to the dashboard to start."
+              : "Couldn't load your connections. Try again in a moment."}
+        </p>
+        {!isAuthError && !isNotFound && loadError?.message && (
+          <p className="mt-2 text-sm text-muted-foreground">Details: {loadError.message}</p>
+        )}
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {isAuthError ? (
+            <Button onClick={() => window.location.reload()}>Refresh page</Button>
+          ) : isNotFound ? (
+            <Button onClick={() => onReturn()}>Go to dashboard</Button>
+          ) : (
+            <Button onClick={onRetry}>Try again</Button>
           )}
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            {isAuthError ? (
-              <Button onClick={() => window.location.reload()}>Refresh page</Button>
-            ) : isNotFound ? (
-              <Button onClick={() => onReturn()}>Go to Dashboard</Button>
-            ) : (
-              <Button onClick={onRetry}>Retry</Button>
-            )}
-            {returnTo && (
-              <Button variant="outline" onClick={onReturn}>
-                Back
-              </Button>
-            )}
-          </div>
+          {returnTo && (
+            <Button variant="outline" onClick={onReturn}>
+              Back
+            </Button>
+          )}
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
 export function ConnectionsSupportBanner() {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border bg-muted/10 p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-      <p>
-        Manual setup is still the default for some channels while OAuth approvals
-        and public apps are still being finalized.
-      </p>
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <p>Some accounts take a few manual steps to connect. If you get stuck, we can help.</p>
       <a
         href={SUPPORT_MAILTO}
         className="inline-flex items-center justify-center rounded-lg border px-3 py-2 font-medium text-foreground"
       >
-        Contact our team for support
+        Email us for help
       </a>
     </div>
   );
 }
 
 export function ConnectionsReturnBanner({
-  returnTo,
   onReturn,
 }: {
   returnTo: string;
   onReturn: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between rounded-lg border bg-muted/20 p-4 text-sm">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-4 text-sm">
       <p className="text-muted-foreground">
-        Finish connections here, then return to onboarding when you are ready.
+        Connect what you need here, then go back to setup.
       </p>
       <Button variant="outline" onClick={onReturn}>
-        Return to Onboarding
+        Back to setup
       </Button>
     </div>
   );
@@ -258,18 +293,16 @@ export function ConnectionsReturnBanner({
 
 export function getConnectionErrorText(error: string | null) {
   return error === "oauth_denied"
-    ? "OAuth access was denied."
+    ? "Access wasn't allowed. Try connecting again and click Allow."
     : error === "no_refresh_token"
-      ? "No refresh token returned. Revoke access in Google Account and reconnect."
+      ? "Google didn't finish the connection. Remove this app from your Google account's security settings, then connect again."
       : error === "forbidden"
-        ? "You do not have access to this brand."
+        ? "You don't have access to this brand. Ask the owner to invite you."
         : error === "no_instagram_account"
-          ? "No Instagram Business Account found. Ensure your Instagram account is connected to a Facebook Page."
-          : error === "invalid_signature"
-            ? "Shopify OAuth signature validation failed."
-            : error === "invalid_state"
-              ? "Shopify OAuth state expired. Start the connection again."
-              : error
-                ? "An error occurred. Please try again."
-                : null;
+          ? "We couldn't find an Instagram Business account. Link your Instagram to your Facebook page, then try again."
+          : error === "invalid_signature" || error === "invalid_state"
+            ? "Shopify sign-in timed out. Start connecting again."
+            : error
+              ? "Something went wrong. Try connecting again."
+              : null;
 }

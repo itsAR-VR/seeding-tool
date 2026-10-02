@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deriveBrandICP, icpToSearchHints } from "@/lib/brands/icp";
 import { computeNextRunAt } from "@/lib/automations/schedule";
-import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
+import { buildUnifiedDiscoveryQueryFromAutomationConfig, normalizeUnifiedDiscoveryQuery } from "@/lib/creator-search/contracts";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -79,6 +79,20 @@ async function buildAutomationConfig(
 
   const categories = normalizeCategories(incomingConfig?.categories);
   const limit = normalizeLimit(incomingConfig?.limit);
+
+  // Plain search words (what the Automations page sends): search exactly those.
+  const keywords = Array.isArray(incomingConfig?.keywords)
+    ? (incomingConfig.keywords as unknown[]).filter((k): k is string => typeof k === "string" && k.trim() !== "")
+    : [];
+  if (keywords.length > 0) {
+    return {
+      platform: "instagram",
+      autoImport: incomingConfig?.autoImport !== false,
+      keywords,
+      ...(limit ? { limit } : {}),
+      query: normalizeUnifiedDiscoveryQuery({ keywords, platform: "instagram", ...(limit ? { limit } : {}) }),
+    } as Prisma.InputJsonValue;
+  }
   const providedHashtag =
     typeof incomingConfig?.hashtag === "string"
       ? incomingConfig.hashtag.trim().replace(/^#/, "")

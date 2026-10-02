@@ -42,7 +42,7 @@ const settingsLinks = [
   {
     href: "/admin/health",
     title: "System status",
-    description: "Check that email, Shopify, and Instagram are working.",
+    description: "Anything stuck: emails that didn't send, orders or syncs that failed.",
   },
   {
     href: "/settings/creator-search",
@@ -51,8 +51,8 @@ const settingsLinks = [
   },
   {
     href: "/settings/automations",
-    title: "Automations",
-    description: "Find new creators on a schedule.",
+    title: "Scheduled searches",
+    description: "Find new creators every day or week, automatically.",
   },
 ];
 

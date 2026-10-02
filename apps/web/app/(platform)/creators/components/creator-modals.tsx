@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import { UnifiedKeywordSelector, type KeywordGroup } from "@/components/unified-keyword-selector";
@@ -11,9 +11,9 @@ import { LocationInput } from "@/components/location-input";
 import type {
   CampaignOption,
   SearchResult,
-  SearchJobSummary,
   SearchSourceKey,
 } from "../hooks/use-creators-state";
+import { sourceLabel } from "./creator-filters";
 
 // ── Campaign Modal ──────────────────────────────────────────────────────
 
@@ -35,40 +35,57 @@ export function CampaignModal({
   onClose,
 }: CampaignModalProps) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <Card
+        className="w-full max-w-md"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-to-campaign-title"
+      >
         <CardHeader>
-          <CardTitle>Add to Campaign</CardTitle>
+          <CardTitle id="add-to-campaign-title">Add to a campaign</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {campaigns.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No campaigns found. Create a campaign first.
-            </p>
+            <div className="space-y-1">
+              <p className="text-sm">You don&apos;t have a campaign yet.</p>
+              <p className="text-sm text-muted-foreground">
+                Start one first, then come back to add this creator.
+              </p>
+            </div>
           ) : (
-            <select
-              className="w-full rounded-md border px-3 py-2 text-sm"
-              value={selectedCampaignId}
-              onChange={(e) => setSelectedCampaignId(e.target.value)}
-            >
-              <option value="">Select a campaign...</option>
-              {campaigns.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-1.5">
+              <label htmlFor="campaign-select" className="text-sm font-medium">
+                Campaign
+              </label>
+              <select
+                id="campaign-select"
+                className="h-9 w-full rounded-md border bg-background px-3 text-sm"
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+              >
+                <option value="">Choose a campaign</option>
+                {campaigns.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              onClick={onConfirm}
-              disabled={!selectedCampaignId || addingToCampaign}
-            >
-              {addingToCampaign ? "Adding..." : "Add"}
-            </Button>
+            {campaigns.length === 0 ? (
+              <Link href="/campaigns/new" className={buttonVariants()}>
+                Start a campaign
+              </Link>
+            ) : (
+              <Button onClick={onConfirm} disabled={!selectedCampaignId || addingToCampaign}>
+                {addingToCampaign ? "Adding..." : "Add to campaign"}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -111,9 +128,12 @@ type SearchModalProps = {
   onImportSelected: () => void;
   onClose: () => void;
   onNewSearch: () => void;
+  /** Why the search didn't start, shown above the buttons. */
+  searchError?: string | null;
 };
 
 export function SearchModal({
+  searchError,
   searchResults,
   searching,
   searchStatus,
@@ -205,6 +225,12 @@ export function SearchModal({
               onToggleResult={onToggleResult}
               onToggleAll={onToggleAll}
             />
+          )}
+
+          {searchError && (
+            <p role="alert" className="mt-4 text-sm text-destructive">
+              {searchError}
+            </p>
           )}
 
           {/* Actions */}
@@ -457,109 +483,104 @@ function SearchResultsTable({
   onToggleResult: (id: string) => void;
   onToggleAll: () => void;
 }) {
+  const allSelected = selectedResults.size === results.length && results.length > 0;
   return (
     <div className="min-h-0 flex-1 space-y-3 py-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">
-          {results.length} creators found
+          {results.length} {results.length === 1 ? "creator" : "creators"} found.{" "}
+          <span className="font-normal text-muted-foreground">
+            {selectedResults.size} selected.
+          </span>
         </p>
-        <Button size="sm" variant="ghost" onClick={onToggleAll}>
-          {selectedResults.size === results.length
-            ? "Deselect All"
-            : "Select All"}
+        <Button variant="ghost" onClick={onToggleAll}>
+          {allSelected ? "Clear selection" : "Select all"}
         </Button>
       </div>
 
-      <div className="max-h-[400px] overflow-y-auto border rounded-md">
+      <div className="max-h-[400px] overflow-y-auto rounded-md border">
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-background">
-            <tr className="border-b text-left">
-              <th className="p-2 w-8">
+            <tr className="border-b text-left text-muted-foreground">
+              <th scope="col" className="w-10 p-3">
                 <input
                   type="checkbox"
-                  checked={
-                    selectedResults.size === results.length &&
-                    results.length > 0
-                  }
+                  aria-label="Select all creators"
+                  className="h-4 w-4"
+                  checked={allSelected}
                   onChange={onToggleAll}
                 />
               </th>
-              <th className="p-2 font-medium">Creator</th>
-              <th className="p-2 font-medium">Sources</th>
-              <th className="p-2 font-medium">Followers</th>
-              <th className="p-2 font-medium">Avg Views</th>
-              <th className="p-2 font-medium">Bio</th>
+              <th scope="col" className="p-3 font-medium">Creator</th>
+              <th scope="col" className="p-3 font-medium">Found through</th>
+              <th scope="col" className="p-3 font-medium">Followers</th>
+              <th scope="col" className="p-3 font-medium">Average views</th>
+              <th scope="col" className="p-3 font-medium">Bio</th>
             </tr>
           </thead>
-          <tbody>
-            {results.map((result) => (
-              <tr
-                key={result.id}
-                className="border-b hover:bg-muted/50 cursor-pointer"
-                onClick={() => onToggleResult(result.id)}
-              >
-                <td className="p-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedResults.has(result.id)}
-                    onChange={() => onToggleResult(result.id)}
-                  />
-                </td>
-                <td className="p-2">
-                  <div className="flex items-center gap-2">
-                    {result.imageUrl && (
-                      <img
-                        src={result.imageUrl}
-                        alt=""
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                    )}
-                    <div>
-                      <InstagramHandleLink
-                        handle={result.handle}
-                        url={result.profileUrl}
-                        className="font-mono text-xs text-blue-600 hover:underline"
-                      />
-                      {result.name && (
-                        <p className="text-xs text-muted-foreground">
-                          <InstagramHandleLink
-                            handle={result.handle}
-                            url={result.profileUrl}
-                            className="hover:text-foreground hover:underline"
-                          >
-                            {result.name}
-                          </InstagramHandleLink>
-                        </p>
+          <tbody className="divide-y">
+            {results.map((result) => {
+              const labels = Array.from(
+                new Set(
+                  (result.sources ?? [result.primarySource || result.source || "manual"]).map(
+                    (src) => sourceLabel(src)
+                  )
+                )
+              );
+              const checked = selectedResults.has(result.id);
+              return (
+                <tr
+                  key={result.id}
+                  className={`cursor-pointer hover:bg-muted/50 ${checked ? "bg-muted/30" : ""}`}
+                  onClick={() => onToggleResult(result.id)}
+                >
+                  <td className="p-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select @${result.handle}`}
+                      className="h-4 w-4"
+                      checked={checked}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => onToggleResult(result.id)}
+                    />
+                  </td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-2">
+                      {result.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={result.imageUrl}
+                          alt=""
+                          className="h-8 w-8 shrink-0 rounded-full object-cover"
+                        />
                       )}
+                      <div>
+                        {result.name && <p className="font-medium">{result.name}</p>}
+                        <InstagramHandleLink
+                          handle={result.handle}
+                          url={result.profileUrl}
+                          className="text-blue-700 hover:underline"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="p-2">
-                  <div className="flex flex-wrap gap-1">
-                    {(result.sources ?? [
-                      result.primarySource || result.source || "manual",
-                    ]).map((src) => (
-                      <Badge
-                        key={`${result.id}-${src}`}
-                        variant="outline"
-                        className="text-[10px]"
-                      >
-                        {src}
-                      </Badge>
-                    ))}
-                  </div>
-                </td>
-                <td className="p-2 text-xs">
-                  {result.followerCount?.toLocaleString() ?? "\u2014"}
-                </td>
-                <td className="p-2 text-xs">
-                  {result.avgViews?.toLocaleString() ?? "\u2014"}
-                </td>
-                <td className="p-2 text-xs max-w-[200px] truncate">
-                  {result.bio || result.bioCategory || "\u2014"}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="p-3">{labels.join(", ")}</td>
+                  <td className="whitespace-nowrap p-3 tabular-nums">
+                    {result.followerCount?.toLocaleString() ?? (
+                      <span className="text-muted-foreground">Unknown</span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap p-3 tabular-nums">
+                    {result.avgViews?.toLocaleString() ?? (
+                      <span className="text-muted-foreground">Unknown</span>
+                    )}
+                  </td>
+                  <td className="max-w-[240px] truncate p-3" title={result.bio || result.bioCategory || undefined}>
+                    {result.bio || result.bioCategory || <span className="text-muted-foreground">No bio</span>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

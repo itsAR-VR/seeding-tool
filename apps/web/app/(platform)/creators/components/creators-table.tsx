@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import type { Creator } from "../hooks/use-creators-state";
+import { sourceLabel } from "./creator-filters";
 
 type TableProps = {
   creators: Creator[];
@@ -18,6 +19,17 @@ type TableProps = {
   onAddToCampaign: (creatorId: string) => void;
 };
 
+const COLUMNS = [
+  "Creator",
+  "Email",
+  "Followers",
+  "Average views",
+  "Category",
+  "Found through",
+  "Campaigns",
+  "",
+];
+
 export function CreatorsTable({
   creators,
   loading,
@@ -28,166 +40,163 @@ export function CreatorsTable({
   onAddToCampaign,
 }: TableProps) {
   const router = useRouter();
+  const showSkeleton = loading && creators.length === 0;
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">
-          {loading ? "Loading..." : `${total} Creators`}
-        </CardTitle>
-        <p className="text-xs text-muted-foreground">
-          Avg Views means the average of the latest 12 reels/video posts when
-          that enrichment has completed.
+    <section className="rounded-xl border bg-card">
+      <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
+        <h2 className="font-semibold">
+          {showSkeleton ? "Your creators" : `${total.toLocaleString()} ${total === 1 ? "creator" : "creators"}`}
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Average views come from their latest 12 reels.
         </p>
-      </CardHeader>
-      <CardContent>
-        {creators.length === 0 && !loading ? (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            No creators found. Try adjusting your filters or{" "}
-            <button
-              className="underline"
-              onClick={() => router.push("/creators/import")}
-            >
-              import from CSV
-            </button>
-            .
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-2 pr-4 font-medium">Handle</th>
-                  <th className="pb-2 pr-4 font-medium">Email</th>
-                  <th className="pb-2 pr-4 font-medium">Followers</th>
-                  <th className="pb-2 pr-4 font-medium">Avg Views</th>
-                  <th className="pb-2 pr-4 font-medium">Category</th>
-                  <th className="pb-2 pr-4 font-medium">Source</th>
-                  <th className="pb-2 pr-4 font-medium">Campaigns</th>
-                  <th className="pb-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {creators.map((creator) => {
-                  const instagramProfile = creator.profiles.find(
-                    (profile) => profile.platform === "instagram"
-                  );
+      </div>
 
-                  return (
-                    <tr key={creator.id} className="border-b">
-                      <td className="py-2 pr-4">
-                        <div>
+      {creators.length === 0 && !loading ? (
+        <div className="space-y-3 px-5 py-10 text-center">
+          <p className="font-medium">No creators to show</p>
+          <p className="text-sm text-muted-foreground">
+            If you set filters above, clear them. Otherwise find creators or import a list you already have.
+          </p>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={() => router.push("/creators?find=1")}>
+              Find creators
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/creators/import")}>
+              Import a list
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="overflow-x-auto" aria-busy={loading}>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-muted-foreground">
+                {COLUMNS.map((col, i) => (
+                  <th key={col || i} scope="col" className="whitespace-nowrap px-4 py-3 font-medium first:pl-5 last:pr-5">
+                    {col || <span className="sr-only">Actions</span>}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {showSkeleton
+                ? Array.from({ length: 6 }, (_, i) => (
+                    <tr key={i}>
+                      {COLUMNS.map((col, j) => (
+                        <td key={col || j} className="px-4 py-3 first:pl-5 last:pr-5">
+                          <Skeleton className="h-4 w-20" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))
+                : creators.map((creator) => {
+                    const instagramProfile = creator.profiles.find(
+                      (profile) => profile.platform === "instagram"
+                    );
+                    const showName = creator.name && creator.name !== creator.instagramHandle;
+
+                    return (
+                      <tr key={creator.id} className="align-top">
+                        <td className="px-4 py-3 pl-5">
+                          {showName ? (
+                            <Link
+                              href={`/creators/${creator.id}`}
+                              className="block font-medium hover:underline"
+                            >
+                              {creator.name}
+                            </Link>
+                          ) : null}
                           <InstagramHandleLink
                             handle={creator.instagramHandle}
                             url={instagramProfile?.url}
-                            className="font-mono text-xs text-blue-600 hover:underline"
+                            className="text-blue-700 hover:underline"
                           />
-                          {creator.name &&
-                            creator.name !== creator.instagramHandle && (
-                              <p className="text-xs">
-                                <Link
-                                  href={`/creators/${creator.id}`}
-                                  className="font-medium text-foreground hover:underline"
-                                >
-                                  {creator.name}
-                                </Link>
-                              </p>
-                            )}
-                        </div>
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.email ? (
-                          <span className="text-green-600">{creator.email}</span>
-                        ) : (
-                          <span className="text-muted-foreground">&mdash;</span>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.followerCount?.toLocaleString() ?? "\u2014"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.avgViews?.toLocaleString() ?? "\u2014"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.bioCategory || "\u2014"}
-                      </td>
-                      <td className="py-2 pr-4">
-                        <Badge variant="outline" className="text-xs">
-                          {creator.discoverySource}
-                        </Badge>
-                      </td>
-                      <td className="py-2 pr-4">
-                        {creator.campaignCreators.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {creator.campaignCreators.map((cc) => (
-                              <Badge
-                                key={cc.id}
-                                variant="secondary"
-                                className="text-xs"
-                              >
-                                {cc.campaign.name}
-                              </Badge>
-                            ))}
+                        </td>
+                        <td className="px-4 py-3">
+                          {creator.email ? (
+                            <span className="break-all">{creator.email}</span>
+                          ) : (
+                            <span className="text-muted-foreground">No email yet</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                          {creator.followerCount?.toLocaleString() ?? (
+                            <span className="text-muted-foreground">Unknown</span>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                          {creator.avgViews?.toLocaleString() ?? (
+                            <span className="text-muted-foreground">Unknown</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {creator.bioCategory || <span className="text-muted-foreground">None</span>}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {sourceLabel(creator.discoverySource)}
+                        </td>
+                        <td className="px-4 py-3">
+                          {creator.campaignCreators.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {creator.campaignCreators.map((cc) => (
+                                <Badge key={cc.id} variant="secondary" className="text-sm font-normal">
+                                  {cc.campaign.name}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">Not in one yet</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 pr-5">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                             
+                              variant="ghost"
+                              onClick={() => router.push(`/creators/${creator.id}`)}
+                            >
+                              Open
+                            </Button>
+                            <Button
+                             
+                              variant="outline"
+                              className="whitespace-nowrap"
+                              onClick={() => onAddToCampaign(creator.id)}
+                            >
+                              Add to campaign
+                            </Button>
                           </div>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            None
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-2">
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => router.push(`/creators/${creator.id}`)}
-                          >
-                            View
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onAddToCampaign(creator.id)}
-                          >
-                            Add to Campaign
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between">
-            <p className="text-xs text-muted-foreground">
-              Page {page} of {totalPages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page <= 1}
-                onClick={() => setPage(page - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={page >= totalPages}
-                onClick={() => setPage(page + 1)}
-              >
-                Next
-              </Button>
-            </div>
+      {totalPages > 1 && (
+        <nav aria-label="Pages" className="flex items-center justify-between border-t px-5 py-3">
+          <p className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              Previous
+            </Button>
+            <Button
+             
+              variant="outline"
+              disabled={page >= totalPages}
+              onClick={() => setPage(page + 1)}
+            >
+              Next
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </nav>
+      )}
+    </section>
   );
 }

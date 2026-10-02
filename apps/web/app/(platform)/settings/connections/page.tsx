@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import {
   type ConnectionOverviewItem,
   type ConnectionsOverviewResponse,
@@ -64,10 +63,6 @@ function ConnectionsContent({
     apiSecret: "",
     oauthShop: "",
   });
-  const [unipileForm, setUnipileForm] = useState({
-    apiKey: "",
-    accountId: "",
-  });
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
@@ -100,7 +95,7 @@ function ConnectionsContent({
         const body = await res.json().catch(() => null) as { error?: string } | null;
         setLoadError({
           status: res.status,
-          message: body?.error ?? "Failed to load connections",
+          message: body?.error ?? "Couldn't load your connections.",
         });
         setOverview(null);
         return;
@@ -108,7 +103,7 @@ function ConnectionsContent({
 
       setOverview((await res.json()) as ConnectionsOverviewResponse);
     } catch {
-      setLoadError({ status: 0, message: "Network error" });
+      setLoadError({ status: 0, message: "Check your internet connection and try again." });
       setOverview(null);
     } finally {
       setLoading(false);
@@ -126,9 +121,9 @@ function ConnectionsContent({
 
     const provider = connected as IntegrationProvider;
     const textByProvider: Partial<Record<IntegrationProvider, string>> = {
-      gmail: "Gmail connected successfully.",
-      instagram: "Instagram connected successfully.",
-      shopify: "Shopify connected successfully.",
+      gmail: "Gmail is connected.",
+      instagram: "Instagram is connected.",
+      shopify: "Shopify is connected.",
     };
 
     if (textByProvider[provider]) {
@@ -176,7 +171,7 @@ function ConnectionsContent({
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to switch method"));
+        throw new Error(await readErrorMessage(res, "Couldn't switch. Try again."));
       }
 
       setProviderMessage(provider, {
@@ -184,7 +179,7 @@ function ConnectionsContent({
         text:
           method === "oauth"
             ? "Switched to signing in. Finish connecting to turn it on."
-            : "Switched to manual credentials. Finish setup to activate this provider.",
+            : "Switched to pasting a token. Fill in the form below to connect.",
       });
       await refreshConnectionData();
     } catch (methodError) {
@@ -193,7 +188,7 @@ function ConnectionsContent({
         text:
           methodError instanceof Error
             ? methodError.message
-            : "Failed to switch connection method.",
+            : "Couldn't switch. Try again.",
       });
     } finally {
       setSwitchingProvider(null);
@@ -211,7 +206,7 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Instagram")
+          await readErrorMessage(res, "Couldn't disconnect Instagram. Try again.")
         );
       }
 
@@ -226,7 +221,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Instagram.",
+            : "Couldn't disconnect Instagram. Try again.",
       });
     } finally {
       setInstagramLoading(false);
@@ -254,7 +249,7 @@ function ConnectionsContent({
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to connect Shopify"));
+        throw new Error(await readErrorMessage(res, "Couldn't connect Shopify. Check the store address and token, then try again."));
       }
 
       const data = (await res.json()) as { storeDomain?: string };
@@ -277,7 +272,7 @@ function ConnectionsContent({
         text:
           saveError instanceof Error
             ? saveError.message
-            : "Failed to connect Shopify.",
+            : "Couldn't connect Shopify. Check the store address and token, then try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -295,7 +290,7 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Shopify")
+          await readErrorMessage(res, "Couldn't disconnect Shopify. Try again.")
         );
       }
 
@@ -310,7 +305,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Shopify.",
+            : "Couldn't disconnect Shopify. Try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -327,7 +322,7 @@ function ConnectionsContent({
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to sync products"));
+        throw new Error(await readErrorMessage(res, "Couldn't update your products. Try again."));
       }
 
       const data = (await res.json()) as {
@@ -338,8 +333,8 @@ function ConnectionsContent({
       setProviderMessage("shopify", {
         tone: "success",
         text: data.truncated
-          ? `Shopify sync completed with a partial catalog (${data.synced} products).`
-          : `Shopify sync completed (${data.synced} products).`,
+          ? `Updated ${data.synced} products. Some products were skipped.`
+          : `Updated ${data.synced} products.`,
       });
       await refreshConnectionData();
     } catch (syncError) {
@@ -348,7 +343,7 @@ function ConnectionsContent({
         text:
           syncError instanceof Error
             ? syncError.message
-            : "Failed to sync products.",
+            : "Couldn't update your products. Try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -368,47 +363,6 @@ function ConnectionsContent({
     return `/api/auth/shopify?${params.toString()}`;
   }
 
-  async function handleSaveUnipile() {
-    if (!overview?.brand.id || !unipileForm.apiKey.trim()) {
-      return;
-    }
-
-    setUnipileSaving(true);
-    setProviderMessage("unipile", null);
-
-    try {
-      const res = await fetch("/api/connections/unipile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: unipileForm.apiKey.trim(),
-          accountId: unipileForm.accountId.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to save Unipile"));
-      }
-
-      setProviderMessage("unipile", {
-        tone: "success",
-        text: "Unipile connected successfully.",
-      });
-      setUnipileForm({ apiKey: "", accountId: "" });
-      await refreshConnectionData();
-    } catch (saveError) {
-      setProviderMessage("unipile", {
-        tone: "error",
-        text:
-          saveError instanceof Error
-            ? saveError.message
-            : "Network error saving credentials.",
-      });
-    } finally {
-      setUnipileSaving(false);
-    }
-  }
-
   async function handleDisconnectUnipile() {
     setUnipileSaving(true);
     setProviderMessage("unipile", null);
@@ -420,7 +374,7 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Unipile")
+          await readErrorMessage(res, "Couldn't disconnect Unipile. Try again.")
         );
       }
 
@@ -435,7 +389,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Unipile.",
+            : "Couldn't disconnect Unipile. Try again.",
       });
     } finally {
       setUnipileSaving(false);
@@ -466,14 +420,14 @@ function ConnectionsContent({
   const errorText = getConnectionErrorText(error);
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-6"}>
+    <div className={embedded ? "space-y-4" : "space-y-8"}>
       {!embedded && (
-        <div>
+        <header>
           <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-          <p className="text-muted-foreground">
-            The accounts the tool sends email from, creates orders in, and reads posts from.
+          <p className="mt-1 text-muted-foreground">
+            The accounts this tool sends email from, creates orders in, and finds posts in.
           </p>
-        </div>
+        </header>
       )}
 
       {showSupportCta && <ConnectionsSupportBanner />}
@@ -488,8 +442,8 @@ function ConnectionsContent({
       )}
 
       {errorText && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          Connection failed: {errorText}
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          That didn&apos;t connect. {errorText}
         </div>
       )}
 
@@ -562,45 +516,12 @@ function ConnectionsContent({
           />
         )}
 
-        {unipile && !unipile.connected && (
-          <details className="rounded-xl border border-dashed p-4 md:col-span-2">
-            <summary className="cursor-pointer font-medium">
-              Optional: send Instagram DMs (Unipile)
-            </summary>
-            <div className="mt-4">
-              <UnipileConnectionCard
-                provider={unipile}
-                message={messages.unipile ?? null}
-                saving={unipileSaving}
-                apiKey={unipileForm.apiKey}
-                accountId={unipileForm.accountId}
-                onApiKeyChange={(value) =>
-                  setUnipileForm((current) => ({ ...current, apiKey: value }))
-                }
-                onAccountIdChange={(value) =>
-                  setUnipileForm((current) => ({ ...current, accountId: value }))
-                }
-                onSave={() => void handleSaveUnipile()}
-                onDisconnect={() => void handleDisconnectUnipile()}
-              />
-            </div>
-          </details>
-        )}
-
+        {/* Unipile is an extra paid service. Only show it to brands that already connected it. */}
         {unipile && unipile.connected && (
           <UnipileConnectionCard
             provider={unipile}
             message={messages.unipile ?? null}
             saving={unipileSaving}
-            apiKey={unipileForm.apiKey}
-            accountId={unipileForm.accountId}
-            onApiKeyChange={(value) =>
-              setUnipileForm((current) => ({ ...current, apiKey: value }))
-            }
-            onAccountIdChange={(value) =>
-              setUnipileForm((current) => ({ ...current, accountId: value }))
-            }
-            onSave={() => void handleSaveUnipile()}
             onDisconnect={() => void handleDisconnectUnipile()}
           />
         )}
