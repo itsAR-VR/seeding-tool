@@ -8,7 +8,10 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { AppIcon } from "@/components/app-icon";
+import { buttonVariants } from "@/components/ui/button";
 import { safeReturnPath } from "@/lib/safe-return-path";
 
 import {
@@ -24,6 +27,7 @@ import {
   UnipileConnectionCard,
 } from "./provider-cards";
 import {
+  ConnectionStatus,
   ConnectionsErrorState,
   ConnectionsLoadingState,
   ConnectionsReturnBanner,
@@ -58,6 +62,16 @@ function ConnectionsContent({
   const [shopifySaving, setShopifySaving] = useState(false);
   const [instagramLoading, setInstagramLoading] = useState(false);
   const [unipileSaving, setUnipileSaving] = useState(false);
+  // Creator search runs on Apify: ready when the company has a key or may use the shared one.
+  const [searchReady, setSearchReady] = useState<boolean | null>(null);
+  useEffect(() => {
+    void fetch("/api/settings/apify")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { hasOwnKey?: boolean; usesShared?: boolean } | null) =>
+        setSearchReady(Boolean(d?.hasOwnKey || d?.usesShared)),
+      )
+      .catch(() => setSearchReady(false));
+  }, []);
   const [shopifyForm, setShopifyForm] = useState({
     storeDomain: "",
     accessToken: "",
@@ -420,6 +434,9 @@ function ConnectionsContent({
   const unipile = getProvider("unipile");
 
   const errorText = getConnectionErrorText(error);
+  const mainProviders = [gmail, instagram, shopify].filter(Boolean);
+  const connectedCount = mainProviders.filter((p) => p?.connected).length + (searchReady ? 1 : 0);
+  const totalCount = mainProviders.length + 1;
 
   return (
     <div className={embedded ? "space-y-4" : "space-y-8"}>
@@ -449,7 +466,14 @@ function ConnectionsContent({
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {!embedded && (
+        <p className="font-medium">
+          {connectedCount} of {totalCount} connected
+          {connectedCount < totalCount ? ". Connect the rest when you're ready." : ". You're all set."}
+        </p>
+      )}
+
+      <div className="grid max-w-3xl gap-4">
         {gmail && (
           <GmailConnectionCard
             provider={gmail}
@@ -463,6 +487,24 @@ function ConnectionsContent({
               }
               window.location.href = `/api/auth/gmail?${params.toString()}`;
             }}
+          />
+        )}
+
+        {instagram && (
+          <InstagramConnectionCard
+            provider={instagram}
+            message={messages.instagram ?? null}
+            loading={instagramLoading}
+            onConnect={() => {
+              const params = new URLSearchParams({
+                brandId: brandIdOverride ?? overview.brand.id,
+              });
+              if (authReturnTo) {
+                params.set("returnTo", authReturnTo);
+              }
+              window.location.href = `/api/auth/instagram?${params.toString()}`;
+            }}
+            onDisconnect={() => void handleDisconnectInstagram()}
           />
         )}
 
@@ -500,23 +542,28 @@ function ConnectionsContent({
           />
         )}
 
-        {instagram && (
-          <InstagramConnectionCard
-            provider={instagram}
-            message={messages.instagram ?? null}
-            loading={instagramLoading}
-            onConnect={() => {
-              const params = new URLSearchParams({
-                brandId: brandIdOverride ?? overview.brand.id,
-              });
-              if (authReturnTo) {
-                params.set("returnTo", authReturnTo);
-              }
-              window.location.href = `/api/auth/instagram?${params.toString()}`;
-            }}
-            onDisconnect={() => void handleDisconnectInstagram()}
-          />
-        )}
+        <section className="rounded-xl border bg-card" aria-labelledby="conn-search">
+          <div className="flex items-start gap-4 p-5">
+            <AppIcon name="search" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="conn-search" className="text-lg font-semibold">
+                  Creator search
+                </h2>
+                <ConnectionStatus
+                  connected={searchReady === true}
+                  label={searchReady === null ? "Checking..." : searchReady ? "Ready" : "Needs a key"}
+                />
+              </div>
+              <p className="text-muted-foreground">Finds creators on Instagram and Collabstr, with their emails.</p>
+            </div>
+          </div>
+          <div className="border-t px-5 py-4">
+            <Link href="/settings/creator-search" className={buttonVariants({ variant: "outline" })}>
+              {searchReady ? "Manage creator search" : "Set up creator search"}
+            </Link>
+          </div>
+        </section>
 
         {/* Unipile is an extra paid service. Only show it to brands that already connected it. */}
         {unipile && unipile.connected && (

@@ -3,11 +3,19 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Circle } from "lucide-react";
+import { AppIcon, type AppIconName } from "@/components/app-icon";
+import { ConnectionStatus } from "@/app/(platform)/settings/connections/shared";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { buildOnboardingParams } from "./constants";
 
 type Provider = { provider: string; connected: boolean; summary: string };
+
+const ROW_ICON: Record<string, AppIconName> = {
+  instagram: "instagram",
+  gmail: "gmail",
+  shopify: "shopify",
+  apify: "search",
+};
 
 type Row = {
   key: string;
@@ -130,17 +138,16 @@ export function ConnectStep({ brandName, brandId }: { brandName: string; brandId
         <ul className="divide-y rounded-xl border bg-card">
           {rows.map((r) => (
             <li key={r.key} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-4 sm:px-5">
-              {r.connected ? (
-                <CheckCircle2 className="size-5 shrink-0 text-green-700" aria-hidden />
-              ) : (
-                <Circle className="size-5 shrink-0 text-muted-foreground" aria-hidden />
-              )}
+              <AppIcon name={ROW_ICON[r.key] ?? "search"} />
               <div className="min-w-0 flex-1">
                 <p className="font-medium">{r.title}</p>
                 <p className="text-sm text-muted-foreground">{r.what}</p>
               </div>
               {r.connected ? (
-                <span className="min-w-0 break-words text-sm text-green-800">{r.status}</span>
+                <span className="flex min-w-0 flex-col items-end gap-1">
+                  <ConnectionStatus connected />
+                  <span className="max-w-56 break-words text-right text-sm text-muted-foreground">{r.status}</span>
+                </span>
               ) : (
                 <Link href={r.href} className={buttonVariants({ variant: "outline" })}>
                   {r.action}

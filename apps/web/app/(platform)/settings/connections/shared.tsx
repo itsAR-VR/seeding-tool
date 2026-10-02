@@ -9,6 +9,7 @@ import {
   type IntegrationProvider,
 } from "@/lib/integrations/methods";
 import { cn } from "@/lib/utils";
+import { AppIcon, type AppIconName } from "@/components/app-icon";
 
 export type FlashMessage =
   | {
@@ -79,7 +80,35 @@ const PROVIDER_GUIDES: Record<
   },
 };
 
-/** Shared card frame: name, status in words, and what the account is for. */
+const PROVIDER_ICON: Record<IntegrationProvider, AppIconName> = {
+  gmail: "gmail",
+  shopify: "shopify",
+  instagram: "instagram",
+  unipile: "unipile",
+};
+
+const PROVIDER_TITLE: Partial<Record<IntegrationProvider, string>> = {
+  instagram: "Instagram and Meta ads",
+};
+
+/** A status pill in words, with a dot so it scans at a glance. */
+export function ConnectionStatus({ connected, label }: { connected: boolean; label?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium",
+        connected
+          ? "bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300"
+          : "bg-muted text-muted-foreground",
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", connected ? "bg-green-600" : "bg-muted-foreground/60")} aria-hidden />
+      {label ?? (connected ? "Connected" : "Not connected")}
+    </span>
+  );
+}
+
+/** Shared card frame: app icon, name, what it's for, and status in words. */
 export function ProviderCardShell({
   provider,
   children,
@@ -88,25 +117,23 @@ export function ProviderCardShell({
   children: ReactNode;
 }) {
   return (
-    <section className="space-y-4 rounded-xl border bg-card p-5">
-      <div className="space-y-1">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">{provider.label}</h2>
-          <span
-            className={cn(
-              "text-sm font-medium",
-              provider.connected ? "text-green-700 dark:text-green-400" : "text-muted-foreground",
-            )}
-          >
-            {provider.connected ? "Connected" : "Not connected yet"}
-          </span>
+    <section className="rounded-xl border bg-card" aria-labelledby={`conn-${provider.provider}`}>
+      <div className="flex items-start gap-4 p-5">
+        <AppIcon name={PROVIDER_ICON[provider.provider]} />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 id={`conn-${provider.provider}`} className="text-lg font-semibold">
+              {PROVIDER_TITLE[provider.provider] ?? provider.label}
+            </h2>
+            <ConnectionStatus connected={provider.connected} />
+          </div>
+          <p className="text-muted-foreground">{PROVIDER_PURPOSE[provider.provider]}</p>
+          {provider.connected && provider.summary && provider.summary !== "Connected" && (
+            <p className="break-words text-sm font-medium">{provider.summary}</p>
+          )}
         </div>
-        <p className="text-muted-foreground">{PROVIDER_PURPOSE[provider.provider]}</p>
-        {provider.connected && provider.summary && provider.summary !== "Connected" && (
-          <p className="text-sm font-medium">{provider.summary}</p>
-        )}
       </div>
-      {children}
+      <div className="space-y-4 border-t px-5 py-4">{children}</div>
     </section>
   );
 }
