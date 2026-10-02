@@ -16,7 +16,16 @@ async function BrandMark({ className }: { className: string }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={brand.logoUrl} alt={brand.name} className={className} />;
   }
-  return <p className="text-lg font-semibold tracking-tight">{brand?.name ?? "Seed Scale"}</p>;
+  if (brand) return <p className="text-lg font-semibold tracking-tight">{brand.name}</p>;
+  // No company yet (someone mid-setup): show the product, made by Kalm.
+  return (
+    <span className="flex items-center gap-2.5">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/kalm-logo.png" alt="Kalm" className="h-6 w-auto" />
+      <span className="h-5 w-px bg-border" aria-hidden />
+      <span className="text-lg font-semibold tracking-tight">Seed Scale</span>
+    </span>
+  );
 }
 
 
