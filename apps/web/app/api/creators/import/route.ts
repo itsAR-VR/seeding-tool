@@ -288,12 +288,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (enrichedCreatorIds.length > 0) {
+      // Best effort: the background scheduler may not be set up; the save already worked.
       await inngest.send({
         name: "creator-avg-views/requested",
         data: {
           creatorIds: enrichedCreatorIds,
         },
-      });
+      }).catch((error) => console.warn("[avg-views enqueue skipped]", error));
     }
 
     return NextResponse.json({
