@@ -30,7 +30,14 @@ function OnboardingContent() {
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/onboarding/status")
-      .then((r) => (r.ok ? (r.json() as Promise<Status>) : null))
+      .then((r) =>
+        r.ok
+          ? (r.json() as Promise<Status>)
+          : // No account here and no invite to accept.
+            r.status === 404
+            ? ({ isComplete: false, hasBrand: false, canCreateBrand: false } as Status)
+            : null,
+      )
       .then((data) => {
         if (cancelled) return;
         // Finished companies go Home; the Accounts step stays reachable for adding connections.

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId, requireOrg } from "@/lib/tenancy";
+import { requireOrg } from "@/lib/tenancy";
 import { findOpenCompanyInvite, isPlatformAdmin } from "@/lib/invites";
 import { prisma } from "@/lib/prisma";
+import { getOrAcceptInvitedUser } from "@/lib/invite-user";
 import {
   fetchBrandProfile,
   normalizeBrandWebsiteUrl,
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserBySupabaseId(authUser.id);
+    const user = await getOrAcceptInvitedUser(authUser);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }

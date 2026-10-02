@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
 import { prisma } from "@/lib/prisma";
+import { getOrAcceptInvitedUser } from "@/lib/invite-user";
 import { findOpenCompanyInvite, isPlatformAdmin } from "@/lib/invites";
 
 /**
@@ -21,7 +21,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await getUserBySupabaseId(authUser.id);
+    const user = await getOrAcceptInvitedUser(authUser);
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
