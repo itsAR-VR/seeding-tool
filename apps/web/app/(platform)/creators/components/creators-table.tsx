@@ -116,7 +116,7 @@ export function CreatorsTable({
                         </td>
                         <td className="px-4 py-3">
                           {creator.email ? (
-                            <span className="break-all">{creator.email}</span>
+                            <span className="block max-w-[14rem] truncate" title={creator.email}>{creator.email}</span>
                           ) : (
                             <span className="text-muted-foreground">No email yet</span>
                           )}

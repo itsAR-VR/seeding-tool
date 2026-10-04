@@ -346,7 +346,7 @@ function SearchForm({
 
       <div className="flex flex-wrap gap-6">
         <div className="space-y-1.5">
-          <label htmlFor="search-limit" className="text-sm font-medium">
+          <label htmlFor="search-limit" className="block text-sm font-medium">
             How many creators
           </label>
           <Input
@@ -422,12 +422,12 @@ function SearchForm({
           </fieldset>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium">Location (optional)</label>
+            <label className="block text-sm font-medium">Location (optional)</label>
             <LocationInput value={searchLocation} onChange={setSearchLocation} suggestions={locationSuggestions} />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="search-usernames" className="text-sm font-medium">
+            <label htmlFor="search-usernames" className="block text-sm font-medium">
               Specific creators to check (optional)
             </label>
             <textarea

@@ -154,7 +154,7 @@ export function useCreatorsState() {
   const [searchLocation, setSearchLocation] = useState("");
   const [searchMinFollowers, setSearchMinFollowers] = useState("");
   const [searchMaxFollowers, setSearchMaxFollowers] = useState("");
-  const [searchLimit, setSearchLimit] = useState("50");
+  const [searchLimit, setSearchLimit] = useState("25");
   const [searchSources, setSearchSources] =
     useState<Record<SearchSourceKey, boolean>>(DEFAULT_SEARCH_SOURCES);
   const [brandKeywords, setBrandKeywords] = useState<string[]>([]);
@@ -437,6 +437,7 @@ export function useCreatorsState() {
       setActiveSearchJob(queuedJob);
       setShowSearchModal(false);
 
+      window.dispatchEvent(new Event("creator-search-started"));
       pollRef.current = setInterval(() => {
         void pollCreatorSearchJob(queuedJob.jobId);
       }, 3000);

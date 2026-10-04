@@ -40,6 +40,20 @@ export function CreatorSearchJobsTray() {
   useEffect(() => {
     let cancelled = false;
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let running = false;
+
+    // Check often only while a search is running; otherwise once a minute,
+    // and never while the tab is hidden.
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(() => void tick(), running ? 4000 : 60000);
+    }
+    async function tick() {
+      if (!document.hidden) await loadJobs();
+      if (!cancelled) schedule();
+    }
+
     async function loadJobs() {
       try {
         const [activeResponse, recentResponse] = await Promise.all([
@@ -54,6 +68,7 @@ export function CreatorSearchJobsTray() {
         const recentPayload = (await recentResponse.json()) as {
           jobs: SearchJobSummary[];
         };
+        running = activePayload.jobs.length > 0;
         if (!cancelled) {
           setActiveJobs(activePayload.jobs);
           setRecentJobs(recentPayload.jobs);
@@ -63,14 +78,18 @@ export function CreatorSearchJobsTray() {
       }
     }
 
-    void loadJobs();
-    const interval = setInterval(() => {
-      void loadJobs();
-    }, 4000);
+    // A search started on this page should show up right away.
+    const onStarted = () => {
+      running = true;
+      void tick();
+    };
+    window.addEventListener("creator-search-started", onStarted);
+    void tick();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timer);
+      window.removeEventListener("creator-search-started", onStarted);
     };
   }, []);
 
