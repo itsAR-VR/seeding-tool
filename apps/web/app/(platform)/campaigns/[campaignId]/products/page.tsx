@@ -179,7 +179,7 @@ export default function CampaignProductsPage() {
                   </span>
                   {cp.shopifyProduct?.variants &&
                     cp.shopifyProduct.variants.length > 0 && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-sm">
                         ${parseFloat(
                           cp.shopifyProduct.variants[0].price
                         ).toFixed(2)}

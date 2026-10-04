@@ -116,7 +116,7 @@ export function CreatorSearchJobsTray() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold">Discovery Jobs</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Active and recent creator searches
               </p>
             </div>
@@ -136,7 +136,7 @@ export function CreatorSearchJobsTray() {
                   <Badge variant={statusTone(job.status)}>{job.status}</Badge>
                   <Link
                     href={jobTarget(job)}
-                    className="text-xs font-medium text-blue-600 hover:underline"
+                    className="text-sm font-medium text-blue-600 hover:underline"
                   >
                     Open
                   </Link>
@@ -147,7 +147,7 @@ export function CreatorSearchJobsTray() {
                     style={{ width: `${job.progressPercent}%` }}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <span>Requested: {job.requestedCount}</span>
                   <span>Ready: {job.resultCount}</span>
                   <span>Validated: {job.validatedCount}</span>
@@ -158,7 +158,7 @@ export function CreatorSearchJobsTray() {
                   </span>
                 </div>
                 {job.error ? (
-                  <p className="mt-2 text-xs text-red-700">{job.error}</p>
+                  <p className="mt-2 text-sm text-red-700">{job.error}</p>
                 ) : null}
               </div>
             ))}
@@ -172,7 +172,7 @@ export function CreatorSearchJobsTray() {
         onClick={() => setOpen((current) => !current)}
       >
         Discovery Jobs
-        <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs text-foreground">
+        <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-sm text-foreground">
           {activeJobs.length}
         </span>
       </Button>

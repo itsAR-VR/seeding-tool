@@ -605,7 +605,7 @@ export default function OutreachPage() {
                   </div>
                   <Badge
                     variant={sendable ? "outline" : "secondary"}
-                    className="text-xs"
+                    className="text-sm"
                   >
                     {statusLabel(cc.lifecycleStatus)}
                   </Badge>
@@ -637,8 +637,10 @@ export default function OutreachPage() {
               disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
-                ? "Loading drafts..."
-                : `Load drafts (${selectedIds.size})`}
+                ? "Writing emails..."
+                : selectedIds.size === 0
+                  ? "Pick creators to email"
+                  : `Write ${selectedIds.size} ${selectedIds.size === 1 ? "email" : "emails"}`}
             </Button>
           </div>
         </CardContent>

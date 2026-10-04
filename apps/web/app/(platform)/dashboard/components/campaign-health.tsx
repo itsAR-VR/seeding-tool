@@ -65,7 +65,7 @@ export function CampaignHealthWidget({
           <div className="flex flex-col items-center py-6 text-center">
             <span className="text-3xl">🏥</span>
             <p className="mt-2 text-sm font-medium">No health data yet</p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               Health checks run daily at 6 AM UTC for active campaigns.
             </p>
           </div>
@@ -98,7 +98,7 @@ export function CampaignHealthWidget({
                   : "All campaigns healthy"}
             </CardDescription>
           </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
             {criticalCount > 0 && (
               <span className="flex items-center gap-1">
                 <span className="inline-block h-2 w-2 rounded-full bg-red-500" />
@@ -148,14 +148,14 @@ export function CampaignHealthWidget({
                     </span>
                     <span
                       className={cn(
-                        "rounded-full px-2 py-0.5 text-xs font-medium",
+                        "rounded-full px-2 py-0.5 text-sm font-medium",
                         config.bg
                       )}
                     >
                       {config.label}
                     </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-sm text-muted-foreground">
                     {isExpanded ? "−" : "+"}
                   </span>
                 </button>
@@ -191,7 +191,7 @@ export function CampaignHealthWidget({
                           <div
                             key={`${snapshot.id}-alert-${idx}`}
                             className={cn(
-                              "rounded border px-2 py-1 text-xs",
+                              "rounded border px-2 py-1 text-sm",
                               severityColors[alert.severity] ??
                                 severityColors.info
                             )}
@@ -203,7 +203,7 @@ export function CampaignHealthWidget({
                     )}
 
                     {/* Integration status */}
-                    <div className="mb-3 flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="mb-3 flex items-center gap-3 text-sm text-muted-foreground">
                       <IntegrationDot
                         label="Gmail"
                         ok={snapshot.metrics.integrationHealth.gmail}
@@ -222,7 +222,7 @@ export function CampaignHealthWidget({
 
                     <Link
                       href={`/campaigns/${snapshot.campaignId}`}
-                      className="text-xs font-medium text-primary hover:underline"
+                      className="text-sm font-medium text-primary hover:underline"
                     >
                       View campaign details →
                     </Link>
@@ -248,7 +248,7 @@ function MetricPill({
 }) {
   return (
     <div className="rounded-md bg-muted/50 px-2 py-1 text-center">
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-sm text-muted-foreground">{label}</p>
       <p className="text-sm font-semibold">{value}</p>
     </div>
   );

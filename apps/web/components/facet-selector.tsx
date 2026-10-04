@@ -125,7 +125,7 @@ export function FacetSelector({
       <div className="flex items-center justify-between gap-3">
         <label className="text-sm font-medium">{label}</label>
         {selectedOptions.length > 0 ? (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {selectedOptions.length} selected
           </span>
         ) : null}
@@ -155,7 +155,7 @@ export function FacetSelector({
             />
             <div className="mt-3 max-h-56 space-y-1 overflow-y-auto">
               {filteredOptions.length === 0 ? (
-                <p className="px-2 py-3 text-xs text-muted-foreground">
+                <p className="px-2 py-3 text-sm text-muted-foreground">
                   {emptyText}
                 </p>
               ) : (
@@ -175,7 +175,7 @@ export function FacetSelector({
                       <span className="min-w-0 truncate">
                         {option.label ?? option.value}
                       </span>
-                      <span className="ml-3 flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <span className="ml-3 flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
                         {typeof option.count === "number" ? `(${option.count})` : null}
                         {isSelected ? <CheckIcon className="size-3.5" /> : null}
                       </span>

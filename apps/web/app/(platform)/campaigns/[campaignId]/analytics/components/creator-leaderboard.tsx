@@ -85,7 +85,7 @@ export function CreatorLeaderboard({ entries }: CreatorLeaderboardProps) {
                   {entry.creatorName || "Unknown"}
                 </div>
                 {entry.handle && (
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-sm text-muted-foreground">
                     @{entry.handle} ({entry.platform})
                   </div>
                 )}

@@ -1,12 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { isPlatformAdmin } from "@/lib/invites";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { ChevronRight } from "lucide-react";
 
 const settingsLinks = [
   {
@@ -31,8 +26,8 @@ const settingsLinks = [
   },
   {
     href: "/settings/ai-personas",
-    title: "AI Personas",
-    description: "How AI-drafted outreach emails sound.",
+    title: "Writing styles",
+    description: "How suggested outreach emails sound.",
   },
   {
     href: "/settings/do-not-send",
@@ -61,41 +56,51 @@ const settingsLinks = [
   },
 ];
 
+const GROUPS: Array<{ title: string; hrefs: string[] }> = [
+  { title: "Your brand", hrefs: ["/settings/brand", "/settings/brand-kit", "/settings/ai-personas", "/settings/team"] },
+  { title: "Accounts and creator search", hrefs: ["/settings/connections", "/settings/creator-search", "/settings/automations"] },
+  { title: "Safety and status", hrefs: ["/settings/do-not-send", "/admin/health", "/settings/feature-flags"] },
+];
+
 export default async function SettingsPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  const links = isPlatformAdmin(user?.email)
-    ? [
-        ...settingsLinks,
-        {
-          href: "/admin/companies",
-          title: "Companies",
-          description: "Invite new companies to Seed Scale. Only you see this.",
-        },
-      ]
-    : settingsLinks;
+  const byHref = new Map(settingsLinks.map((l) => [l.href, l]));
+  const groups = GROUPS.map((g) => ({ title: g.title, links: g.hrefs.map((h) => byHref.get(h)).filter((l) => l !== undefined) }));
+  if (isPlatformAdmin(user?.email)) {
+    groups.push({
+      title: "Only you see this",
+      links: [{ href: "/admin/companies", title: "Companies", description: "Invite new companies to Seed Scale." }],
+    });
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="max-w-3xl space-y-8">
+      <header>
         <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground">
-          Your brand, connected accounts, and the do-not-send list.
-        </p>
-      </div>
+        <p className="mt-1 text-muted-foreground">Your brand, connected accounts, and the do-not-send list.</p>
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        {links.map((link) => (
-          <Link key={link.href} href={link.href}>
-            <Card className="transition-colors hover:bg-accent/50">
-              <CardHeader>
-                <CardTitle>{link.title}</CardTitle>
-                <CardDescription>{link.description}</CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      {groups.map((group) => (
+        <section key={group.title} className="space-y-3" aria-labelledby={`group-${group.title}`}>
+          <h2 id={`group-${group.title}`} className="text-lg font-semibold">
+            {group.title}
+          </h2>
+          <ul className="divide-y rounded-xl border bg-card">
+            {group.links.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{link.title}</span>
+                    <span className="block text-sm text-muted-foreground">{link.description}</span>
+                  </span>
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

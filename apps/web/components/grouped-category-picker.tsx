@@ -70,7 +70,7 @@ export function GroupedCategoryPicker({
           <div className="space-y-2">
             <p className="text-sm font-medium">Selected keywords</p>
             {selectedValues.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Pick at least one keyword to guide discovery.
               </p>
             ) : (
@@ -95,7 +95,7 @@ export function GroupedCategoryPicker({
               </div>
             )}
           </div>
-          <span className="shrink-0 text-xs text-muted-foreground">
+          <span className="shrink-0 text-sm text-muted-foreground">
             {selectedValues.length} selected
           </span>
         </div>

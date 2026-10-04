@@ -77,17 +77,17 @@ export default async function AdsPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Ads</CardDescription><CardTitle>{posts.length}</CardTitle></CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Total spend</CardDescription><CardTitle>{money(totalSpend)}</CardTitle></CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardDescription>Cost per purchase</CardDescription><CardTitle>{totalPurchases > 0 ? money(totalSpend / totalPurchases) : "–"}</CardTitle></CardHeader>
-        </Card>
-      </div>
+      <p className="text-lg">
+        <span className="font-semibold tabular-nums">{posts.length}</span> {posts.length === 1 ? "ad" : "ads"} ·{" "}
+        <span className="font-semibold tabular-nums">{money(totalSpend)}</span> spent
+        {totalPurchases > 0 ? (
+          <>
+            {" "}· <span className="font-semibold tabular-nums">{money(totalSpend / totalPurchases)}</span> per purchase
+          </>
+        ) : (
+          <span className="text-muted-foreground"> · no purchases yet</span>
+        )}
+      </p>
 
       <Card>
         <CardHeader>

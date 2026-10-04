@@ -372,7 +372,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
               return (
                 <div key={stage.key} className="flex items-center gap-3">
                   <div className="w-36 shrink-0">
-                    <Badge className={`${stage.color} text-xs`}>
+                    <Badge className={`${stage.color} text-sm`}>
                       {stage.label}
                     </Badge>
                   </div>
@@ -384,7 +384,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
                   </div>
                   <div className="w-16 text-right text-sm font-medium">
                     {count}
-                    <span className="text-muted-foreground ml-1 text-xs">
+                    <span className="text-muted-foreground ml-1 text-sm">
                       ({pct}%)
                     </span>
                   </div>

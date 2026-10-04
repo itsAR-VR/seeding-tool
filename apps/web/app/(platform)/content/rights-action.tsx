@@ -81,7 +81,7 @@ export function RightsAction({ postId, status }: Props) {
         </>
       ) : (
         <>
-          <p className="whitespace-pre-wrap break-words text-xs">{message}</p>
+          <p className="whitespace-pre-wrap break-words text-sm">{message}</p>
           <Button size="sm" className="w-full" onClick={() => void copy()}>
             {copied ? "Copied" : "Copy message"}
           </Button>

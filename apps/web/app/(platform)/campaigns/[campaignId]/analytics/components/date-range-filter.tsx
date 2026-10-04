@@ -23,7 +23,7 @@ export function DateRangeFilter({ onRangeChange }: DateRangeFilterProps) {
   return (
     <div className="flex items-end gap-3 flex-wrap">
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">From</label>
+        <label className="text-sm font-medium text-muted-foreground">From</label>
         <input
           type="date"
           value={from}
@@ -32,7 +32,7 @@ export function DateRangeFilter({ onRangeChange }: DateRangeFilterProps) {
         />
       </div>
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground">To</label>
+        <label className="text-sm font-medium text-muted-foreground">To</label>
         <input
           type="date"
           value={to}

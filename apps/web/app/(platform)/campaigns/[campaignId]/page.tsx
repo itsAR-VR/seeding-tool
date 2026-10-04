@@ -192,23 +192,23 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             </p>
           )}
         </div>
-        <nav aria-label="Campaign" className="flex flex-wrap items-center gap-1 text-sm">
+        <nav aria-label="Campaign" className="flex flex-wrap items-center gap-2">
           {stats.pendingReview > 0 && (
             <Link href={`/campaigns/${campaignId}/review`}>
               <Button size="sm">Review {stats.pendingReview} new creators</Button>
             </Link>
           )}
           <Link href={`/campaigns/${campaignId}/orders`}>
-            <Button variant="ghost" size="sm">Orders</Button>
+            <Button variant="outline">Orders</Button>
           </Link>
           <Link href={`/campaigns/${campaignId}/mentions`}>
-            <Button variant="ghost" size="sm">Posts</Button>
+            <Button variant="outline">Posts</Button>
           </Link>
           <Link href={`/campaigns/${campaignId}/analytics`}>
-            <Button variant="ghost" size="sm">Results</Button>
+            <Button variant="outline">Results</Button>
           </Link>
           <Link href={`/campaigns/${campaignId}/seed-list`}>
-            <Button variant="ghost" size="sm">Shareable list</Button>
+            <Button variant="outline">Shareable list</Button>
           </Link>
           <TriggerSearchButton campaignId={campaignId} />
         </nav>
@@ -352,8 +352,8 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           <Link href={`/campaigns/${campaignId}/products`}>
             <Button variant="outline" size="sm">
               {campaign.campaignProducts.length > 0
-                ? "Manage Products"
-                : "Add Products"}
+                ? "Change product"
+                : "Add a product"}
             </Button>
           </Link>
         </CardHeader>
@@ -445,18 +445,18 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                           <Link href={`/creators/${cc.creatorId}`} className="font-medium hover:underline">
                             {cc.creator.name ?? "Unknown"}
                           </Link>
-                          {profile && (
+                          {(profile || cc.creator.instagramHandle) && (
                             <div className="text-muted-foreground">
                               <InstagramHandleLink
-                                handle={profile.handle}
-                                url={profile.url}
+                                handle={profile?.handle ?? cc.creator.instagramHandle ?? ""}
+                                url={profile?.url}
                                 className="hover:text-foreground hover:underline"
                               />
                             </div>
                           )}
                         </td>
                         <td className="py-3 tabular-nums">
-                          {profile?.followerCount?.toLocaleString() ?? "—"}
+                          {profile?.followerCount?.toLocaleString() ?? <span className="text-muted-foreground">Unknown</span>}
                         </td>
                         <td className="py-3">
                           <Badge className={status.tone}>{status.label}</Badge>
@@ -484,7 +484,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                               Review
                             </Link>
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">Waiting on them</span>
                           )}
                         </td>
                         <td className="py-3">
@@ -495,7 +495,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                               disabled={!hasCampaignProducts}
                             />
                           ) : (
-                            <span className="text-muted-foreground">—</span>
+                            <span className="text-muted-foreground">After you email them</span>
                           )}
                         </td>
                       </tr>

@@ -467,7 +467,7 @@ export function ProductPicker({
                     <div className="absolute bottom-2 left-2">
                       <Badge
                         variant="secondary"
-                        className="bg-black/60 text-white text-[10px] backdrop-blur-sm border-0"
+                        className="bg-black/60 text-white text-sm backdrop-blur-sm border-0"
                       >
                         {product.productType}
                       </Badge>
@@ -484,7 +484,7 @@ export function ProductPicker({
                       {priceRange(product.variants)}
                     </span>
                     {product.variants.length > 1 && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {variantSummary(product.variants) ||
                           `${product.variants.length} variants`}
                       </span>
@@ -495,7 +495,7 @@ export function ProductPicker({
                   {product.variants.length > 1 && (
                     <button
                       type="button"
-                      className="mt-2 text-xs text-primary hover:underline"
+                      className="mt-2 text-sm text-primary hover:underline"
                       onClick={(e) => {
                         e.stopPropagation();
                         setExpandedProduct(isExpanded ? null : product.id);
@@ -511,7 +511,7 @@ export function ProductPicker({
                       {product.variants.map((v) => (
                         <div
                           key={v.id}
-                          className="flex items-center justify-between text-xs"
+                          className="flex items-center justify-between text-sm"
                         >
                           <span className="text-muted-foreground truncate max-w-[60%]">
                             {v.title === "Default Title" ? "Standard" : v.title}

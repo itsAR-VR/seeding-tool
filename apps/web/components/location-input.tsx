@@ -70,12 +70,12 @@ export function LocationInput({
       {showDropdown && (
         <div className="absolute left-0 right-0 z-30 mt-1 rounded-xl border bg-background p-2 shadow-lg">
           {!hasSavedSuggestions && (
-            <p className="px-2 pb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <p className="px-2 pb-1.5 text-sm font-medium uppercase tracking-[0.12em] text-muted-foreground">
               Common locations
             </p>
           )}
           {hasSavedSuggestions && (
-            <p className="px-2 pb-1.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            <p className="px-2 pb-1.5 text-sm font-medium uppercase tracking-[0.12em] text-muted-foreground">
               Saved locations
             </p>
           )}
@@ -93,7 +93,7 @@ export function LocationInput({
               >
                 <span>{suggestion.value}</span>
                 {typeof suggestion.count === "number" && (
-                  <span className="ml-2 text-xs text-muted-foreground">
+                  <span className="ml-2 text-sm text-muted-foreground">
                     ({suggestion.count})
                   </span>
                 )}
