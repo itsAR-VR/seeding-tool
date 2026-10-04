@@ -193,7 +193,7 @@ export default function AutomationsPage() {
         <UnifiedKeywordSelector groups={[]} selected={words} onChange={setWords} onPendingChange={setPending} />
         <div className="flex flex-wrap gap-6">
           <div className="space-y-1.5">
-            <label htmlFor="limit" className="text-sm font-medium">
+            <label htmlFor="limit" className="block text-sm font-medium">
               Creators each time
             </label>
             <Input
@@ -207,7 +207,7 @@ export default function AutomationsPage() {
             />
           </div>
           <div className="space-y-1.5">
-            <label htmlFor="schedule" className="text-sm font-medium">
+            <label htmlFor="schedule" className="block text-sm font-medium">
               How often
             </label>
             <select

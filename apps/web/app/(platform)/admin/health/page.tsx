@@ -41,9 +41,11 @@ export default async function AdminHealthPage() {
   // Stuck CampaignCreators
   const stuckCreators = await prisma.campaignCreator.findMany({
     where: {
-      campaign: { brandId },
+      // Only campaigns that are sending, and only creators already contacted:
+      // someone not emailed yet isn't stuck, they're waiting on you to start.
+      campaign: { brandId, status: "active" },
       updatedAt: { lt: seventyTwoHoursAgo },
-      lifecycleStatus: { notIn: closedStatuses },
+      lifecycleStatus: { notIn: [...closedStatuses, "ready"] },
     },
     include: {
       creator: { select: { name: true, instagramHandle: true } },

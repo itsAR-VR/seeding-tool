@@ -118,11 +118,17 @@ export default function ThreadDetailPage() {
           const suggestion = loaded.campaignCreator.aiDrafts.find(
             (d) => d.type === "reply" && d.status === "draft"
           );
+          // Only start from the "yes" message when this looks like a yes. A "no"
+          // or "not now" usually needs no reply, so start empty.
+          const lastIn = [...loaded.messages].reverse().find((m) => m.direction === "inbound");
+          const guess = loaded.campaignCreator.replyDecision ?? guessFromIntent(lastIn?.classification);
           if (suggestion) {
             setReplyText(suggestion.body);
             setSuggestionId(suggestion.id);
-          } else {
+          } else if (guess === "yes") {
             setReplyText(loaded.followUpTemplate);
+          } else {
+            setReplyText("");
           }
         }
         if (brandRes.ok) {
@@ -558,7 +564,12 @@ export default function ThreadDetailPage() {
                     </span>
                     {msg.fromAddress && <span>from {msg.fromAddress}</span>}
                     <span>
-                      {new Date(msg.createdAt).toLocaleString()}
+                      {new Date(msg.createdAt).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
                     </span>
 
                   </div>
