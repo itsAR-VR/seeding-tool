@@ -169,12 +169,12 @@ export function SearchModal({
   const [pendingWords, setPendingWords] = useState("");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden">
+      <Card className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden">
         <CardHeader className="shrink-0 border-b pb-4">
           <CardTitle>Find creators</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Pick a few words that describe the creators you want. We search Instagram and Collabstr, then score each
-            creator against your brand.
+            Type what their content is about. We search Instagram and Collabstr and score each creator against your
+            brand.
           </p>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col">
@@ -320,152 +320,131 @@ function SearchForm({
   searchLimitWarning: string | null;
   onPendingWordsChange: (text: string) => void;
 }) {
+  // Only suggest words tied to this brand and its creators; the generic
+  // category list (Automotive, Gaming...) is noise for most brands.
+  const brandGroups = keywordGroups.filter((g) => g.label !== "Categories");
+  const sourceOptions: Array<[SearchSourceKey, string, string]> = [
+    ["apify_search", "Instagram", "Search Instagram profiles for your words."],
+    ["collabstr", "Collabstr", "Creators listed on the Collabstr marketplace."],
+    ["approved_seed_following", "Who your approved creators follow", "Finds similar creators. Slower."],
+    ["apify_keyword_email", "Instagram, emails first", "Only creators with a public email. Slower."],
+  ];
+  const sourceCount = Object.values(searchSources).filter(Boolean).length;
+
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_320px]">
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Where to look</p>
-            <div className="flex flex-wrap gap-2">
-              {([
-                ["collabstr", "Collabstr marketplace"],
-                ["apify_search", "Instagram search"],
-                ["approved_seed_following", "Who your approved creators follow"],
-                ["apify_keyword_email", "Instagram, with emails (slower)"],
-              ] as Array<[SearchSourceKey, string]>).map(
-                ([src, label]) => (
-                  <Button
-                    key={src}
-                    type="button"
-                    size="sm"
-                    variant={searchSources[src] ? "default" : "outline"}
-                    className="rounded-full"
-                    aria-pressed={searchSources[src]}
-                    onClick={() =>
-                      setSearchSources((current) => ({
-                        ...current,
-                        [src]: !current[src],
-                      }))
-                    }
-                  >
-                    {label}
-                  </Button>
-                )
-              )}
-            </div>
-          </div>
+    <div className="min-h-0 flex-1 space-y-6 overflow-y-auto py-5 pr-1">
+      {searchCategoriesLoading ? (
+        <div className="h-24 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" />
+      ) : (
+        <UnifiedKeywordSelector
+          groups={brandGroups}
+          selected={selectedKeywords}
+          onChange={setSelectedKeywords}
+          onPendingChange={onPendingWordsChange}
+        />
+      )}
 
-          {searchCategoriesLoading ? (
-            <p className="text-sm text-muted-foreground">
-              Loading keywords...
-            </p>
-          ) : (
-            <UnifiedKeywordSelector
-              groups={keywordGroups}
-              selected={selectedKeywords}
-              onChange={setSelectedKeywords}
-              onPendingChange={onPendingWordsChange}
+      <div className="flex flex-wrap gap-6">
+        <div className="space-y-1.5">
+          <label htmlFor="search-limit" className="text-sm font-medium">
+            How many creators
+          </label>
+          <Input
+            id="search-limit"
+            type="number"
+            min={1}
+            step={1}
+            value={searchLimit}
+            onChange={(e) => setSearchLimit(e.target.value)}
+            className="w-28"
+          />
+        </div>
+        <fieldset className="space-y-1.5">
+          <legend className="text-sm font-medium">Followers</legend>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min={0}
+              placeholder="Any"
+              aria-label="Fewest followers"
+              value={searchMinFollowers}
+              onChange={(e) => setSearchMinFollowers(e.target.value)}
+              className="w-32"
             />
-          )}
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Location</label>
-            <LocationInput
-              value={searchLocation}
-              onChange={setSearchLocation}
-              suggestions={locationSuggestions}
+            <span className="text-muted-foreground">to</span>
+            <Input
+              type="number"
+              min={0}
+              placeholder="Any"
+              aria-label="Most followers"
+              value={searchMaxFollowers}
+              onChange={(e) => setSearchMaxFollowers(e.target.value)}
+              className="w-32"
             />
           </div>
+        </fieldset>
+      </div>
+      {searchLimitValidation.error ? (
+        <p className="-mt-3 text-sm text-destructive">{searchLimitValidation.error}</p>
+      ) : searchLimitWarning ? (
+        <p className="-mt-3 text-sm text-amber-700">{searchLimitWarning}</p>
+      ) : (
+        <p className="-mt-3 text-sm text-muted-foreground">
+          Start with 10 to 25. Bigger searches take longer and use more Apify credit.
+        </p>
+      )}
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_240px]">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Specific creators to check{" "}
-                <span className="font-normal text-muted-foreground">
-                  (optional)
+      <details className="group rounded-lg border">
+        <summary className="cursor-pointer list-none px-4 py-3 font-medium marker:hidden">
+          More options
+          <span className="ml-2 font-normal text-muted-foreground">
+            {sourceCount} {sourceCount === 1 ? "place" : "places"} to look
+            {searchLocation ? `, near ${searchLocation}` : ""}
+          </span>
+        </summary>
+        <div className="space-y-5 border-t px-4 py-4">
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">Where to look</legend>
+            {sourceOptions.map(([src, label, hint]) => (
+              <label key={src} className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={searchSources[src]}
+                  onChange={() => setSearchSources((current) => ({ ...current, [src]: !current[src] }))}
+                />
+                <span>
+                  <span className="font-medium">{label}</span>
+                  <span className="block text-sm text-muted-foreground">{hint}</span>
                 </span>
               </label>
-              <textarea
-                className="min-h-[108px] w-full rounded-md border px-3 py-2 text-sm"
-                placeholder={"creatorone, creatortwo\ncreatorthree"}
-                value={searchUsernames}
-                onChange={(e) => setSearchUsernames(e.target.value)}
-              />
-              {usernameSuggestions.length > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Recent handles:{" "}
-                  {usernameSuggestions
-                    .slice(0, 4)
-                    .map((option) => `@${option.value}`)
-                    .join(", ")}
-                </p>
-              ) : null}
-            </div>
+            ))}
+          </fieldset>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                Followers
-              </label>
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-1">
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="Min"
-                  value={searchMinFollowers}
-                  onChange={(e) => setSearchMinFollowers(e.target.value)}
-                />
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="Max"
-                  value={searchMaxFollowers}
-                  onChange={(e) => setSearchMaxFollowers(e.target.value)}
-                />
-              </div>
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Location (optional)</label>
+            <LocationInput value={searchLocation} onChange={setSearchLocation} suggestions={locationSuggestions} />
           </div>
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                How many creators
-              </label>
-              <Input
-                type="number"
-                min={1}
-                step={1}
-                value={searchLimit}
-                onChange={(e) => setSearchLimit(e.target.value)}
-              />
-              {searchLimitValidation.error ? (
-                <p className="text-sm text-destructive">
-                  {searchLimitValidation.error}
-                </p>
-              ) : searchLimitWarning ? (
-                <p className="text-sm text-amber-700">
-                  {searchLimitWarning}
-                </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Start with 10 to 25. Bigger searches take longer and use more Apify credit.
-                </p>
-              )}
-            </div>
-
+          <div className="space-y-1.5">
+            <label htmlFor="search-usernames" className="text-sm font-medium">
+              Specific creators to check (optional)
+            </label>
+            <textarea
+              id="search-usernames"
+              className="min-h-20 w-full rounded-lg border bg-background px-3 py-2"
+              placeholder="Instagram handles, separated by commas"
+              value={searchUsernames}
+              onChange={(e) => setSearchUsernames(e.target.value)}
+            />
+            {usernameSuggestions.length > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Recent: {usernameSuggestions.slice(0, 4).map((option) => `@${option.value}`).join(", ")}
+              </p>
+            ) : null}
           </div>
         </div>
-
-        <aside className="space-y-4">
-          <div className="rounded-lg border bg-muted/15 p-4">
-            <p className="text-sm font-medium">Tips</p>
-            <ul className="mt-2 space-y-2 text-sm text-muted-foreground">
-              <li>The suggested words come from your brand. Type your own too.</li>
-              <li>Two or three words work better than ten.</li>
-              <li>Only fill in specific creators when you already know their handles.</li>
-            </ul>
-          </div>
-        </aside>
-      </div>
+      </details>
     </div>
   );
 }
