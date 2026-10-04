@@ -535,7 +535,7 @@ export function useCreatorsState() {
     setSearchLocation("");
     setSearchMinFollowers("");
     setSearchMaxFollowers("");
-    setSearchLimit("50");
+    setSearchLimit("25");
     setSearchSources(DEFAULT_SEARCH_SOURCES);
   }
 
