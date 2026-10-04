@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -48,7 +47,7 @@ export default function CampaignProductsPage() {
     try {
       setLoading(true);
       const res = await fetch(`/api/campaigns/${campaignId}/products`);
-      if (!res.ok) throw new Error("Failed to load");
+      if (!res.ok) throw new Error("Couldn't load products");
       const data = (await res.json()) as { products: CampaignProductData[] };
       setCampaignProducts(data.products);
 
@@ -59,7 +58,7 @@ export default function CampaignProductsPage() {
       }
       setSelectedIds(ids);
     } catch {
-      setError("Failed to load campaign products");
+      setError("Couldn't load this campaign's products. Refresh the page to try again.");
     } finally {
       setLoading(false);
     }
@@ -91,7 +90,7 @@ export default function CampaignProductsPage() {
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error ?? "Failed to save");
+        throw new Error(data.error ?? "Couldn't save your products. Try again.");
       }
 
       const data = (await res.json()) as { products: CampaignProductData[] };
@@ -100,7 +99,7 @@ export default function CampaignProductsPage() {
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save");
+      setError(err instanceof Error ? err.message : "Couldn't save your products. Try again.");
     } finally {
       setSaving(false);
     }
@@ -109,43 +108,31 @@ export default function CampaignProductsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link
-              href={`/campaigns/${campaignId}`}
-              className="hover:text-foreground"
-            >
-              ← Back to Campaign
-            </Link>
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Campaign Products
-          </h1>
-          <p className="text-muted-foreground">
-            Select products from your Shopify catalog to include in this campaign.
-            Selected products will be available as template variables in outreach messages.
+          <h1 className="text-3xl font-bold tracking-tight">Products</h1>
+          <p className="mt-1 text-muted-foreground">
+            Pick the Shopify products you&apos;re gifting in this campaign. Their names and prices
+            can go into your emails.
           </p>
         </div>
         <div className="flex items-center gap-3">
           {saveSuccess && (
-            <span className="text-sm text-green-600 font-medium">
-              ✓ Saved
-            </span>
+            <span className="text-sm font-medium text-green-800">Saved</span>
           )}
           {dirty && (
             <Button
               onClick={handleSave}
               disabled={saving}
             >
-              {saving ? "Saving…" : "Save Selection"}
+              {saving ? "Saving…" : "Save products"}
             </Button>
           )}
         </div>
       </div>
 
       {error && (
-        <div className="rounded-md bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
           {error}
         </div>
       )}
@@ -154,10 +141,9 @@ export default function CampaignProductsPage() {
       {campaignProducts.length > 0 && !dirty && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Selected Products</CardTitle>
+            <CardTitle className="text-lg">In this campaign</CardTitle>
             <CardDescription>
-              These products are associated with this campaign and available as
-              template variables: {"{{product_name}}"}, {"{{product_price}}"}, {"{{product_image}}"}
+              Use {"{{product_name}}"} or {"{{product_price}}"} in an email to fill these in.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -168,6 +154,7 @@ export default function CampaignProductsPage() {
                   className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2"
                 >
                   {cp.shopifyProduct?.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={cp.shopifyProduct.imageUrl}
                       alt=""
@@ -196,9 +183,9 @@ export default function CampaignProductsPage() {
       {!loading && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Product Catalog</CardTitle>
+            <CardTitle className="text-lg">Your Shopify products</CardTitle>
             <CardDescription>
-              Click products to select or deselect them for this campaign.
+              Click a product to add it or take it out, then save.
             </CardDescription>
           </CardHeader>
           <CardContent>

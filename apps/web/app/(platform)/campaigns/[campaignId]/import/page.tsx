@@ -142,34 +142,22 @@ export default function CampaignImportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Add creators from your list
-          </h1>
-          <p className="text-muted-foreground">
-            Pick creators you already saved to add them to{" "}
-            {campaignName ? campaignName : "this campaign"}.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() =>
-            router.push(`/campaigns/${params.campaignId}`)
-          }
-        >
-          ← Back to Campaign
-        </Button>
-      </div>
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Add creators from your list</h1>
+        <p className="mt-1 text-muted-foreground">
+          Pick creators you already saved to add them to{" "}
+          {campaignName ? campaignName : "this campaign"}.
+        </p>
+      </header>
 
       {error && (
-        <p role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
           {error}
         </p>
       )}
 
       {result && (
-        <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+        <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
           {result.added} added. {result.skipped} were already in this campaign
           {result.invalid > 0 ? `, ${result.invalid} couldn't be added` : ""}.
         </div>
@@ -177,15 +165,15 @@ export default function CampaignImportPage() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
-              Available Creators ({creators.length})
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-lg">
+              Saved creators not in this campaign ({creators.length})
             </CardTitle>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={toggleAll}>
-                {selected.size === creators.length
-                  ? "Deselect All"
-                  : "Select All"}
+                {selected.size === creators.length && creators.length > 0
+                  ? "Unselect all"
+                  : "Select all"}
               </Button>
               <Button
                 size="sm"
@@ -194,12 +182,12 @@ export default function CampaignImportPage() {
               >
                 {importing
                   ? "Adding…"
-                  : `Add ${selected.size} Selected to Campaign`}
+                  : `Add ${selected.size} to campaign`}
               </Button>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            Avg views is the average of their latest 12 videos, when we have it.
+            Average views is from their latest 12 videos, when we have it.
           </p>
         </CardHeader>
         <CardContent>
@@ -226,6 +214,7 @@ export default function CampaignImportPage() {
                     <th className="pb-2 pr-4 w-8">
                       <input
                         type="checkbox"
+                        aria-label="Select all creators"
                         checked={
                           selected.size === creators.length &&
                           creators.length > 0
@@ -235,7 +224,7 @@ export default function CampaignImportPage() {
                     </th>
                     <th className="pb-2 pr-4 font-medium">Handle</th>
                     <th className="pb-2 pr-4 font-medium">Followers</th>
-                    <th className="pb-2 pr-4 font-medium">Avg Views</th>
+                    <th className="pb-2 pr-4 font-medium">Average views</th>
                     <th className="pb-2 pr-4 font-medium">Category</th>
                     <th className="pb-2 font-medium">Source</th>
                   </tr>
@@ -250,13 +239,15 @@ export default function CampaignImportPage() {
                       <tr
                         key={creator.id}
                         className={`border-b cursor-pointer ${
-                          selected.has(creator.id) ? "bg-blue-50" : ""
+                          selected.has(creator.id) ? "bg-muted" : ""
                         }`}
                         onClick={() => toggleSelect(creator.id)}
                       >
                       <td className="py-2 pr-4">
                         <input
                           type="checkbox"
+                          aria-label={`Select ${creator.instagramHandle ?? creator.name ?? "creator"}`}
+                          onClick={(e) => e.stopPropagation()}
                           checked={selected.has(creator.id)}
                           onChange={() => toggleSelect(creator.id)}
                         />
@@ -265,21 +256,21 @@ export default function CampaignImportPage() {
                         <InstagramHandleLink
                           handle={creator.instagramHandle}
                           url={instagramProfile?.url}
-                          className="font-mono text-sm text-blue-600 hover:underline"
+                          className="font-medium hover:underline"
                         >
                           {creator.instagramHandle
                             ? `@${creator.instagramHandle.replace(/^@/, "")}`
-                            : creator.name || "—"}
+                            : creator.name || "Unnamed creator"}
                         </InstagramHandleLink>
                       </td>
                       <td className="py-2 pr-4">
-                        {creator.followerCount?.toLocaleString() ?? "—"}
+                        {creator.followerCount?.toLocaleString() ?? <span className="text-muted-foreground">Not known</span>}
                       </td>
                       <td className="py-2 pr-4">
-                        {creator.avgViews?.toLocaleString() ?? "—"}
+                        {creator.avgViews?.toLocaleString() ?? <span className="text-muted-foreground">Not known</span>}
                       </td>
                       <td className="py-2 pr-4">
-                        {creator.bioCategory || "—"}
+                        {creator.bioCategory || <span className="text-muted-foreground">Not set</span>}
                       </td>
                       <td className="py-2">
                         <Badge variant="outline">

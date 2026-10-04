@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -73,7 +72,7 @@ const DEFAULT_SOURCES: Record<SearchSourceKey, boolean> = {
 
 function parsePositiveInteger(value: string) {
   if (!value.trim()) {
-    return { value: null, error: "Creator limit is required." };
+    return { value: null, error: "Enter how many creators to look for." };
   }
 
   const parsed = Number(value);
@@ -81,7 +80,7 @@ function parsePositiveInteger(value: string) {
   if (!Number.isInteger(parsed) || parsed < 1) {
     return {
       value: null,
-      error: "Creator limit must be a positive integer.",
+      error: "Enter a whole number, like 20.",
     };
   }
 
@@ -98,7 +97,7 @@ const JOB_STATUS_LABELS: Record<string, string> = {
 };
 
 function jobStatusLabel(status: string): string {
-  return JOB_STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+  return JOB_STATUS_LABELS[status] ?? "Working";
 }
 
 export default function DiscoverCreatorsPage() {
@@ -144,7 +143,7 @@ export default function DiscoverCreatorsPage() {
 
   const limitWarning =
     parsedLimit.value && parsedLimit.value > 100
-      ? "Values above 100 are allowed, but they increase search volume."
+      ? "More than 100 works, but the search takes longer and uses more credits."
       : null;
 
   useEffect(() => {
@@ -234,7 +233,7 @@ export default function DiscoverCreatorsPage() {
     }
 
     if (selectedSourceList.length === 0) {
-      setError("Select at least one discovery source.");
+      setError("Pick at least one place to search.");
       return;
     }
 
@@ -244,7 +243,7 @@ export default function DiscoverCreatorsPage() {
       keywordList.length === 0 &&
       selectedCategories.apify.length === 0
     ) {
-      setError("Add keywords or choose at least one category.");
+      setError("Add a keyword or pick at least one topic.");
       return;
     }
 
@@ -312,43 +311,31 @@ export default function DiscoverCreatorsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Discover Creators
-          </h1>
-          <p className="text-muted-foreground">
-            Run one background discovery job across Collabstr, Apify search,
-            and optional graph expansion. Matching creators land in your review
-            queue when the job finishes.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/campaigns/${params.campaignId}`)}
-        >
-          ← Back to Campaign
-        </Button>
-      </div>
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Find creators</h1>
+        <p className="mt-1 text-muted-foreground">
+          Search for creators who fit this campaign. The search runs in the background, and
+          matches wait for your review when it finishes.
+        </p>
+      </header>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Discovery Query</CardTitle>
+          <CardTitle className="text-lg">What to look for</CardTitle>
           <CardDescription>
-            Default sources are Collabstr + Apify search. Add approved-seed
-            following or keyword-email enrichment only when you need broader
-            recall.
+            Collabstr and Instagram search are usually enough. Turn on the other two only when
+            you need more creators.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <p className="text-sm font-medium">Sources</p>
+            <p className="text-sm font-medium">Where to search</p>
             <div className="flex flex-wrap gap-2">
               {([
                 ["collabstr", "Collabstr"],
-                ["apify_search", "Apify Search"],
-                ["approved_seed_following", "Approved Seed Following"],
-                ["apify_keyword_email", "Keyword Email"],
+                ["apify_search", "Instagram search"],
+                ["approved_seed_following", "Who your approved creators follow"],
+                ["apify_keyword_email", "Keyword search with emails"],
               ] as Array<[SearchSourceKey, string]>).map(([source, label]) => (
                 <Button
                   key={source}
@@ -387,7 +374,7 @@ export default function DiscoverCreatorsPage() {
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Min followers</label>
+              <label className="text-sm font-medium">Fewest followers</label>
               <Input
                 type="number"
                 min={0}
@@ -398,7 +385,7 @@ export default function DiscoverCreatorsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Max followers</label>
+              <label className="text-sm font-medium">Most followers</label>
               <Input
                 type="number"
                 min={0}
@@ -409,7 +396,7 @@ export default function DiscoverCreatorsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Creator limit</label>
+              <label className="text-sm font-medium">How many creators</label>
               <Input
                 type="number"
                 min={1}
@@ -430,10 +417,10 @@ export default function DiscoverCreatorsPage() {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Discovery keywords</label>
+            <p className="text-sm font-medium">Topics</p>
             {categoriesLoading ? (
               <p className="text-sm text-muted-foreground">
-                Loading category sources…
+                Loading topics…
               </p>
             ) : (
               <GroupedCategoryPicker
@@ -450,7 +437,7 @@ export default function DiscoverCreatorsPage() {
               disabled={loading || categoriesLoading || facetLoading}
               className="min-w-[160px]"
             >
-              {loading ? "Running…" : "Run Discovery"}
+              {loading ? "Searching…" : "Start search"}
             </Button>
           </div>
         </CardContent>
@@ -473,82 +460,51 @@ export default function DiscoverCreatorsPage() {
       ) : null}
 
       {job ? (
-        <Card className="border-green-200 bg-green-50">
-          <CardHeader>
-            <CardTitle className="text-base text-green-900">
-              Discovery Job
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-              <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-sm text-muted-foreground">Status</p>
-                <p className="text-sm font-semibold">{jobStatusLabel(job.status)}</p>
-              </div>
-              <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-sm text-muted-foreground">Requested</p>
-                <p className="text-sm font-semibold">
-                  {job.requestedCount ?? "—"}
-                </p>
-              </div>
-              <div className="rounded-lg bg-white p-3 text-center shadow-sm">
-                <p className="text-sm text-muted-foreground">Ready</p>
-                <p className="text-sm font-semibold">
-                  {job.resultCount ?? 0}
-                </p>
-              </div>
-            </div>
+        <section aria-labelledby="search-heading" className="space-y-3 rounded-xl border bg-card p-5">
+          <h2 id="search-heading" className="text-lg font-semibold">
+            Search: {jobStatusLabel(job.status)}
+          </h2>
 
-            <div className="h-2 overflow-hidden rounded-full bg-white/70">
-              <div
-                className="h-full bg-blue-700 transition-all"
-                style={{ width: `${job.progressPercent ?? 0}%` }}
-              />
-            </div>
+          <div
+            className="h-2.5 overflow-hidden rounded-full bg-muted"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={job.progressPercent ?? 0}
+            aria-label="Search progress"
+          >
+            <div
+              className="h-full bg-foreground/70 transition-all"
+              style={{ width: `${job.progressPercent ?? 0}%` }}
+            />
+          </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-blue-100 text-blue-800">
-                Background search
-              </Badge>
-              {typeof job.progressPercent === "number" ? (
-                <Badge variant="outline">{job.progressPercent}%</Badge>
-              ) : null}
-              {typeof job.etaSeconds === "number" ? (
-                <Badge variant="outline">ETA {job.etaSeconds}s</Badge>
-              ) : null}
-            </div>
+          <p>
+            {typeof job.progressPercent === "number" ? `${job.progressPercent}% done. ` : ""}
+            {job.requestedCount != null ? `Looking for ${job.requestedCount}. ` : ""}
+            Checked {job.validatedCount ?? 0}, skipped {job.invalidCount ?? 0},{" "}
+            {job.resultCount ?? 0} ready to review.
+            {typeof job.etaSeconds === "number" && job.etaSeconds > 0
+              ? ` About ${job.etaSeconds < 60 ? "a minute" : `${Math.ceil(job.etaSeconds / 60)} minutes`} left.`
+              : ""}
+          </p>
 
-            <div className="grid gap-2 text-sm text-green-900 sm:grid-cols-3">
-              <span>Checked: {job.validatedCount ?? 0}</span>
-              <span>Skipped: {job.invalidCount ?? 0}</span>
-              <span>Ready to review: {job.resultCount ?? 0}</span>
-            </div>
+          {job.error ? (
+            <p role="alert" className="text-sm text-red-700">{job.error}</p>
+          ) : null}
 
-            {job.error ? (
-              <p role="alert" className="text-sm text-red-700">{job.error}</p>
-            ) : null}
-
-            <div className="flex justify-end">
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() =>
-                    router.push(`/campaigns/${params.campaignId}/seed-list`)
-                  }
-                >
-                  Preview Seed List
-                </Button>
-                <Button
-                  onClick={() =>
-                    router.push(`/campaigns/${params.campaignId}/review`)
-                  }
-                >
-                  Open Review Queue →
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => router.push(`/campaigns/${params.campaignId}/review`)}>
+              Review creators
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/campaigns/${params.campaignId}/seed-list`)}
+            >
+              See suggested mix
+            </Button>
+          </div>
+        </section>
       ) : null}
     </div>
   );

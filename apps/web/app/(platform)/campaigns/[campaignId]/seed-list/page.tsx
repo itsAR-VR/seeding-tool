@@ -25,7 +25,7 @@ const TRIAGE_LABELS: Record<string, string> = {
 };
 
 function triageLabel(triage: string): string {
-  return TRIAGE_LABELS[triage] ?? triage.replace(/_/g, " ");
+  return TRIAGE_LABELS[triage] ?? "Not sorted yet";
 }
 
 type SeedListPayload = {
@@ -70,18 +70,18 @@ export default function SeedListPreviewPage() {
   }, [params.campaignId]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading the suggested list…</div>;
+    return <p className="py-12 text-center text-muted-foreground">Loading the suggested list…</p>;
   }
 
   return (
     <div className="space-y-6">
-      <div>
+      <header>
         <h1 className="text-3xl font-bold tracking-tight">Suggested creator mix</h1>
-        <p className="text-muted-foreground">
+        <p className="mt-1 text-muted-foreground">
           Your best matches next to a more varied mix of creators, from this campaign&apos;s latest
           search.
         </p>
-      </div>
+      </header>
 
       {error ? (
         <Card>
@@ -105,7 +105,7 @@ export default function SeedListPreviewPage() {
         <div className="grid gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Current Ranked List</CardTitle>
+              <CardTitle className="text-lg">Best matches</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {payload.ranked.slice(0, payload.config.targetSize).map((candidate) => (
@@ -115,7 +115,7 @@ export default function SeedListPreviewPage() {
                     {candidate.name ? ` · ${candidate.name}` : ""}
                   </p>
                   <p className="text-muted-foreground">
-                    Score {(candidate.fitScore * 100).toFixed(0)}% · {triageLabel(candidate.triage)}
+                    {(candidate.fitScore * 100).toFixed(0)}% match · {triageLabel(candidate.triage)}
                   </p>
                 </div>
               ))}
@@ -124,22 +124,16 @@ export default function SeedListPreviewPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Portfolio Preview</CardTitle>
+              <CardTitle className="text-lg">A more varied mix</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 {payload.portfolio.explanation}
               </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md border p-3 text-sm">
-                  <p className="font-medium">Overall diversity</p>
-                  <p>{payload.portfolio.diversityMetrics.overallDiversity.toFixed(2)}</p>
-                </div>
-                <div className="rounded-md border p-3 text-sm">
-                  <p className="font-medium">Mean score</p>
-                  <p>{(payload.portfolio.qualityMetrics.meanScore * 100).toFixed(0)}%</p>
-                </div>
-              </div>
+              <p className="text-sm">
+                Average match {(payload.portfolio.qualityMetrics.meanScore * 100).toFixed(0)}%, variety{" "}
+                {Math.round(payload.portfolio.diversityMetrics.overallDiversity * 100)}%.
+              </p>
               {payload.portfolio.selected.map((candidate) => (
                 <div key={candidate.id} className="rounded-md border p-3 text-sm">
                   <p className="font-medium">
@@ -147,7 +141,7 @@ export default function SeedListPreviewPage() {
                     {candidate.name ? ` · ${candidate.name}` : ""}
                   </p>
                   <p className="text-muted-foreground">
-                    Score {(candidate.fitScore * 100).toFixed(0)}% · {triageLabel(candidate.triage)}
+                    {(candidate.fitScore * 100).toFixed(0)}% match · {triageLabel(candidate.triage)}
                   </p>
                 </div>
               ))}

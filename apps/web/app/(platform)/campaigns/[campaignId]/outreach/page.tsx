@@ -44,19 +44,19 @@ const STATUS_LABELS: Record<string, string> = {
   ready: "Not emailed yet",
   outreach_sent: "Emailed",
   replied: "Replied",
-  address_review: "Address to review",
-  address_confirmed: "Address confirmed",
-  order_created: "Order drafted",
+  address_review: "Address to check",
+  address_confirmed: "Address in",
+  order_created: "Order made",
   shipped: "Shipped",
   delivered: "Delivered",
   posted: "Posted",
-  completed: "Completed",
-  opted_out: "Opted out",
-  stalled: "Stalled",
+  completed: "Done",
+  opted_out: "Said no",
+  stalled: "Not right now",
 };
 
 function statusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? status.replace(/_/g, " ");
+  return STATUS_LABELS[status] ?? "In progress";
 }
 
 type CustomPersona = {
@@ -123,6 +123,8 @@ export default function OutreachPage() {
   const [savingSender, setSavingSender] = useState(false);
   const [senderError, setSenderError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  // Which send is waiting for a second click: "all", or one campaignCreatorId.
+  const [confirmingSend, setConfirmingSend] = useState<string | null>(null);
 
   // Load campaign creators
   const loadCreators = useCallback(async () => {
@@ -372,7 +374,7 @@ export default function OutreachPage() {
         ? { tone: "success", text: `Sent ${sent} email${sent === 1 ? "" : "s"}${senderAddress ? ` from ${senderAddress}` : ""}.` }
         : {
             tone: "error",
-            text: `Sent ${sent}, ${failures.length} not sent: ${failures[0]?.error ?? "unknown error"}`,
+            text: `Sent ${sent}, ${failures.length} not sent: ${failures[0]?.error ?? "we didn't get a reason"}`,
           }
     );
     await loadCreators();
@@ -509,7 +511,7 @@ export default function OutreachPage() {
               <CardTitle>Choose creators</CardTitle>
               <CardDescription>
                 {loadingCreators
-                  ? "Loading..."
+                  ? "Loading…"
                   : `Click the creators you want to email. ${sendableCreators.length} of ${approvedCreators.length} haven't been emailed yet.`}
               </CardDescription>
             </div>
@@ -517,7 +519,7 @@ export default function OutreachPage() {
               <Button variant="outline" size="sm" onClick={selectAll}>
                 {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
                   sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
-                  ? "Deselect All"
+                  ? "Unselect all"
                   : `Select the first ${MAX_BATCH_SIZE}`}
               </Button>
             )}
@@ -584,7 +586,7 @@ export default function OutreachPage() {
                       <span className="font-medium">
                         {cc.creator.name ??
                           cc.creator.instagramHandle ??
-                          "Unknown"}
+                          "Unnamed creator"}
                       </span>
                       {cc.creator.instagramHandle && (
                         <span className="text-sm text-muted-foreground">
@@ -627,8 +629,8 @@ export default function OutreachPage() {
               </span>
             ) : null}
             {selectedIds.size > MAX_BATCH_SIZE && (
-              <span className="text-sm text-red-500 font-medium">
-                Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
+              <span className="text-sm font-medium text-red-700">
+                Up to {MAX_BATCH_SIZE} at a time. Unselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}.
               </span>
             )}
             <Button
@@ -637,7 +639,7 @@ export default function OutreachPage() {
               disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
-                ? "Writing emails..."
+                ? "Writing emails…"
                 : selectedIds.size === 0
                   ? "Pick creators to email"
                   : `Write ${selectedIds.size} ${selectedIds.size === 1 ? "email" : "emails"}`}
@@ -772,7 +774,7 @@ export default function OutreachPage() {
               Only used for creators who don&apos;t already have a written email.
             </p>
             <Textarea
-              placeholder="Talking points or instructions for the AI..."
+              placeholder="Anything to mention, like a launch date or a discount code"
               value={additionalContext}
               onChange={(e) => setAdditionalContext(e.target.value)}
               rows={3}
@@ -814,58 +816,64 @@ export default function OutreachPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {!draft.error && draft.body && (
+                    {!draft.error && draft.body && confirmingSend === draft.campaignCreatorId ? (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmingSend(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={sending || Boolean(sendBlocker)}
+                          onClick={async () => {
+                            setConfirmingSend(null);
+                            setSending(true);
+                            try {
+                              const res = await fetch("/api/outreach/send", {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  drafts: [
+                                    {
+                                      campaignCreatorId: draft.campaignCreatorId,
+                                      creatorId: draft.creatorId,
+                                      channel,
+                                      subject:
+                                        editedDrafts[draft.campaignCreatorId]?.subject ??
+                                        draft.subject ??
+                                        undefined,
+                                      body: editedDrafts[draft.campaignCreatorId]?.body ?? draft.body!,
+                                    },
+                                  ],
+                                }),
+                              });
+                              const data = (await res.json().catch(() => ({}))) as SendResponse;
+                              await handleSendResult(data, res.ok);
+                            } catch {
+                              setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
+                            } finally {
+                              setSending(false);
+                            }
+                          }}
+                        >
+                          Yes, send to @{draft.creatorHandle}
+                        </Button>
+                      </>
+                    ) : !draft.error && draft.body ? (
                       <Button
                         size="sm"
                         disabled={sending || Boolean(sendBlocker)}
-                        onClick={async () => {
-                          const confirmed = confirm(
-                            `Send ${channel === "email" ? "email" : "DM"} to @${draft.creatorHandle}?`
-                          );
-                          if (!confirmed) return;
-                          setSending(true);
-                          try {
-                            const res = await fetch("/api/outreach/send", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify({
-                                drafts: [
-                                  {
-                                    campaignCreatorId:
-                                      draft.campaignCreatorId,
-                                    creatorId: draft.creatorId,
-                                    channel,
-                                    subject:
-                                      editedDrafts[draft.campaignCreatorId]
-                                        ?.subject ??
-                                      draft.subject ??
-                                      undefined,
-                                    body:
-                                      editedDrafts[draft.campaignCreatorId]
-                                        ?.body ?? draft.body!,
-                                  },
-                                ],
-                              }),
-                            });
-                            const data = (await res.json().catch(() => ({}))) as SendResponse;
-                            await handleSendResult(data, res.ok);
-                          } catch {
-                            setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
-                          } finally {
-                            setSending(false);
-                          }
-                        }}
+                        onClick={() => setConfirmingSend(draft.campaignCreatorId)}
                       >
                         Send
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
                 {draft.error ? (
-                  <p className="text-sm text-red-500">{draft.error}</p>
+                  <p className="text-sm text-red-700">{draft.error}</p>
                 ) : (
                   <>
                     {channel === "email" && (
@@ -927,10 +935,16 @@ export default function OutreachPage() {
                 onClick={() => {
                   setDrafts([]);
                   setEditedDrafts({});
+                  setConfirmingSend(null);
                 }}
               >
                 Discard
               </Button>
+              {confirmingSend === "all" ? (
+                <Button variant="ghost" onClick={() => setConfirmingSend(null)}>
+                  Cancel
+                </Button>
+              ) : null}
               <Button
                 disabled={
                   Boolean(sendBlocker) ||
@@ -943,13 +957,15 @@ export default function OutreachPage() {
                   );
                   if (validDrafts.length === 0) return;
 
-                  const confirmed = confirm(
-                    `Send ${validDrafts.length} ${channel === "email" ? "email(s)" : "DM(s)"}? This action cannot be undone.`
-                  );
-                  if (!confirmed) return;
+                  // First click asks, second click sends: a sent email can't be taken back.
+                  if (confirmingSend !== "all") {
+                    setConfirmingSend("all");
+                    return;
+                  }
+                  setConfirmingSend(null);
 
                   setSending(true);
-                  setSendProgress(`Sending 0/${validDrafts.length}...`);
+                  setSendProgress(`Sending 0 of ${validDrafts.length}…`);
 
                   try {
                     const payload = validDrafts.map((d) => ({
@@ -982,8 +998,10 @@ export default function OutreachPage() {
                 }}
               >
                 {sending
-                  ? sendProgress || "Sending..."
-                  : `Send all (${drafts.filter((d) => !d.error).length})`}
+                  ? sendProgress || "Sending…"
+                  : confirmingSend === "all"
+                    ? `Yes, send ${drafts.filter((d) => !d.error).length} now`
+                    : `Send all (${drafts.filter((d) => !d.error).length})`}
               </Button>
             </div>
           </CardContent>

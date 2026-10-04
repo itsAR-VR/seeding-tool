@@ -38,7 +38,7 @@ export function CSVExportButton({
 
   return (
     <Button variant="outline" size="sm" onClick={handleExport} disabled={loading}>
-      {loading ? "Exporting..." : "Export CSV"}
+      {loading ? "Downloading…" : "Download spreadsheet"}
     </Button>
   );
 }

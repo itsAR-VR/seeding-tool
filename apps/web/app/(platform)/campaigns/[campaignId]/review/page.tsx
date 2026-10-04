@@ -3,8 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 
 type CreatorProfile = {
@@ -25,6 +23,12 @@ type CampaignCreator = {
     email: string | null;
     profiles: CreatorProfile[];
   };
+};
+
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube",
 };
 
 export default function ReviewQueuePage() {
@@ -96,153 +100,109 @@ export default function ReviewQueuePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Loading review queue...</p>
+        <p className="text-muted-foreground">Loading creators…</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Review Queue</h1>
-          <p className="text-muted-foreground">
-            {pendingCreators.length} creator{pendingCreators.length !== 1 ? "s" : ""} pending
-            review
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() => router.push(`/campaigns/${params.campaignId}`)}
-        >
-          ← Back to Campaign
-        </Button>
-      </div>
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Review creators</h1>
+        <p className="mt-1 text-muted-foreground">
+          {pendingCreators.length === 0
+            ? "Nobody is waiting for you."
+            : `${pendingCreators.length} ${pendingCreators.length === 1 ? "creator needs" : "creators need"} a yes or no.`}
+        </p>
+      </header>
 
       {error && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </p>
       )}
 
       {pendingCreators.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Nothing is waiting for manual review</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Everyone in this campaign has been reviewed, or no creators were added yet. Find
-              creators to add more.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[
-                { label: "Approved", value: approvedCount },
-                { label: "Declined", value: declinedCount },
-                { label: "Deferred", value: deferredCount },
-              ].map((item) => (
-                <div key={item.label} className="rounded-lg border p-3">
-                  <p className="text-sm text-muted-foreground">{item.label}</p>
-                  <p className="text-2xl font-semibold">{item.value}</p>
-                </div>
-              ))}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}
-              >
-                Discover more creators
+        <div className="space-y-3 rounded-xl border bg-card p-5">
+          <p>
+            Everyone in this campaign has been reviewed, or no creators were added yet.
+            {approvedCount + declinedCount + deferredCount > 0 &&
+              ` So far: ${approvedCount} approved, ${declinedCount} not a fit, ${deferredCount} maybe later.`}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}
+            >
+              Find more creators
+            </Button>
+            {approvedCount > 0 ? (
+              <Button onClick={() => router.push(`/campaigns/${params.campaignId}/outreach`)}>
+                Email approved creators
               </Button>
-              {approvedCount > 0 ? (
-                <Button
-                  variant="outline"
-                  onClick={() => router.push(`/campaigns/${params.campaignId}/outreach`)}
-                >
-                  Open draft outreach
-                </Button>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
+            ) : null}
+          </div>
+        </div>
       ) : (
-        <div className="grid gap-4">
+        <ul className="divide-y rounded-xl border bg-card">
           {pendingCreators.map((cc) => {
             const profile = cc.creator.profiles[0];
             const isLoading = actionLoading === cc.creatorId;
 
             return (
-              <Card key={cc.id}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium">
-                        {cc.creator.name ?? "Unknown Creator"}
-                      </p>
-                      {profile && (
-                        <Badge variant="outline">
-                          {profile.platform}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex gap-4 text-sm text-muted-foreground">
-                      {profile && (
-                        <>
+              <li
+                key={cc.id}
+                className="flex flex-wrap items-center justify-between gap-4 px-5 py-4"
+              >
+                <div className="space-y-1">
+                  <p className="font-medium">{cc.creator.name ?? "Unnamed creator"}</p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    {profile && (
+                      <>
+                        <span>
                           <InstagramHandleLink
                             handle={profile.handle}
                             url={profile.url}
-                            className="text-blue-600 hover:underline"
+                            className="text-foreground hover:underline"
                           />
-                          <span>
-                            {profile.followerCount != null
-                              ? `${profile.followerCount.toLocaleString()} followers`
-                              : "—"}
-                          </span>
-                        </>
-                      )}
-                      {cc.creator.email && (
-                        <span>{cc.creator.email}</span>
-                      )}
-                    </div>
+                          {" "}on {PLATFORM_LABELS[profile.platform] ?? "social media"}
+                        </span>
+                        <span>
+                          {profile.followerCount != null
+                            ? `${profile.followerCount.toLocaleString()} followers`
+                            : "Followers unknown"}
+                        </span>
+                      </>
+                    )}
+                    {cc.creator.email && <span>{cc.creator.email}</span>}
                   </div>
+                </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        handleReview(cc.creatorId, "approve")
-                      }
-                      disabled={isLoading}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        handleReview(cc.creatorId, "defer")
-                      }
-                      disabled={isLoading}
-                    >
-                      Defer
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() =>
-                        handleReview(cc.creatorId, "decline")
-                      }
-                      disabled={isLoading}
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => handleReview(cc.creatorId, "approve")} disabled={isLoading}>
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleReview(cc.creatorId, "defer")}
+                    disabled={isLoading}
+                  >
+                    Maybe later
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleReview(cc.creatorId, "decline")}
+                    disabled={isLoading}
+                  >
+                    Not a fit
+                  </Button>
+                </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

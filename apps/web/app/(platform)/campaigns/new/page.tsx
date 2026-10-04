@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -59,16 +59,23 @@ export default function NewCampaignPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">New Campaign</h1>
-        <p className="text-muted-foreground">
+    <div className="max-w-2xl space-y-6">
+      <header>
+        <Link
+          href="/campaigns"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground hover:underline"
+        >
+          <span aria-hidden>←</span>
+          Campaigns
+        </Link>
+        <h1 className="mt-4 text-3xl font-bold tracking-tight">New campaign</h1>
+        <p className="mt-1 text-muted-foreground">
           Name it now. Next you&apos;ll pick the product you&apos;re gifting and find creators.
         </p>
-      </div>
+      </header>
 
       {shopifyConnected === false && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
           <p className="font-medium">Shopify isn&apos;t connected yet</p>
           <p className="mt-1">
             You can create the campaign now. To pick a product and make gift orders, connect
@@ -81,16 +88,13 @@ export default function NewCampaignPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle>Campaign Details</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Campaign Name</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
-                placeholder="e.g. Summer 2025 Product Launch"
+                placeholder="For example: Fall gift box"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
@@ -105,7 +109,7 @@ export default function NewCampaignPage() {
               <textarea
                 id="description"
                 className="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                placeholder="Describe the campaign goals, target criteria, and gifted product details..."
+                placeholder="What you're gifting and the kind of creators you want"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
@@ -117,7 +121,7 @@ export default function NewCampaignPage() {
 
             <div className="flex gap-3">
               <Button type="submit" disabled={loading || !name.trim()}>
-                {loading ? "Creating..." : "Create Campaign"}
+                {loading ? "Creating…" : "Create campaign"}
               </Button>
               <Button
                 type="button"
