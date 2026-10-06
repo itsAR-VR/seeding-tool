@@ -149,14 +149,10 @@ export default function DiscoverCreatorsPage() {
         keywords: facets.keywords.map((f) => f.value),
       });
     }
-    const topics = Array.from(
-      new Set([...categories.apify, ...categories.collabstr])
-    ).sort();
-    if (topics.length > 0) {
-      groups.push({ label: "Topics", keywords: topics });
-    }
+    // No generic category list (Automotive, Gaming...): only suggestions tied
+    // to this brand and its creators, like the main Find creators form.
     return groups;
-  }, [brandKeywords, facets.keywords, categories]);
+  }, [brandKeywords, facets.keywords]);
 
   const locationSuggestions = useMemo(
     () => facets.locations.map((l) => ({ value: l.value, count: l.count })),

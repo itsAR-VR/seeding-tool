@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { NoCompanyNotice } from "@/components/no-company-notice";
+import { AllowAgain } from "./allow-again";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,7 +55,7 @@ export default async function DoNotSendPage() {
             {suppressions.length} {suppressions.length === 1 ? "person" : "people"}
           </CardTitle>
           <CardDescription>
-            To take someone off, open their conversation in the Inbox and click &ldquo;They said yes&rdquo;.
+            You can allow emails again for anyone you marked &ldquo;no&rdquo;. People who clicked unsubscribe or whose email bounced stay blocked.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -69,6 +70,7 @@ export default async function DoNotSendPage() {
                   <th className="pb-2 font-medium">Email</th>
                   <th className="pb-2 font-medium">Why</th>
                   <th className="pb-2 font-medium">Since</th>
+                  <th className="pb-2 font-medium"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -90,6 +92,11 @@ export default async function DoNotSendPage() {
                       </td>
                       <td className="py-2 text-muted-foreground">
                         {formatDate(s.suppressedAt)}
+                      </td>
+                      <td className="py-2 text-right">
+                        {s.brandId && (s.reason === "DECLINED" || s.reason === "REPLY_OPTOUT") ? (
+                          <AllowAgain id={s.id} name={creator?.name ?? s.email} />
+                        ) : null}
                       </td>
                     </tr>
                   );

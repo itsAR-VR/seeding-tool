@@ -141,7 +141,7 @@ function MobileNavItems({ pathname, findOpen }: { pathname: string; findOpen: bo
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium",
+              "inline-flex min-h-11 shrink-0 items-center rounded-full px-4 text-sm font-medium",
               active ? "bg-foreground text-background" : "bg-muted text-foreground/80"
             )}
           >

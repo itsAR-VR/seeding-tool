@@ -23,16 +23,15 @@ export default function PlatformError({
     <div className="mx-auto max-w-xl space-y-4 py-12">
       <h1 className="text-2xl font-bold tracking-tight">This page didn&apos;t load</h1>
       <p className="text-muted-foreground">
-        Something went wrong on our side. Try again. If it keeps happening, check that your
-        accounts are still connected in Settings &gt; Connections.
+        Something went wrong on our side, not yours. Try again in a moment. Your data is safe.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => reset()}>Try again</Button>
         <Link
-          href="/settings/connections"
+          href="/dashboard"
           className="inline-flex h-9 items-center rounded-md border px-4 text-sm font-medium hover:bg-muted"
         >
-          Open connections
+          Go to Home
         </Link>
       </div>
     </div>

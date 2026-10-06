@@ -131,16 +131,16 @@ export function CreatorsTable({
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 tabular-nums">
                           {creator.followerCount?.toLocaleString() ?? (
-                            <span className="text-muted-foreground">Unknown</span>
+                            <span className="text-muted-foreground/70" aria-label="Unknown">·</span>
                           )}
                         </td>
                         <td className={cn("whitespace-nowrap px-4 py-3 tabular-nums", WIDE_ONLY)}>
                           {creator.avgViews?.toLocaleString() ?? (
-                            <span className="text-muted-foreground">Unknown</span>
+                            <span className="text-muted-foreground/70" aria-label="Unknown">·</span>
                           )}
                         </td>
                         <td className={cn("px-4 py-3", WIDE_ONLY)}>
-                          {creator.bioCategory || <span className="text-muted-foreground">None</span>}
+                          {creator.bioCategory || <span className="text-muted-foreground/70" aria-label="None">·</span>}
                         </td>
                         <td className="hidden whitespace-nowrap px-4 py-3 lg:table-cell">
                           {sourceLabel(creator.discoverySource)}

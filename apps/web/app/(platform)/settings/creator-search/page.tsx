@@ -82,7 +82,7 @@ function CreatorSearchSettings() {
     : status.hasOwnKey
       ? "Searches use your own key, so credit comes from your account."
       : status.usesShared
-        ? "Searches use Seed Scale's shared creator search credit. Add your own key any time."
+        ? "Creator search is included. Seed Scale covers your searches."
         : "Not set up yet. Add a key below to find creators.";
 
   return (
@@ -96,7 +96,14 @@ function CreatorSearchSettings() {
 
       <section className="space-y-4 rounded-xl border bg-card p-5">
         <p className="font-medium">{current}</p>
-        <form onSubmit={(e) => void save(e)} className="space-y-3">
+        {status?.usesShared && !status.hasOwnKey && (
+          <p className="text-sm text-muted-foreground">You don&apos;t need to do anything. A key is only for running searches on your own account.</p>
+        )}
+        <details open={!status || status.hasOwnKey || !status.usesShared} className="group">
+          {status?.usesShared && !status.hasOwnKey && (
+            <summary className="cursor-pointer text-sm font-medium underline">Use your own search key instead</summary>
+          )}
+        <form onSubmit={(e) => void save(e)} className="mt-3 space-y-3">
           <label className="block text-sm font-medium">
             {status?.hasOwnKey ? "Replace your search account key (from Apify)" : "Your search account key (from Apify)"}
             <input
@@ -126,6 +133,7 @@ function CreatorSearchSettings() {
             )}
           </div>
         </form>
+        </details>
         {notice && <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>}
       </section>
 
