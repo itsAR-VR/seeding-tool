@@ -57,6 +57,26 @@ export type GeneratedDraft = {
 /**
  * Build the user prompt with all context for draft generation.
  */
+/**
+ * How every outreach email opens. Kam's rule (Oct 2026): a short, plain
+ * compliment reads like a person; a detailed one ("I love how you help
+ * overstimulated moms...") reads like AI read their bio.
+ */
+export const OPENER_RULES = `- After the greeting, open with ONE short line in exactly this shape: "I love your <topic> content!" where <topic> is 1 to 3 everyday words for what they post (for example: fitness, fashion, wellness, nutrition, beauty, sleep, health, running, gut health, hormone health).
+- For moms, write "I love your content about motherhood!" (or "...about motherhood and business!" if they also run a business). Never "mom content".
+- Word choices: say "fitness" (never "strength", "strength training" or "movement"), "fashion" (never "style"), "wellness" (never "midlife wellness"). Never say "body confidence".
+- Never write a detailed compliment about their mission or who they help (no "I love how you help...").`;
+
+/** Safety net for the opener rules when the model slips. */
+export function tidyOpener(body: string): string {
+  return body
+    .replace(/I love your (strength training|strength|movement) content!/g, "I love your fitness content!")
+    .replace(/I love your style( and [a-z ]+)? content!/g, (_m, rest: string | undefined) => `I love your fashion${rest ?? ""} content!`)
+    .replace(/I love your midlife wellness content!/g, "I love your wellness content!")
+    .replace(/I love your mom content!/g, "I love your content about motherhood!")
+    .replace(/I love your body confidence content!/g, "I love your wellness content!");
+}
+
 function buildUserPrompt(params: GenerateDraftParams): string {
   const { creatorProfile, campaign, channel, additionalContext, brandName } =
     params;
@@ -84,7 +104,7 @@ function buildUserPrompt(params: GenerateDraftParams): string {
   const channelInstructions =
     channel === "instagram_dm"
       ? `This is an Instagram DM. Keep it SHORT (2-4 sentences max). No subject line needed. Be casual and direct.`
-      : `This is an email. Include a compelling subject line. Can be 3-5 paragraphs. Be thorough but not verbose.`;
+      : `This is an email. Include a short, lowercase-friendly subject line (a few words, like "better sleep, on us").`;
 
   return `Generate an outreach message for the following creator and campaign.
 
@@ -105,10 +125,11 @@ ${channelInstructions}
 ${additionalContext ? `ADDITIONAL CONTEXT / TALKING POINTS:\n${additionalContext}` : ""}
 
 IMPORTANT:
-- Personalize the message to this specific creator
+${OPENER_RULES}
+- Then say who you are and what the product does in one or two plain sentences, and offer to send it for free.
 - Mention the product(s) naturally, don't just list them
-- Make it feel genuine, not templated
-- ${channel === "instagram_dm" ? "Keep it under 300 characters if possible" : "Keep the email concise but complete"}
+- Sound like a founder writing one email by hand: short sentences, no hype, no em dashes, no "I hope this finds you well"
+- ${channel === "instagram_dm" ? "Keep it under 300 characters if possible" : "Keep the email to 3 or 4 short paragraphs"}
 - For email, format the response as:
   SUBJECT: <subject line>
   BODY:
@@ -154,7 +175,7 @@ ${
     if (subjectMatch && bodyMatch) {
       return {
         subject: subjectMatch[1].trim(),
-        body: bodyMatch[1].trim(),
+        body: tidyOpener(bodyMatch[1].trim()),
         tokens: totalTokens,
       };
     }
@@ -165,14 +186,14 @@ ${
     if (firstLine.toLowerCase().startsWith("subject:")) {
       return {
         subject: firstLine.replace(/^subject:\s*/i, "").trim(),
-        body: lines.slice(1).join("\n").trim(),
+        body: tidyOpener(lines.slice(1).join("\n").trim()),
         tokens: totalTokens,
       };
     }
   }
 
   return {
-    body: content.trim(),
+    body: tidyOpener(content.trim()),
     tokens: totalTokens,
   };
 }
