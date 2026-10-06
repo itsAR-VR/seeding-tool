@@ -1,30 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { Badge } from "@/components/ui/badge";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-
-const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "Not started",
-  active: "Sending",
-  paused: "Paused",
-  completed: "Finished",
-  archived: "Archived",
-};
-
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800",
-  active: "bg-green-100 text-green-800",
-  paused: "bg-yellow-100 text-yellow-800",
-  completed: "bg-blue-100 text-blue-800",
-  archived: "bg-gray-100 text-gray-500",
-};
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { StatusPill } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
+import { campaignStatus } from "./_components/campaign-status";
 
 export default async function CampaignsPage() {
   let membership;
@@ -69,8 +50,8 @@ export default async function CampaignsPage() {
             Each campaign is one product sent to a list of creators.
           </p>
         </div>
-        <Link href="/campaigns/new">
-          <Button>New campaign</Button>
+        <Link href="/campaigns/new" className={buttonVariants()}>
+          New campaign
         </Link>
       </div>
 
@@ -83,8 +64,8 @@ export default async function CampaignsPage() {
               product and find creators.
             </CardDescription>
             <div className="pt-2">
-              <Link href="/campaigns/new">
-                <Button>Start your first campaign</Button>
+              <Link href="/campaigns/new" className={buttonVariants()}>
+                Start your first campaign
               </Link>
             </div>
           </CardHeader>
@@ -110,31 +91,24 @@ export default async function CampaignsPage() {
                         </CardDescription>
                       )}
                     </div>
-                    <Badge
-                      className={
-                        statusColors[campaign.status] ?? statusColors.draft
-                      }
-                    >
-                      {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
-                    </Badge>
+                    <StatusPill tone={campaignStatus(campaign.status).tone}>
+                      {campaignStatus(campaign.status).label}
+                    </StatusPill>
                   </div>
-                  <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>
                       {campaign._count.campaignCreators} creator
                       {campaign._count.campaignCreators !== 1 ? "s" : ""}
                     </span>
                     {campaign.campaignProducts.length > 0 && (
                       <span>
-                        Products:{" "}
+                        Gifting{" "}
                         {campaign.campaignProducts
                           .map((cp) => cp.product.name)
                           .join(", ")}
                       </span>
                     )}
-                    <span>
-                      Created{" "}
-                      {new Date(campaign.createdAt).toLocaleDateString()}
-                    </span>
+                    <span>Started {formatDate(campaign.createdAt)}</span>
                   </div>
                 </CardHeader>
               </Card>

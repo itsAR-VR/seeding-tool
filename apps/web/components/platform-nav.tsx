@@ -1,7 +1,8 @@
 "use client";
 
+import { Suspense } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   Clapperboard,
   Compass,
@@ -37,12 +38,27 @@ const SECONDARY: NavItem[] = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-function isActive(pathname: string, href: string) {
+const FIND_HREF = "/creators?find=1";
+
+/**
+ * "Find creators" and "Creators" share a path; ?find=1 (the find panel is
+ * open) decides which one is highlighted.
+ */
+function isActive(pathname: string, href: string, findOpen: boolean) {
+  if (href === FIND_HREF) return findOpen && pathname === "/creators";
+  if (href === "/creators" && findOpen && pathname === "/creators") return false;
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
-  const active = isActive(pathname, item.href);
+/** Current path plus whether the find panel is open. Reads the URL query, so it needs Suspense. */
+function useNavLocation() {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  return { pathname, findOpen: searchParams.get("find") === "1" };
+}
+
+function NavLink({ item, pathname, findOpen }: { item: NavItem; pathname: string; findOpen: boolean }) {
+  const active = isActive(pathname, item.href, findOpen);
   const Icon = item.icon;
   return (
     <Link
@@ -63,17 +79,33 @@ function NavLink({ item, pathname }: { item: NavItem; pathname: string }) {
 
 /** Sidebar navigation for desktop. */
 export function SidebarNav() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<SidebarNavPathOnly />}>
+      <SidebarNavWithLocation />
+    </Suspense>
+  );
+}
+
+function SidebarNavPathOnly() {
+  return <SidebarNavItems pathname={usePathname()} findOpen={false} />;
+}
+
+function SidebarNavWithLocation() {
+  const { pathname, findOpen } = useNavLocation();
+  return <SidebarNavItems pathname={pathname} findOpen={findOpen} />;
+}
+
+function SidebarNavItems({ pathname, findOpen }: { pathname: string; findOpen: boolean }) {
   return (
     <nav aria-label="Main" className="space-y-6">
       <div className="space-y-1">
         {PRIMARY.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
+          <NavLink key={item.href} item={item} pathname={pathname} findOpen={findOpen} />
         ))}
       </div>
       <div className="space-y-1 border-t pt-4">
         {SECONDARY.map((item) => (
-          <NavLink key={item.href} item={item} pathname={pathname} />
+          <NavLink key={item.href} item={item} pathname={pathname} findOpen={findOpen} />
         ))}
       </div>
     </nav>
@@ -82,11 +114,27 @@ export function SidebarNav() {
 
 /** Scrollable top navigation for phones, where the sidebar is hidden. */
 export function MobileNav() {
-  const pathname = usePathname();
+  return (
+    <Suspense fallback={<MobileNavPathOnly />}>
+      <MobileNavWithLocation />
+    </Suspense>
+  );
+}
+
+function MobileNavPathOnly() {
+  return <MobileNavItems pathname={usePathname()} findOpen={false} />;
+}
+
+function MobileNavWithLocation() {
+  const { pathname, findOpen } = useNavLocation();
+  return <MobileNavItems pathname={pathname} findOpen={findOpen} />;
+}
+
+function MobileNavItems({ pathname, findOpen }: { pathname: string; findOpen: boolean }) {
   return (
     <nav aria-label="Main" className="flex gap-1 overflow-x-auto pb-1">
       {[...PRIMARY, ...SECONDARY].map((item) => {
-        const active = isActive(pathname, item.href);
+        const active = isActive(pathname, item.href, findOpen);
         return (
           <Link
             key={item.href}

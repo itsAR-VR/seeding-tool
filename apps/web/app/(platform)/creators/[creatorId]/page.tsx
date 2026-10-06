@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
 import { sourceLabel } from "../components/creator-filters";
 
 type ProvenancePayload = {
@@ -95,6 +97,16 @@ function campaignStatus(cc: CreatorSummary["campaignCreators"][number]): string 
   const parts = [readable(PROGRESS_LABELS, cc.lifecycleStatus)];
   if (cc.replyDecision) parts.push(readable(REPLY_LABELS, cc.replyDecision));
   return parts.join(". ");
+}
+
+const GOOD_PROGRESS = new Set(["address_confirmed", "order_created", "shipped", "delivered", "posted", "completed"]);
+const WAITING_PROGRESS = new Set(["replied", "address_review", "stalled"]);
+
+function campaignTone(cc: CreatorSummary["campaignCreators"][number]): StatusTone {
+  if (cc.reviewStatus !== "approved") return cc.reviewStatus === "pending" ? "waiting" : "neutral";
+  if (GOOD_PROGRESS.has(cc.lifecycleStatus)) return "good";
+  if (WAITING_PROGRESS.has(cc.lifecycleStatus)) return "waiting";
+  return "neutral";
 }
 
 const backLink = (
@@ -199,11 +211,11 @@ export default function CreatorProvenancePage() {
           <ul className="divide-y">
             {summary.campaignCreators.map((cc) => (
               <li key={cc.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
-                <div>
-                  <Link href={`/campaigns/${cc.campaign.id}`} className="font-medium hover:underline">
+                <div className="min-w-0 space-y-1">
+                  <Link href={`/campaigns/${cc.campaign.id}`} className="block font-medium hover:underline">
                     {cc.campaign.name}
                   </Link>
-                  <p className="text-muted-foreground">{campaignStatus(cc)}</p>
+                  <StatusPill tone={campaignTone(cc)}>{campaignStatus(cc)}</StatusPill>
                 </div>
                 {cc.conversationThread ? (
                   <Link href={`/inbox/${cc.conversationThread.id}`} className="text-blue-700 hover:underline">
@@ -260,7 +272,7 @@ export default function CreatorProvenancePage() {
                         {sourceLabel(touch.source)}
                         <span className="text-muted-foreground">
                           {" "}
-                          on {new Date(touch.createdAt).toLocaleDateString()}
+                          on {formatDate(touch.createdAt)}
                         </span>
                       </li>
                     ))}

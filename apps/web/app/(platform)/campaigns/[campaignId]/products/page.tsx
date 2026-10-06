@@ -110,7 +110,7 @@ export default function CampaignProductsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Products</h1>
+          <h2 className="text-2xl font-semibold tracking-tight">Products</h2>
           <p className="mt-1 text-muted-foreground">
             Pick the Shopify products you&apos;re gifting in this campaign. Their names and prices
             can go into your emails.
@@ -162,7 +162,7 @@ export default function CampaignProductsPage() {
                     />
                   )}
                   <span className="text-sm font-medium">
-                    {cp.shopifyProduct?.title || cp.product.name}
+                    {cp.product.name}
                   </span>
                   {cp.shopifyProduct?.variants &&
                     cp.shopifyProduct.variants.length > 0 && (

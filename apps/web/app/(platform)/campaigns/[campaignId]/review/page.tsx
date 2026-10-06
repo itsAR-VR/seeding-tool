@@ -108,7 +108,7 @@ export default function ReviewQueuePage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Review creators</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Review creators</h2>
         <p className="mt-1 text-muted-foreground">
           {pendingCreators.length === 0
             ? "Nobody is waiting for you."

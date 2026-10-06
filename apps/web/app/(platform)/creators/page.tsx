@@ -11,14 +11,17 @@ import { CampaignModal, SearchModal } from "./components/creator-modals";
 function CreatorsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const state = useCreatorsState();
+  // "Find creators" in the menu links to ?find=1. The panel opens on the
+  // first render, and the link stays in the address bar while it is open so
+  // the menu shows where you are.
+  const openFind = searchParams.get("find") === "1";
+  const state = useCreatorsState({ openSearchOnLoad: openFind });
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const missingEmail = state.creators.filter((c) => !c.email);
-  const { resetSearchState, setShowSearchModal } = state;
+  const { resetSearchState, setShowSearchModal, showSearchModal } = state;
 
-  // "Find creators" in the menu opens the search straight away.
-  const openFind = searchParams.get("find") === "1";
-  const openedFind = useRef(false);
+  // Following the menu link while already on this page opens the panel too.
+  const openedFind = useRef(openFind);
   useEffect(() => {
     if (!openFind) {
       openedFind.current = false;
@@ -28,8 +31,15 @@ function CreatorsContent() {
     openedFind.current = true;
     resetSearchState();
     setShowSearchModal(true);
-    router.replace("/creators");
-  }, [openFind, resetSearchState, setShowSearchModal, router]);
+  }, [openFind, resetSearchState, setShowSearchModal]);
+
+  // When the panel closes (cancel, search started, creators added), drop ?find=1.
+  const wasShowingSearch = useRef(showSearchModal);
+  useEffect(() => {
+    const closed = wasShowingSearch.current && !showSearchModal;
+    wasShowingSearch.current = showSearchModal;
+    if (closed && openFind) router.replace("/creators", { scroll: false });
+  }, [showSearchModal, openFind, router]);
 
   async function findMissingEmails() {
     if (missingEmail.length === 0) return;
@@ -61,7 +71,7 @@ function CreatorsContent() {
   const job = state.activeSearchJob;
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Creators</h1>
@@ -196,7 +206,7 @@ function CreatorsContent() {
           importing={state.importing}
           searchSources={state.searchSources}
           setSearchSources={state.setSearchSources}
-          searchCategoriesLoading={state.searchCategoriesLoading}
+          searchCategoriesLoading={state.suggestionsLoading}
           keywordGroups={state.keywordGroups}
           selectedKeywords={state.selectedKeywords}
           setSelectedKeywords={state.setSelectedKeywords}

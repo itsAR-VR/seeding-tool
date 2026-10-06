@@ -121,7 +121,7 @@ export function parsePositiveInteger(value: string) {
   return { value: parsed, error: null };
 }
 
-export function useCreatorsState() {
+export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoad?: boolean } = {}) {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -135,6 +135,7 @@ export function useCreatorsState() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
+  const [facetsLoaded, setFacetsLoaded] = useState(false);
 
   // Add-to-campaign modal state
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -146,7 +147,9 @@ export function useCreatorsState() {
   const [addingToCampaign, setAddingToCampaign] = useState(false);
 
   // Search Creators modal state
-  const [showSearchModal, setShowSearchModal] = useState(false);
+  // Opened from "Find creators" in the menu: show the panel on the first
+  // render, without waiting for the creators list to load.
+  const [showSearchModal, setShowSearchModal] = useState(openSearchOnLoad);
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
   const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -204,6 +207,7 @@ export function useCreatorsState() {
       // ignore
     } finally {
       setLoading(false);
+      setFacetsLoaded(true);
     }
   }, [
     search,
@@ -633,6 +637,8 @@ export function useCreatorsState() {
     searchSources,
     setSearchSources,
     searchCategoriesLoading,
+    /** Suggested words, places, and handles are still on their way. */
+    suggestionsLoading: searchCategoriesLoading || !facetsLoaded,
     searching,
     searchStatus,
     activeSearchJob,

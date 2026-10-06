@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardDescription,
@@ -10,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { SyncReplies } from "./sync-replies";
+import { InboxList, type InboxRow } from "./inbox-list";
 
 type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
 
@@ -98,6 +98,28 @@ export default async function InboxPage({
       : "all";
   const visibleThreads = activeTab === "all" ? threads : threads.filter((t) => tabFor(t) === activeTab);
 
+  const rows: InboxRow[] = visibleThreads.map((thread) => {
+    const cc = thread.campaignCreator;
+    const lastMessage = thread.messages[0];
+    const decision = cc.replyDecision;
+    return {
+      id: thread.id,
+      name: cc.creator.name ?? cc.creator.profiles[0]?.handle ?? "Unknown creator",
+      campaignId: cc.campaign.id,
+      campaignName: cc.campaign.name,
+      lastMessage: lastMessage ? { direction: lastMessage.direction, body: lastMessage.body.slice(0, 200) } : null,
+      updatedAt: new Date(thread.updatedAt).toISOString(),
+      decision,
+      needsCall: !decision && lastMessage?.direction === "inbound",
+      askedToBeRemoved:
+        decision === "no" &&
+        lastMessage?.direction === "inbound" &&
+        lastMessage.classification === OPT_OUT_CLASSIFICATION,
+      hasDraft: cc.aiDrafts.length > 0,
+      addressToConfirm: cc.shippingSnapshots.length > 0 && cc._count.shippingSnapshots === 0,
+    };
+  });
+
   const decided = threads.filter(
     (t) =>
       (t.campaignCreator.replyDecision === "yes" || t.campaignCreator.replyDecision === "no") &&
@@ -131,10 +153,11 @@ export default async function InboxPage({
             className={`rounded-full px-3 py-1 text-sm transition-colors ${
               activeTab === t.key
                 ? "bg-foreground text-background"
-                : "bg-muted text-muted-foreground hover:bg-muted/70"
+                : "bg-muted text-foreground/80 hover:bg-muted/70 hover:text-foreground"
             }`}
+            aria-current={activeTab === t.key ? "page" : undefined}
           >
-            {t.label} <span className="opacity-70">{counts[t.key]}</span>
+            {t.label} <span className="font-semibold tabular-nums">{counts[t.key]}</span>
           </Link>
         ))}
       </div>
@@ -171,75 +194,12 @@ export default async function InboxPage({
           </CardHeader>
         </Card>
       ) : (
-        <ul className="divide-y rounded-xl border bg-card">
-          {visibleThreads.map((thread) => {
-            const creator = thread.campaignCreator.creator;
-            const profile = creator.profiles[0];
-            const lastMessage = thread.messages[0];
-            const hasDraft = thread.campaignCreator.aiDrafts.length > 0;
-            const addressToConfirm =
-              thread.campaignCreator.shippingSnapshots.length > 0 &&
-              thread.campaignCreator._count.shippingSnapshots === 0;
-            const decision = thread.campaignCreator.replyDecision;
-            const needsCall = !decision && lastMessage?.direction === "inbound";
-            const askedToBeRemoved =
-              decision === "no" &&
-              lastMessage?.direction === "inbound" &&
-              lastMessage.classification === OPT_OUT_CLASSIFICATION;
-            const name = creator.name ?? profile?.handle ?? "Unknown creator";
-
-            return (
-              <li key={thread.id} className="relative transition-colors hover:bg-muted/50">
-                <Link
-                  href={`/inbox/${thread.id}`}
-                  aria-label={`Open conversation with ${name}`}
-                  className="absolute inset-0 z-0"
-                />
-                <div className="flex items-start justify-between gap-4 px-5 py-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-medium">{name}</p>
-                      {decision === "yes" && <Badge className="bg-green-100 text-green-800">Said yes</Badge>}
-                      {askedToBeRemoved ? (
-                        <Badge className="bg-red-100 text-red-800">Asked to be removed</Badge>
-                      ) : (
-                        decision === "no" && <Badge className="bg-red-100 text-red-800">Said no</Badge>
-                      )}
-                      {decision === "later" && <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>}
-                      {needsCall && activeTab !== "needs" && <Badge className="bg-amber-100 text-amber-900">Needs your call</Badge>}
-                      {hasDraft && <Badge variant="outline">Reply drafted</Badge>}
-                      {addressToConfirm && (
-                        <Badge className="bg-teal-100 text-teal-900">Address to check</Badge>
-                      )}
-                    </div>
-                    {lastMessage && (
-                      <p className="mt-1 truncate text-muted-foreground">
-                        <span className="font-medium text-foreground/70">
-                          {lastMessage.direction === "inbound" ? "They wrote: " : "You wrote: "}
-                        </span>
-                        {lastMessage.body.slice(0, 120)}
-                      </p>
-                    )}
-                    <p className="relative z-10 mt-1 text-sm text-muted-foreground">
-                      <Link
-                        href={`/campaigns/${thread.campaignCreator.campaign.id}`}
-                        className="hover:text-foreground hover:underline"
-                      >
-                        {thread.campaignCreator.campaign.name}
-                      </Link>
-                    </p>
-                  </div>
-                  <time
-                    dateTime={new Date(thread.updatedAt).toISOString()}
-                    className="shrink-0 text-sm text-muted-foreground"
-                  >
-                    {new Date(thread.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </time>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+        <InboxList
+          key={activeTab}
+          rows={rows}
+          selectable={activeTab === "needs"}
+          showNeedsPill={activeTab !== "needs"}
+        />
       )}
     </div>
   );

@@ -10,6 +10,7 @@ import {
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateTime } from "@/lib/format/date";
 
 interface Variant {
   id: string;
@@ -133,13 +134,13 @@ export function ProductPicker({
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(normalizeErrorMessage(data.error ?? "Sync failed"));
+        throw new Error(normalizeErrorMessage(data.error ?? "Couldn't refresh products. Try again."));
       }
       await fetchProducts();
       await fetchStatus();
     } catch (err) {
       setError(
-        err instanceof Error ? normalizeErrorMessage(err.message) : "Sync failed"
+        err instanceof Error ? normalizeErrorMessage(err.message) : "Couldn't refresh products. Try again."
       );
       await fetchStatus();
     } finally {
@@ -174,7 +175,7 @@ export function ProductPicker({
 
   function variantSummary(variants: Variant[]): string {
     if (variants.length <= 1) return "";
-    // Group by option type — simplify "Default Title" variants
+    // Group by option type; simplify "Default Title" variants
     const titles = variants
       .map((v) => v.title)
       .filter((t) => t !== "Default Title");
@@ -237,7 +238,7 @@ export function ProductPicker({
     );
   }
 
-  // Empty state — no products synced
+  // Empty state: no products brought in yet
   if (products.length === 0 && !error) {
     return (
       <Card className="border-dashed">
@@ -257,9 +258,9 @@ export function ProductPicker({
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold">No products synced</h3>
+          <h3 className="text-lg font-semibold">No products yet</h3>
           <p className="mt-1 text-sm text-muted-foreground text-center max-w-sm">
-            Sync your Shopify product catalog to select products for this campaign.
+            Bring in your products from Shopify, then pick the one you are gifting.
           </p>
           {showSyncButton && (
             <Button
@@ -288,10 +289,10 @@ export function ProductPicker({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Syncing…
+                  Refreshing…
                 </>
               ) : (
-                "Sync Products from Shopify"
+                "Get products from Shopify"
               )}
             </Button>
           )}
@@ -314,7 +315,7 @@ export function ProductPicker({
                 onClick={handleSync}
                 disabled={syncing}
               >
-                {syncing ? "Retrying…" : "Retry sync"}
+                {syncing ? "Trying again…" : "Try again"}
               </Button>
             ) : (
               <Link
@@ -332,24 +333,22 @@ export function ProductPicker({
         <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
           <div className="flex flex-wrap items-center gap-2">
             <span>
-              Store: <strong>{shopifyStatus.storeDomain ?? "Connected"}</strong>
+              Connected to <strong>your Shopify store</strong>
             </span>
             {shopifyStatus.lastSyncAt && (
               <span>
-                Last sync:{" "}
-                <strong>
-                  {new Date(shopifyStatus.lastSyncAt).toLocaleString()}
-                </strong>
+                Last refreshed:{" "}
+                <strong>{formatDateTime(shopifyStatus.lastSyncAt)}</strong>
               </span>
             )}
             {typeof shopifyStatus.lastSyncedCount === "number" && (
               <span>{shopifyStatus.lastSyncedCount} products</span>
             )}
-            {shopifyStatus.truncated && <span>Partial sync</span>}
+            {shopifyStatus.truncated && <span>Only some products came in</span>}
           </div>
           {shopifyStatus.lastSyncError && (
             <p className="mt-2 text-red-700">
-              Last sync failed: {shopifyStatus.lastSyncError}
+              Last refresh didn&apos;t work: {shopifyStatus.lastSyncError}
             </p>
           )}
         </div>
@@ -385,7 +384,7 @@ export function ProductPicker({
             onClick={handleSync}
             disabled={syncing || !shopifyStatus.connected}
           >
-            {syncing ? "Syncing…" : "Re-sync"}
+            {syncing ? "Refreshing…" : "Refresh products"}
           </Button>
         )}
         {selectedProductIds.size > 0 && (

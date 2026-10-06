@@ -81,3 +81,25 @@ export function isClearOptOut(body: string, guess?: ReplyGuess): boolean {
     aiKnown && guess.confidence >= MIN_AI_CONFIDENCE && words <= MAX_WORDS_WITH_AI
   );
 }
+
+/** The stored latest message of a thread, as the backfill reads it. */
+export type StoredReply = {
+  direction: string;
+  body: string;
+  classification: string | null;
+  confidence: number | null;
+};
+
+/**
+ * Same conservative rule for replies that arrived before opt-outs were
+ * handled automatically. Only the thread's latest message counts, it must be
+ * from the creator, and a stored AI label is used the same way a fresh guess is.
+ */
+export function isStoredOptOut(latest: StoredReply | null | undefined): boolean {
+  if (!latest || latest.direction !== "inbound") return false;
+  const guess =
+    latest.classification && latest.confidence != null && latest.confidence > 0
+      ? { intent: latest.classification, confidence: latest.confidence }
+      : null;
+  return isClearOptOut(latest.body, guess);
+}

@@ -16,6 +16,8 @@ import type { FeatureFlags } from "@/lib/feature-flags";
 
 type FlagCopy = {
   label: string;
+  /** Orders shows up front; Advanced starts folded so new companies see two switches, not eight. */
+  group: "orders" | "advanced";
   description: string;
   available: boolean;
   /** Shown under "Not available yet": what happens today instead. */
@@ -24,66 +26,77 @@ type FlagCopy = {
 
 const FLAG_COPY: Record<keyof FeatureFlags, FlagCopy> = {
   claimAutoDraftEnabled: {
+    group: "orders",
     label: "Save a draft order when a creator fills in the gift form",
     description:
       "Saves a draft gift order in Shopify the moment a creator sends their address. A draft never ships anything, and this works whether the next switch is on or off.",
     available: true,
   },
   shopifyOrderEnabled: {
+    group: "orders",
     label: "Create and complete orders from this tool",
     description:
       "Lets you create gift orders and complete drafts from a creator's page here. When off, you finish orders in Shopify yourself.",
     available: true,
   },
   unipileDmEnabled: {
+    group: "advanced",
     label: "Send Instagram messages",
     description:
-      "Lets you message creators on Instagram from the inbox. Needs Instagram messages (Unipile) connected, which is a separate paid service.",
+      "Lets you message creators on Instagram from the inbox. Needs Instagram messages connected in Connections, which is a separate paid service.",
     available: true,
   },
   decisionEngineScoringEnabled: {
+    group: "advanced",
     label: "Detailed match scores",
     description:
       "Shows why each creator is or isn't a good match for your brand, not just a single score.",
     available: true,
   },
   portfolioOptimizerEnabled: {
+    group: "advanced",
     label: "Suggested creator mix",
     description:
       "Suggests a balanced group of creators for each campaign. Needs Detailed match scores turned on too.",
     available: true,
   },
   outcomeLearningEnabled: {
+    group: "advanced",
     label: "Learn from past campaigns",
     description:
       "Tracks which creators posted and how their posts did, so results and future suggestions get better over time.",
     available: true,
   },
   identityGraphEnabled: {
+    group: "advanced",
     label: "Spot the same creator across accounts",
     description:
       "Notices when two creator records look like the same person and lists them for you to check.",
     available: true,
   },
   identityAutoLinkEnabled: {
+    group: "advanced",
     label: "Merge obvious duplicates for me",
     description:
       "Joins creator records automatically when they are clearly the same person. Merges can't be undone, so leave this off until you trust the matches.",
     available: true,
   },
   aiReplyEnabled: {
+    group: "advanced",
     label: "Instant reply suggestions",
     description: "Drafts a suggested answer the moment a creator replies.",
     available: false,
     note: "Suggested replies still appear in your inbox after the regular reply check, whether this is on or off.",
   },
   reminderEmailEnabled: {
+    group: "advanced",
     label: "Reminder emails after delivery",
     description: "Emails creators a gentle reminder to post once their gift has arrived.",
     available: false,
     note: "No reminders are sent right now, whether this is on or off.",
   },
   instagramMentionPollEnabled: {
+    group: "advanced",
     label: "Extra check for Instagram mentions",
     description: "An additional check for posts that mention your brand.",
     available: false,
@@ -215,6 +228,9 @@ export default function FeatureFlagsPage() {
   // Switches marked available: false have no effect yet, so they stay hidden.
   // Their flag values are left untouched.
   const working = FLAG_ORDER.filter((flag) => FLAG_COPY[flag].available);
+  const orders = working.filter((flag) => FLAG_COPY[flag].group === "orders");
+  const advanced = working.filter((flag) => FLAG_COPY[flag].group === "advanced");
+  const advancedOn = advanced.filter((flag) => Boolean(flags?.[flag])).length;
 
   return (
     <div className="space-y-8">
@@ -226,7 +242,26 @@ export default function FeatureFlagsPage() {
         </p>
       )}
 
-      <ul className="divide-y rounded-xl border bg-card">{working.map(renderRow)}</ul>
+      <section aria-labelledby="flags-orders" className="space-y-3">
+        <h2 id="flags-orders" className="text-lg font-semibold">
+          Orders
+        </h2>
+        <ul className="divide-y rounded-xl border bg-card">{orders.map(renderRow)}</ul>
+      </section>
+
+      {advanced.length > 0 && (
+        <details className="group space-y-3">
+          <summary className="cursor-pointer list-none text-lg font-semibold marker:hidden">
+            Advanced
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              {advancedOn} of {advanced.length} on.{" "}
+              <span className="group-open:hidden">Show</span>
+              <span className="hidden group-open:inline">Hide</span>
+            </span>
+          </summary>
+          <ul className="mt-3 divide-y rounded-xl border bg-card">{advanced.map(renderRow)}</ul>
+        </details>
+      )}
 
       <p className="text-sm text-muted-foreground">
         If these settings ever fail to load, every feature stays off to be safe, so nothing gets

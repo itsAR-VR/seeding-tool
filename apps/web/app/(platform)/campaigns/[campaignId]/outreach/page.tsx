@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
 import { BUILT_IN_PERSONAS } from "@/lib/ai/personas";
 
 type CampaignCreator = {
@@ -266,6 +266,10 @@ export default function OutreachPage() {
   const sendableCreators = approvedCreators.filter(
     (c) => c.lifecycleStatus === "ready" && !queuedIds.has(c.id)
   );
+  // Nobody approved is left to email: say so plainly instead of showing an empty chooser.
+  const everyoneEmailed = !loadingCreators && approvedCreators.length > 0 && sendableCreators.length === 0;
+  const pendingReviewCount = creators.filter((c) => c.reviewStatus === "pending").length;
+  const queuedCount = approvedCreators.filter((c) => queuedIds.has(c.id)).length;
   const creatorByCcId = new Map(creators.map((c) => [c.id, c]));
   const senderAddress =
     (campaignSetup?.senderAliasId
@@ -419,7 +423,7 @@ export default function OutreachPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Email creators</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Email creators</h2>
         <ol className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-label="Steps">
           <li className={step === "choose" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "choose" ? "step" : undefined}>
             1. Choose creators
@@ -473,7 +477,31 @@ export default function OutreachPage() {
         </div>
       )}
 
-      {!setupLoading && !draftBlocker && !sendBlocker ? (
+      {everyoneEmailed ? (
+        <div role="status" className="space-y-1 rounded-lg border bg-card px-4 py-3">
+          <p className="font-medium">
+            {queuedCount > 0
+              ? "Everyone in this campaign has been emailed or is queued to send"
+              : "Everyone in this campaign has been emailed"}
+          </p>
+          {pendingReviewCount > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {pendingReviewCount} more {pendingReviewCount === 1 ? "creator needs" : "creators need"} a yes or no
+              first.{" "}
+              <Link href={`/campaigns/${campaignId}/review`} className="font-medium text-foreground underline">
+                Review creators
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Replies show up in your inbox. Want to reach more people?{" "}
+              <Link href={`/campaigns/${campaignId}/discover`} className="font-medium text-foreground underline">
+                Find creators
+              </Link>
+            </p>
+          )}
+        </div>
+      ) : !setupLoading && !draftBlocker && !sendBlocker ? (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
           <span className="font-medium">Ready to send</span>
           <span>✓ {campaignSetup?.campaignProducts?.length ?? 0} product</span>
@@ -526,9 +554,9 @@ export default function OutreachPage() {
               <div key={item.label} className="rounded-lg border bg-white p-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{item.label}</span>
-                  <Badge variant={item.ready ? "default" : "secondary"}>
+                  <StatusPill tone={item.ready ? "good" : "waiting"}>
                     {item.ready ? "Ready" : "Needs setup"}
-                  </Badge>
+                  </StatusPill>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{item.helper}</p>
               </div>
@@ -540,24 +568,14 @@ export default function OutreachPage() {
           ) : draftBlocker || sendBlocker ? (
             <div className="flex flex-wrap gap-2">
               {!hasProducts ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = `/campaigns/${campaignId}/products`;
-                  }}
-                >
+                <Link href={`/campaigns/${campaignId}/products`} className={buttonVariants({ variant: "outline" })}>
                   Add products
-                </Button>
+                </Link>
               ) : null}
               {!selectedChannelConnected ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = "/settings/connections";
-                  }}
-                >
+                <Link href="/settings/connections" className={buttonVariants({ variant: "outline" })}>
                   {channel === "email" ? "Connect Gmail" : "Connect Instagram messages"}
-                </Button>
+                </Link>
               ) : null}
             </div>
           ) : (
@@ -576,7 +594,7 @@ export default function OutreachPage() {
         </div>
       )}
 
-      {step === "choose" && (
+      {step === "choose" && !everyoneEmailed && (
       <>
       {/* Creator Selection */}
       <Card>
@@ -680,12 +698,9 @@ export default function OutreachPage() {
                         .join(" · ")}
                     </span>
                   </div>
-                  <Badge
-                    variant={sendable ? "outline" : "secondary"}
-                    className="text-sm"
-                  >
+                  <StatusPill tone={queuedIds.has(cc.id) ? "waiting" : sendable ? "neutral" : "good"}>
                     {queuedIds.has(cc.id) ? "Queued to send" : statusLabel(cc.lifecycleStatus)}
-                  </Badge>
+                  </StatusPill>
                 </div>
                 );
               })}

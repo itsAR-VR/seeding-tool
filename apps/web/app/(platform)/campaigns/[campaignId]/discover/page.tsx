@@ -331,7 +331,7 @@ export default function DiscoverCreatorsPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Find creators</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Find creators</h2>
         <p className="mt-1 text-muted-foreground">
           Search for creators who fit this campaign. The search runs in the background, and
           matches wait for your review when it finishes.

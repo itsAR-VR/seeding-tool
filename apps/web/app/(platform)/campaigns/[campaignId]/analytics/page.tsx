@@ -253,9 +253,9 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Results</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Results</h2>
         <p className="mt-1 text-muted-foreground">
-          How {campaign.name} is going, from first email to posts.
+          How this campaign is going, from first email to posts.
         </p>
       </header>
 

@@ -552,6 +552,7 @@ function ConnectionsContent({
                 </h2>
                 <ConnectionStatus
                   connected={searchReady === true}
+                  tone={searchReady === false ? "waiting" : undefined}
                   label={searchReady === null ? "Checking..." : searchReady ? "Ready" : "Needs a key"}
                 />
               </div>

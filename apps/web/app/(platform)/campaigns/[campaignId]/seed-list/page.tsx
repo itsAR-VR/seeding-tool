@@ -81,7 +81,7 @@ export default function SeedListPreviewPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Suggested creator mix</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Suggested creator mix</h2>
         <p className="mt-1 text-muted-foreground">
           Your best matches next to a more varied mix of creators, from this campaign&apos;s latest
           search.

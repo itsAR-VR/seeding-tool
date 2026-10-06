@@ -5,6 +5,7 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { loadCampaignPosts, type CampaignPost } from "../_components/campaign-posts";
 import { AddPostForm } from "./components/add-post-form";
+import { formatDate } from "@/lib/format/date";
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
@@ -30,15 +31,6 @@ function postDescription(post: CampaignPost): string {
   if (post.source === "tagged") return `Tagged you on ${where}`;
   const kind = post.kind ? (KIND_LABELS[post.kind] ?? "post") : "post";
   return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} on ${where}, added by hand`;
-}
-
-function formatDate(date: Date): string {
-  const sameYear = date.getFullYear() === new Date().getFullYear();
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    ...(sameYear ? {} : { year: "numeric" }),
-  });
 }
 
 export default async function CampaignPostsPage({ params }: PageProps) {
@@ -81,7 +73,7 @@ export default async function CampaignPostsPage({ params }: PageProps) {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Posts</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Posts</h2>
         <p className="mt-1 text-muted-foreground">
           Posts this campaign&apos;s creators made about your gift.
         </p>

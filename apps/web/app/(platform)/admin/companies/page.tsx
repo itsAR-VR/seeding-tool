@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { InviteLinkBox } from "@/components/invite-link-box";
+import { formatDate } from "@/lib/format/date";
 
 type AdminData = {
   companies: Array<{
@@ -15,7 +16,7 @@ type AdminData = {
   invites: Array<{ id: string; email: string; companyName: string | null; acceptedAt: string | null; expiresAt: string }>;
 };
 
-const date = (iso: string) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const date = (iso: string) => formatDate(iso);
 
 export default function CompaniesPage() {
   const [data, setData] = useState<AdminData | null>(null);
@@ -43,7 +44,7 @@ export default function CompaniesPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ useSharedApify }),
     });
-    if (!res.ok) setError("Couldn't change that company's Apify setting.");
+    if (!res.ok) setError("Couldn't change that company's search setting.");
     await load();
   }
 
@@ -131,7 +132,7 @@ export default function CompaniesPage() {
                 </p>
               </div>
               {c.hasOwnApifyKey ? (
-                <span className="text-sm">Uses their own Apify key</span>
+                <span className="text-sm">Uses their own search account</span>
               ) : (
                 <label className="flex items-center gap-2 text-sm">
                   <input
@@ -139,7 +140,7 @@ export default function CompaniesPage() {
                     checked={c.useSharedApify}
                     onChange={(e) => void setSharedApify(c.id, e.target.checked)}
                   />
-                  Can use our Apify account
+                  Can use our search account
                 </label>
               )}
             </li>

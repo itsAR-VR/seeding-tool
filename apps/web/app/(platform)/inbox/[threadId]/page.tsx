@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { guessFromIntent } from "@/lib/inbox/decision";
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
+import { formatDateTime } from "@/lib/format/date";
 
 type Message = {
   id: string;
@@ -91,7 +92,7 @@ export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
   const router = useRouter();
   const [thread, setThread] = useState<Thread | null>(null);
-  const [brand, setBrand] = useState<BrandData | null>(null);
+  const [, setBrand] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
   const [dmText, setDmText] = useState("");
   const [dmSending, setDmSending] = useState(false);
@@ -257,7 +258,7 @@ export default function ThreadDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Loading thread...</p>
+        <p className="text-muted-foreground">Loading conversation…</p>
       </div>
     );
   }
@@ -271,7 +272,7 @@ export default function ThreadDetailPage() {
           see your conversations.
         </p>
         <Button variant="outline" onClick={() => router.push("/inbox")}>
-          ← Back to Inbox
+          Back to inbox
         </Button>
       </div>
     );
@@ -279,6 +280,12 @@ export default function ThreadDetailPage() {
 
   const creator = thread.campaignCreator.creator;
   const profile = creator.profiles[0];
+  const creatorName = creator.name ?? profile?.handle ?? "Unknown creator";
+  // Feature their latest reply; if they haven't replied, the latest message we sent.
+  const featured =
+    [...thread.messages].reverse().find((m) => m.direction === "inbound") ??
+    thread.messages[thread.messages.length - 1];
+  const earlier = thread.messages.filter((m) => m.id !== featured?.id);
   const pendingAddresses = thread.campaignCreator.shippingSnapshots.filter(
     (s) => !s.confirmedAt && !s.isActive
   );
@@ -291,7 +298,7 @@ export default function ThreadDetailPage() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">
               <Link href={`/creators/${creator.id}`} className="hover:underline">
-                {creator.name ?? profile?.handle ?? "Unknown Creator"}
+                {creatorName}
               </Link>
             </h1>
             {thread.status === "closed" && <Badge variant="outline">Closed</Badge>}
@@ -310,6 +317,26 @@ export default function ThreadDetailPage() {
           Back to inbox
         </Button>
       </div>
+
+      {/* Their latest message, shown first so the decision below reads in context */}
+      {featured && (
+        <figure className="rounded-xl border bg-card p-5 shadow-sm">
+          <figcaption className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {featured.direction === "inbound" ? creatorName : "You"}
+            </span>{" "}
+            wrote, <time dateTime={featured.createdAt}>{formatDateTime(featured.createdAt)}</time>:
+          </figcaption>
+          {featured.subject && <p className="mt-2 font-medium">{featured.subject}</p>}
+          <blockquote className="mt-2 whitespace-pre-wrap border-l-4 border-amber-300 pl-4 text-base leading-relaxed">
+            {featured.body}
+          </blockquote>
+          {featured.direction === "outbound" && (
+            <p className="mt-3 text-sm text-muted-foreground">No reply from them yet.</p>
+          )}
+        </figure>
+      )}
+      {!featured && <p className="text-muted-foreground">No messages in this conversation yet.</p>}
 
       {/* Reply decision: operator's official call, AI guess shown alongside */}
       {thread.messages.some((m) => m.direction === "inbound") && (() => {
@@ -383,6 +410,98 @@ export default function ThreadDetailPage() {
           </Card>
         );
       })()}
+
+      {/* Email reply */}
+      {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {suggestionId ? "Suggested reply (edit it before sending)" : "Your reply"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {replyNotice && (
+              <div
+                role={replyNotice.tone === "success" ? "status" : "alert"}
+                className={`rounded border p-2 text-sm ${
+                  replyNotice.tone === "success"
+                    ? "border-green-200 bg-green-50 text-green-900"
+                    : "border-red-200 bg-red-50 text-red-800"
+                }`}
+              >
+                {replyNotice.text}
+              </div>
+            )}
+            <textarea
+              className="w-full min-h-40 rounded-md border p-3 text-sm leading-relaxed"
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Write your reply…"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                {replyText.includes(ADDRESS_LINK)
+                  ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
+                  : `To: ${creator.email ?? "no email on file"}`}
+              </p>
+              <div className="flex gap-2">
+                {!replyText.includes(ADDRESS_LINK) && (
+                  <Button size="sm" variant="outline" onClick={() => setReplyText(followUp)}>
+                    Add the gift link message
+                  </Button>
+                )}
+                <Button size="sm" onClick={handleSendReply} disabled={replySending || !replyText.trim()}>
+                  {replySending ? "Sending…" : "Send reply"}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* DM Compose — Instagram DM threads only */}
+      {thread.channel === "instagram_dm" && (
+        <Card className="border-indigo-200 bg-indigo-50">
+          <CardHeader>
+            <CardTitle className="text-base text-indigo-900">
+              📱 Send Instagram DM
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dmError && (
+              <div role="alert" className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+                {dmError}
+                {dmError.includes("Settings > Features") && (
+                  <>
+                    {" "}
+                    <Link href="/settings/feature-flags" className="font-medium underline">
+                      Open Settings &gt; Features
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
+            <textarea
+              className="w-full min-h-20 rounded-md border p-3 text-sm"
+              placeholder="Type your DM message…"
+              value={dmText}
+              onChange={(e) => setDmText(e.target.value)}
+            />
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Sending to @{creator.instagramHandle || "unknown"}
+              </p>
+              <Button
+                size="sm"
+                onClick={handleSendDm}
+                disabled={dmSending || !dmText.trim()}
+              >
+                {dmSending ? "Sending…" : "Send DM"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pending Address Snapshot */}
       {pendingAddresses.length > 0 && (
@@ -461,144 +580,33 @@ export default function ThreadDetailPage() {
         </Card>
       )}
 
-      {/* Email reply */}
-      {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {suggestionId ? "Reply · suggested answer (edit before sending)" : "Reply"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {replyNotice && (
-              <div
-                role={replyNotice.tone === "success" ? "status" : "alert"}
-                className={`rounded border p-2 text-sm ${
-                  replyNotice.tone === "success"
-                    ? "border-green-200 bg-green-50 text-green-900"
-                    : "border-red-200 bg-red-50 text-red-800"
-                }`}
+      {/* Earlier messages, collapsed: the latest one is already shown above */}
+      {earlier.length > 0 && (
+        <details className="group rounded-xl border bg-card">
+          <summary className="cursor-pointer select-none px-5 py-4 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Earlier messages ({earlier.length})
+          </summary>
+          <ol className="space-y-4 px-5 pb-5">
+            {earlier.map((msg) => (
+              <li
+                key={msg.id}
+                className={`rounded-lg p-3 ${msg.direction === "inbound" ? "bg-muted/50" : "ml-8 bg-blue-50"}`}
               >
-                {replyNotice.text}
-              </div>
-            )}
-            <textarea
-              className="w-full min-h-40 rounded-md border p-3 text-sm leading-relaxed"
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              placeholder="Write your reply…"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">
-                {replyText.includes(ADDRESS_LINK)
-                  ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
-                  : `To: ${creator.email ?? "no email on file"}`}
-              </p>
-              <div className="flex gap-2">
-                {!replyText.includes(ADDRESS_LINK) && (
-                  <Button size="sm" variant="outline" onClick={() => setReplyText(followUp)}>
-                    Use address-link message
-                  </Button>
-                )}
-                <Button size="sm" onClick={handleSendReply} disabled={replySending || !replyText.trim()}>
-                  {replySending ? "Sending…" : "Send reply"}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+                <p className="mb-1 text-sm text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {msg.direction === "inbound" ? `${creatorName} wrote` : "You wrote"}
+                  </span>
+                  {msg.fromAddress && msg.direction === "inbound" && ` from ${msg.fromAddress}`}
+                  {", "}
+                  <time dateTime={msg.createdAt}>{formatDateTime(msg.createdAt)}</time>
+                </p>
+                {msg.subject && <p className="mb-1 text-sm font-medium">{msg.subject}</p>}
+                <p className="whitespace-pre-wrap text-sm">{msg.body}</p>
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
-
-      {/* DM Compose — Instagram DM threads only */}
-      {thread.channel === "instagram_dm" && (
-        <Card className="border-indigo-200 bg-indigo-50">
-          <CardHeader>
-            <CardTitle className="text-base text-indigo-900">
-              📱 Send Instagram DM
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {dmError && (
-              <div role="alert" className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
-                {dmError}
-                {dmError.includes("Settings > Features") && (
-                  <>
-                    {" "}
-                    <Link href="/settings/feature-flags" className="font-medium underline">
-                      Open Settings &gt; Features
-                    </Link>
-                  </>
-                )}
-              </div>
-            )}
-            <textarea
-              className="w-full min-h-20 rounded-md border p-3 text-sm"
-              placeholder="Type your DM message…"
-              value={dmText}
-              onChange={(e) => setDmText(e.target.value)}
-            />
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Sending to @{creator.instagramHandle || "unknown"}
-              </p>
-              <Button
-                size="sm"
-                onClick={handleSendDm}
-                disabled={dmSending || !dmText.trim()}
-              >
-                {dmSending ? "Sending…" : "Send DM"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Message History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Conversation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {thread.messages.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No messages in this thread yet.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              {thread.messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`rounded-lg p-3 ${
-                    msg.direction === "inbound"
-                      ? "bg-muted/50"
-                      : "bg-blue-50 ml-8"
-                  }`}
-                >
-                  <div className="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
-                    <span className="font-medium">
-                      {msg.direction === "inbound" ? "↙ Reply" : "↗ You sent"}
-                    </span>
-                    {msg.fromAddress && <span>from {msg.fromAddress}</span>}
-                    <span>
-                      {new Date(msg.createdAt).toLocaleString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </span>
-
-                  </div>
-                  {msg.subject && (
-                    <p className="mb-1 text-sm font-medium">{msg.subject}</p>
-                  )}
-                  <p className="whitespace-pre-wrap text-sm">{msg.body}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -143,7 +143,7 @@ export default function CampaignImportPage() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Add creators from your list</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Add creators from your list</h2>
         <p className="mt-1 text-muted-foreground">
           Pick creators you already saved to add them to{" "}
           {campaignName ? campaignName : "this campaign"}.

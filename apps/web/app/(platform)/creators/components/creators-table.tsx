@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import type { Creator } from "../hooks/use-creators-state";
 import { sourceLabel } from "./creator-filters";
+import { cn } from "@/lib/utils";
 
 type TableProps = {
   creators: Creator[];
@@ -19,15 +20,18 @@ type TableProps = {
   onAddToCampaign: (creatorId: string) => void;
 };
 
-const COLUMNS = [
-  "Creator",
-  "Email",
-  "Followers",
-  "Average views",
-  "Category",
-  "Found through",
-  "Campaigns",
-  "",
+/** Columns that only show on wide screens, so the table fits without scrolling sideways. */
+const WIDE_ONLY = "hidden xl:table-cell";
+
+const COLUMNS: { label: string; className?: string }[] = [
+  { label: "Creator" },
+  { label: "Email" },
+  { label: "Followers" },
+  { label: "Average views", className: WIDE_ONLY },
+  { label: "Category", className: WIDE_ONLY },
+  { label: "Found through", className: "hidden lg:table-cell" },
+  { label: "Campaigns" },
+  { label: "" },
 ];
 
 export function CreatorsTable({
@@ -43,12 +47,12 @@ export function CreatorsTable({
   const showSkeleton = loading && creators.length === 0;
 
   return (
-    <section className="rounded-xl border bg-card">
+    <section className="min-w-0 rounded-xl border bg-card">
       <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-5 py-4">
         <h2 className="font-semibold">
           {showSkeleton ? "Your creators" : `${total.toLocaleString()} ${total === 1 ? "creator" : "creators"}`}
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="hidden text-sm text-muted-foreground xl:block">
           Average views come from their latest 12 reels.
         </p>
       </div>
@@ -69,13 +73,17 @@ export function CreatorsTable({
           </div>
         </div>
       ) : (
-        <div className="overflow-x-auto" aria-busy={loading}>
+        <div className="w-0 min-w-full overflow-x-auto" aria-busy={loading}>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-muted-foreground">
                 {COLUMNS.map((col, i) => (
-                  <th key={col || i} scope="col" className="whitespace-nowrap px-4 py-3 font-medium first:pl-5 last:pr-5">
-                    {col || <span className="sr-only">Actions</span>}
+                  <th
+                    key={col.label || i}
+                    scope="col"
+                    className={cn("whitespace-nowrap px-4 py-3 font-medium first:pl-5 last:pr-5", col.className)}
+                  >
+                    {col.label || <span className="sr-only">Actions</span>}
                   </th>
                 ))}
               </tr>
@@ -85,7 +93,7 @@ export function CreatorsTable({
                 ? Array.from({ length: 6 }, (_, i) => (
                     <tr key={i}>
                       {COLUMNS.map((col, j) => (
-                        <td key={col || j} className="px-4 py-3 first:pl-5 last:pr-5">
+                        <td key={col.label || j} className={cn("px-4 py-3 first:pl-5 last:pr-5", col.className)}>
                           <Skeleton className="h-4 w-20" />
                         </td>
                       ))}
@@ -126,15 +134,15 @@ export function CreatorsTable({
                             <span className="text-muted-foreground">Unknown</span>
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 tabular-nums">
+                        <td className={cn("whitespace-nowrap px-4 py-3 tabular-nums", WIDE_ONLY)}>
                           {creator.avgViews?.toLocaleString() ?? (
                             <span className="text-muted-foreground">Unknown</span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className={cn("px-4 py-3", WIDE_ONLY)}>
                           {creator.bioCategory || <span className="text-muted-foreground">None</span>}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3">
+                        <td className="hidden whitespace-nowrap px-4 py-3 lg:table-cell">
                           {sourceLabel(creator.discoverySource)}
                         </td>
                         <td className="px-4 py-3">

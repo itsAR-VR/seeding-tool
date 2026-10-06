@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { NoCompanyNotice } from "@/components/no-company-notice";
 import { getAdResults, MetaAdsError, type AdResults } from "@/lib/meta/ads";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PartnershipForm } from "./partnership-form";
 
@@ -18,6 +18,14 @@ const STATUS_LABELS: Record<string, string> = {
   IN_PROCESS: "Processing",
   DISAPPROVED: "Rejected",
   WITH_ISSUES: "Has issues",
+};
+
+const STATUS_TONES: Record<string, StatusTone> = {
+  ACTIVE: "good",
+  PENDING_REVIEW: "waiting",
+  IN_PROCESS: "waiting",
+  DISAPPROVED: "problem",
+  WITH_ISSUES: "problem",
 };
 
 const money = (n: number | null) => (n === null ? "–" : `$${n.toFixed(2)}`);
@@ -137,14 +145,14 @@ export default async function AdsPage() {
                           )}
                           <span>@{post.username}</span>
                           {post.metaAdKind === "partnership" && (
-                            <Badge variant="secondary">Partnership</Badge>
+                            <StatusPill tone="neutral">Partnership</StatusPill>
                           )}
                         </div>
                       </td>
                       <td className="py-2">
-                        <Badge variant={r?.status === "ACTIVE" ? "default" : "outline"}>
-                          {r?.status ? (STATUS_LABELS[r.status] ?? r.status) : "–"}
-                        </Badge>
+                        <StatusPill tone={(r?.status && STATUS_TONES[r.status]) || "neutral"}>
+                          {r?.status ? (STATUS_LABELS[r.status] ?? r.status) : "Not known yet"}
+                        </StatusPill>
                       </td>
                       <td className="py-2">{money(r?.spend ?? null)}</td>
                       <td className="py-2">{r?.clicks ?? "–"}</td>

@@ -10,7 +10,7 @@ import {
 } from "@/lib/instagram/client";
 
 /** True when the URL points at our own storage rather than Instagram's CDN. */
-function isStoredCopy(url: string | null): boolean {
+export function isStoredCopy(url: string | null): boolean {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   return Boolean(url && supabaseUrl && url.startsWith(supabaseUrl));
 }
@@ -76,7 +76,9 @@ export async function findCreatorId(brandId: string, username: string | undefine
 
 /**
  * Pulls posts that tag the brand's Instagram account into the content library.
- * Existing posts get fresh stats and media URLs (Instagram's URLs expire).
+ * Existing posts get fresh stats and media URLs (Instagram's URLs expire after
+ * a week or two). Posts with a stored copy keep it; every other post we see
+ * gets the new Instagram links, so thumbnails keep loading.
  */
 export async function syncContentForBrand(brandId: string): Promise<ContentSyncResult> {
   const credential = await loadInstagramCredential(brandId);
@@ -100,6 +102,9 @@ export async function syncContentForBrand(brandId: string): Promise<ContentSyncR
 
     for (let pageCount = 1; ; pageCount++) {
       let pageHadNew = false;
+      // Older posts only get fresh links when we read the page they're on, so
+      // keep reading while a page still has posts that rely on Instagram's links.
+      let pageHadExpiringLinks = false;
 
       for (const media of page.data ?? []) {
         const fields = {
@@ -124,6 +129,9 @@ export async function syncContentForBrand(brandId: string): Promise<ContentSyncR
           // Instagram's expiring links, and never blank out a file we already have.
           const keepMedia = isStoredCopy(existing.mediaUrl) || (existing.mediaUrl && !fields.mediaUrl);
           const keepThumb = isStoredCopy(existing.thumbnailUrl) || (existing.thumbnailUrl && !fields.thumbnailUrl);
+          if ([existing.mediaUrl, existing.thumbnailUrl].some((url) => url && !isStoredCopy(url))) {
+            pageHadExpiringLinks = true;
+          }
           await prisma.contentPost.update({
             where: { id: existing.id },
             data: {
@@ -153,8 +161,9 @@ export async function syncContentForBrand(brandId: string): Promise<ContentSyncR
         pageHadNew = true;
       }
 
-      // Tags come newest first, so a page with nothing new means we're caught up.
-      if (!pageHadNew || !page.paging?.next || pageCount >= MAX_PAGES) break;
+      // Tags come newest first, so a page with nothing new means we're caught up,
+      // unless that page still had links to refresh.
+      if ((!pageHadNew && !pageHadExpiringLinks) || !page.paging?.next || pageCount >= MAX_PAGES) break;
       page = await fetchNextPage<InstagramMedia>(page.paging.next);
     }
   } catch (error) {

@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { orderStatusLabel } from "@/lib/shopify/order-labels";
-import { Badge } from "@/components/ui/badge";
+import { OrdersTable, type OrderTableRow } from "@/app/(platform)/orders/_components/orders-table";
 
 type OrderRow = {
   id: string;
@@ -41,28 +40,19 @@ type EligibleCreator = {
   };
 };
 
-/** Pill colors: amber for "waiting on you", red only for real problems. */
-const statusColors: Record<string, string> = {
-  draft_pending: "bg-slate-100 text-slate-800",
-  draft_created: "bg-amber-100 text-amber-900",
-  draft_completing: "bg-amber-100 text-amber-900",
-  error_needs_reconciliation: "bg-red-100 text-red-900",
-  created: "bg-blue-100 text-blue-900",
-  processing: "bg-blue-100 text-blue-900",
-  shipped: "bg-indigo-100 text-indigo-900",
-  delivered: "bg-green-100 text-green-900",
-  cancelled: "bg-red-100 text-red-900",
-};
-
-/** Words and color for one order row. A draft is amber unless something actually broke. */
-function orderPill(status: string, isDraft: boolean): { label: string; tone: string } {
-  const isProblem = status === "error_needs_reconciliation" || status === "cancelled";
-  if (isDraft && !isProblem) {
-    return { label: "Draft, waiting for you", tone: statusColors.draft_created };
-  }
+function toTableRow(order: OrderRow): OrderTableRow {
+  const creator = order.campaignCreator.creator;
   return {
-    label: orderStatusLabel(status),
-    tone: statusColors[status] ?? "bg-slate-100 text-slate-800",
+    id: order.id,
+    status: order.status,
+    shopifyOrderId: order.shopifyOrderId,
+    shopifyOrderNumber: order.shopifyOrderNumber,
+    shopifyDraftOrderId: order.shopifyDraftOrderId,
+    shopifyDraftOrderName: order.shopifyDraftOrderName,
+    createdAt: order.createdAt,
+    adminUrl: order.shopifyAdminUrl ?? null,
+    creator: { id: order.campaignCreator.creatorId, name: creator.name || creator.email || "Unnamed creator" },
+    tracking: order.fulfillmentEvents?.[0] ?? null,
   };
 }
 
@@ -143,7 +133,7 @@ export default function OrdersPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Orders</h2>
         <p className="mt-1 text-muted-foreground">
           Gift orders for this campaign. Drafts wait for you in Shopify; complete one there to ship it.
         </p>
@@ -171,7 +161,7 @@ export default function OrdersPage() {
 
       <section aria-labelledby="orders-heading" className="space-y-3">
         <h2 id="orders-heading" className="text-lg font-semibold">
-          All orders ({orders.length})
+          {orders.length} {orders.length === 1 ? "order" : "orders"}
         </h2>
         {loadError ? (
           <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-800">
@@ -187,83 +177,7 @@ export default function OrdersPage() {
             .
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border bg-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="px-5 py-3 font-medium">Creator</th>
-                  <th className="px-5 py-3 font-medium">Shopify order</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium">Tracking</th>
-                  <th className="px-5 py-3 font-medium">Date</th>
-                  <th className="px-5 py-3 font-medium">
-                    <span className="sr-only">Open in Shopify</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {orders.map((order) => {
-                  const isDraft = Boolean(order.shopifyDraftOrderId) && !order.shopifyOrderId;
-                  const pill = orderPill(order.status, isDraft);
-                  const tracking = order.fulfillmentEvents?.[0];
-                  return (
-                    <tr key={order.id}>
-                      <td className="px-5 py-4">
-                        <Link
-                          href={`/creators/${order.campaignCreator.creatorId}`}
-                          className="font-medium hover:underline"
-                        >
-                          {order.campaignCreator.creator.name ||
-                            order.campaignCreator.creator.email ||
-                            "Unnamed creator"}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-4">
-                        {(isDraft
-                          ? order.shopifyDraftOrderName || order.shopifyDraftOrderId
-                          : order.shopifyOrderNumber || order.shopifyOrderId) ?? "Not made yet"}
-                      </td>
-                      <td className="px-5 py-4">
-                        <Badge className={pill.tone}>{pill.label}</Badge>
-                      </td>
-                      <td className="px-5 py-4">
-                        {isDraft ? (
-                          <span className="text-muted-foreground">Not shipped</span>
-                        ) : tracking?.trackingNumber ? (
-                          <span>
-                            {tracking.carrier && `${tracking.carrier}: `}
-                            {tracking.trackingNumber}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">No tracking yet</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-4 text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        {order.shopifyAdminUrl ? (
-                          <a
-                            href={order.shopifyAdminUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="whitespace-nowrap font-medium hover:underline"
-                          >
-                            {isDraft ? "Review in Shopify ↗" : "Open in Shopify ↗"}
-                          </a>
-                        ) : (
-                          <span className="text-muted-foreground">No link yet</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <OrdersTable orders={orders.map(toTableRow)} />
         )}
       </section>
     </div>

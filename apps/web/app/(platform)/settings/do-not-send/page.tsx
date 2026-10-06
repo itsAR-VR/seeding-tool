@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { NoCompanyNotice } from "@/components/no-company-notice";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const REASON_LABELS: Record<string, string> = {
@@ -83,10 +84,12 @@ export default async function DoNotSendPage() {
                       </td>
                       <td className="py-2">{s.email}</td>
                       <td className="py-2">
-                        <Badge variant="outline">{REASON_LABELS[s.reason] ?? s.reason}</Badge>
+                        <StatusPill tone={s.reason === "BOUNCE" || s.reason === "COMPLAINT" ? "problem" : "neutral"}>
+                          {REASON_LABELS[s.reason] ?? s.reason}
+                        </StatusPill>
                       </td>
                       <td className="py-2 text-muted-foreground">
-                        {s.suppressedAt.toLocaleDateString()}
+                        {formatDate(s.suppressedAt)}
                       </td>
                     </tr>
                   );

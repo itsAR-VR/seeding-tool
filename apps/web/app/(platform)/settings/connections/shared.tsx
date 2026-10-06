@@ -10,6 +10,7 @@ import {
 } from "@/lib/integrations/methods";
 import { cn } from "@/lib/utils";
 import { AppIcon, type AppIconName } from "@/components/app-icon";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
 
 export type FlashMessage =
   | {
@@ -89,23 +90,23 @@ const PROVIDER_ICON: Record<IntegrationProvider, AppIconName> = {
 
 const PROVIDER_TITLE: Partial<Record<IntegrationProvider, string>> = {
   instagram: "Instagram and Meta ads",
-  unipile: "Instagram messages (Unipile)",
+  unipile: "Instagram messages",
 };
 
-/** A status pill in words, with a dot so it scans at a glance. */
-export function ConnectionStatus({ connected, label }: { connected: boolean; label?: string }) {
+/** Connection status in words, using the same pill tones as the rest of the app. */
+export function ConnectionStatus({
+  connected,
+  label,
+  tone,
+}: {
+  connected: boolean;
+  label?: string;
+  tone?: StatusTone;
+}) {
   return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-sm font-medium",
-        connected
-          ? "bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      <span className={cn("size-1.5 rounded-full", connected ? "bg-green-600" : "bg-muted-foreground/60")} aria-hidden />
+    <StatusPill tone={tone ?? (connected ? "good" : "neutral")}>
       {label ?? (connected ? "Connected" : "Not connected")}
-    </span>
+    </StatusPill>
   );
 }
 

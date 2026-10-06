@@ -20,6 +20,14 @@ const COST_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+/**
+ * In "where everyone is now", a step only holds people still on it. These
+ * labels say so where the plain step name would read like the total above.
+ */
+const NOW_LABELS: Record<string, string> = {
+  Replied: "Replied, no address yet",
+};
+
 function plural(n: number, one: string, many: string): string {
   return `${new Intl.NumberFormat("en-US").format(n)} ${n === 1 ? one : many}`;
 }
@@ -117,32 +125,43 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
         </p>
       )}
 
-      <p className="text-lg">
-        {plural(total, "creator", "creators")} · {emailed} emailed · {replied} replied ·{" "}
-        {plural(data.summary.totalOrders, "order", "orders")} · {plural(posts, "post", "posts")}
-      </p>
+      <section aria-labelledby="so-far-heading" className="space-y-2">
+        <h2 id="so-far-heading" className="text-lg font-semibold">
+          So far
+        </h2>
+        <p className="text-lg">
+          {plural(total, "creator", "creators")} · {emailed} ever emailed · {replied} ever replied ·{" "}
+          {plural(data.summary.totalOrders, "order", "orders")} · {plural(posts, "post", "posts")}
+        </p>
+      </section>
 
       <section aria-labelledby="stages-heading" className="space-y-3">
         <h2 id="stages-heading" className="text-lg font-semibold">
           Where everyone is now
         </h2>
         <p className="text-muted-foreground">
-          Each creator is counted once, at the step they&apos;re on today. Someone who replied and then
-          sent their address shows under Address in, not Replied.
+          Each creator is counted once, at the step they&apos;re on today, so these numbers can be
+          smaller than the totals above. Someone who replied and then sent their address shows under Address in.
         </p>
         <ul className="divide-y rounded-xl border bg-card">
+          <li className="flex items-center gap-4 px-5 py-2 text-sm text-muted-foreground">
+            <span className="w-44 shrink-0">Step</span>
+            <span className="flex-1" />
+            <span className="w-28 text-right">Now at this step</span>
+          </li>
           {CURRENT_STAGES.map((stage) => {
             const n = count(stage.keys);
+            const label = NOW_LABELS[stage.label] ?? stage.label;
             return (
               <li key={stage.label} className="flex items-center gap-4 px-5 py-3">
-                <span className="w-36 shrink-0">{stage.label}</span>
+                <span className="w-44 shrink-0">{label}</span>
                 <span className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
                   <span
                     className="block h-full rounded-full bg-foreground/70"
                     style={{ width: `${(n / largest) * 100}%` }}
                   />
                 </span>
-                <span className="w-10 text-right font-medium tabular-nums">{n}</span>
+                <span className="w-28 text-right font-medium tabular-nums">{n}</span>
               </li>
             );
           })}

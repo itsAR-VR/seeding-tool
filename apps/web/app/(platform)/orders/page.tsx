@@ -2,9 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { getShopifyStoreDomain, shopifyAdminOrderUrl } from "@/lib/shopify/admin-links";
-import { orderStatusLabel } from "@/lib/shopify/order-labels";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { OrdersTable, type OrderTableRow } from "./_components/orders-table";
 
 export default async function OrdersPage() {
   let brandId: string;
@@ -35,95 +33,65 @@ export default async function OrdersPage() {
             conversationThread: { select: { id: true } },
           },
         },
+        fulfillmentEvents: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { carrier: true, trackingNumber: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     }),
     getShopifyStoreDomain(brandId),
   ]);
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
-        <p className="text-muted-foreground">Every gift order across your campaigns.</p>
-      </div>
+  const rows: OrderTableRow[] = orders.map((order) => {
+    const cc = order.campaignCreator;
+    return {
+      id: order.id,
+      status: order.status,
+      shopifyOrderId: order.shopifyOrderId,
+      shopifyOrderNumber: order.shopifyOrderNumber,
+      shopifyDraftOrderId: order.shopifyDraftOrderId,
+      shopifyDraftOrderName: order.shopifyDraftOrderName,
+      createdAt: order.createdAt,
+      adminUrl: shopifyAdminOrderUrl(storeDomain, order),
+      creator: { id: cc.creator.id, name: cc.creator.name ?? cc.creator.instagramHandle ?? "Unnamed creator" },
+      campaign: cc.campaign,
+      tracking: order.fulfillmentEvents[0] ?? null,
+      conversationId: cc.conversationThread?.id ?? null,
+    };
+  });
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            {orders.length} {orders.length === 1 ? "order" : "orders"}
-          </CardTitle>
-          <CardDescription>
-            Drafts wait for you in Shopify. Complete one there to ship it.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {orders.length === 0 ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                No orders yet. They appear here when a creator sends their address.
+  return (
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Orders</h1>
+        <p className="mt-1 text-muted-foreground">
+          Every gift order across your campaigns. Drafts wait for you in Shopify; complete one there to ship it.
+        </p>
+      </header>
+
+      <section aria-labelledby="orders-heading" className="space-y-3">
+        <h2 id="orders-heading" className="text-lg font-semibold">
+          {rows.length} {rows.length === 1 ? "order" : "orders"}
+        </h2>
+        {rows.length === 0 ? (
+          <div className="space-y-2 rounded-xl border bg-card p-5">
+            <p className="text-muted-foreground">No orders yet. They appear here when a creator sends their address.</p>
+            {!storeDomain && (
+              <p>
+                Gift orders are made in Shopify.{" "}
+                <Link href="/settings/connections" className="font-medium underline">
+                  Connect Shopify in Settings &gt; Connections
+                </Link>{" "}
+                before your first creator says yes.
               </p>
-              {!storeDomain && (
-                <p className="text-sm">
-                  Gift orders are made in Shopify.{" "}
-                  <Link href="/settings/connections" className="text-blue-600 hover:underline">
-                    Connect Shopify in Settings &gt; Connections
-                  </Link>{" "}
-                  before your first creator says yes.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-2 font-medium">Creator</th>
-                  <th className="pb-2 font-medium">Campaign</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium"><span className="sr-only">Open</span></th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => {
-                  const cc = order.campaignCreator;
-                  const shopifyUrl = shopifyAdminOrderUrl(storeDomain, order);
-                  return (
-                    <tr key={order.id} className="border-b last:border-0">
-                      <td className="py-2">
-                        <Link href={`/creators/${cc.creator.id}`} className="font-medium hover:underline">
-                          {cc.creator.name ?? cc.creator.instagramHandle ?? "Unknown"}
-                        </Link>
-                      </td>
-                      <td className="py-2">
-                        <Link href={`/campaigns/${cc.campaign.id}`} className="hover:underline">
-                          {cc.campaign.name}
-                        </Link>
-                      </td>
-                      <td className="py-2">
-                        <Badge variant="outline">{orderStatusLabel(order.status)}</Badge>
-                      </td>
-                      <td className="space-x-4 py-2">
-                        {shopifyUrl && (
-                          <a href={shopifyUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                            Open in Shopify ↗
-                          </a>
-                        )}
-                        {cc.conversationThread && (
-                          <Link href={`/inbox/${cc.conversationThread.id}`} className="text-blue-600 hover:underline">
-                            Conversation →
-                          </Link>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </div>
+        ) : (
+          <OrdersTable orders={rows} showCampaign />
+        )}
+      </section>
     </div>
   );
 }

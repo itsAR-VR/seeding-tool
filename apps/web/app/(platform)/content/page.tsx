@@ -2,7 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { NoCompanyNotice } from "@/components/no-company-notice";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill, type StatusTone } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
 import { Card, CardContent } from "@/components/ui/card";
 import { rightsEndDate } from "@/lib/content/rights";
 import { getBrandKit } from "@/lib/brand/kit";
@@ -11,11 +12,11 @@ import { PostThumbnail } from "./post-thumbnail";
 import { RightsAction } from "./rights-action";
 import { AdAction, PartnershipCodeAction } from "./ad-action";
 
-const RIGHTS_LABELS: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
-  none: { label: "No rights yet", variant: "outline" },
-  requested: { label: "Rights requested", variant: "secondary" },
-  approved: { label: "Rights approved", variant: "default" },
-  declined: { label: "Declined", variant: "destructive" },
+const RIGHTS_LABELS: Record<string, { label: string; tone: StatusTone }> = {
+  none: { label: "No rights yet", tone: "neutral" },
+  requested: { label: "Rights requested", tone: "waiting" },
+  approved: { label: "Rights approved", tone: "good" },
+  declined: { label: "Declined", tone: "problem" },
 };
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -165,17 +166,17 @@ export default async function ContentPage({
                       <span className="truncate font-medium">@{post.username ?? "unknown"}</span>
                     )}
                     <span className="shrink-0 text-sm text-muted-foreground">
-                      {post.postedAt?.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {formatDate(post.postedAt)}
                     </span>
                   </div>
-                  <Badge variant={rights.variant}>{rights.label}</Badge>
+                  <StatusPill tone={rights.tone}>{rights.label}</StatusPill>
                   {post.rightsStatus === "approved" && (
                     <p className="text-sm text-muted-foreground">
                       By {post.rightsSignerName}
                       {(() => {
                         const end = rightsEndDate(post.rightsRespondedAt, post.rightsMonths);
                         return end
-                          ? ` · until ${end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                          ? ` · until ${formatDate(end)}`
                           : " · no end date";
                       })()}
                     </p>

@@ -333,16 +333,20 @@ function SearchForm({
 
   return (
     <div className="min-h-0 flex-1 space-y-6 overflow-y-auto py-5 pr-1">
-      {searchCategoriesLoading ? (
-        <div className="h-24 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" />
-      ) : (
+      {/* Typing works right away; suggested words fill in when they arrive. */}
+      <div className="space-y-2">
         <UnifiedKeywordSelector
           groups={brandGroups}
           selected={selectedKeywords}
           onChange={setSelectedKeywords}
           onPendingChange={onPendingWordsChange}
         />
-      )}
+        {searchCategoriesLoading && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading suggestions...
+          </p>
+        )}
+      </div>
 
       <div className="flex flex-wrap gap-6">
         <div className="space-y-1.5">

@@ -98,7 +98,7 @@ function CreatorSearchSettings() {
         <p className="font-medium">{current}</p>
         <form onSubmit={(e) => void save(e)} className="space-y-3">
           <label className="block text-sm font-medium">
-            {status?.hasOwnKey ? "Replace your Apify key" : "Your Apify key"}
+            {status?.hasOwnKey ? "Replace your search account key (from Apify)" : "Your search account key (from Apify)"}
             <input
               type="password"
               value={token}
@@ -108,7 +108,7 @@ function CreatorSearchSettings() {
               className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2"
             />
             <span className="mt-1 block text-sm text-muted-foreground">
-              Creator search runs on Apify, a separate service. In Apify, go to Settings, then API &amp; Integrations, and copy your personal API token.
+              This key lets creator search run on your own account, so searches use your credit. To find it, open Apify, go to Settings, then API &amp; Integrations, and copy your personal token.
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-4">

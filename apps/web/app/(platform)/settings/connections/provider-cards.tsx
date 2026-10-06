@@ -9,6 +9,7 @@ import {
   type ConnectionOverviewItem,
   type IntegrationMethod,
 } from "@/lib/integrations/methods";
+import { formatDate } from "@/lib/format/date";
 
 import {
   FeedbackBanner,
@@ -181,10 +182,7 @@ export function ShopifyConnectionCard({
                 ? `${provider.details.lastSyncedCount} products`
                 : "Products"}{" "}
               last updated{" "}
-              {new Date(provider.details.lastSyncAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
+              {formatDate(provider.details.lastSyncAt)}
               {provider.details.truncated ? " (some were skipped)" : ""}
             </p>
           )}

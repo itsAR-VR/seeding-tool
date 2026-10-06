@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { STUCK_AFTER_DAYS } from "@/lib/stats/campaign-counts";
 import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-you";
+import { StatusPill } from "@/components/status-pill";
+import { formatDateTime } from "@/lib/format/date";
 
 /**
  * System status (admin health), server component. Lives under Settings.
@@ -210,7 +212,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   shopify: "Shopify",
   instagram: "Instagram",
   meta: "Instagram",
-  unipile: "Unipile",
+  unipile: "Instagram messages",
 };
 
 function providerName(provider: string): string {
@@ -224,22 +226,24 @@ function creatorName(creator: { name: string | null; instagramHandle: string | n
 }
 
 function formatWhen(date: Date): string {
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatDateTime(date);
 }
 
 /** `max` is the most a list loads; at that size the real number may be higher. */
 function StatusLine({ count, okText, max }: { count: number; okText: string; max?: number }) {
   if (count === 0) {
-    return <p className="font-medium text-green-700 dark:text-green-400">{okText}</p>;
+    return (
+      <p className="flex flex-wrap items-center gap-2">
+        <StatusPill tone="good">All clear</StatusPill>
+        <span>{okText}</span>
+      </p>
+    );
   }
   return (
-    <p className="font-medium text-amber-800 dark:text-amber-300">
-      {max != null && count >= max ? `${max} or more` : count} to look at
+    <p>
+      <StatusPill tone="waiting">
+        {max != null && count >= max ? `${max} or more` : count} to look at
+      </StatusPill>
     </p>
   );
 }

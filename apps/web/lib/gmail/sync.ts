@@ -6,7 +6,7 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { classifyReply } from "@/lib/inbox/ai";
 import { aiLabelingEnabled } from "@/lib/inbox/decision";
 import { createSuggestedReply } from "@/lib/inbox/suggest-reply";
-import { isClearOptOut, OPT_OUT_CLASSIFICATION, type ReplyGuess } from "@/lib/inbox/opt-out";
+import { isClearOptOut, isStoredOptOut, OPT_OUT_CLASSIFICATION, type ReplyGuess } from "@/lib/inbox/opt-out";
 import { addSuppression } from "@/lib/compliance/suppression";
 
 /** How far back each sync looks for creator replies. */
@@ -56,6 +56,53 @@ async function handleOptOut(input: {
 function bareAddress(header: string): string {
   const match = header.match(/<([^>]+)>/);
   return (match ? match[1] : header).trim().toLowerCase();
+}
+
+/**
+ * Replies that arrived before opt-outs were handled automatically still sit in
+ * "Needs your call". Apply the same conservative rule to undecided email
+ * threads whose latest message is the creator asking to be removed. Safe to
+ * run every sync: once handled, a thread has a decision and is skipped.
+ */
+export async function backfillOptOuts(brandId: string): Promise<number> {
+  const threads = await prisma.conversationThread.findMany({
+    where: { brandId, channel: "email", campaignCreator: { replyDecision: null } },
+    select: {
+      id: true,
+      campaignCreatorId: true,
+      campaignCreator: { select: { creator: { select: { email: true } } } },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { id: true, direction: true, body: true, classification: true, confidence: true, fromAddress: true },
+      },
+    },
+  });
+
+  let handled = 0;
+  for (const thread of threads) {
+    const latest = thread.messages[0];
+    if (!latest || !isStoredOptOut(latest)) continue;
+    try {
+      await handleOptOut({
+        brandId,
+        messageId: latest.id,
+        threadId: thread.id,
+        campaignCreatorId: thread.campaignCreatorId,
+        email:
+          thread.campaignCreator.creator.email?.toLowerCase().trim() ||
+          (latest.fromAddress ? bareAddress(latest.fromAddress) : null),
+        confidence: latest.confidence ?? 0,
+      });
+      handled++;
+    } catch (error) {
+      log("error", "gmail.sync.opt_out_backfill_failed", {
+        messageId: latest.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  return handled;
 }
 
 /**
@@ -198,6 +245,16 @@ export async function syncRepliesForBrand(
         });
       }
     }
+  }
+
+  // Older "take me off your list" replies get the same automatic handling.
+  try {
+    await backfillOptOuts(brandId);
+  } catch (error) {
+    log("error", "gmail.sync.opt_out_backfill_failed", {
+      brandId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // Draft a suggested answer for any open conversation whose latest reply is a

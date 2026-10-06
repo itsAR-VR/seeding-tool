@@ -1,6 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_RIGHTS_MONTHS, rightsTerms } from "@/lib/content/rights";
+import { isStoredCopy } from "@/lib/content/sync";
 import { RightsForm, VideoUpload } from "./RightsForm";
+import { PostPreview } from "./post-preview";
+
+/**
+ * The picture to show for a post: a stored copy first (it never expires), then
+ * Instagram's link. A video's own file can't show as a picture, so videos use
+ * their thumbnail only.
+ */
+function previewImage(post: { mediaType: string | null; mediaUrl: string | null; thumbnailUrl: string | null }) {
+  const candidates = post.mediaType === "VIDEO" ? [post.thumbnailUrl] : [post.mediaUrl, post.thumbnailUrl];
+  const urls = candidates.filter((url): url is string => Boolean(url));
+  return urls.find(isStoredCopy) ?? urls[0] ?? null;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -17,7 +30,7 @@ export default async function RightsPage({
   });
 
   const brandName = post?.brand.name ?? "the brand";
-  const image = post?.mediaType === "VIDEO" ? post.thumbnailUrl : post?.mediaUrl;
+  const image = post ? previewImage(post) : null;
 
   return (
     <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
@@ -50,14 +63,7 @@ export default async function RightsPage({
             </p>
           ) : (
             <>
-              {image && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={image}
-                  alt="Your post"
-                  className="mt-6 aspect-square w-full rounded-3xl object-cover"
-                />
-              )}
+              <PostPreview src={image} />
               {post.permalink && (
                 <a
                   href={post.permalink}

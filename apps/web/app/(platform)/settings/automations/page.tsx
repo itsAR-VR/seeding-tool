@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnifiedKeywordSelector } from "@/components/unified-keyword-selector";
+import { formatDateTime } from "@/lib/format/date";
 
 type Automation = {
   id: string;
@@ -34,7 +35,7 @@ const scheduleLabel = (value: string) => SCHEDULES.find((s) => s.value === value
 
 function when(iso: string | null) {
   if (!iso) return "not yet";
-  return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return formatDateTime(iso);
 }
 
 /** What a saved automation searches for, in words. Older ones used hashtags or categories. */
