@@ -110,6 +110,25 @@ export default function OutreachPage() {
   const [channel, setChannel] = useState<"email" | "instagram_dm">("email");
   const [additionalContext, setAdditionalContext] = useState("");
   const [drafts, setDrafts] = useState<GeneratedDraft[]>([]);
+  // Emails queued by "Send all" go out one every 1 to 3 minutes in the background.
+  type QueueState = { waitingIds: string[]; waiting: number; sent: number; nextAt: string | null; finishesAt: string | null };
+  const [queue, setQueue] = useState<QueueState | null>(null);
+  const loadQueue = useCallback(async () => {
+    const res = await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`);
+    if (res.ok) setQueue((await res.json()) as QueueState);
+  }, [campaignId]);
+  useEffect(() => {
+    void loadQueue();
+  }, [loadQueue]);
+  useEffect(() => {
+    if (!queue?.waiting) return;
+    const timer = setInterval(() => void loadQueue(), 20000);
+    return () => clearInterval(timer);
+  }, [queue?.waiting, loadQueue]);
+  const queuedIds = new Set(queue?.waitingIds ?? []);
+  const clock = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+
   // Two separate screens: pick creators, then review and send their emails.
   const [step, setStep] = useState<"choose" | "review">("choose");
   const [editedDrafts, setEditedDrafts] = useState<
@@ -245,7 +264,7 @@ export default function OutreachPage() {
   );
   // Only creators who have not been contacted can be drafted and sent.
   const sendableCreators = approvedCreators.filter(
-    (c) => c.lifecycleStatus === "ready"
+    (c) => c.lifecycleStatus === "ready" && !queuedIds.has(c.id)
   );
   const creatorByCcId = new Map(creators.map((c) => [c.id, c]));
   const senderAddress =
@@ -411,6 +430,28 @@ export default function OutreachPage() {
           </li>
         </ol>
       </div>
+
+      {queue && queue.waiting > 0 && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            <span className="font-medium">Sending in the background:</span> {queue.waiting}{" "}
+            {queue.waiting === 1 ? "email" : "emails"} left
+            {queue.nextAt ? `, next at ${clock(queue.nextAt)}` : ""}
+            {queue.finishesAt ? `, done around ${clock(queue.finishesAt)}` : ""}.
+          </span>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`, { method: "DELETE" });
+              setNotice({ tone: "success", text: "Stopped. Emails that hadn't gone out yet were not sent." });
+              await loadQueue();
+              await loadCreators();
+            }}
+          >
+            Stop sending
+          </Button>
+        </div>
+      )}
 
       {notice && (
         <div
@@ -585,7 +626,7 @@ export default function OutreachPage() {
           ) : (
             <div className="space-y-2">
               {approvedCreators.map((cc) => {
-                const sendable = cc.lifecycleStatus === "ready";
+                const sendable = cc.lifecycleStatus === "ready" && !queuedIds.has(cc.id);
                 return (
                 <div
                   key={cc.id}
@@ -643,7 +684,7 @@ export default function OutreachPage() {
                     variant={sendable ? "outline" : "secondary"}
                     className="text-sm"
                   >
-                    {statusLabel(cc.lifecycleStatus)}
+                    {queuedIds.has(cc.id) ? "Queued to send" : statusLabel(cc.lifecycleStatus)}
                   </Badge>
                 </div>
                 );
@@ -1010,7 +1051,7 @@ export default function OutreachPage() {
                   setConfirmingSend(null);
 
                   startSending("all");
-                  setSendProgress(`Sending 0 of ${validDrafts.length}…`);
+                  setSendProgress("Queueing…");
 
                   try {
                     const payload = validDrafts.map((d) => ({
@@ -1025,17 +1066,34 @@ export default function OutreachPage() {
                         editedDrafts[d.campaignCreatorId]?.body ?? d.body!,
                     }));
 
-                    const res = await fetch("/api/outreach/send", {
+                    const res = await fetch("/api/outreach/queue", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ drafts: payload }),
+                      body: JSON.stringify({ campaignId, drafts: payload }),
                     });
-
-                    const data = (await res.json().catch(() => ({}))) as SendResponse;
-                    setSendProgress("");
-                    await handleSendResult(data, res.ok);
+                    const data = (await res.json().catch(() => ({}))) as {
+                      queued?: number;
+                      finishesAt?: string | null;
+                      error?: string;
+                    };
+                    if (!res.ok) {
+                      setNotice({ tone: "error", text: data.error || "Couldn't queue the emails. Nothing was sent." });
+                    } else {
+                      const queuedSet = new Set(payload.map((p) => p.campaignCreatorId));
+                      setDrafts([]);
+                      setEditedDrafts({});
+                      setSelectedIds((prev) => new Set([...prev].filter((id) => !queuedSet.has(id))));
+                      setStep("choose");
+                      setNotice({
+                        tone: "success",
+                        text: `${data.queued ?? payload.length} emails are queued. They go out one every 1 to 3 minutes${
+                          data.finishesAt ? `, finishing around ${clock(data.finishesAt)}` : ""
+                        }. You can close this page.`,
+                      });
+                      await loadQueue();
+                    }
                   } catch {
-                    setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
+                    setNotice({ tone: "error", text: "Couldn't queue the emails. Nothing was sent." });
                   } finally {
                     stopSending("all");
                     setSendProgress("");
@@ -1045,7 +1103,7 @@ export default function OutreachPage() {
                 {sendingIds.has("all")
                   ? sendProgress || "Sending…"
                   : confirmingSend === "all"
-                    ? `Yes, send ${drafts.filter((d) => !d.error).length} now`
+                    ? `Yes, send ${drafts.filter((d) => !d.error).length}, spaced out`
                     : `Send all (${drafts.filter((d) => !d.error).length})`}
               </Button>
             </div>
