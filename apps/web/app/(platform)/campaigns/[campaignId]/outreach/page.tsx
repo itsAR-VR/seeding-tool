@@ -118,7 +118,16 @@ export default function OutreachPage() {
   const [connections, setConnections] = useState<ConnectionsOverview | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [sending, setSending] = useState(false);
+  // Which send is running: one creator's id, or "all". Only that button shows progress.
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const sending = sendingIds.size > 0;
+  const startSending = (id: string) => setSendingIds((cur) => new Set(cur).add(id));
+  const stopSending = (id: string) =>
+    setSendingIds((cur) => {
+      const next = new Set(cur);
+      next.delete(id);
+      return next;
+    });
   const [sendProgress, setSendProgress] = useState("");
   const [savingSender, setSavingSender] = useState(false);
   const [senderError, setSenderError] = useState<string | null>(null);
@@ -823,10 +832,10 @@ export default function OutreachPage() {
                         </Button>
                         <Button
                           size="sm"
-                          disabled={sending || Boolean(sendBlocker)}
+                          disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || Boolean(sendBlocker)}
                           onClick={async () => {
                             setConfirmingSend(null);
-                            setSending(true);
+                            startSending(draft.campaignCreatorId);
                             try {
                               const res = await fetch("/api/outreach/send", {
                                 method: "POST",
@@ -853,7 +862,7 @@ export default function OutreachPage() {
                             } catch {
                               setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
                             } finally {
-                              setSending(false);
+                              stopSending(draft.campaignCreatorId);
                             }
                           }}
                         >
@@ -863,10 +872,10 @@ export default function OutreachPage() {
                     ) : !draft.error && draft.body ? (
                       <Button
                         size="sm"
-                        disabled={sending || Boolean(sendBlocker)}
+                        disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || Boolean(sendBlocker)}
                         onClick={() => setConfirmingSend(draft.campaignCreatorId)}
                       >
-                        Send
+                        {sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") ? "Sending..." : "Send"}
                       </Button>
                     ) : null}
                   </div>
@@ -964,7 +973,7 @@ export default function OutreachPage() {
                   }
                   setConfirmingSend(null);
 
-                  setSending(true);
+                  startSending("all");
                   setSendProgress(`Sending 0 of ${validDrafts.length}…`);
 
                   try {
@@ -992,12 +1001,12 @@ export default function OutreachPage() {
                   } catch {
                     setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
                   } finally {
-                    setSending(false);
+                    stopSending("all");
                     setSendProgress("");
                   }
                 }}
               >
-                {sending
+                {sendingIds.has("all")
                   ? sendProgress || "Sending…"
                   : confirmingSend === "all"
                     ? `Yes, send ${drafts.filter((d) => !d.error).length} now`
