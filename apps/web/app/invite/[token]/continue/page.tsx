@@ -34,7 +34,7 @@ export default async function ContinuePage({
         ) : (
           <>
             <h1 className="text-2xl font-semibold tracking-tight">This link is incomplete</h1>
-            <a href={`/invite/${token}`} className="inline-block font-medium underline">
+            <a href={`/invite/${token}`} className="inline-flex min-h-11 items-center font-medium underline">
               Go back to your invite and send a new link
             </a>
           </>

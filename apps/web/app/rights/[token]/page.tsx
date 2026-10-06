@@ -63,7 +63,7 @@ export default async function RightsPage({
                   href={post.permalink}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-2 inline-block text-sm text-neutral-600 underline"
+                  className="mt-1 inline-flex min-h-11 items-center text-sm text-neutral-600 underline"
                 >
                   View post on Instagram
                 </a>

@@ -1,9 +1,5 @@
 # Product
 
-## Register
-
-product
-
 ## Users
 Founders and small brand teams (Kalm first, then other DTC brands) running creator gifting by themselves. They usually juggle many tabs and tools at once, check in between other work, and scan rather than read. Creators also see two public pages: the gift claim form and the usage-rights approval page, usually opened on a phone from an email or DM.
 
@@ -11,7 +7,7 @@ Founders and small brand teams (Kalm first, then other DTC brands) running creat
 Seed Scale runs the creator gifting loop end to end: find creators, email them, handle replies, collect shipping addresses, create the Shopify gift order, capture the posts that tag the brand, get usage rights, and turn approved posts into paused Meta ads. Success means a founder can open it, see the one thing that needs them, do it, and leave, without asking anyone what a screen means.
 
 ## Brand Personality
-Calm, simple, warm. It carries the Kalm brand (logo, warm paper tones, serif headings) without decoration getting in the way. Plain, human wording: say what happened and what to do next. Never sounds like AI and never sounds like enterprise software.
+Calm, simple, warm. The Kalm logo and warm paper tones carry the brand, with one clean sans family for every heading and label, so nothing decorative gets in the way. Plain, human wording: say what happened and what to do next. Never sounds like AI and never sounds like enterprise software.
 
 ## Anti-references
 - Busy SaaS dashboards full of tiny gray text, badges, and counters that all look equally important.

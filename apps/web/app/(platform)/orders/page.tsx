@@ -74,7 +74,8 @@ export default async function OrdersPage() {
               )}
             </div>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Creator</th>
@@ -119,6 +120,7 @@ export default async function OrdersPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

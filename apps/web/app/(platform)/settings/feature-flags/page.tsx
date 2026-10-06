@@ -24,21 +24,21 @@ type FlagCopy = {
 
 const FLAG_COPY: Record<keyof FeatureFlags, FlagCopy> = {
   claimAutoDraftEnabled: {
-    label: "Start the Shopify order when a creator sends their address",
+    label: "Save a draft order when a creator fills in the gift form",
     description:
-      "Creates a draft gift order in Shopify as soon as a creator fills in the gift form. You still finish the order yourself.",
+      "Saves a draft gift order in Shopify the moment a creator sends their address. A draft never ships anything, and this works whether the next switch is on or off.",
     available: true,
   },
   shopifyOrderEnabled: {
-    label: "Create Shopify gift orders",
+    label: "Create and complete orders from this tool",
     description:
-      "Lets you create gift orders in Shopify from this tool. When off, the order button won't work.",
+      "Lets you create gift orders and complete drafts from a creator's page here. When off, you finish orders in Shopify yourself.",
     available: true,
   },
   unipileDmEnabled: {
     label: "Send Instagram messages",
     description:
-      "Lets you message creators on Instagram from the inbox. Needs a connected Unipile account, which is a separate paid service.",
+      "Lets you message creators on Instagram from the inbox. Needs Instagram messages (Unipile) connected, which is a separate paid service.",
     available: true,
   },
   decisionEngineScoringEnabled: {
@@ -212,8 +212,9 @@ export default function FeatureFlagsPage() {
     );
   };
 
+  // Switches marked available: false have no effect yet, so they stay hidden.
+  // Their flag values are left untouched.
   const working = FLAG_ORDER.filter((flag) => FLAG_COPY[flag].available);
-  const notYet = FLAG_ORDER.filter((flag) => !FLAG_COPY[flag].available);
 
   return (
     <div className="space-y-8">
@@ -225,21 +226,7 @@ export default function FeatureFlagsPage() {
         </p>
       )}
 
-      <section className="space-y-3">
-        <h2 className="font-semibold">Available</h2>
-        <ul className="divide-y rounded-xl border bg-card">{working.map(renderRow)}</ul>
-      </section>
-
-      <section className="space-y-3">
-        <div>
-          <h2 className="font-semibold">Not available yet</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            These need background tasks that aren&apos;t set up yet, so the switch has no effect
-            for now.
-          </p>
-        </div>
-        <ul className="divide-y rounded-xl border bg-card">{notYet.map(renderRow)}</ul>
-      </section>
+      <ul className="divide-y rounded-xl border bg-card">{working.map(renderRow)}</ul>
 
       <p className="text-sm text-muted-foreground">
         If these settings ever fail to load, every feature stays off to be safe, so nothing gets

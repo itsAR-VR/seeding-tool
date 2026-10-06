@@ -109,15 +109,16 @@ export default async function AdsPage() {
               No ads yet. Approve usage rights on a post in <Link href="/content" className="underline">Content</Link>, then click Create ad.
             </p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Post</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium">Spend</th>
                   <th className="pb-2 font-medium">Clicks</th>
-                  <th className="pb-2 font-medium">CTR</th>
-                  <th className="pb-2 font-medium">Cost/click</th>
+                  <th className="pb-2 font-medium">Click rate</th>
+                  <th className="pb-2 font-medium">Cost per click</th>
                   <th className="pb-2 font-medium">Purchases</th>
                   <th className="pb-2 font-medium"></th>
                 </tr>
@@ -162,6 +163,7 @@ export default async function AdsPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

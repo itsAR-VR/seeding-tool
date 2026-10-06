@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { guessFromIntent } from "@/lib/inbox/decision";
+import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 
 type Message = {
   id: string;
@@ -315,6 +316,8 @@ export default function ThreadDetailPage() {
         const latestInbound = [...thread.messages].reverse().find((m) => m.direction === "inbound");
         const aiGuess = guessFromIntent(latestInbound?.classification);
         const decision = thread.campaignCreator.replyDecision;
+        const askedToBeRemoved =
+          decision === "no" && latestInbound?.classification === OPT_OUT_CLASSIFICATION;
         return (
           <Card
             className={
@@ -332,14 +335,18 @@ export default function ThreadDetailPage() {
                 <p className="font-medium">
                   {decision === "yes"
                     ? "They said yes"
-                    : decision === "no"
+                    : askedToBeRemoved
+                      ? "Asked to be removed. They're on the do-not-send list."
+                      : decision === "no"
                       ? "They said no. They're on the do-not-send list."
                       : decision === "later"
                         ? "Not right now. They're not on the do-not-send list."
                         : "Did they say yes?"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {aiGuess && aiGuess !== "unclear"
+                  {askedToBeRemoved
+                    ? "Their reply asked us to stop emailing, so we took care of it. If we got it wrong, tap They said yes or Not right now."
+                    : aiGuess && aiGuess !== "unclear"
                     ? `The AI thinks this is a ${aiGuess}${
                         latestInbound?.confidence != null ? ` (${Math.round(latestInbound.confidence * 100)}% sure)` : ""
                       }.${decision ? (aiGuess === decision ? " You agreed." : " You decided differently.") : ""} You can change this anytime.`
@@ -465,6 +472,7 @@ export default function ThreadDetailPage() {
           <CardContent className="space-y-3">
             {replyNotice && (
               <div
+                role={replyNotice.tone === "success" ? "status" : "alert"}
                 className={`rounded border p-2 text-sm ${
                   replyNotice.tone === "success"
                     ? "border-green-200 bg-green-50 text-green-900"
@@ -511,8 +519,16 @@ export default function ThreadDetailPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {dmError && (
-              <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
+              <div role="alert" className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-800">
                 {dmError}
+                {dmError.includes("Settings > Features") && (
+                  <>
+                    {" "}
+                    <Link href="/settings/feature-flags" className="font-medium underline">
+                      Open Settings &gt; Features
+                    </Link>
+                  </>
+                )}
               </div>
             )}
             <textarea

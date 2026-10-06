@@ -6,12 +6,52 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { classifyReply } from "@/lib/inbox/ai";
 import { aiLabelingEnabled } from "@/lib/inbox/decision";
 import { createSuggestedReply } from "@/lib/inbox/suggest-reply";
+import { isClearOptOut, OPT_OUT_CLASSIFICATION, type ReplyGuess } from "@/lib/inbox/opt-out";
+import { addSuppression } from "@/lib/compliance/suppression";
 
 /** How far back each sync looks for creator replies. */
 const SYNC_QUERY = "in:inbox newer_than:7d";
 
 /** Lifecycle states a first reply should move forward to "replied". */
 const PRE_REPLY_STATES = new Set(["ready", "outreach_sent"]);
+
+/**
+ * A reply that plainly asks to stop being emailed is handled for the operator:
+ * marked "no", the address goes on this brand's do-not-send list, and any
+ * drafted reply is thrown away. The thread's "They said yes" undoes it.
+ */
+async function handleOptOut(input: {
+  brandId: string;
+  messageId: string;
+  threadId: string;
+  campaignCreatorId: string;
+  email: string | null;
+  confidence: number;
+}): Promise<void> {
+  const now = new Date();
+  await prisma.message.update({
+    where: { id: input.messageId },
+    data: { classification: OPT_OUT_CLASSIFICATION, confidence: Math.max(input.confidence, 0.95) },
+  });
+  await prisma.campaignCreator.update({
+    where: { id: input.campaignCreatorId },
+    // aiSuggestion stays empty: nobody decided, so it doesn't count toward AI accuracy.
+    data: { replyDecision: "no", replyDecidedAt: now, lifecycleStatus: "opted_out" },
+  });
+  await prisma.conversationThread.update({
+    where: { id: input.threadId },
+    data: { status: "closed" },
+  });
+  await prisma.aIDraft.updateMany({
+    where: { campaignCreatorId: input.campaignCreatorId, status: { in: ["draft", "approved"] } },
+    data: { status: "discarded" },
+  });
+  if (input.email) await addSuppression(input.email, "REPLY_OPTOUT", input.brandId);
+  log("info", "gmail.sync.opt_out_handled", {
+    brandId: input.brandId,
+    campaignCreatorId: input.campaignCreatorId,
+  });
+}
 
 function bareAddress(header: string): string {
   const match = header.match(/<([^>]+)>/);
@@ -22,7 +62,9 @@ function bareAddress(header: string): string {
  * Pull recent replies from every connected Gmail inbox of a brand and attach
  * them to the outreach threads they answer. Pull-based, so it works without a
  * Gmail push (Pub/Sub) subscription. Replies are recorded and the creator is
- * marked "replied"; nothing is sent or classified here.
+ * marked "replied". Nothing is sent. A reply that clearly asks to be removed
+ * is marked "no" and suppressed automatically; everything else waits for the
+ * operator.
  */
 export async function syncRepliesForBrand(
   brandId: string
@@ -59,10 +101,12 @@ export async function syncRepliesForBrand(
       });
       if (!created) continue;
 
-      // AI guess only (shown next to the operator's yes/no buttons); it never acts.
+      // AI guess only (shown next to the operator's yes/no buttons); it never
+      // acts on its own. The one exception is a clear opt-out, handled below.
+      let guess: ReplyGuess = null;
       if (aiLabelingEnabled()) {
         try {
-          const guess = await classifyReply(
+          guess = await classifyReply(
             { body: message.body, subject: message.subject },
             brandId,
             thread.campaignCreatorId
@@ -103,6 +147,25 @@ export async function syncRepliesForBrand(
           where: { id: thread.campaignCreatorId },
           data: { lastReplyAt: receivedAt },
         });
+      }
+
+      if (thread.campaignCreator.replyDecision !== "no" && isClearOptOut(message.body, guess)) {
+        try {
+          await handleOptOut({
+            brandId,
+            messageId: message.id,
+            threadId: thread.id,
+            campaignCreatorId: thread.campaignCreatorId,
+            email: thread.campaignCreator.creator.email?.toLowerCase().trim() || bareAddress(raw.from),
+            confidence: guess?.confidence ?? 0,
+          });
+        } catch (error) {
+          // Leave it in "Needs your call" rather than half-handled silently.
+          log("error", "gmail.sync.opt_out_failed", {
+            messageId: message.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
       processed++;
     }

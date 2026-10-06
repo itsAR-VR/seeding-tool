@@ -390,7 +390,7 @@ function SearchForm({
         <p className="-mt-3 text-sm text-amber-700">{searchLimitWarning}</p>
       ) : (
         <p className="-mt-3 text-sm text-muted-foreground">
-          Start with 10 to 25. Bigger searches take longer and use more Apify credit.
+          Start with 10 to 25. Bigger searches take longer and use more search credit.
         </p>
       )}
 

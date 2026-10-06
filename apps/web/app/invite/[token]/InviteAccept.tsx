@@ -11,6 +11,8 @@ type Props = {
   mode?: "join" | "signin";
 };
 
+const NETWORK_ERROR = "We couldn't send that. Check your connection and tap the button again.";
+
 /**
  * Joining needs proof the person owns the invited email: they get a sign-in
  * link at that address, which brings them back here signed in. Then they can
@@ -25,14 +27,19 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
   async function sendLink() {
     setBusy(true);
     setError(null);
-    const res = await fetch(`/api/invites/${token}/link`, { method: "POST" });
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
-    setBusy(false);
-    if (!res.ok) {
-      setError(data?.error ?? "Couldn't send the email. Try again.");
-      return;
+    try {
+      const res = await fetch(`/api/invites/${token}/link`, { method: "POST" });
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        setError(data?.error ?? "We couldn't send the email. Tap the button again.");
+        return;
+      }
+      setSent(true);
+    } catch {
+      setError(NETWORK_ERROR);
+    } finally {
+      setBusy(false);
     }
-    setSent(true);
   }
 
   async function accept(event: React.FormEvent) {
@@ -44,12 +51,17 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
         const { error: pwError } = await createClient().auth.updateUser({ password });
         if (pwError) throw new Error("Couldn't save that password. Try a different one, or leave it blank.");
       }
-      const res = await fetch(`/api/invites/${token}/accept`, { method: "POST" });
+      let res: Response;
+      try {
+        res = await fetch(`/api/invites/${token}/accept`, { method: "POST" });
+      } catch {
+        throw new Error(NETWORK_ERROR);
+      }
       const data = (await res.json().catch(() => null)) as { next?: string; error?: string } | null;
-      if (!res.ok || !data?.next) throw new Error(data?.error ?? "Couldn't accept the invite.");
+      if (!res.ok || !data?.next) throw new Error(data?.error ?? "We couldn't accept the invite. Tap Accept invite again.");
       window.location.href = data.next;
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : NETWORK_ERROR);
       setBusy(false);
     }
   }
@@ -71,7 +83,7 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
             At least 8 characters. Skip it and you can always sign in with an email link.
           </span>
         </label>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div role="alert" aria-live="assertive">{error && <p className="text-sm text-red-700">{error}</p>}</div>
         <button
           type="submit"
           disabled={busy}
@@ -89,10 +101,10 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
         <p className="rounded-lg bg-muted p-4">
           Check <strong>{email}</strong> for an email from us. {mode === "signin" ? "Open the link in it to sign in." : "Open the link in it to finish joining."}
         </p>
-        <button type="button" disabled={busy} onClick={() => void sendLink()} className="text-sm font-medium underline">
+        <button type="button" disabled={busy} onClick={() => void sendLink()} className="min-h-11 text-sm font-medium underline">
           Send it again
         </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div role="alert" aria-live="assertive">{error && <p className="text-sm text-red-700">{error}</p>}</div>
       </div>
     );
   }
@@ -107,7 +119,7 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
       <p>
         We&apos;ll email a link to <strong>{email}</strong> to confirm it&apos;s you.
       </p>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div role="alert" aria-live="assertive">{error && <p className="text-sm text-red-700">{error}</p>}</div>
       <button
         type="button"
         disabled={busy}

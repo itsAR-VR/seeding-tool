@@ -201,7 +201,7 @@ export default function AiPersonasPage() {
           <h1 className="text-3xl font-bold tracking-tight">Writing styles</h1>
           <p className="mt-1 text-muted-foreground">
             How the AI sounds when it drafts emails to creators. You pick a style on each
-            campaign&apos;s Outreach page.
+            campaign&apos;s Email creators page.
           </p>
         </div>
         <Button onClick={openCreate}>Add a style</Button>

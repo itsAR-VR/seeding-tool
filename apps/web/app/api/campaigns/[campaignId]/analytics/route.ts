@@ -9,22 +9,9 @@ import {
   computeTimeToPost,
 } from "@/lib/analytics/conversion";
 import type { CreatorLeaderboardEntry } from "@/lib/analytics/types";
+import { countStepsReached, lifecycleBreakdown as countLifecycle } from "@/lib/stats/campaign-counts";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
-
-const LIFECYCLE_STAGES = [
-  "ready",
-  "outreach_sent",
-  "replied",
-  "address_confirmed",
-  "order_created",
-  "shipped",
-  "delivered",
-  "posted",
-  "completed",
-  "opted_out",
-  "stalled",
-] as const;
 
 /**
  * GET /api/campaigns/:campaignId/analytics
@@ -88,20 +75,18 @@ export async function GET(request: NextRequest, context: RouteContext) {
         lifecycleStatus: true,
         reviewStatus: true,
         creatorId: true,
+        outreachCount: true,
+        lastOutreachAt: true,
+        lastReplyAt: true,
+        replyDecision: true,
       },
     });
 
     const totalCreators = campaignCreators.length;
 
-    const lifecycleBreakdown = LIFECYCLE_STAGES.reduce<Record<string, number>>(
-      (acc, stage) => ({
-        ...acc,
-        [stage]: campaignCreators.filter(
-          (cc) => cc.lifecycleStatus === stage
-        ).length,
-      }),
-      {}
-    );
+    // Where everyone is now, and who ever reached each step (lib/stats).
+    const lifecycleBreakdown: Record<string, number> = countLifecycle(campaignCreators);
+    const steps = countStepsReached(campaignCreators);
 
     const reviewBreakdown = {
       pending: campaignCreators.filter((cc) => cc.reviewStatus === "pending")
@@ -324,6 +309,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       timeToPost,
       creatorLeaderboard,
       costsByType,
+      steps,
     });
   } catch (error) {
     if (error instanceof BrandAccessError) {

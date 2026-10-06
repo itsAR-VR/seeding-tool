@@ -138,9 +138,14 @@ export default function InterventionsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Needs attention</h1>
+        <h1 className="text-2xl font-bold">Problems</h1>
         <p className="text-muted-foreground">
-          Things the tool couldn&apos;t handle on its own. Open each one, sort it out, then mark it resolved.
+          Things the tool couldn&apos;t handle on its own. Open each one, sort it out, then mark it
+          resolved. Everything else that needs you is on{" "}
+          <Link href="/dashboard" className="font-medium text-foreground underline">
+            Home
+          </Link>
+          .
         </p>
       </div>
 
@@ -170,7 +175,7 @@ export default function InterventionsPage() {
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
               {filter === "open"
-                ? "Nothing needs your attention right now. Problems with emails, orders, or connections show up here."
+                ? "No open problems. Problems with emails, orders, or connections show up here and on Home."
                 : "Nothing here."}
             </p>
           </CardContent>

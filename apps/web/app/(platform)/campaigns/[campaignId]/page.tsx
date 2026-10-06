@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/card";
 import { TriggerSearchButton } from "./_components/TriggerSearchButton";
 import { GiftClaimLinkButton } from "./_components/GiftClaimLinkButton";
+import { CREATOR_FILTERS, countCampaignCreators, isCreatorFilterKey } from "@/lib/stats/campaign-counts";
+import { findStuckCreators } from "@/lib/stats/needs-you";
 
 /** One plain status per creator, combining review and progress. */
 function creatorStatus(c: { reviewStatus: string; lifecycleStatus: string }): { label: string; tone: string } {
@@ -42,28 +44,10 @@ type PageProps = {
   searchParams: Promise<{ filter?: string }>;
 };
 
-/** Stat-box filters for the creator list. Keys match the ?filter= query value. */
-const CREATOR_FILTERS: Record<string, { label: string; match: (c: { reviewStatus: string; lifecycleStatus: string }) => boolean }> = {
-  pending: { label: "Needs review", match: (c) => c.reviewStatus === "pending" },
-  approved: { label: "Approved", match: (c) => c.reviewStatus === "approved" },
-  declined: { label: "Not a fit", match: (c) => c.reviewStatus === "declined" },
-  to_email: {
-    label: "Ready to email",
-    match: (c) => c.reviewStatus === "approved" && c.lifecycleStatus === "ready",
-  },
-  emailed: {
-    label: "Emailed",
-    match: (c) => c.reviewStatus === "approved" && c.lifecycleStatus !== "ready",
-  },
-  replied: { label: "Replied", match: (c) => c.lifecycleStatus === "replied" },
-  address_review: { label: "Address to check", match: (c) => c.lifecycleStatus === "address_review" },
-  address_confirmed: { label: "Address in", match: (c) => c.lifecycleStatus === "address_confirmed" },
-};
-
 export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
   const { campaignId } = await params;
   const { filter } = await searchParams;
-  const activeFilter = filter && CREATOR_FILTERS[filter] ? filter : null;
+  const activeFilter = isCreatorFilterKey(filter) ? filter : null;
 
   let membership;
   try {
@@ -73,7 +57,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     return null;
   }
 
-  const [campaign, brandSetup] = await Promise.all([
+  const [campaign, brandSetup, stuckCreators] = await Promise.all([
     prisma.campaign.findFirst({
       where: { id: campaignId, brandId: membership.brandId },
       include: {
@@ -83,7 +67,13 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         campaignCreators: {
           include: {
             creator: { include: { profiles: true } },
-            conversationThread: { select: { id: true } },
+            conversationThread: {
+              select: {
+                id: true,
+                messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
+              },
+            },
+            shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -112,28 +102,30 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         },
       },
     }),
+    findStuckCreators(membership.brandId, { campaignId }),
   ]);
 
   if (!campaign) return notFound();
 
-  const creators = campaign.campaignCreators;
+  // Counts and filters share one definition (lib/stats/campaign-counts), so a
+  // chip's number always matches the list it opens. Step chips are "ever
+  // reached": Emailed counts everyone emailed, even if they've replied since.
+  const stuckIds = new Set(stuckCreators.map((s) => s.id));
+  const creators = campaign.campaignCreators.map((cc) => ({
+    ...cc,
+    latestMessageDirection: cc.conversationThread?.messages[0]?.direction ?? null,
+    stuck: stuckIds.has(cc.id),
+  }));
   const visibleCreators = activeFilter
     ? creators.filter(CREATOR_FILTERS[activeFilter].match)
     : creators;
+  const counts = countCampaignCreators(creators);
   const stats = {
-    total: creators.length,
-    pendingReview: creators.filter((c) => c.reviewStatus === "pending").length,
-    approved: creators.filter((c) => c.reviewStatus === "approved").length,
-    toEmail: creators.filter((c) => c.reviewStatus === "approved" && c.lifecycleStatus === "ready").length,
-    declined: creators.filter((c) => c.reviewStatus === "declined").length,
-    outreachSent: creators.filter(
-      (c) => c.lifecycleStatus !== "ready" && c.reviewStatus === "approved"
-    ).length,
-    replied: creators.filter((c) => c.lifecycleStatus === "replied").length,
-    addressReview: creators.filter((c) => c.lifecycleStatus === "address_review").length,
-    addressConfirmed: creators.filter(
-      (c) => c.lifecycleStatus === "address_confirmed"
-    ).length,
+    total: counts.total,
+    pendingReview: counts.pending,
+    approved: counts.approved,
+    toEmail: counts.to_email,
+    declined: counts.declined,
   };
 
   const hasCampaignProducts = campaign.campaignProducts.length > 0;
@@ -319,14 +311,21 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       {/* Progress: one row, each step filters the list below */}
       <nav aria-label="Filter creators by step" className="flex flex-wrap gap-2">
         {[
-          { label: "All", value: stats.total, filter: null },
-          { label: "Ready to email", value: stats.toEmail, filter: "to_email" },
-          { label: "Emailed", value: stats.outreachSent, filter: "emailed" },
-          { label: "Replied", value: stats.replied, filter: "replied" },
-          { label: "Address to check", value: stats.addressReview, filter: "address_review" },
-          { label: "Address in", value: stats.addressConfirmed, filter: "address_confirmed" },
-          ...(stats.pendingReview > 0 ? [{ label: "Needs review", value: stats.pendingReview, filter: "pending" }] : []),
-          ...(stats.declined > 0 ? [{ label: "Not a fit", value: stats.declined, filter: "declined" }] : []),
+          { label: "All", value: counts.total, filter: null },
+          { label: CREATOR_FILTERS.to_email.label, value: counts.to_email, filter: "to_email" },
+          { label: CREATOR_FILTERS.emailed.label, value: counts.emailed, filter: "emailed" },
+          { label: CREATOR_FILTERS.replied.label, value: counts.replied, filter: "replied" },
+          { label: CREATOR_FILTERS.address_in.label, value: counts.address_in, filter: "address_in" },
+          // To-do chips: only shown when there's something to do.
+          ...(counts.needs_answer > 0
+            ? [{ label: CREATOR_FILTERS.needs_answer.label, value: counts.needs_answer, filter: "needs_answer" }]
+            : []),
+          ...(counts.address_review > 0
+            ? [{ label: CREATOR_FILTERS.address_review.label, value: counts.address_review, filter: "address_review" }]
+            : []),
+          ...(counts.stuck > 0 ? [{ label: CREATOR_FILTERS.stuck.label, value: counts.stuck, filter: "stuck" }] : []),
+          ...(counts.pending > 0 ? [{ label: CREATOR_FILTERS.pending.label, value: counts.pending, filter: "pending" }] : []),
+          ...(counts.declined > 0 ? [{ label: CREATOR_FILTERS.declined.label, value: counts.declined, filter: "declined" }] : []),
         ].map((step) => {
           const selected = (step.filter ?? null) === activeFilter;
           return (

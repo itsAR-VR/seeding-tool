@@ -1,33 +1,17 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import type { AnalyticsResponse } from "@/lib/analytics/types";
+import { CURRENT_STAGES, countCurrentStage, type ResultsData } from "@/lib/stats/campaign-counts";
 import { CreatorLeaderboard } from "./creator-leaderboard";
 import { DateRangeFilter } from "./date-range-filter";
 import { CSVExportButton } from "./csv-export-button";
 
 type AnalyticsDashboardProps = {
-  readonly initialData: AnalyticsResponse;
+  readonly initialData: ResultsData;
   readonly campaignName: string;
   /** Tagged + hand-added posts for the whole campaign (the date filter falls back to logged posts). */
   readonly postCount: number;
 };
-
-/** Plain stages, in order. Each groups one or more stored lifecycle statuses. */
-const STAGES: readonly { label: string; keys: readonly string[] }[] = [
-  { label: "Not emailed yet", keys: ["ready"] },
-  { label: "Emailed", keys: ["outreach_sent"] },
-  { label: "Replied", keys: ["replied"] },
-  { label: "Address in", keys: ["address_review", "address_confirmed"] },
-  { label: "Order created", keys: ["order_created"] },
-  { label: "Shipped", keys: ["shipped"] },
-  { label: "Delivered", keys: ["delivered"] },
-  { label: "Posted", keys: ["posted"] },
-  { label: "Done", keys: ["completed"] },
-];
-
-/** Everyone at "Replied" or any later stage has replied at some point. */
-const REPLIED_OR_LATER = STAGES.slice(2).flatMap((stage) => stage.keys);
 
 const COST_LABELS: Record<string, string> = {
   product: "Products",
@@ -59,7 +43,7 @@ function describeHours(hours: number): string {
 }
 
 export function AnalyticsDashboard({ initialData, campaignName, postCount }: AnalyticsDashboardProps) {
-  const [data, setData] = useState<AnalyticsResponse>(initialData);
+  const [data, setData] = useState<ResultsData>(initialData);
   const [from, setFrom] = useState<string | undefined>();
   const [to, setTo] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
@@ -93,7 +77,7 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
           setLoadError("Couldn't load results for those dates. Try again.");
           return;
         }
-        const json = (await res.json()) as AnalyticsResponse;
+        const json = (await res.json()) as ResultsData;
         if (!cancelled) setData(json);
       } catch {
         if (!cancelled) setLoadError("Couldn't load results for those dates. Check your connection.");
@@ -108,13 +92,13 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
     };
   }, [from, to, initialData]);
 
-  const count = (keys: readonly string[]) => keys.reduce((sum, key) => sum + (data.lifecycle[key] ?? 0), 0);
-  const total = data.summary.totalCreators;
-  const replied = count(REPLIED_OR_LATER);
+  const count = (keys: readonly string[]) => countCurrentStage(data.lifecycle, keys);
+  // Summary numbers are "ever reached"; the breakdown below is "where they are now".
+  const { total, emailed, replied } = data.steps;
   const posts = filtered ? data.summary.totalMentions : postCount;
   const saidNo = count(["opted_out"]);
   const notNow = count(["stalled"]);
-  const largest = Math.max(1, ...STAGES.map((stage) => count(stage.keys)));
+  const largest = Math.max(1, ...CURRENT_STAGES.map((stage) => count(stage.keys)));
   const typicalTimeToPost = median(data.timeToPost);
   const { likes, comments, views } = data.mentions.engagement;
   const costs = Object.entries(data.costsByType).filter(([, cents]) => cents > 0);
@@ -134,16 +118,20 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
       )}
 
       <p className="text-lg">
-        {plural(total, "creator", "creators")} · {replied} replied · {plural(data.summary.totalOrders, "order", "orders")}{" "}
-        · {plural(posts, "post", "posts")}
+        {plural(total, "creator", "creators")} · {emailed} emailed · {replied} replied ·{" "}
+        {plural(data.summary.totalOrders, "order", "orders")} · {plural(posts, "post", "posts")}
       </p>
 
       <section aria-labelledby="stages-heading" className="space-y-3">
         <h2 id="stages-heading" className="text-lg font-semibold">
-          Where everyone is
+          Where everyone is now
         </h2>
+        <p className="text-muted-foreground">
+          Each creator is counted once, at the step they&apos;re on today. Someone who replied and then
+          sent their address shows under Address in, not Replied.
+        </p>
         <ul className="divide-y rounded-xl border bg-card">
-          {STAGES.map((stage) => {
+          {CURRENT_STAGES.map((stage) => {
             const n = count(stage.keys);
             return (
               <li key={stage.label} className="flex items-center gap-4 px-5 py-3">

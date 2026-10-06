@@ -8,6 +8,7 @@ import {
 import { addSuppression, removeSuppression } from "@/lib/compliance/suppression";
 import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { guessFromIntent, type ReplyDecision } from "@/lib/inbox/decision";
+import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -58,6 +59,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (decision !== "no" && cc.replyDecision === "no" && email) {
       // Only this brand's "no"; other brands' opt-outs and global blocks stay.
       await removeSuppression(email, DECLINED_REASON, thread.brandId);
+      // A "no" the tool made for an "unsubscribe" reply: the operator read it
+      // and disagrees, so lift that opt-out too. An unsubscribe-link click is a
+        // separate UNSUBSCRIBE row and stays.
+      if (thread.messages[0]?.classification === OPT_OUT_CLASSIFICATION) {
+        await removeSuppression(email, "REPLY_OPTOUT", thread.brandId);
+      }
     }
 
     if (decision === "later") {

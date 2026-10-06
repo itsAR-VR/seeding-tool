@@ -39,7 +39,13 @@ export function VideoUpload({ token }: { token: string }) {
       if (!finish.ok) throw new Error(finish.data.error ?? "Upload failed");
       setStatus("done");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed. Please try again.");
+      setError(
+        e instanceof TypeError
+          ? "We couldn't send that. Check your connection and choose the file again."
+          : e instanceof Error
+            ? e.message
+            : "Upload failed. Please choose the file again."
+      );
       setStatus("idle");
     }
   }
@@ -68,7 +74,9 @@ export function VideoUpload({ token }: { token: string }) {
         />
       </label>
       {status === "uploading" && <p className="text-sm text-neutral-600">Uploading...</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div role="alert" aria-live="assertive">
+        {error && <p className="text-sm text-red-700">{error}</p>}
+      </div>
     </div>
   );
 }
@@ -90,12 +98,13 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
       });
       const data = (await res.json().catch(() => null)) as { error?: string } | null;
       if (!res.ok) {
-        setError(data?.error ?? "Something went wrong. Please try again.");
+        setError(data?.error ?? "We couldn't save your answer. Please tap the button again.");
         return;
       }
       setDone(decision);
     } catch {
-      setError("Something went wrong. Please try again.");
+      // Network failure: the typed name stays in place so they can just tap again.
+      setError("We couldn't send that. Check your connection and tap the button again.");
     } finally {
       setSubmitting(false);
     }
@@ -132,10 +141,17 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
           className="mt-1 w-full rounded-2xl border border-neutral-300 px-4 py-3 text-base"
         />
       </label>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div role="alert" aria-live="assertive">
+        {error && (
+          <p id="rights-error" className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </p>
+        )}
+      </div>
       <button
         type="submit"
         disabled={submitting}
+        aria-describedby={error ? "rights-error" : undefined}
         className="w-full rounded-full bg-neutral-950 px-6 py-3 font-medium text-white disabled:opacity-50"
       >
         {submitting ? "Saving..." : "I agree"}
@@ -144,7 +160,7 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
         type="button"
         disabled={submitting}
         onClick={() => void submit("decline")}
-        className="w-full text-sm text-neutral-600 underline"
+        className="min-h-11 w-full py-3 text-sm text-neutral-600 underline"
       >
         No thanks
       </button>

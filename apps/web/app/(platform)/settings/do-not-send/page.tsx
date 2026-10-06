@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 const REASON_LABELS: Record<string, string> = {
   DECLINED: "Said no",
   UNSUBSCRIBE: "Unsubscribed",
+  REPLY_OPTOUT: "Asked to be removed",
   BOUNCE: "Email bounced",
   COMPLAINT: "Marked as spam",
   MANUAL: "Added manually",
@@ -59,7 +60,8 @@ export default async function DoNotSendPage() {
           {suppressions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nobody is on the list yet.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Creator</th>
@@ -74,7 +76,7 @@ export default async function DoNotSendPage() {
                   return (
                     <tr key={s.id} className="border-b last:border-0">
                       <td className="py-2">
-                        {creator?.name ?? "—"}
+                        {creator?.name ?? "No name saved"}
                         {creator?.instagramHandle && (
                           <span className="ml-2 text-muted-foreground">@{creator.instagramHandle}</span>
                         )}
@@ -91,6 +93,7 @@ export default async function DoNotSendPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>

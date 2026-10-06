@@ -18,6 +18,61 @@ import {
   type FlashMessage,
 } from "./shared";
 
+/**
+ * Disconnect is never the loudest thing on the card: a quiet outline button
+ * that asks once, inline, before anything happens.
+ */
+function DisconnectButton({
+  name,
+  busy,
+  onConfirm,
+}: {
+  name: string;
+  busy: boolean;
+  onConfirm: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (busy) {
+    return (
+      <Button variant="outline" disabled className="text-destructive">
+        Disconnecting...
+      </Button>
+    );
+  }
+
+  if (!confirming) {
+    return (
+      <Button
+        variant="outline"
+        className="text-destructive hover:text-destructive"
+        onClick={() => setConfirming(true)}
+      >
+        Disconnect
+      </Button>
+    );
+  }
+
+  return (
+    <div role="group" aria-label={`Disconnect ${name}`} className="flex flex-wrap items-center gap-2">
+      <span className="text-sm">Disconnect {name}?</span>
+      <Button
+        variant="outline"
+        className="text-destructive hover:text-destructive"
+        onClick={() => {
+          setConfirming(false);
+          onConfirm();
+        }}
+      >
+        Yes, disconnect
+      </Button>
+      <Button variant="ghost" onClick={() => setConfirming(false)}>
+        Keep it
+      </Button>
+    </div>
+  );
+}
+
 export function GmailConnectionCard({
   provider,
   message,
@@ -143,9 +198,7 @@ export function ShopifyConnectionCard({
             <Button variant="outline" onClick={onSync} disabled={saving}>
               {saving ? "Updating..." : "Update products"}
             </Button>
-            <Button variant="destructive" onClick={onDisconnect} disabled={saving}>
-              {saving ? "Disconnecting..." : "Disconnect"}
-            </Button>
+            <DisconnectButton name="Shopify" busy={saving} onConfirm={onDisconnect} />
           </div>
         </div>
       ) : provider.activeMethod === "manual" ? (
@@ -259,9 +312,7 @@ export function InstagramConnectionCard({
             Posts, reels, and stories that tag this account show up on the Content page.
           </p>
           <AccountPicker provider={provider} />
-          <Button variant="destructive" onClick={onDisconnect} disabled={loading}>
-            {loading ? "Disconnecting..." : "Disconnect"}
-          </Button>
+          <DisconnectButton name="Instagram" busy={loading} onConfirm={onDisconnect} />
         </div>
       ) : (
         <Button variant="outline" onClick={onConnect}>
@@ -289,11 +340,9 @@ export function UnipileConnectionCard({
     <ProviderCardShell provider={provider}>
       <FeedbackBanner message={message} />
       <p className="text-sm text-muted-foreground">
-      Instagram messages to creators can be sent through your Unipile account.
+        Instagram messages to creators are sent through your Unipile account.
       </p>
-      <Button variant="destructive" onClick={onDisconnect} disabled={saving}>
-      {saving ? "Disconnecting..." : "Disconnect Unipile"}
-      </Button>
+      <DisconnectButton name="Instagram messages" busy={saving} onConfirm={onDisconnect} />
       <ProviderGuide provider="unipile" />
     </ProviderCardShell>
   );

@@ -2,15 +2,16 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { STUCK_AFTER_DAYS } from "@/lib/stats/campaign-counts";
+import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-you";
 
 /**
- * System status (admin health), server component.
+ * System status (admin health), server component. Lives under Settings.
  *
- * Shows:
- * - Stuck CampaignCreators (lifecycleStatus not updated in >72h and not closed)
- * - Open InterventionCases count
- * - Failed WebhookEvents in last 24h
- * - AIDrafts in "draft" status older than 48h (pending human review)
+ * Home is the one "needs you" list. This page shows the detail behind two of
+ * its rows (stuck creators, emails waiting to send) using the same queries
+ * from lib/stats/needs-you, so the numbers always match Home, plus failed
+ * updates from Gmail, Shopify, and Instagram, which only show here.
  */
 export default async function AdminHealthPage() {
   let membership;
@@ -27,87 +28,36 @@ export default async function AdminHealthPage() {
   const brandId = membership.brandId;
 
   const now = new Date();
-  const seventyTwoHoursAgo = new Date(now.getTime() - 72 * 60 * 60 * 1000);
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
 
-  const closedStatuses = [
-    "posted",
-    "completed",
-    "opted_out",
-    "closed",
-  ];
-
-  // Stuck CampaignCreators
-  const stuckCreators = await prisma.campaignCreator.findMany({
-    where: {
-      // Only campaigns that are sending, and only creators already contacted:
-      // someone not emailed yet isn't stuck, they're waiting on you to start.
-      campaign: { brandId, status: "active" },
-      updatedAt: { lt: seventyTwoHoursAgo },
-      lifecycleStatus: { notIn: [...closedStatuses, "ready"] },
-    },
-    include: {
-      creator: { select: { name: true, instagramHandle: true } },
-      campaign: { select: { name: true, id: true } },
-    },
-    take: 50,
-  });
-
-  // Open InterventionCases
-  const openInterventions = await prisma.interventionCase.findMany({
-    where: {
-      brandId,
-      status: { in: ["open", "in_progress"] },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-
-  // Failed WebhookEvents in last 24h
-  const failedWebhooks = await prisma.webhookEvent.findMany({
-    where: {
-      brandId,
-      status: "failed",
-      createdAt: { gte: twentyFourHoursAgo },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
-
-  // AIDrafts in "draft" status older than 48h
-  const staleDrafts = await prisma.aIDraft.findMany({
-    where: {
-      status: "draft",
-      createdAt: { lt: fortyEightHoursAgo },
-      campaignCreator: {
-        campaign: { brandId },
-      },
-    },
-    include: {
-      campaignCreator: {
-        include: {
-          creator: { select: { name: true, instagramHandle: true } },
-          campaign: { select: { name: true } },
-        },
-      },
-    },
-    take: 50,
-  });
+  const [stuckCreators, outreachWaiting, openProblems, failedWebhooks] = await Promise.all([
+    findStuckCreators(brandId, { now }),
+    findOutreachWaitingToSend(brandId),
+    prisma.interventionCase.count({ where: { brandId, status: { in: ["open", "in_progress"] } } }),
+    prisma.webhookEvent.findMany({
+      where: { brandId, status: "failed", createdAt: { gte: twentyFourHoursAgo } },
+      orderBy: { createdAt: "desc" },
+      take: 50,
+    }),
+  ]);
+  const shownStuck = stuckCreators.slice(0, 50);
 
   const allClear =
     stuckCreators.length === 0 &&
-    openInterventions.length === 0 &&
+    openProblems === 0 &&
     failedWebhooks.length === 0 &&
-    staleDrafts.length === 0;
+    outreachWaiting.length === 0;
 
   return (
     <div className="space-y-8">
       <header>
         <h1 className="text-3xl font-bold tracking-tight">System status</h1>
         <p className="mt-1 text-muted-foreground">
-          Things that may be stuck or waiting on you. To check that Gmail, Shopify, and Instagram
-          are connected, open{" "}
+          The details behind what Home shows you, plus updates that failed. Your to-do list is on{" "}
+          <Link href="/dashboard" className="font-medium text-foreground underline">
+            Home
+          </Link>
+          . To check that Gmail, Shopify, and Instagram are connected, open{" "}
           <Link href="/settings/connections" className="font-medium text-foreground underline">
             Connections
           </Link>
@@ -123,12 +73,16 @@ export default async function AdminHealthPage() {
 
       <section className="space-y-3 rounded-xl border bg-card p-5">
         <div>
-          <h2 className="font-semibold">Creators with no progress for 3 days</h2>
+          <h2 className="font-semibold">Creators with no progress for {STUCK_AFTER_DAYS} days</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Open the campaign to see if they need an email, a reply, or an order.
+            In campaigns that are sending. People with a reply to answer, an address to check, or an
+            order to finish are left out here, because Home already lists them.
           </p>
         </div>
         <StatusLine count={stuckCreators.length} okText="None. Every creator has moved recently." />
+        {stuckCreators.length > shownStuck.length && (
+          <p className="text-sm text-muted-foreground">Showing the {shownStuck.length} who have waited longest.</p>
+        )}
         {stuckCreators.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -141,11 +95,11 @@ export default async function AdminHealthPage() {
                 </tr>
               </thead>
               <tbody>
-                {stuckCreators.map((cc) => (
+                {shownStuck.map((cc) => (
                   <tr key={cc.id} className="border-b last:border-0">
                     <td className="py-2">{creatorName(cc.creator)}</td>
                     <td className="py-2">
-                      <Link href={`/campaigns/${cc.campaign.id}`} className="underline">
+                      <Link href={`/campaigns/${cc.campaign.id}?filter=stuck#creators`} className="underline">
                         {cc.campaign.name}
                       </Link>
                     </td>
@@ -161,31 +115,16 @@ export default async function AdminHealthPage() {
 
       <section className="space-y-3 rounded-xl border bg-card p-5">
         <div>
-          <h2 className="font-semibold">Things that need attention</h2>
+          <h2 className="font-semibold">Problems</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Replies and problems the tool couldn&apos;t handle by itself.
+            Replies and errors the tool couldn&apos;t handle by itself.
           </p>
         </div>
-        <StatusLine count={openInterventions.length} okText="Nothing waiting on you." />
-        {openInterventions.length > 0 && (
-          <>
-            <ul className="divide-y">
-              {openInterventions.map((ic) => (
-                <li key={ic.id} className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm">
-                  <span>
-                    {ic.title}
-                    {(ic.priority === "critical" || ic.priority === "high") && (
-                      <span className="ml-2 font-medium text-red-700 dark:text-red-400">Urgent</span>
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">{formatWhen(ic.createdAt)}</span>
-                </li>
-              ))}
-            </ul>
-            <Link href="/interventions" className="inline-block text-sm font-medium underline">
-              Go to Needs attention
-            </Link>
-          </>
+        <StatusLine count={openProblems} okText="None open." />
+        {openProblems > 0 && (
+          <Link href="/interventions" className="inline-block text-sm font-medium underline">
+            See problems
+          </Link>
         )}
       </section>
 
@@ -197,7 +136,7 @@ export default async function AdminHealthPage() {
             keeps happening, email us.
           </p>
         </div>
-        <StatusLine count={failedWebhooks.length} okText="None. Everything came through." />
+        <StatusLine count={failedWebhooks.length} max={50} okText="None. Everything came through." />
         {failedWebhooks.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -226,33 +165,28 @@ export default async function AdminHealthPage() {
 
       <section className="space-y-3 rounded-xl border bg-card p-5">
         <div>
-          <h2 className="font-semibold">Drafts waiting more than 2 days</h2>
+          <h2 className="font-semibold">Emails written and not sent yet</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            AI-written emails no one has sent or thrown away yet. Review them in the inbox.
+            First emails to creators that are ready but still waiting for you to send them.
           </p>
         </div>
-        <StatusLine count={staleDrafts.length} okText="None. No drafts are waiting." />
-        {staleDrafts.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="pb-2 font-medium">Creator</th>
-                  <th className="pb-2 font-medium">Campaign</th>
-                  <th className="pb-2 font-medium">Written</th>
-                </tr>
-              </thead>
-              <tbody>
-                {staleDrafts.map((draft) => (
-                  <tr key={draft.id} className="border-b last:border-0">
-                    <td className="py-2">{creatorName(draft.campaignCreator.creator)}</td>
-                    <td className="py-2">{draft.campaignCreator.campaign.name}</td>
-                    <td className="py-2 text-muted-foreground">{formatWhen(draft.createdAt)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <StatusLine
+          count={outreachWaiting.reduce((sum, group) => sum + group.count, 0)}
+          okText="None. Every written email has gone out."
+        />
+        {outreachWaiting.length > 0 && (
+          <ul className="divide-y">
+            {outreachWaiting.map((group) => (
+              <li key={group.campaignId} className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm">
+                <span>
+                  {group.campaignName}: {group.count} {group.count === 1 ? "email" : "emails"}
+                </span>
+                <Link href={`/campaigns/${group.campaignId}/outreach`} className="font-medium underline">
+                  Send them
+                </Link>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </div>
@@ -298,13 +232,14 @@ function formatWhen(date: Date): string {
   });
 }
 
-function StatusLine({ count, okText }: { count: number; okText: string }) {
+/** `max` is the most a list loads; at that size the real number may be higher. */
+function StatusLine({ count, okText, max }: { count: number; okText: string; max?: number }) {
   if (count === 0) {
     return <p className="font-medium text-green-700 dark:text-green-400">{okText}</p>;
   }
   return (
     <p className="font-medium text-amber-800 dark:text-amber-300">
-      {count >= 50 ? "50 or more" : count} to look at
+      {max != null && count >= max ? `${max} or more` : count} to look at
     </p>
   );
 }

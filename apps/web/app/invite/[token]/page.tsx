@@ -39,7 +39,7 @@ export default async function InvitePage({
           <>
             <h1 className="text-2xl font-semibold tracking-tight">This invite can&apos;t be used</h1>
             <p className="text-muted-foreground">{problem}</p>
-            <a href="/login" className="inline-block font-medium underline">Go to sign in</a>
+            <a href="/login" className="inline-flex min-h-11 items-center font-medium underline">Go to sign in</a>
           </>
         ) : joined && isInvitee ? (
           <>

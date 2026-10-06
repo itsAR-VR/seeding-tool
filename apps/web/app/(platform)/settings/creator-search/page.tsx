@@ -62,7 +62,7 @@ function CreatorSearchSettings() {
       return;
     }
     setToken("");
-    setNotice({ ok: true, text: "Saved. Creator searches now use your Apify account." });
+    setNotice({ ok: true, text: "Saved. Creator searches now use your own key." });
     await load();
   }
 
@@ -80,17 +80,17 @@ function CreatorSearchSettings() {
       ? "Couldn't load this. Refresh the page to try again."
       : "Loading..."
     : status.hasOwnKey
-      ? "Searches use your own Apify account."
+      ? "Searches use your own key, so credit comes from your account."
       : status.usesShared
-        ? "Searches use Seed Scale's shared Apify account. Add your own key any time."
-        : "Not set up yet. Add your Apify key to find creators.";
+        ? "Searches use Seed Scale's shared creator search credit. Add your own key any time."
+        : "Not set up yet. Add a key below to find creators.";
 
   return (
     <div className="max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Creator search</h1>
         <p className="mt-1 text-muted-foreground">
-          Finding creators and their emails runs on Apify. Searches are billed to your Apify account.
+          Finding creators and their emails uses creator search credit. Each search uses a little.
         </p>
       </div>
 
@@ -98,7 +98,7 @@ function CreatorSearchSettings() {
         <p className="font-medium">{current}</p>
         <form onSubmit={(e) => void save(e)} className="space-y-3">
           <label className="block text-sm font-medium">
-            {status?.hasOwnKey ? "Replace your Apify API key" : "Your Apify API key"}
+            {status?.hasOwnKey ? "Replace your Apify key" : "Your Apify key"}
             <input
               type="password"
               value={token}
@@ -108,7 +108,7 @@ function CreatorSearchSettings() {
               className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2"
             />
             <span className="mt-1 block text-sm text-muted-foreground">
-              In Apify, go to Settings, then API &amp; Integrations, and copy your personal API token.
+              Creator search runs on Apify, a separate service. In Apify, go to Settings, then API &amp; Integrations, and copy your personal API token.
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-4">

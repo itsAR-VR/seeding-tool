@@ -71,8 +71,8 @@ const PROVIDER_GUIDES: Record<
     ],
   },
   unipile: {
-    title: "Help with Unipile",
-    summary: "Unipile is a separate paid service. You only need it to send Instagram messages.",
+    title: "Help with Instagram messages",
+    summary: "Instagram messages run on Unipile, a separate paid service. You only need it to message creators on Instagram.",
     bullets: [
       "Copy the API key from your Unipile dashboard.",
       "If you're not sure which account to use, email us and we'll help.",
@@ -89,6 +89,7 @@ const PROVIDER_ICON: Record<IntegrationProvider, AppIconName> = {
 
 const PROVIDER_TITLE: Partial<Record<IntegrationProvider, string>> = {
   instagram: "Instagram and Meta ads",
+  unipile: "Instagram messages (Unipile)",
 };
 
 /** A status pill in words, with a dot so it scans at a glance. */

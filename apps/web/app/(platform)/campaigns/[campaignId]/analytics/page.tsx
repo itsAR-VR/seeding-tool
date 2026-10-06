@@ -6,32 +6,18 @@ import {
   computeConversionRates,
   computeTimeToPost,
 } from "@/lib/analytics/conversion";
-import type {
-  AnalyticsResponse,
-  CreatorLeaderboardEntry,
-} from "@/lib/analytics/types";
+import type { CreatorLeaderboardEntry } from "@/lib/analytics/types";
+import {
+  countStepsReached,
+  lifecycleBreakdown as countLifecycle,
+  type ResultsData,
+} from "@/lib/stats/campaign-counts";
 import { loadCampaignPosts } from "../_components/campaign-posts";
 import { AnalyticsDashboard } from "./components/analytics-dashboard";
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
 };
-
-/** Every stored lifecycle status we count. address_review is "address in, needs a check". */
-const LIFECYCLE_KEYS = [
-  "ready",
-  "outreach_sent",
-  "replied",
-  "address_review",
-  "address_confirmed",
-  "order_created",
-  "shipped",
-  "delivered",
-  "posted",
-  "completed",
-  "opted_out",
-  "stalled",
-] as const;
 
 export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const { campaignId } = await params;
@@ -58,19 +44,19 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       lifecycleStatus: true,
       reviewStatus: true,
       creatorId: true,
+      outreachCount: true,
+      lastOutreachAt: true,
+      lastReplyAt: true,
+      replyDecision: true,
     },
   });
 
   const campaignCreatorIds = campaignCreators.map((cc) => cc.id);
   const totalCreators = campaignCreators.length;
 
-  // Lifecycle breakdown
-  const lifecycleBreakdown: Record<string, number> = {};
-  for (const key of LIFECYCLE_KEYS) {
-    lifecycleBreakdown[key] = campaignCreators.filter(
-      (cc) => cc.lifecycleStatus === key
-    ).length;
-  }
+  // Where everyone is now (one count per creator) and who ever reached each step.
+  const lifecycleBreakdown: Record<string, number> = countLifecycle(campaignCreators);
+  const steps = countStepsReached(campaignCreators);
 
   // Mention assets
   const mentionAssets = campaignCreatorIds.length > 0
@@ -226,7 +212,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     {}
   );
 
-  const initialData: AnalyticsResponse = {
+  const initialData: ResultsData = {
     campaignId,
     summary: {
       totalCreators,
@@ -258,6 +244,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     timeToPost,
     creatorLeaderboard,
     costsByType,
+    steps,
   };
 
   // Posts: tagged Instagram posts from this campaign's creators plus posts added by hand.

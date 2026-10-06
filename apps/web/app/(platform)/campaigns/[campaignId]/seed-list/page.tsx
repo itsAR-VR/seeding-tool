@@ -43,6 +43,11 @@ type SeedListPayload = {
   } | null;
 };
 
+/** The API says which switch to turn on; give people a way to get there. */
+function needsFeatureSetting(message: string): boolean {
+  return message.includes("Settings > Features");
+}
+
 export default function SeedListPreviewPage() {
   const params = useParams<{ campaignId: string }>();
   const [payload, setPayload] = useState<SeedListPayload | null>(null);
@@ -85,8 +90,13 @@ export default function SeedListPreviewPage() {
 
       {error ? (
         <Card>
-          <CardContent role="alert" className="pt-6 text-sm text-red-800">
-            {error}
+          <CardContent role="alert" className="space-y-3 pt-6 text-sm text-red-800">
+            <p>{error}</p>
+            {needsFeatureSetting(error) && (
+              <Link href="/settings/feature-flags" className={buttonVariants({ size: "sm" })}>
+                Open Settings &gt; Features
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : !payload?.portfolio ? (

@@ -390,13 +390,13 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Couldn't disconnect Unipile. Try again.")
+          await readErrorMessage(res, "Couldn't disconnect Instagram messages. Try again.")
         );
       }
 
       setProviderMessage("unipile", {
         tone: "success",
-        text: "Unipile disconnected.",
+        text: "Instagram messages disconnected.",
       });
       await refreshConnectionData();
     } catch (disconnectError) {
@@ -405,7 +405,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Couldn't disconnect Unipile. Try again.",
+            : "Couldn't disconnect Instagram messages. Try again.",
       });
     } finally {
       setUnipileSaving(false);

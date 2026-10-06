@@ -12,6 +12,7 @@ export function guessFromIntent(intent: string | null | undefined): AiReplyGuess
     case "address":
       return "yes";
     case "negative":
+    case "unsubscribe":
       return "no";
     case "question":
     case "other":

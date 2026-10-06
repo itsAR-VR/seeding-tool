@@ -226,13 +226,6 @@ export default function BrandSettingsPage() {
               onChange={(e) => setWebsiteUrl(e.target.value)}
             />
           </div>
-          <p className="text-sm text-muted-foreground">
-            Your logo lives in the{" "}
-            <Link href="/settings/brand-kit" className="font-medium text-foreground underline">
-              Brand kit
-            </Link>
-            , where you can upload it.
-          </p>
 
           {message && <p className="text-sm text-green-700 dark:text-green-400">{message}</p>}
           {error && <p className="text-sm text-destructive">{error}</p>}

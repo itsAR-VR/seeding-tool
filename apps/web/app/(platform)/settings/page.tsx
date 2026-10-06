@@ -7,7 +7,7 @@ const settingsLinks = [
   {
     href: "/settings/brand",
     title: "Brand",
-    description: "Update your brand name, website, and logo.",
+    description: "Your brand name, website, and who approves new creators.",
   },
   {
     href: "/settings/brand-kit",
@@ -37,12 +37,12 @@ const settingsLinks = [
   {
     href: "/admin/health",
     title: "System status",
-    description: "Anything stuck: emails that didn't send, orders or syncs that failed.",
+    description: "Anything stuck: emails that didn't send, orders or product updates that failed.",
   },
   {
     href: "/settings/creator-search",
     title: "Creator search",
-    description: "The Apify account your creator searches run on.",
+    description: "Which account pays for creator searches.",
   },
   {
     href: "/settings/feature-flags",

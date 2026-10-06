@@ -16,6 +16,9 @@ const COUNTRY_NAMES: Record<string, string> = {
   AU: "Australia",
 };
 
+const NETWORK_ERROR =
+  "We couldn't send that. Check your connection and tap Submit again.";
+
 export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
   const [country, setCountry] = useState(shipCountries[0] ?? "US");
   const isUS = country === "US";
@@ -32,17 +35,25 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
     const formData = new FormData(event.currentTarget);
     const payload = Object.fromEntries(formData.entries());
 
-    const response = await fetch(`/api/gift-claims/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    let response: Response;
+    try {
+      response = await fetch(`/api/gift-claims/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Network failure: the form keeps everything typed, so they can just tap again.
+      setError(NETWORK_ERROR);
+      setStatus("idle");
+      return;
+    }
 
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
         error?: string;
       };
-      setError(body.error ?? "We could not submit this claim. Please try again.");
+      setError(body.error ?? "We couldn't save your address. Please tap Submit again.");
       setStatus("idle");
       return;
     }
@@ -188,13 +199,21 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
         </p>
       </div>
 
-      {error ? (
-        <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>
-      ) : null}
+      <div role="alert" aria-live="assertive">
+        {error ? (
+          <p
+            id="claim-error"
+            className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
 
       <Button
         type="submit"
         disabled={status === "submitting"}
+        aria-describedby={error ? "claim-error" : undefined}
         className="w-full rounded-full py-6 text-base"
       >
         {status === "submitting" ? "Submitting…" : "Submit shipping details"}

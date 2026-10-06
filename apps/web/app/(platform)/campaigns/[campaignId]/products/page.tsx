@@ -143,7 +143,7 @@ export default function CampaignProductsPage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">In this campaign</CardTitle>
             <CardDescription>
-              Use {"{{product_name}}"} or {"{{product_price}}"} in an email to fill these in.
+              Drafted emails mention these products by name.
             </CardDescription>
           </CardHeader>
           <CardContent>

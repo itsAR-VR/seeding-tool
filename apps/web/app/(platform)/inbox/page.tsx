@@ -8,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { SyncReplies } from "./sync-replies";
 
 type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
@@ -181,6 +182,10 @@ export default async function InboxPage({
               thread.campaignCreator._count.shippingSnapshots === 0;
             const decision = thread.campaignCreator.replyDecision;
             const needsCall = !decision && lastMessage?.direction === "inbound";
+            const askedToBeRemoved =
+              decision === "no" &&
+              lastMessage?.direction === "inbound" &&
+              lastMessage.classification === OPT_OUT_CLASSIFICATION;
             const name = creator.name ?? profile?.handle ?? "Unknown creator";
 
             return (
@@ -195,9 +200,13 @@ export default async function InboxPage({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-medium">{name}</p>
                       {decision === "yes" && <Badge className="bg-green-100 text-green-800">Said yes</Badge>}
-                      {decision === "no" && <Badge className="bg-red-100 text-red-800">Said no</Badge>}
+                      {askedToBeRemoved ? (
+                        <Badge className="bg-red-100 text-red-800">Asked to be removed</Badge>
+                      ) : (
+                        decision === "no" && <Badge className="bg-red-100 text-red-800">Said no</Badge>
+                      )}
                       {decision === "later" && <Badge className="bg-slate-100 text-slate-700">Not right now</Badge>}
-                      {needsCall && <Badge className="bg-amber-100 text-amber-900">Needs your call</Badge>}
+                      {needsCall && activeTab !== "needs" && <Badge className="bg-amber-100 text-amber-900">Needs your call</Badge>}
                       {hasDraft && <Badge variant="outline">Reply drafted</Badge>}
                       {addressToConfirm && (
                         <Badge className="bg-teal-100 text-teal-900">Address to check</Badge>

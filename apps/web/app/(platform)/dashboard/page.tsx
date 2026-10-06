@@ -7,6 +7,13 @@ import { ArrowRight, CheckCircle2, Circle } from "lucide-react";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { CampaignHealthWidget } from "./components/campaign-health";
 import type { HealthSnapshotData } from "@/lib/health/types";
+import { ADDRESS_TO_CHECK_WHERE, STUCK_AFTER_DAYS } from "@/lib/stats/campaign-counts";
+import {
+  countNeedsAnswer,
+  findOutreachWaitingToSend,
+  findStuckCreators,
+  groupByCampaign,
+} from "@/lib/stats/needs-you";
 
 // ── Health snapshot fetcher ──────────────────────────────────
 
@@ -126,7 +133,7 @@ export default async function DashboardPage() {
   const weekAgo = daysAgo(7);
 
   const [
-    undecidedThreads,
+    repliesToAnswer,
     draftOrders,
     newPosts,
     rightsWaiting,
@@ -134,11 +141,10 @@ export default async function DashboardPage() {
     addressesToConfirm,
     campaigns,
     healthSnapshots,
+    outreachWaiting,
+    stuckCreators,
   ] = await Promise.all([
-    prisma.conversationThread.findMany({
-      where: { brandId, campaignCreator: { replyDecision: null } },
-      select: { messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } } },
-    }),
+    countNeedsAnswer(brandId),
     prisma.shopifyOrder.count({
       where: { campaignCreator: { campaign: { brandId } }, status: "draft_created" },
     }),
@@ -146,17 +152,9 @@ export default async function DashboardPage() {
       where: { brandId, hidden: false, rightsStatus: "none", createdAt: { gte: weekAgo } },
     }),
     prisma.contentPost.count({ where: { brandId, hidden: false, rightsStatus: "requested" } }),
-    prisma.interventionCase.count({ where: { brandId, status: { in: ["open", "in_progress"] } } }),
+    prisma.interventionCase.count({ where: { brandId, status: "open" } }),
     prisma.campaignCreator.count({
-      where: {
-        campaign: { brandId },
-        // An unconfirmed address, and no address confirmed since (a later
-        // claim-form submission confirms itself and settles it).
-        AND: [
-          { shippingSnapshots: { some: { isActive: false, confirmedAt: null } } },
-          { shippingSnapshots: { none: { confirmedAt: { not: null } } } },
-        ],
-      },
+      where: { campaign: { brandId }, ...ADDRESS_TO_CHECK_WHERE },
     }),
     prisma.campaign.findMany({
       where: { brandId, status: { not: "archived" } },
@@ -165,14 +163,44 @@ export default async function DashboardPage() {
       include: { _count: { select: { campaignCreators: true } } },
     }),
     fetchHealthSnapshots(brandId),
+    findOutreachWaitingToSend(brandId),
+    findStuckCreators(brandId),
   ]);
 
   const setupItems = await fetchSetupItems(brandId, campaigns.length > 0);
   const setupDone = setupItems.filter((i) => i.done).length;
   const showSetup = setupDone < setupItems.length;
 
-  const repliesToAnswer = undecidedThreads.filter((t) => t.messages[0]?.direction === "inbound").length;
   const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+  // One row per campaign; the campaign name only shows when there's more than one.
+  const outreachTodos: Todo[] = outreachWaiting.map((group) => {
+    const where = outreachWaiting.length > 1 ? ` for ${group.campaignName}` : "";
+    return {
+      count: group.count,
+      text: plural(
+        group.count,
+        `email${where} is written and waiting for you to send`,
+        `emails${where} are written and waiting for you to send`,
+      ),
+      action: "Send them",
+      href: `/campaigns/${group.campaignId}/outreach`,
+    };
+  });
+  const stuckGroups = groupByCampaign(stuckCreators);
+  const stuckTodos: Todo[] = stuckGroups.map((group) => {
+    const where = stuckGroups.length > 1 ? ` in ${group.campaignName}` : "";
+    return {
+      count: group.count,
+      text: plural(
+        group.count,
+        `creator${where} hasn't moved in ${STUCK_AFTER_DAYS} days`,
+        `creators${where} haven't moved in ${STUCK_AFTER_DAYS} days`,
+      ),
+      action: "See who",
+      href: `/campaigns/${group.campaignId}?filter=stuck#creators`,
+    };
+  });
 
   const todos: Todo[] = [
     {
@@ -181,6 +209,7 @@ export default async function DashboardPage() {
       action: "Open inbox",
       href: "/inbox",
     },
+    ...outreachTodos,
     {
       count: addressesToConfirm,
       text: plural(addressesToConfirm, "shipping address needs a quick check", "shipping addresses need a quick check"),
@@ -193,6 +222,7 @@ export default async function DashboardPage() {
       action: "See orders",
       href: "/orders",
     },
+    ...stuckTodos,
     {
       count: newPosts,
       text: plural(newPosts, "new post tagged you this week", "new posts tagged you this week"),
@@ -208,7 +238,7 @@ export default async function DashboardPage() {
     {
       count: openProblems,
       text: plural(openProblems, "problem needs a look", "problems need a look"),
-      action: "Fix it",
+      action: "See problems",
       href: "/interventions",
     },
   ].filter((t) => t.count > 0);
@@ -272,7 +302,7 @@ export default async function DashboardPage() {
         ) : (
           <ul className="divide-y rounded-xl border bg-card">
             {todos.map((todo) => (
-              <li key={todo.href}>
+              <li key={`${todo.href}|${todo.text}`}>
                 <Link
                   href={todo.href}
                   className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-muted/50"

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { rightsEndDate } from "@/lib/content/rights";
 import { getBrandKit } from "@/lib/brand/kit";
 import { SyncContent } from "./sync-content";
+import { PostThumbnail } from "./post-thumbnail";
 import { RightsAction } from "./rights-action";
 import { AdAction, PartnershipCodeAction } from "./ad-action";
 
@@ -147,16 +148,7 @@ export default async function ContentPage({
                   rel="noreferrer"
                   className="relative block aspect-square bg-muted"
                 >
-                  {image && /\.(mp4|mov|webm)$/i.test(image) ? (
-                    <video src={image} className="h-full w-full object-cover" muted playsInline preload="metadata" />
-                  ) : image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
-                  ) : (
-                    <span className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      Open on Instagram
-                    </span>
-                  )}
+                  <PostThumbnail src={image ?? null} mediaType={post.mediaType ?? null} source={post.source} />
                   {(post.mediaType === "VIDEO" || post.source !== "tag") && (
                     <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-sm text-white">
                       {SOURCE_LABELS[post.source] ?? "Video"}

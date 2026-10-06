@@ -282,10 +282,10 @@ export default function OutreachPage() {
     ) ?? false;
   const selectedChannelConnected = channel === "email" ? hasGmail : hasUnipile;
   const draftBlocker = !hasProducts
-    ? "Attach at least one campaign product before drafting outreach."
+    ? "Add a product to this campaign before writing emails."
     : null;
   const sendBlocker = !hasProducts
-    ? "Attach at least one campaign product before sending outreach."
+    ? "Add a product to this campaign before sending."
     : !selectedChannelConnected
       ? channel === "email"
         ? "Connect Gmail in Settings > Connections before sending emails."
@@ -479,7 +479,7 @@ export default function OutreachPage() {
           <span>✓ {campaignSetup?.campaignProducts?.length ?? 0} product</span>
           <span>✓ {sendableCreators.length} not yet contacted</span>
           <span>
-            ✓ {channel === "email" ? `Gmail${senderAddress ? ` · ${senderAddress}` : ""}` : "Instagram DMs"}
+            ✓ {channel === "email" ? `Gmail${senderAddress ? ` · ${senderAddress}` : ""}` : "Instagram messages"}
           </span>
         </div>
       ) : (
@@ -516,9 +516,9 @@ export default function OutreachPage() {
               ...(channel === "instagram_dm"
                 ? [
                     {
-                      label: "Instagram DMs",
+                      label: "Instagram messages",
                       ready: hasUnipile,
-                      helper: hasUnipile ? "DM sending ready" : "Not connected",
+                      helper: hasUnipile ? "Ready to send messages" : "Not connected",
                     },
                   ]
                 : []),
