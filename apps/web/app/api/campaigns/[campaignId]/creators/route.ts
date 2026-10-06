@@ -217,12 +217,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     // Best effort: the background scheduler may not be set up; the save already worked.
 
-    await inngest.send({
+    try {
+      await inngest.send({
       name: "creator-avg-views/requested",
       data: {
         creatorIds: [creatorId],
       },
-    }).catch((error) => console.warn("[avg-views enqueue skipped]", error));
+    });
+    } catch (error) {
+      console.warn("[avg-views enqueue skipped]", error);
+    }
 
     return NextResponse.json(campaignCreator, { status: 201 });
   } catch (error) {
