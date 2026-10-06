@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import {

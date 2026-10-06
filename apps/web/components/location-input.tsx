@@ -65,6 +65,7 @@ export function LocationInput({
         onChange={(e) => onChange(e.target.value)}
         onFocus={() => setIsFocused(true)}
         placeholder="e.g. Los Angeles, CA"
+        aria-label="Location"
       />
 
       {showDropdown && (

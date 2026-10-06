@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,

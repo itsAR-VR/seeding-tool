@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { campaignStatus } from "./_components/campaign-status";

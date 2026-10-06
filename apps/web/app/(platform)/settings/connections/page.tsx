@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/app-icon";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { safeReturnPath } from "@/lib/safe-return-path";
 
 import {

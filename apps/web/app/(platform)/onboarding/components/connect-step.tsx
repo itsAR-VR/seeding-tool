@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AppIcon, type AppIconName } from "@/components/app-icon";
 import { ConnectionStatus } from "@/app/(platform)/settings/connections/shared";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { buildOnboardingParams } from "./constants";
 
 type Provider = { provider: string; connected: boolean; summary: string };

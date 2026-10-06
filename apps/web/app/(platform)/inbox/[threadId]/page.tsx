@@ -328,7 +328,7 @@ export default function ThreadDetailPage() {
             wrote, <time dateTime={featured.createdAt}>{formatDateTime(featured.createdAt)}</time>:
           </figcaption>
           {featured.subject && <p className="mt-2 font-medium">{featured.subject}</p>}
-          <blockquote className="mt-2 whitespace-pre-wrap border-l-4 border-amber-300 pl-4 text-base leading-relaxed">
+          <blockquote className="mt-2 whitespace-pre-wrap rounded-lg bg-amber-50/70 px-4 py-3 text-base leading-relaxed">
             {featured.body}
           </blockquote>
           {featured.direction === "outbound" && (
@@ -437,6 +437,7 @@ export default function ThreadDetailPage() {
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               placeholder="Write your reply…"
+                aria-label="Your reply"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">

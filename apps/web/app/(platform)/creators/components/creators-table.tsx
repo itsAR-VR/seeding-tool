@@ -81,7 +81,7 @@ export function CreatorsTable({
                   <th
                     key={col.label || i}
                     scope="col"
-                    className={cn("whitespace-nowrap px-4 py-3 font-medium first:pl-5 last:pr-5", col.className)}
+                    className={cn("relative whitespace-nowrap px-4 py-3 font-medium first:pl-5 last:pr-5", col.className)}
                   >
                     {col.label || <span className="sr-only">Actions</span>}
                   </th>
