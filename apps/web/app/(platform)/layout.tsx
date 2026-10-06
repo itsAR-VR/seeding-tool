@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CreatorSearchJobsTray } from "@/components/creator-search-jobs-tray";
 import { MobileNav, SidebarNav } from "@/components/platform-nav";
-import { KeyboardHelp } from "@/components/keyboard-help";
+import { HelpButton, KeyboardHelp } from "@/components/keyboard-help";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership } from "@/lib/integrations/brand-access";
 
@@ -28,6 +28,16 @@ async function BrandMark({ className }: { className: string }) {
   );
 }
 
+/** Unresolved problems for the signed-in company; the nav only shows Problems when there are some. */
+async function countOpenProblems(): Promise<number> {
+  return getCurrentBrandMembership()
+    .then((m) =>
+      prisma.interventionCase.count({
+        where: { brandId: m.brandId, status: { in: ["open", "in_progress", "reopened"] } },
+      }),
+    )
+    .catch(() => 0);
+}
 
 export default async function PlatformLayout({
   children,
@@ -43,6 +53,8 @@ export default async function PlatformLayout({
     redirect("/login");
   }
 
+  const openProblems = await countOpenProblems();
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -51,17 +63,17 @@ export default async function PlatformLayout({
           <BrandMark className="h-7 w-auto" />
         </div>
 
-        <SidebarNav />
+        <SidebarNav openProblems={openProblems} />
 
         <div className="mt-auto space-y-4 pt-8">
-          <KeyboardHelp />
+          <HelpButton />
           <p className="truncate text-sm text-muted-foreground">
             {user.email}
           </p>
-          <form action="/api/auth/logout" method="POST" className="mt-3">
+          <form action="/api/auth/logout" method="POST">
             <button
               type="submit"
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              className="min-h-11 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Log out
             </button>
@@ -75,11 +87,13 @@ export default async function PlatformLayout({
           <div className="mb-3">
             <BrandMark className="h-6 w-auto" />
           </div>
-          <MobileNav />
+          <MobileNav openProblems={openProblems} email={user.email} />
         </div>
         <div className="mx-auto max-w-6xl">{children}</div>
         <CreatorSearchJobsTray />
       </main>
+      {/* One help dialog and shortcut listener, outside the phone-hidden sidebar. */}
+      <KeyboardHelp />
     </div>
   );
 }

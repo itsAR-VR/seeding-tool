@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { getShopifyStoreDomain, shopifyAdminOrderUrl } from "@/lib/shopify/admin-links";
-import { OrdersTable, type OrderTableRow } from "./_components/orders-table";
+import { OrdersTable, ordersHeading, type OrderTableRow } from "./_components/orders-table";
 
 export default async function OrdersPage() {
   let brandId: string;
@@ -73,7 +73,7 @@ export default async function OrdersPage() {
 
       <section aria-labelledby="orders-heading" className="space-y-3">
         <h2 id="orders-heading" className="text-lg font-semibold">
-          {rows.length} {rows.length === 1 ? "order" : "orders"}
+          {ordersHeading(rows)}
         </h2>
         {rows.length === 0 ? (
           <div className="space-y-2 rounded-xl border bg-card p-5">

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { CURRENT_STAGES, countCurrentStage, type ResultsData } from "@/lib/stats/campaign-counts";
+import {
+  CURRENT_STAGES,
+  OFF_PATH_STAGES,
+  countCurrentStage,
+  type CreatorStage,
+  type ResultsData,
+} from "@/lib/stats/campaign-counts";
 import { CreatorLeaderboard } from "./creator-leaderboard";
 import { DateRangeFilter } from "./date-range-filter";
 import { CSVExportButton } from "./csv-export-button";
@@ -9,8 +15,6 @@ import { CSVExportButton } from "./csv-export-button";
 type AnalyticsDashboardProps = {
   readonly initialData: ResultsData;
   readonly campaignName: string;
-  /** Tagged + hand-added posts for the whole campaign (the date filter falls back to logged posts). */
-  readonly postCount: number;
 };
 
 const COST_LABELS: Record<string, string> = {
@@ -20,12 +24,13 @@ const COST_LABELS: Record<string, string> = {
   other: "Other",
 };
 
-/**
- * In "where everyone is now", a step only holds people still on it. These
- * labels say so where the plain step name would read like the total above.
- */
-const NOW_LABELS: Record<string, string> = {
-  Replied: "Replied, no address yet",
+/** The short note under the breakdown for people off the main path. */
+const OFF_PATH_WORDS: Record<(typeof OFF_PATH_STAGES)[number], (n: number) => string> = {
+  order_cancelled: (n) => `${n} ${n === 1 ? "order was" : "orders were"} cancelled`,
+  said_no: (n) => `${n} said no`,
+  not_now: (n) => `${n} ${n === 1 ? "isn't" : "aren't"} ready right now`,
+  not_a_fit: (n) => `${n} not a fit`,
+  maybe_later: (n) => `${n} maybe later`,
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -50,13 +55,12 @@ function describeHours(hours: number): string {
   return days === 1 ? "about 1 day" : `about ${days} days`;
 }
 
-export function AnalyticsDashboard({ initialData, campaignName, postCount }: AnalyticsDashboardProps) {
+export function AnalyticsDashboard({ initialData, campaignName }: AnalyticsDashboardProps) {
   const [data, setData] = useState<ResultsData>(initialData);
   const [from, setFrom] = useState<string | undefined>();
   const [to, setTo] = useState<string | undefined>();
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const filtered = Boolean(from || to);
 
   const handleRangeChange = useCallback((newFrom: string | undefined, newTo: string | undefined) => {
     setFrom(newFrom);
@@ -100,13 +104,13 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
     };
   }, [from, to, initialData]);
 
-  const count = (keys: readonly string[]) => countCurrentStage(data.lifecycle, keys);
+  const count = (keys: readonly CreatorStage[]) => countCurrentStage(data.stages, keys);
   // Summary numbers are "ever reached"; the breakdown below is "where they are now".
-  const { total, emailed, replied } = data.steps;
-  const posts = filtered ? data.summary.totalMentions : postCount;
-  const saidNo = count(["opted_out"]);
-  const notNow = count(["stalled"]);
-  const largest = Math.max(1, ...CURRENT_STAGES.map((stage) => count(stage.keys)));
+  // Orders and posts are counted the same way as the Orders and Posts tabs (lib/stats).
+  const { total, emailed, replied, ordersMade } = data.steps;
+  const posts = data.postCount;
+  const offPath = OFF_PATH_STAGES.map((stage) => ({ stage, n: count([stage]) })).filter(({ n }) => n > 0);
+  const largest = Math.max(1, ...CURRENT_STAGES.map((stage) => count(stage.stages)));
   const typicalTimeToPost = median(data.timeToPost);
   const { likes, comments, views } = data.mentions.engagement;
   const costs = Object.entries(data.costsByType).filter(([, cents]) => cents > 0);
@@ -131,7 +135,7 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
         </h2>
         <p className="text-lg">
           {plural(total, "creator", "creators")} · {emailed} ever emailed · {replied} ever replied ·{" "}
-          {plural(data.summary.totalOrders, "order", "orders")} · {plural(posts, "post", "posts")}
+          {plural(ordersMade, "order", "orders")} · {plural(posts, "post", "posts")}
         </p>
       </section>
 
@@ -150,8 +154,8 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
             <span className="w-28 text-right">Now at this step</span>
           </li>
           {CURRENT_STAGES.map((stage) => {
-            const n = count(stage.keys);
-            const label = NOW_LABELS[stage.label] ?? stage.label;
+            const n = count(stage.stages);
+            const label = stage.label;
             return (
               <li key={stage.label} className="flex items-center gap-4 px-5 py-3">
                 <span className="w-44 shrink-0">{label}</span>
@@ -166,15 +170,9 @@ export function AnalyticsDashboard({ initialData, campaignName, postCount }: Ana
             );
           })}
         </ul>
-        {(saidNo > 0 || notNow > 0) && (
+        {offPath.length > 0 && (
           <p className="text-muted-foreground">
-            {[
-              saidNo > 0 ? `${saidNo} said no` : null,
-              notNow > 0 ? `${notNow} ${notNow === 1 ? "isn't" : "aren't"} ready right now` : null,
-            ]
-              .filter(Boolean)
-              .join(", ")}
-            .
+            Also: {offPath.map(({ stage, n }) => OFF_PATH_WORDS[stage](n)).join(", ")}.
           </p>
         )}
         {typicalTimeToPost != null && (

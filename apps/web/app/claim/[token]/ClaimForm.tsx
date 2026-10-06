@@ -16,6 +16,21 @@ const COUNTRY_NAMES: Record<string, string> = {
   AU: "Australia",
 };
 
+type SubmittedAddress = {
+  fullName: string;
+  line1: string;
+  line2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+};
+
+function field(data: Record<string, FormDataEntryValue>, key: string): string {
+  const value = data[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
 const NETWORK_ERROR =
   "We couldn't send that. Check your connection and tap Submit again.";
 
@@ -26,6 +41,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
     "idle"
   );
   const [error, setError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState<SubmittedAddress | null>(null);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,15 +74,46 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
       return;
     }
 
+    setSubmitted({
+      fullName: field(payload, "fullName"),
+      line1: field(payload, "line1"),
+      line2: field(payload, "line2"),
+      city: field(payload, "city"),
+      state: field(payload, "state"),
+      postalCode: field(payload, "postalCode"),
+      country: field(payload, "country"),
+    });
     setStatus("submitted");
   }
 
   if (status === "submitted") {
     return (
-      <div className="rounded-3xl border border-green-200 bg-green-50 p-6 text-green-950">
+      <div role="status" className="rounded-3xl border border-green-200 bg-green-50 p-6 text-green-950">
         <h2 className="text-xl font-semibold">Address submitted</h2>
         <p className="mt-2 text-sm leading-6">
-          Thank you! We&apos;ll let you know when it ships.
+          Thank you! We&apos;ll let you know when it ships. Here&apos;s what we&apos;ll ship to:
+        </p>
+        {submitted && (
+          <address className="mt-3 rounded-2xl bg-white p-4 text-base not-italic leading-7 text-neutral-950">
+            {submitted.fullName}
+            <br />
+            {submitted.line1}
+            {submitted.line2 && (
+              <>
+                <br />
+                {submitted.line2}
+              </>
+            )}
+            <br />
+            {submitted.city}, {submitted.country === "US" ? submitted.state.toUpperCase() : submitted.state}{" "}
+            {submitted.postalCode}
+            <br />
+            {COUNTRY_NAMES[submitted.country] ?? submitted.country}
+          </address>
+        )}
+        <p className="mt-3 text-sm leading-6">
+          Spot a typo? Reply to the email with this link and tell {brandName} the right address. They&apos;ll fix it
+          before it ships.
         </p>
       </div>
     );
@@ -110,6 +157,27 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
         />
       </label>
 
+      {shipCountries.length > 1 ? (
+        <label className="block text-sm font-medium">
+          Country
+          <select
+            name="country"
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            autoComplete="country"
+            className="mt-1 w-full rounded-xl border bg-white px-3 py-3 text-base"
+          >
+            {shipCountries.map((code) => (
+              <option key={code} value={code}>
+                {COUNTRY_NAMES[code] ?? code}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <input type="hidden" name="country" value={country} />
+      )}
+
       <label className="block text-sm font-medium">
         Street address
         <input
@@ -131,27 +199,6 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
           className="mt-1 w-full rounded-xl border px-3 py-3 text-base"
         />
       </label>
-
-      {shipCountries.length > 1 ? (
-        <label className="block text-sm font-medium">
-          Country
-          <select
-            name="country"
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            autoComplete="country"
-            className="mt-1 w-full rounded-xl border bg-white px-3 py-3 text-base"
-          >
-            {shipCountries.map((code) => (
-              <option key={code} value={code}>
-                {COUNTRY_NAMES[code] ?? code}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <input type="hidden" name="country" value={country} />
-      )}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block text-sm font-medium sm:col-span-1">

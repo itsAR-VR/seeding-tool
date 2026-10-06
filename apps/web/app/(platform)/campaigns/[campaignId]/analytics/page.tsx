@@ -8,8 +8,10 @@ import {
 } from "@/lib/analytics/conversion";
 import type { CreatorLeaderboardEntry } from "@/lib/analytics/types";
 import {
+  countStages,
   countStepsReached,
   lifecycleBreakdown as countLifecycle,
+  postCountsByCreator,
   type ResultsData,
 } from "@/lib/stats/campaign-counts";
 import { loadCampaignPosts } from "../_components/campaign-posts";
@@ -48,15 +50,27 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       lastOutreachAt: true,
       lastReplyAt: true,
       replyDecision: true,
+      shopifyOrder: { select: { status: true } },
     },
   });
 
   const campaignCreatorIds = campaignCreators.map((cc) => cc.id);
   const totalCreators = campaignCreators.length;
 
-  // Where everyone is now (one count per creator) and who ever reached each step.
+  // Posts: tagged Instagram posts from this campaign's creators plus posts
+  // added by hand. Same list as the Posts tab.
+  const posts = await loadCampaignPosts(membership.brandId, campaignId);
+  const postCounts = postCountsByCreator(posts);
+  const countable = campaignCreators.map((cc) => ({
+    ...cc,
+    orderStatus: cc.shopifyOrder?.status ?? null,
+    postCount: postCounts.get(cc.creatorId) ?? 0,
+  }));
+
+  // Where everyone is now (one stage per creator) and who ever reached each step.
   const lifecycleBreakdown: Record<string, number> = countLifecycle(campaignCreators);
-  const steps = countStepsReached(campaignCreators);
+  const steps = countStepsReached(countable);
+  const stages = countStages(countable);
 
   // Mention assets
   const mentionAssets = campaignCreatorIds.length > 0
@@ -89,7 +103,8 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       })
     : [];
 
-  const totalOrders = orders.length;
+  // Cancelled orders aren't orders made (lib/stats), same as the Orders tab.
+  const totalOrders = steps.ordersMade;
   const totalProductValueCents = orders.reduce(
     (sum, o) => sum + (o.totalPrice ?? 0),
     0
@@ -245,10 +260,9 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     creatorLeaderboard,
     costsByType,
     steps,
+    stages,
+    postCount: posts.length,
   };
-
-  // Posts: tagged Instagram posts from this campaign's creators plus posts added by hand.
-  const posts = await loadCampaignPosts(membership.brandId, campaignId);
 
   return (
     <div className="space-y-8">
@@ -276,7 +290,6 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
         <AnalyticsDashboard
           initialData={initialData}
           campaignName={campaign.name}
-          postCount={posts.length}
         />
       )}
     </div>

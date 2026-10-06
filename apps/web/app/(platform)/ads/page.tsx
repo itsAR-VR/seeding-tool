@@ -4,7 +4,8 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { NoCompanyNotice } from "@/components/no-company-notice";
 import { getAdResults, MetaAdsError, type AdResults } from "@/lib/meta/ads";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChevronDown } from "lucide-react";
 import { PartnershipForm } from "./partnership-form";
 
 export const dynamic = "force-dynamic";
@@ -98,18 +99,6 @@ export default async function AdsPage() {
       </p>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Got a partnership code from a creator?</CardTitle>
-          <CardDescription>
-            Paste it here to make a paused ad that runs from their handle and yours. Works for any post.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <PartnershipForm adsManagerUrl={adsManagerUrl} />
-        </CardContent>
-      </Card>
-
-      <Card>
         <CardContent className="pt-6">
           {loadError && <p role="alert" className="mb-4 text-sm text-red-700">{loadError}</p>}
           {posts.length === 0 ? (
@@ -175,6 +164,27 @@ export default async function AdsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Less common, so it waits below the results until someone opens it. */}
+      <details className="group rounded-xl border bg-card">
+        <summary className="relative block min-h-11 cursor-pointer list-none py-4 pl-5 pr-12 [&::-webkit-details-marker]:hidden">
+          <h2 className="font-semibold">Got a partnership code?</h2>
+          <span className="mt-1 block text-sm text-muted-foreground">
+            A creator can send you a code from Instagram that lets you run their post as an ad from their handle and
+            yours.
+          </span>
+          <ChevronDown
+            className="absolute right-5 top-5 size-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
+            aria-hidden
+          />
+        </summary>
+        <div className="border-t px-5 py-4">
+          <p className="mb-3 text-sm text-muted-foreground">
+            Paste it here to make a paused ad. Works for any post.
+          </p>
+          <PartnershipForm adsManagerUrl={adsManagerUrl} />
+        </div>
+      </details>
     </div>
   );
 }

@@ -35,11 +35,6 @@ const settingsLinks = [
     description: "Creators who said no, unsubscribed, or bounced. They're never emailed again.",
   },
   {
-    href: "/admin/health",
-    title: "System status",
-    description: "Anything stuck: emails that didn't send, orders or product updates that failed.",
-  },
-  {
     href: "/settings/creator-search",
     title: "Creator search",
     description: "Which account pays for creator searches.",
@@ -59,7 +54,7 @@ const settingsLinks = [
 const GROUPS: Array<{ title: string; hrefs: string[] }> = [
   { title: "Your brand", hrefs: ["/settings/brand", "/settings/brand-kit", "/settings/ai-personas", "/settings/team"] },
   { title: "Accounts and creator search", hrefs: ["/settings/connections", "/settings/creator-search", "/settings/automations"] },
-  { title: "Safety and status", hrefs: ["/settings/do-not-send", "/admin/health", "/settings/feature-flags"] },
+  { title: "Safety and features", hrefs: ["/settings/do-not-send", "/settings/feature-flags"] },
 ];
 
 export default async function SettingsPage() {

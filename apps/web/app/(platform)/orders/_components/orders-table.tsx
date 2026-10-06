@@ -2,6 +2,7 @@ import Link from "next/link";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { orderStatusLabel } from "@/lib/shopify/order-labels";
+import { countOrders } from "@/lib/stats/campaign-counts";
 
 /** One gift order, shaped the same for the main Orders page and a campaign's Orders tab. */
 export type OrderTableRow = {
@@ -45,6 +46,13 @@ export function orderPill(
   return { label: orderStatusLabel(order.status), tone: "good" };
 }
 
+/** "2 orders" or "2 orders, 1 cancelled". Cancelled orders aren't counted as made (lib/stats). */
+export function ordersHeading(orders: readonly { status: string }[]): string {
+  const { made, cancelled } = countOrders(orders);
+  const base = `${made} ${made === 1 ? "order" : "orders"}`;
+  return cancelled > 0 ? `${base}, ${cancelled} cancelled` : base;
+}
+
 export function OrdersTable({ orders, showCampaign = false }: { orders: readonly OrderTableRow[]; showCampaign?: boolean }) {
   return (
     <div className="overflow-x-auto rounded-xl border bg-card">
@@ -64,9 +72,18 @@ export function OrdersTable({ orders, showCampaign = false }: { orders: readonly
         </thead>
         <tbody className="divide-y">
           {orders.map((order) => {
-            const draft = isDraftOrder(order);
+            const cancelled = CLOSED_STATUSES.has(order.status);
+            const draft = !cancelled && isDraftOrder(order);
             const pill = orderPill(order);
-            const orderName = draft
+            // A cancelled order gets no "Review" link; only a real Shopify order (not a draft) can be viewed.
+            const shopifyLink = cancelled
+              ? order.shopifyOrderId && order.adminUrl
+                ? { href: order.adminUrl, label: "View in Shopify ↗" }
+                : null
+              : order.adminUrl
+                ? { href: order.adminUrl, label: draft ? "Review in Shopify ↗" : "Open in Shopify ↗" }
+                : null;
+            const orderName = isDraftOrder(order)
               ? order.shopifyDraftOrderName || order.shopifyDraftOrderId
               : order.shopifyOrderNumber || order.shopifyOrderId;
             return (
@@ -96,7 +113,7 @@ export function OrdersTable({ orders, showCampaign = false }: { orders: readonly
                   <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
                 </td>
                 <td className="px-5 py-4">
-                  {draft ? (
+                  {cancelled ? null : draft ? (
                     <span className="text-muted-foreground">Not shipped</span>
                   ) : order.tracking?.trackingNumber ? (
                     <span>
@@ -115,11 +132,11 @@ export function OrdersTable({ orders, showCampaign = false }: { orders: readonly
                         Conversation
                       </Link>
                     )}
-                    {order.adminUrl ? (
-                      <a href={order.adminUrl} target="_blank" rel="noreferrer" className="hover:underline">
-                        {draft ? "Review in Shopify ↗" : "Open in Shopify ↗"}
+                    {shopifyLink ? (
+                      <a href={shopifyLink.href} target="_blank" rel="noreferrer" className="hover:underline">
+                        {shopifyLink.label}
                       </a>
-                    ) : (
+                    ) : cancelled ? null : (
                       <span className="font-normal text-muted-foreground">No Shopify link yet</span>
                     )}
                   </span>

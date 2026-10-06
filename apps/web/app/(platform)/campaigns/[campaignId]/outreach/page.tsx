@@ -24,11 +24,14 @@ import {
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/status-pill";
 import { BUILT_IN_PERSONAS } from "@/lib/ai/personas";
+import { STAGE_LABELS, creatorStage } from "@/lib/stats/campaign-counts";
 
 type CampaignCreator = {
   id: string;
   reviewStatus: string;
   lifecycleStatus: string;
+  replyDecision?: string | null;
+  shopifyOrder?: { status: string } | null;
   creator: {
     id: string;
     name: string | null;
@@ -41,23 +44,14 @@ type CampaignCreator = {
 
 type Notice = { tone: "success" | "error"; text: string };
 
-const STATUS_LABELS: Record<string, string> = {
-  ready: "Not emailed yet",
-  outreach_sent: "Emailed",
-  replied: "Replied",
-  address_review: "Address to check",
-  address_confirmed: "Address in",
-  order_created: "Order made",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  posted: "Posted",
-  completed: "Done",
-  opted_out: "Said no",
-  stalled: "Not right now",
-};
-
-function statusLabel(status: string): string {
-  return STATUS_LABELS[status] ?? "In progress";
+/** Same status words as the campaign Overview (lib/stats creatorStage). */
+function statusLabel(cc: CampaignCreator): string {
+  const stage = creatorStage({
+    ...cc,
+    // Orders come with this list (null = no order); posts don't, so the stored step is used for those.
+    orderStatus: cc.shopifyOrder === undefined ? undefined : (cc.shopifyOrder?.status ?? null),
+  });
+  return stage === "ready" ? "Not emailed yet" : STAGE_LABELS[stage].label;
 }
 
 type CustomPersona = {
@@ -700,7 +694,7 @@ export default function OutreachPage() {
                     </span>
                   </div>
                   <StatusPill tone={queuedIds.has(cc.id) ? "waiting" : sendable ? "neutral" : "good"}>
-                    {queuedIds.has(cc.id) ? "Queued to send" : statusLabel(cc.lifecycleStatus)}
+                    {queuedIds.has(cc.id) ? "Queued to send" : statusLabel(cc)}
                   </StatusPill>
                 </div>
                 );

@@ -36,11 +36,22 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
     }
   }
 
+  const hintId = `partnership-hint-${postId}`;
   if (!open) {
     return (
-      <button type="button" onClick={() => setOpen(true)} className="block text-sm text-muted-foreground underline">
-        Have a partnership ad code?
-      </button>
+      <div>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-describedby={hintId}
+          className="block text-sm text-muted-foreground underline hover:text-foreground"
+        >
+          Have a partnership ad code?
+        </button>
+        <p id={hintId} className="text-sm text-muted-foreground">
+          The creator&apos;s code runs the ad from their account. Use it if they sent you one.
+        </p>
+      </div>
     );
   }
 

@@ -13,15 +13,18 @@ const TABS: readonly Tab[] = [
   { label: "Orders", path: "/orders" },
   { label: "Posts", path: "/mentions" },
   { label: "Results", path: "/analytics" },
-  { label: "Find creators", path: "/discover" },
 ];
 
-/** Reachable, but out of the main row. */
+/**
+ * Reachable, but out of the main row. Finding creators is usually started
+ * from the Overview's next step; Products lives only here (not on Overview).
+ */
 const MORE: readonly Tab[] = [
   { label: "Review creators", path: "/review" },
+  { label: "Find creators", path: "/discover" },
+  { label: "Add from a list", path: "/import" },
   { label: "Products", path: "/products" },
   { label: "Shareable list", path: "/seed-list" },
-  { label: "Add from a list", path: "/import" },
 ];
 
 function isActive(pathname: string, base: string, path: string): boolean {

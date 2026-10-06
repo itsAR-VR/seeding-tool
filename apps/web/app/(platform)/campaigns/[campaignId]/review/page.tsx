@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
+import { readyToEmail } from "@/lib/stats/campaign-counts";
 
 type CreatorProfile = {
   platform: string;
@@ -96,6 +97,8 @@ export default function ReviewQueuePage() {
   const approvedCount = creators.filter((creator) => creator.reviewStatus === "approved").length;
   const declinedCount = creators.filter((creator) => creator.reviewStatus === "declined").length;
   const deferredCount = creators.filter((creator) => creator.reviewStatus === "deferred").length;
+  // Approved but not emailed yet: same rule as the Overview's "Ready to email" chip.
+  const readyCount = creators.filter(readyToEmail).length;
 
   if (loading) {
     return (
@@ -125,22 +128,31 @@ export default function ReviewQueuePage() {
       {pendingCreators.length === 0 ? (
         <div className="space-y-3 rounded-xl border bg-card p-5">
           <p>
-            Everyone in this campaign has been reviewed, or no creators were added yet.
+            {creators.length === 0
+              ? "No creators in this campaign yet."
+              : "Everyone in this campaign has been reviewed."}
             {approvedCount + declinedCount + deferredCount > 0 &&
               ` So far: ${approvedCount} approved, ${declinedCount} not a fit, ${deferredCount} maybe later.`}
+            {approvedCount > 0 && readyCount === 0 && " Everyone you approved has been emailed."}
           </p>
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}
-            >
-              Find more creators
-            </Button>
-            {approvedCount > 0 ? (
-              <Button onClick={() => router.push(`/campaigns/${params.campaignId}/outreach`)}>
-                Email approved creators
+            {readyCount > 0 ? (
+              <>
+                <Button onClick={() => router.push(`/campaigns/${params.campaignId}/outreach`)}>
+                  Email {readyCount} approved {readyCount === 1 ? "creator" : "creators"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}
+                >
+                  Find more creators
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}>
+                Find more creators
               </Button>
-            ) : null}
+            )}
           </div>
         </div>
       ) : (

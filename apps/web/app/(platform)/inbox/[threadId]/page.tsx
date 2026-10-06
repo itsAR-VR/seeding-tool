@@ -7,7 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { guessFromIntent } from "@/lib/inbox/decision";
+import { guessFromIntent, type AiReplyGuess, type ReplyDecision } from "@/lib/inbox/decision";
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { formatDateTime } from "@/lib/format/date";
 
@@ -57,7 +57,7 @@ type Thread = {
   campaignCreator: {
     id: string;
     lifecycleStatus: string;
-    replyDecision: "yes" | "no" | "later" | null;
+    replyDecision: ReplyDecision | null;
     creator: {
       id: string;
       name: string | null;
@@ -103,6 +103,7 @@ export default function ThreadDetailPage() {
   const [suggestionId, setSuggestionId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
   const [deciding, setDeciding] = useState(false);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
@@ -150,9 +151,8 @@ export default function ThreadDetailPage() {
     if (res.ok) setThread((await res.json()) as Thread);
   }
 
-  async function handleDecision(decision: "yes" | "no" | "later") {
-    if (decision === "no" && !confirm("Mark as no? They'll go on the do-not-send list and won't be emailed again.")) return;
-    setDeciding(true);
+  /** Saves the decision. Returns an error message, or null when it saved. */
+  async function saveDecision(decision: ReplyDecision): Promise<string | null> {
     try {
       const res = await fetch(`/api/inbox/${params.threadId}/decision`, {
         method: "POST",
@@ -161,23 +161,45 @@ export default function ThreadDetailPage() {
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setReplyNotice({ tone: "error", text: data.error ?? "Couldn't save your decision. Try again." });
+        return data.error ?? "Couldn't save their answer. Try again.";
+      }
+      return null;
+    } catch {
+      return "Couldn't save their answer. Check your connection and try again.";
+    }
+  }
+
+  async function handleDecision(decision: ReplyDecision) {
+    if (decision === "no" && !confirm("Mark as no? They'll go on the do-not-send list and won't be emailed again.")) return;
+    setDeciding(true);
+    setDecisionError(null);
+    try {
+      const error = await saveDecision(decision);
+      if (error) {
+        setDecisionError(error);
         return;
       }
       await reloadThread();
-    } catch {
-      setReplyNotice({ tone: "error", text: "Couldn't save your decision. Check your connection and try again." });
     } finally {
       setDeciding(false);
     }
   }
 
   async function handleSendReply() {
-    if (!replyText.trim()) return;
-    if (!confirm("Send this reply?")) return;
+    if (!replyText.trim() || !thread) return;
+    // A gift link only makes sense for a yes; record it first so the gift flow stays right.
+    const autoYes = replyText.includes(ADDRESS_LINK) && !thread.campaignCreator.replyDecision;
+    if (!confirm(autoYes ? "Send this reply? This also marks their answer as Yes." : "Send this reply?")) return;
     setReplySending(true);
     setReplyNotice(null);
     try {
+      if (autoYes) {
+        const error = await saveDecision("yes");
+        if (error) {
+          setReplyNotice({ tone: "error", text: `Nothing was sent. ${error}` });
+          return;
+        }
+      }
       const res = await fetch(`/api/inbox/${params.threadId}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -185,13 +207,20 @@ export default function ThreadDetailPage() {
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string };
       if (!res.ok) {
-        setReplyNotice({ tone: "error", text: data.error ?? "Your reply didn't send. Try again." });
+        const reason = data.error ?? "Your reply didn't send. Try again.";
+        setReplyNotice({
+          tone: "error",
+          text: autoYes ? `${reason} Their answer is now marked Yes.` : reason,
+        });
+        if (autoYes) await reloadThread();
         return;
       }
       setReplyNotice({
         tone: "success",
         text: replyText.includes(ADDRESS_LINK)
-          ? "Reply sent with their private address link."
+          ? autoYes
+            ? "Reply sent with their private address link. We marked their answer as Yes."
+            : "Reply sent with their private address link."
           : "Reply sent.",
       });
       setReplyText("");
@@ -199,6 +228,7 @@ export default function ThreadDetailPage() {
       await reloadThread();
     } catch {
       setReplyNotice({ tone: "error", text: "Your reply didn't send. Check your connection and try again." });
+      if (autoYes) await reloadThread().catch(() => undefined);
     } finally {
       setReplySending(false);
     }
@@ -286,6 +316,7 @@ export default function ThreadDetailPage() {
     [...thread.messages].reverse().find((m) => m.direction === "inbound") ??
     thread.messages[thread.messages.length - 1];
   const earlier = thread.messages.filter((m) => m.id !== featured?.id);
+  const latestInbound = [...thread.messages].reverse().find((m) => m.direction === "inbound");
   const pendingAddresses = thread.campaignCreator.shippingSnapshots.filter(
     (s) => !s.confirmedAt && !s.isActive
   );
@@ -338,79 +369,6 @@ export default function ThreadDetailPage() {
       )}
       {!featured && <p className="text-muted-foreground">No messages in this conversation yet.</p>}
 
-      {/* Reply decision: operator's official call, AI guess shown alongside */}
-      {thread.messages.some((m) => m.direction === "inbound") && (() => {
-        const latestInbound = [...thread.messages].reverse().find((m) => m.direction === "inbound");
-        const aiGuess = guessFromIntent(latestInbound?.classification);
-        const decision = thread.campaignCreator.replyDecision;
-        const askedToBeRemoved =
-          decision === "no" && latestInbound?.classification === OPT_OUT_CLASSIFICATION;
-        return (
-          <Card
-            className={
-              decision === "yes"
-                ? "border-green-200 bg-green-50"
-                : decision === "no"
-                  ? "border-red-200 bg-red-50"
-                  : decision === "later"
-                    ? "border-slate-200 bg-slate-50"
-                    : "border-amber-200 bg-amber-50"
-            }
-          >
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
-              <div className="space-y-1">
-                <p className="font-medium">
-                  {decision === "yes"
-                    ? "They said yes"
-                    : askedToBeRemoved
-                      ? "Asked to be removed. They're on the do-not-send list."
-                      : decision === "no"
-                      ? "They said no. They're on the do-not-send list."
-                      : decision === "later"
-                        ? "Not right now. They're not on the do-not-send list."
-                        : "Did they say yes?"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {askedToBeRemoved
-                    ? "Their reply asked us to stop emailing, so we took care of it. If we got it wrong, tap They said yes or Not right now."
-                    : aiGuess && aiGuess !== "unclear"
-                    ? `The AI thinks this is a ${aiGuess}${
-                        latestInbound?.confidence != null ? ` (${Math.round(latestInbound.confidence * 100)}% sure)` : ""
-                      }.${decision ? (aiGuess === decision ? " You agreed." : " You decided differently.") : ""} You can change this anytime.`
-                    : "Pick one. You can change it anytime."}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant={decision === "yes" ? "default" : "outline"}
-                  disabled={deciding || decision === "yes"}
-                  onClick={() => void handleDecision("yes")}
-                >
-                  They said yes
-                </Button>
-                <Button
-                  size="sm"
-                  variant={decision === "later" ? "secondary" : "outline"}
-                  disabled={deciding || decision === "later"}
-                  onClick={() => void handleDecision("later")}
-                >
-                  Not right now
-                </Button>
-                <Button
-                  size="sm"
-                  variant={decision === "no" ? "destructive" : "outline"}
-                  disabled={deciding || decision === "no"}
-                  onClick={() => void handleDecision("no")}
-                >
-                  They said no
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
-
       {/* Email reply */}
       {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
         <Card>
@@ -437,7 +395,7 @@ export default function ThreadDetailPage() {
               value={replyText}
               onChange={(e) => setReplyText(e.target.value)}
               placeholder="Write your reply…"
-                aria-label="Your reply"
+              aria-label="Your reply"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm text-muted-foreground">
@@ -445,13 +403,13 @@ export default function ThreadDetailPage() {
                   ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
                   : `To: ${creator.email ?? "no email on file"}`}
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {!replyText.includes(ADDRESS_LINK) && (
-                  <Button size="sm" variant="outline" onClick={() => setReplyText(followUp)}>
-                    Add the gift link message
+                  <Button variant="ghost" onClick={() => setReplyText(followUp)}>
+                    Use the gift link message
                   </Button>
                 )}
-                <Button size="sm" onClick={handleSendReply} disabled={replySending || !replyText.trim()}>
+                <Button onClick={handleSendReply} disabled={replySending || !replyText.trim()} className="px-5">
                   {replySending ? "Sending…" : "Send reply"}
                 </Button>
               </div>
@@ -502,6 +460,22 @@ export default function ThreadDetailPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Their answer: a quiet, compact choice below the reply (keys y / l / n) */}
+      {latestInbound && (
+        <DecisionChoice
+          decision={thread.campaignCreator.replyDecision}
+          aiGuess={guessFromIntent(latestInbound.classification)}
+          confidence={latestInbound.confidence}
+          askedToBeRemoved={
+            thread.campaignCreator.replyDecision === "no" &&
+            latestInbound.classification === OPT_OUT_CLASSIFICATION
+          }
+          deciding={deciding}
+          error={decisionError}
+          onDecide={(d) => void handleDecision(d)}
+        />
       )}
 
       {/* Pending Address Snapshot */}
@@ -609,5 +583,99 @@ export default function ThreadDetailPage() {
         </details>
       )}
     </div>
+  );
+}
+
+const CHOICES: Array<{ value: ReplyDecision; label: string; key: string }> = [
+  { value: "yes", label: "Yes", key: "y" },
+  { value: "later", label: "Not right now", key: "l" },
+  { value: "no", label: "No", key: "n" },
+];
+
+function decisionLabel(decision: ReplyDecision): string {
+  switch (decision) {
+    case "yes":
+      return "Yes";
+    case "later":
+      return "Not right now";
+    case "no":
+      return "No";
+    default: {
+      const unhandled: never = decision;
+      return unhandled;
+    }
+  }
+}
+
+/** Their answer: a small segmented choice that sits below the reply, not above it. */
+function DecisionChoice({
+  decision,
+  aiGuess,
+  confidence,
+  askedToBeRemoved,
+  deciding,
+  error,
+  onDecide,
+}: {
+  decision: ReplyDecision | null;
+  aiGuess: AiReplyGuess | null;
+  confidence: number | null;
+  askedToBeRemoved: boolean;
+  deciding: boolean;
+  error: string | null;
+  onDecide: (decision: ReplyDecision) => void;
+}) {
+  const hint = askedToBeRemoved
+    ? "They asked us to stop emailing, so they're on the do-not-send list. Pick Yes or Not right now if that's wrong."
+    : decision === "no"
+      ? "They're on the do-not-send list."
+      : decision === "later"
+        ? "Parked. They're not on the do-not-send list."
+        : aiGuess === "yes" || aiGuess === "no"
+          ? `AI guess: ${aiGuess === "yes" ? "Yes" : "No"}${
+              confidence != null ? ` (${Math.round(confidence * 100)}% sure)` : ""
+            }${decision ? (aiGuess === decision ? ". You agreed." : ". You decided differently.") : "."}`
+          : null;
+
+  return (
+    <section aria-labelledby="their-answer" className="space-y-2 px-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 id="their-answer" className="text-sm font-medium">
+          Their answer
+        </h2>
+        <div role="group" aria-labelledby="their-answer" className="inline-flex rounded-lg border bg-card p-0.5">
+          {CHOICES.map((c) => {
+            const active = decision === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                aria-pressed={active}
+                aria-keyshortcuts={c.key}
+                disabled={deciding || active}
+                onClick={() => onDecide(c.value)}
+                className={`rounded-md px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default ${
+                  active
+                    ? "bg-foreground font-medium text-background"
+                    : "text-foreground/80 hover:bg-muted hover:text-foreground disabled:opacity-60"
+                }`}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+        {decision && <span className="sr-only">Marked {decisionLabel(decision)}.</span>}
+        <span className="text-sm text-muted-foreground" aria-hidden="true">
+          Keys: y / l / n
+        </span>
+      </div>
+      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
+      {error && (
+        <p role="alert" className="text-sm text-red-700">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }

@@ -77,9 +77,9 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
             autoComplete="new-password"
-            className="mt-1 w-full rounded-lg border px-3 py-2"
+            className="mt-1 w-full rounded-xl border px-3 py-3 text-base"
           />
-          <span className="mt-1 block text-sm text-muted-foreground">
+          <span className="mt-1 block text-sm text-neutral-700">
             At least 8 characters. Skip it and you can always sign in with an email link.
           </span>
         </label>
@@ -87,7 +87,7 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
         <button
           type="submit"
           disabled={busy}
-          className="w-full rounded-lg bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
+          className="w-full min-h-11 rounded-full bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
         >
           {busy ? "Joining..." : "Accept invite"}
         </button>
@@ -98,7 +98,7 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
   if (sent) {
     return (
       <div className="space-y-3">
-        <p className="rounded-lg bg-muted p-4">
+        <p className="rounded-2xl bg-[#f8f3ec] p-4">
           Check <strong>{email}</strong> for an email from us. {mode === "signin" ? "Open the link in it to sign in." : "Open the link in it to finish joining."}
         </p>
         <button type="button" disabled={busy} onClick={() => void sendLink()} className="min-h-11 text-sm font-medium underline">
@@ -124,7 +124,7 @@ export function InviteAccept({ token, email, signedInEmail, mode = "join" }: Pro
         type="button"
         disabled={busy}
         onClick={() => void sendLink()}
-        className="w-full rounded-lg bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
+        className="w-full min-h-11 rounded-full bg-foreground px-4 py-3 font-medium text-background disabled:opacity-50"
       >
         {busy ? "Sending..." : mode === "signin" ? "Email me a sign-in link" : "Email me a link to join"}
       </button>

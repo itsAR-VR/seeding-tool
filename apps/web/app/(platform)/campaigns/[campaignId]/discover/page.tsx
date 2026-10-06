@@ -77,7 +77,7 @@ function parsePositiveInteger(value: string) {
   if (!Number.isInteger(parsed) || parsed < 1) {
     return {
       value: null,
-      error: "Enter a whole number, like 20.",
+      error: "Enter a whole number, like 25.",
     };
   }
 
@@ -105,7 +105,7 @@ export default function DiscoverCreatorsPage() {
   const [filters, setFilters] = useState<SearchFilters>({
     minFollowers: "",
     maxFollowers: "",
-    limit: "20",
+    limit: "25",
   });
   const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
   const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
@@ -448,7 +448,7 @@ export default function DiscoverCreatorsPage() {
               }
               className="min-w-[160px]"
             >
-              {loading ? "Searching…" : "Start search"}
+              {loading ? "Searching…" : "Find creators"}
             </Button>
           </div>
         </CardContent>

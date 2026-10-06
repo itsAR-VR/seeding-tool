@@ -176,15 +176,30 @@ function CreatorsContent() {
         facets={state.facets}
       />
 
-      <CreatorsTable
-        creators={state.creators}
-        loading={state.loading}
-        total={state.total}
-        page={state.page}
-        totalPages={state.totalPages}
-        setPage={state.setPage}
-        onAddToCampaign={state.handleAddToCampaign}
-      />
+      {state.listError && (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-3 text-sm text-red-800"
+        >
+          <span>{state.listError}</span>
+          <Button size="sm" variant="outline" onClick={() => void state.fetchCreators()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      {/* On a failed first load, the error above replaces a misleading "No creators" table. */}
+      {!(state.listError && state.creators.length === 0 && !state.loading) && (
+        <CreatorsTable
+          creators={state.creators}
+          loading={state.loading}
+          total={state.total}
+          page={state.page}
+          totalPages={state.totalPages}
+          setPage={state.setPage}
+          onAddToCampaign={state.handleAddToCampaign}
+        />
+      )}
 
       {state.showCampaignModal && (
         <CampaignModal

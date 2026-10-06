@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { OrdersTable, type OrderTableRow } from "@/app/(platform)/orders/_components/orders-table";
+import { OrdersTable, ordersHeading, type OrderTableRow } from "@/app/(platform)/orders/_components/orders-table";
 
 type OrderRow = {
   id: string;
@@ -161,7 +161,7 @@ export default function OrdersPage() {
 
       <section aria-labelledby="orders-heading" className="space-y-3">
         <h2 id="orders-heading" className="text-lg font-semibold">
-          {orders.length} {orders.length === 1 ? "order" : "orders"}
+          {ordersHeading(orders)}
         </h2>
         {loadError ? (
           <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-800">

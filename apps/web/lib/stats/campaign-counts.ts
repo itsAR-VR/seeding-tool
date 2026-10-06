@@ -15,11 +15,17 @@
  * you right now. Home, the campaign page, and System status all read them
  * from here so the numbers match everywhere.
  *
+ * Every creator also has exactly one current stage (creatorStage below),
+ * worked out from their stored status, their reply, their gift order, and
+ * their posts. The status column, the Results breakdown, and the Order made /
+ * Posted numbers all come from it, so they agree with the Orders and Posts tabs.
+ *
  * This file has no database access so client components can use it. The
  * queries behind Home's "needs you" rows live in ./needs-you.ts.
  */
 
 import type { AnalyticsResponse } from "@/lib/analytics/types";
+import type { StatusTone } from "@/components/status-pill";
 
 // ── Lifecycle steps ──────────────────────────────────────────
 
@@ -70,7 +76,46 @@ export type CountableCreator = {
   shippingSnapshots?: readonly AddressSnapshot[];
   /** Set by the caller from findStuckCreators, which needs the database. */
   stuck?: boolean;
+  /** Status of their ShopifyOrder; null means no order. Leave undefined when not loaded. */
+  orderStatus?: string | null;
+  /** Posts for this creator in this campaign, from the same list the Posts tab shows. Leave undefined when not loaded. */
+  postCount?: number;
 };
+
+// ── Orders and posts ─────────────────────────────────────────
+
+/** A cancelled order doesn't count as an order made, anywhere. */
+export function isCountedOrder(status: string | null | undefined): boolean {
+  return status != null && status !== "cancelled";
+}
+
+/** Orders made (not cancelled) and cancelled, for the Orders headings and Results. */
+export function countOrders(orders: readonly { status: string }[]): { made: number; cancelled: number } {
+  const made = orders.filter((o) => isCountedOrder(o.status)).length;
+  return { made, cancelled: orders.length - made };
+}
+
+export function hasOrder(c: Pick<CountableCreator, "orderStatus">): boolean {
+  return isCountedOrder(c.orderStatus);
+}
+
+export function hasPosted(c: Pick<CountableCreator, "postCount">): boolean {
+  return (c.postCount ?? 0) > 0;
+}
+
+/** They said no: by reply, by opting out, or we marked it. */
+export function saidNo(c: Pick<CountableCreator, "lifecycleStatus" | "replyDecision">): boolean {
+  return c.lifecycleStatus === "opted_out" || c.replyDecision === "no";
+}
+
+/** Post counts per creator id, from the merged Posts-tab list. */
+export function postCountsByCreator(posts: readonly { creatorId: string | null }[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const post of posts) {
+    if (post.creatorId) counts.set(post.creatorId, (counts.get(post.creatorId) ?? 0) + 1);
+  }
+  return counts;
+}
 
 /** Ever emailed: past "ready", or we have a record of sending them something. */
 export function everEmailed(c: CountableCreator): boolean {
@@ -86,9 +131,13 @@ export function everReplied(c: CountableCreator): boolean {
   return REPLIED_OR_LATER.has(c.lifecycleStatus) || c.lastReplyAt != null || c.replyDecision != null;
 }
 
-/** Address in: we've had their shipping address at some point (checked or not). */
+/**
+ * Address in: we've had their shipping address at some point (checked or not).
+ * Someone whose order was cancelled shows as "Order cancelled" instead.
+ */
 export function everAddressIn(c: CountableCreator): boolean {
-  return ADDRESS_OR_LATER.has(c.lifecycleStatus);
+  if (c.orderStatus === "cancelled") return false;
+  return ADDRESS_OR_LATER.has(c.lifecycleStatus) || hasOrder(c);
 }
 
 /** Approved and not emailed yet. */
@@ -121,6 +170,102 @@ export const ADDRESS_TO_CHECK_WHERE = {
   ],
 };
 
+// ── One current stage per creator ────────────────────────────
+
+export const CREATOR_STAGES = [
+  "needs_review",
+  "not_a_fit",
+  "maybe_later",
+  "ready",
+  "emailed",
+  "replied",
+  "address_to_check",
+  "address_in",
+  "order_made",
+  "shipped",
+  "delivered",
+  "posted",
+  "done",
+  "order_cancelled",
+  "said_no",
+  "not_now",
+] as const;
+
+export type CreatorStage = (typeof CREATOR_STAGES)[number];
+
+/** Words and tone for each stage. The creator table's Status column shows these. */
+export const STAGE_LABELS: Record<CreatorStage, { label: string; tone: StatusTone }> = {
+  needs_review: { label: "Needs review", tone: "waiting" },
+  not_a_fit: { label: "Not a fit", tone: "neutral" },
+  maybe_later: { label: "Maybe later", tone: "neutral" },
+  ready: { label: "Ready to email", tone: "neutral" },
+  emailed: { label: "Emailed", tone: "good" },
+  replied: { label: "Replied", tone: "good" },
+  address_to_check: { label: "Address to check", tone: "waiting" },
+  address_in: { label: "Address in", tone: "good" },
+  order_made: { label: "Order made", tone: "good" },
+  shipped: { label: "Shipped", tone: "good" },
+  delivered: { label: "Delivered", tone: "good" },
+  posted: { label: "Posted", tone: "good" },
+  done: { label: "Done", tone: "good" },
+  order_cancelled: { label: "Order cancelled", tone: "neutral" },
+  said_no: { label: "Said no", tone: "neutral" },
+  not_now: { label: "Not right now", tone: "neutral" },
+};
+
+/**
+ * The one stage a creator is at today. Evidence beats the stored status:
+ *
+ * 1. Any post (same source as the Posts tab) means Posted (Done if closed out).
+ * 2. Not approved yet: Needs review, Not a fit, or Maybe later.
+ * 3. Said no (opted out, or replied no): Said no.
+ * 4. A cancelled order: Order cancelled. Not Address in, not an order made.
+ * 5. Any other order: Order made, Shipped, or Delivered (whichever is furthest
+ *    between the order and the stored status).
+ * 6. Otherwise the stored status: Not right now, Address to check, Address in,
+ *    Replied, Emailed, Ready to email. When orders and posts were loaded, a
+ *    stored order or post step with no order or post on record shows as
+ *    Address in, so it never counts as one. When they weren't loaded
+ *    (undefined), the stored step is trusted.
+ */
+export function creatorStage(c: CountableCreator): CreatorStage {
+  if (hasPosted(c)) return c.lifecycleStatus === "completed" ? "done" : "posted";
+
+  if (c.reviewStatus === "pending") return "needs_review";
+  if (c.reviewStatus === "declined") return "not_a_fit";
+  if (c.reviewStatus === "deferred") return "maybe_later";
+
+  if (saidNo(c)) return "said_no";
+  if (c.orderStatus === "cancelled") return "order_cancelled";
+
+  if (hasOrder(c)) {
+    if (c.orderStatus === "delivered" || c.lifecycleStatus === "delivered") return "delivered";
+    if (c.orderStatus === "shipped" || c.lifecycleStatus === "shipped") return "shipped";
+    return "order_made";
+  }
+
+  if (c.lifecycleStatus === "completed") return "done";
+  if (c.postCount === undefined && c.lifecycleStatus === "posted") return "posted";
+  if (c.orderStatus === undefined) {
+    if (c.lifecycleStatus === "delivered") return "delivered";
+    if (c.lifecycleStatus === "shipped") return "shipped";
+    if (c.lifecycleStatus === "order_created") return "order_made";
+  }
+  if (c.lifecycleStatus === "stalled" || c.replyDecision === "later") return "not_now";
+  if (c.lifecycleStatus === "address_review" || addressToCheck(c)) return "address_to_check";
+  if (ADDRESS_OR_LATER.has(c.lifecycleStatus)) return "address_in";
+  if (everReplied(c)) return "replied";
+  if (everEmailed(c)) return "emailed";
+  return "ready";
+}
+
+/** How many creators are at each stage today. */
+export function countStages(creators: readonly CountableCreator[]): Record<CreatorStage, number> {
+  const counts = Object.fromEntries(CREATOR_STAGES.map((s) => [s, 0])) as Record<CreatorStage, number>;
+  for (const c of creators) counts[creatorStage(c)] += 1;
+  return counts;
+}
+
 // ── Campaign chips ───────────────────────────────────────────
 
 export const STUCK_AFTER_DAYS = 3;
@@ -135,6 +280,10 @@ export type CreatorFilterKey =
   | "needs_answer"
   | "address_in"
   | "address_review"
+  | "order_made"
+  | "posted"
+  | "order_cancelled"
+  | "said_no"
   | "stuck";
 
 /** Filters for the campaign creator list. A chip's number is always the size of its filtered list. */
@@ -148,6 +297,10 @@ export const CREATOR_FILTERS: Record<CreatorFilterKey, { label: string; match: (
   needs_answer: { label: "Needs an answer", match: needsAnswer },
   address_in: { label: "Address in", match: everAddressIn },
   address_review: { label: "Address to check", match: addressToCheck },
+  order_made: { label: "Order made", match: hasOrder },
+  posted: { label: "Posted", match: hasPosted },
+  order_cancelled: { label: "Order cancelled", match: (c) => creatorStage(c) === "order_cancelled" },
+  said_no: { label: "Said no", match: (c) => creatorStage(c) === "said_no" },
   stuck: { label: `No progress for ${STUCK_AFTER_DAYS} days`, match: (c) => c.stuck === true },
 };
 
@@ -169,7 +322,17 @@ export function countCampaignCreators(creators: readonly CountableCreator[]): Ca
 // ── Results: ever reached, and where everyone is now ─────────
 
 /** Cumulative step counts shown in the Results summary line. */
-export type StepCounts = { total: number; emailed: number; replied: number; addressIn: number };
+export type StepCounts = {
+  total: number;
+  emailed: number;
+  replied: number;
+  addressIn: number;
+  /** Creators with an order that wasn't cancelled. One order per creator, so this matches the Orders tab. */
+  ordersMade: number;
+  ordersCancelled: number;
+  /** Creators with at least one post. */
+  posted: number;
+};
 
 export function countStepsReached(creators: readonly CountableCreator[]): StepCounts {
   return {
@@ -177,11 +340,19 @@ export function countStepsReached(creators: readonly CountableCreator[]): StepCo
     emailed: creators.filter(everEmailed).length,
     replied: creators.filter(everReplied).length,
     addressIn: creators.filter(everAddressIn).length,
+    ordersMade: creators.filter(hasOrder).length,
+    ordersCancelled: creators.filter((c) => c.orderStatus === "cancelled").length,
+    posted: creators.filter(hasPosted).length,
   };
 }
 
-/** Results data: the analytics payload plus the cumulative step counts. */
-export type ResultsData = AnalyticsResponse & { readonly steps: StepCounts };
+/** Results data: the analytics payload plus the cumulative step counts and current stages. */
+export type ResultsData = AnalyticsResponse & {
+  readonly steps: StepCounts;
+  readonly stages: Record<CreatorStage, number>;
+  /** Posts on the Posts tab for these creators. */
+  readonly postCount: number;
+};
 
 /** One row per stored lifecycle status: how many creators are on it today. */
 export function lifecycleBreakdown(creators: readonly { lifecycleStatus: string }[]): Record<LifecycleStatus, number> {
@@ -192,19 +363,31 @@ export function lifecycleBreakdown(creators: readonly { lifecycleStatus: string 
   return breakdown;
 }
 
-/** Plain stages for "Where everyone is now". Each groups one or more stored statuses. */
-export const CURRENT_STAGES: readonly { label: string; keys: readonly LifecycleStatus[] }[] = [
-  { label: "Not emailed yet", keys: ["ready"] },
-  { label: "Emailed, no reply yet", keys: ["outreach_sent"] },
-  { label: "Replied", keys: ["replied"] },
-  { label: "Address in", keys: ["address_review", "address_confirmed"] },
-  { label: "Order made", keys: ["order_created"] },
-  { label: "Shipped", keys: ["shipped"] },
-  { label: "Delivered", keys: ["delivered"] },
-  { label: "Posted", keys: ["posted"] },
-  { label: "Done", keys: ["completed"] },
+/** Rows for "Where everyone is now". Each groups one or more stages; the rest are listed underneath. */
+export const CURRENT_STAGES: readonly { label: string; stages: readonly CreatorStage[] }[] = [
+  { label: "Not emailed yet", stages: ["needs_review", "ready"] },
+  { label: "Emailed, no reply yet", stages: ["emailed"] },
+  { label: "Replied, no address yet", stages: ["replied"] },
+  { label: "Address in", stages: ["address_to_check", "address_in"] },
+  { label: "Order made", stages: ["order_made"] },
+  { label: "Shipped", stages: ["shipped"] },
+  { label: "Delivered", stages: ["delivered"] },
+  { label: "Posted", stages: ["posted"] },
+  { label: "Done", stages: ["done"] },
 ];
 
-export function countCurrentStage(lifecycle: Readonly<Record<string, number>>, keys: readonly string[]): number {
-  return keys.reduce((sum, key) => sum + (lifecycle[key] ?? 0), 0);
+/** Stages off the main path, shown as a short note under the breakdown. */
+export const OFF_PATH_STAGES = [
+  "order_cancelled",
+  "said_no",
+  "not_now",
+  "not_a_fit",
+  "maybe_later",
+] as const satisfies readonly CreatorStage[];
+
+export function countCurrentStage(
+  stages: Readonly<Partial<Record<CreatorStage, number>>>,
+  keys: readonly CreatorStage[],
+): number {
+  return keys.reduce((sum, key) => sum + (stages[key] ?? 0), 0);
 }

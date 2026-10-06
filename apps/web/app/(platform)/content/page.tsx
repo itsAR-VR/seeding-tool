@@ -9,6 +9,8 @@ import { rightsEndDate } from "@/lib/content/rights";
 import { getBrandKit } from "@/lib/brand/kit";
 import { SyncContent } from "./sync-content";
 import { PostThumbnail } from "./post-thumbnail";
+import { pickPostMedia } from "./post-media";
+import { isStoredCopy } from "@/lib/content/sync";
 import { RightsAction } from "./rights-action";
 import { AdAction, PartnershipCodeAction } from "./ad-action";
 
@@ -138,8 +140,8 @@ export default async function ContentPage({
         </Card>
       ) : (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {posts.map((post) => {
-            const image = post.mediaType === "VIDEO" ? post.thumbnailUrl : post.mediaUrl;
+          {posts.map((post, index) => {
+            const media = pickPostMedia(post, isStoredCopy);
             const rights = RIGHTS_LABELS[post.rightsStatus] ?? RIGHTS_LABELS.none;
             return (
               <Card key={post.id} className="overflow-hidden">
@@ -149,7 +151,15 @@ export default async function ContentPage({
                   rel="noreferrer"
                   className="relative block aspect-square bg-muted"
                 >
-                  <PostThumbnail src={image ?? null} mediaType={post.mediaType ?? null} source={post.source} />
+                  <PostThumbnail
+                    image={media.image}
+                    video={media.video}
+                    mediaType={post.mediaType ?? null}
+                    source={post.source}
+                    caption={post.caption}
+                    handle={post.username}
+                    index={index}
+                  />
                   {(post.mediaType === "VIDEO" || post.source !== "tag") && (
                     <span className="absolute right-2 top-2 rounded bg-black/60 px-1.5 py-0.5 text-sm text-white">
                       {SOURCE_LABELS[post.source] ?? "Video"}
@@ -197,8 +207,12 @@ export default async function ContentPage({
                     </Link>
                   ) : (
                     <>
-                      {post.rightsStatus === "approved" && <AdAction postId={post.id} defaults={adDefaults} />}
-                      <PartnershipCodeAction postId={post.id} />
+                      {post.rightsStatus === "approved" && (
+                        <>
+                          <AdAction postId={post.id} defaults={adDefaults} />
+                          <PartnershipCodeAction postId={post.id} />
+                        </>
+                      )}
                     </>
                   )}
                   {(post.rightsStatus === "none" || post.rightsStatus === "requested") && (

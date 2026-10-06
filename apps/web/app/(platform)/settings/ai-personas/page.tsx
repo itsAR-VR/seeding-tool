@@ -51,7 +51,7 @@ const emptyForm: FormState = {
 const toneLabels: Record<string, string> = {
   professional: "Polished",
   casual: "Friendly",
-  influencer: "Like a creator",
+  influencer: "Creator to creator",
 };
 
 function parseExamples(text: string): string[] {

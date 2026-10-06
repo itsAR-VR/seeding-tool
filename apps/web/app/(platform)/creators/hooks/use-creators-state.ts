@@ -124,7 +124,10 @@ export function parsePositiveInteger(value: string) {
 export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoad?: boolean } = {}) {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Typing in the search box waits a beat before asking the server.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [minFollowers, setMinFollowers] = useState("");
   const [maxFollowers, setMaxFollowers] = useState("");
   const [minViews, setMinViews] = useState("");
@@ -178,12 +181,25 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
   // Approval settings
   const [discoveryApprovalMode, setDiscoveryApprovalMode] = useState<"recommend" | "auto">("recommend");
   const [discoveryApprovalThreshold, setDiscoveryApprovalThreshold] = useState(0.75);
+  const facetsLoadedRef = useRef(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Only the latest list request may update the table; older ones are aborted.
+  const listRequestRef = useRef<AbortController | null>(null);
+
   const fetchCreators = useCallback(async () => {
+    listRequestRef.current?.abort();
+    const controller = new AbortController();
+    listRequestRef.current = controller;
     setLoading(true);
+    setListError(null);
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
+    if (debouncedSearch) params.set("search", debouncedSearch);
     if (minFollowers) params.set("minFollowers", minFollowers);
     if (maxFollowers) params.set("maxFollowers", maxFollowers);
     if (minViews) params.set("minViews", minViews);
@@ -192,25 +208,41 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     if (source) params.set("source", source);
     params.set("page", page.toString());
     params.set("limit", "50");
-    params.set("includeFacets", "1");
+    // Filter options only need loading once; later pages and filters skip them.
+    if (!facetsLoadedRef.current) params.set("includeFacets", "1");
 
     try {
-      const res = await fetch(`/api/creators?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCreators(data.creators);
-        setTotalPages(data.pagination.totalPages);
-        setTotal(data.pagination.total);
-        setFacets(data.facets ?? EMPTY_FACETS);
+      const res = await fetch(`/api/creators?${params}`, { signal: controller.signal });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Couldn't load your creators.");
       }
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (controller.signal.aborted) return;
+      setCreators(data.creators ?? []);
+      setTotalPages(data.pagination?.totalPages ?? 1);
+      setTotal(data.pagination?.total ?? 0);
+      if (data.facets) {
+        setFacets(data.facets);
+        facetsLoadedRef.current = true;
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setListError(
+        error instanceof Error && error.message !== "Failed to fetch"
+          ? error.message
+          : "Couldn't load your creators. Check your connection and try again."
+      );
     } finally {
-      setLoading(false);
-      setFacetsLoaded(true);
+      // Always clear the skeleton for the latest request, even when it failed.
+      if (listRequestRef.current === controller) {
+        listRequestRef.current = null;
+        setLoading(false);
+        setFacetsLoaded(true);
+      }
     }
   }, [
-    search,
+    debouncedSearch,
     minFollowers,
     maxFollowers,
     minViews,
@@ -220,18 +252,29 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     page,
   ]);
 
+  // The list loads on its own; nothing else waits in front of it.
   useEffect(() => {
-    fetchCreators();
+    void fetchCreators();
+  }, [fetchCreators]);
+
+  useEffect(() => () => listRequestRef.current?.abort(), []);
+
+  // Approval settings load once, separately, and never hold up the list.
+  useEffect(() => {
+    let ignore = false;
     fetch("/api/settings/approval")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { approvalMode?: "recommend" | "auto"; approvalThreshold?: number } | null) => {
-        if (data) {
+        if (data && !ignore) {
           setDiscoveryApprovalMode(data.approvalMode ?? "recommend");
           setDiscoveryApprovalThreshold(data.approvalThreshold ?? 0.75);
         }
       })
       .catch(() => {/* non-fatal */});
-  }, [fetchCreators]);
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -587,6 +630,7 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     // List state
     creators,
     loading,
+    listError,
     search,
     setSearch,
     minFollowers,

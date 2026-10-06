@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
@@ -10,6 +12,7 @@ import {
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { SyncReplies } from "./sync-replies";
 import { InboxList, type InboxRow } from "./inbox-list";
+import { InboxSearch } from "./inbox-search";
 
 type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
 
@@ -20,6 +23,39 @@ const TABS: Array<{ key: InboxTab; label: string }> = [
   { key: "no", label: "No or later" },
   { key: "all", label: "All" },
 ];
+
+const MAX_QUERY_LENGTH = 100;
+
+/** Brand-scoped filter: creator name, handle, email, or any message text. */
+function searchWhere(q: string): Prisma.ConversationThreadWhereInput {
+  const contains = { contains: q, mode: "insensitive" as const };
+  const handle = q.replace(/^@/, "");
+  const handleContains = { contains: handle, mode: "insensitive" as const };
+  return {
+    OR: [
+      {
+        campaignCreator: {
+          creator: {
+            OR: [
+              { name: contains },
+              { email: contains },
+              { instagramHandle: handleContains },
+              { tiktokHandle: handleContains },
+              { profiles: { some: { handle: handleContains } } },
+            ],
+          },
+        },
+      },
+      { messages: { some: { body: contains } } },
+    ],
+  };
+}
+
+function tabHref(tab: InboxTab, q: string): string {
+  const params = new URLSearchParams({ tab });
+  if (q) params.set("q", q);
+  return `/inbox?${params.toString()}`;
+}
 
 function tabFor(thread: {
   campaignCreator: { replyDecision: string | null };
@@ -34,9 +70,10 @@ function tabFor(thread: {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string }>;
 }) {
-  const { tab: tabParam } = await searchParams;
+  const { tab: tabParam, q: rawQuery } = await searchParams;
+  const q = (rawQuery ?? "").trim().slice(0, MAX_QUERY_LENGTH);
   let membership;
   try {
     membership = await getCurrentBrandMembership();
@@ -60,7 +97,7 @@ export default async function InboxPage({
   }
 
   const threads = await prisma.conversationThread.findMany({
-    where: { brandId: membership.brandId },
+    where: q ? { AND: [{ brandId: membership.brandId }, searchWhere(q)] } : { brandId: membership.brandId },
     include: {
       campaignCreator: {
         include: {
@@ -93,7 +130,7 @@ export default async function InboxPage({
   for (const t of threads) counts[tabFor(t)]++;
   const activeTab: InboxTab = TABS.some((t) => t.key === tabParam)
     ? (tabParam as InboxTab)
-    : counts.needs > 0
+    : !q && counts.needs > 0
       ? "needs"
       : "all";
   const visibleThreads = activeTab === "all" ? threads : threads.filter((t) => tabFor(t) === activeTab);
@@ -145,11 +182,15 @@ export default async function InboxPage({
         <SyncReplies />
       </div>
 
+      <Suspense fallback={<div className="h-10 w-full max-w-md" />}>
+        <InboxSearch initialQuery={q} />
+      </Suspense>
+
       <div className="flex flex-wrap gap-2 border-b pb-3">
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={`/inbox?tab=${t.key}`}
+            href={tabHref(t.key, q)}
             className={`rounded-full px-3 py-1 text-sm transition-colors ${
               activeTab === t.key
                 ? "bg-foreground text-background"
@@ -170,11 +211,40 @@ export default async function InboxPage({
 
       {threads.length > 0 && visibleThreads.length === 0 && (
         <p className="text-muted-foreground">
-          {activeTab === "needs" ? "No replies need you right now." : "Nothing here right now."}
+          {q ? (
+            <>
+              No conversations match in this tab.{" "}
+              <Link href={tabHref("all", q)} className="underline hover:text-foreground">
+                See all matches
+              </Link>
+            </>
+          ) : activeTab === "needs" ? (
+            "No replies need you right now."
+          ) : (
+            "Nothing here right now."
+          )}
         </p>
       )}
 
-      {threads.length === 0 ? (
+      {q && threads.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No conversations match</CardTitle>
+            <CardDescription>
+              Nothing found for &ldquo;{q}&rdquo;. Try part of their name, their handle, or their
+              email.
+            </CardDescription>
+            <div className="pt-2 text-sm">
+              <Link
+                href={tabParam ? `/inbox?tab=${encodeURIComponent(tabParam)}` : "/inbox"}
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Clear search
+              </Link>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : threads.length === 0 ? (
         <Card>
           <CardHeader>
             <CardTitle>No conversations yet</CardTitle>

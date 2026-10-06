@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
-import { StatusPill, type StatusTone } from "@/components/status-pill";
+import { StatusPill } from "@/components/status-pill";
 import {
   Card,
   CardContent,
@@ -15,32 +15,55 @@ import {
 } from "@/components/ui/card";
 import { GiftClaimLinkButton } from "./_components/GiftClaimLinkButton";
 import { campaignNextStep } from "./_components/next-step";
-import { CREATOR_FILTERS, countCampaignCreators, isCreatorFilterKey } from "@/lib/stats/campaign-counts";
+import { loadCampaignPosts } from "./_components/campaign-posts";
+import {
+  CREATOR_FILTERS,
+  STAGE_LABELS,
+  countCampaignCreators,
+  creatorStage,
+  isCreatorFilterKey,
+  postCountsByCreator,
+  type CreatorStage,
+} from "@/lib/stats/campaign-counts";
 import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-you";
 
-type CreatorPill = { label: string; tone: StatusTone };
+/** Stages where nobody is waiting on anyone. */
+const NOTHING_TO_DO: ReadonlySet<CreatorStage> = new Set(["said_no", "not_a_fit", "maybe_later", "not_now", "done"]);
 
-const BY_STEP: Record<string, CreatorPill> = {
-  ready: { label: "Ready to email", tone: "neutral" },
-  outreach_sent: { label: "Emailed", tone: "good" },
-  replied: { label: "Replied", tone: "good" },
-  address_review: { label: "Address to check", tone: "waiting" },
-  address_confirmed: { label: "Address in", tone: "good" },
-  order_created: { label: "Order made", tone: "good" },
-  shipped: { label: "Shipped", tone: "good" },
-  delivered: { label: "Delivered", tone: "good" },
-  posted: { label: "Posted", tone: "good" },
-  completed: { label: "Done", tone: "good" },
-  opted_out: { label: "Said no", tone: "neutral" },
-  stalled: { label: "Not right now", tone: "neutral" },
-};
-
-/** One plain status per creator, combining review and progress. */
-function creatorStatus(c: { reviewStatus: string; lifecycleStatus: string }): CreatorPill {
-  if (c.reviewStatus === "pending") return { label: "Needs review", tone: "waiting" };
-  if (c.reviewStatus === "declined") return { label: "Not a fit", tone: "neutral" };
-  if (c.reviewStatus === "deferred") return { label: "Maybe later", tone: "neutral" };
-  return BY_STEP[c.lifecycleStatus] ?? { label: c.lifecycleStatus.replace(/_/g, " "), tone: "neutral" };
+/**
+ * The Address link column: the copy-link button only while we're waiting on
+ * an address (or need a new one after a cancelled order). Otherwise one word on why not.
+ */
+function addressLinkNote(stage: CreatorStage): string | null {
+  switch (stage) {
+    case "emailed":
+    case "replied":
+    case "order_cancelled":
+      return null;
+    case "needs_review":
+      return "After review";
+    case "ready":
+      return "After you email them";
+    case "not_a_fit":
+    case "maybe_later":
+      return "Not needed";
+    case "said_no":
+      return "Said no";
+    case "not_now":
+      return "Not right now";
+    case "address_to_check":
+    case "address_in":
+    case "order_made":
+    case "shipped":
+    case "delivered":
+    case "posted":
+    case "done":
+      return "Address in";
+    default: {
+      const unhandled: never = stage;
+      return unhandled;
+    }
+  }
 }
 
 type PageProps = {
@@ -61,7 +84,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     return null;
   }
 
-  const [campaign, brandSetup, stuckCreators, outreachWaiting, draftOrders] = await Promise.all([
+  const [campaign, brandSetup, stuckCreators, outreachWaiting, draftOrders, posts] = await Promise.all([
     prisma.campaign.findFirst({
       where: { id: campaignId, brandId: membership.brandId },
       include: {
@@ -78,6 +101,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               },
             },
             shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
+            shopifyOrder: { select: { status: true } },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -111,6 +135,8 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     prisma.shopifyOrder.count({
       where: { campaignCreator: { campaignId, campaign: { brandId: membership.brandId } }, status: "draft_created" },
     }),
+    // Same list as the Posts tab, so "Posted" here matches it.
+    loadCampaignPosts(membership.brandId, campaignId),
   ]);
 
   if (!campaign) return notFound();
@@ -118,12 +144,20 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
   // Counts and filters share one definition (lib/stats/campaign-counts), so a
   // chip's number always matches the list it opens. Step chips are "ever
   // reached": Emailed counts everyone emailed, even if they've replied since.
+  // Each creator's status comes from lib/stats creatorStage: stored status,
+  // reply, gift order, and posts together.
   const stuckIds = new Set(stuckCreators.map((s) => s.id));
-  const creators = campaign.campaignCreators.map((cc) => ({
-    ...cc,
-    latestMessageDirection: cc.conversationThread?.messages[0]?.direction ?? null,
-    stuck: stuckIds.has(cc.id),
-  }));
+  const postCounts = postCountsByCreator(posts);
+  const creators = campaign.campaignCreators.map((cc) => {
+    const countable = {
+      ...cc,
+      latestMessageDirection: cc.conversationThread?.messages[0]?.direction ?? null,
+      stuck: stuckIds.has(cc.id),
+      orderStatus: cc.shopifyOrder?.status ?? null,
+      postCount: postCounts.get(cc.creatorId) ?? 0,
+    };
+    return { ...countable, stage: creatorStage(countable) };
+  });
   const visibleCreators = activeFilter
     ? creators.filter(CREATOR_FILTERS[activeFilter].match)
     : creators;
@@ -188,9 +222,15 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             <ArrowRight className="size-4" aria-hidden />
           </Link>
         ) : (
-          <div className="flex items-center gap-3 rounded-xl border bg-card p-5">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-5">
             <CheckCircle2 className="size-5 text-green-700" aria-hidden />
-            <p>Nothing to do right now. New replies and orders will show up here.</p>
+            <p className="flex-1">Nothing to do right now. New replies and orders will show up here.</p>
+            <Link
+              href={`/campaigns/${campaignId}/discover`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Find more creators
+            </Link>
           </div>
         )}
       </section>
@@ -224,6 +264,8 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           { label: CREATOR_FILTERS.emailed.label, value: counts.emailed, filter: "emailed" },
           { label: CREATOR_FILTERS.replied.label, value: counts.replied, filter: "replied" },
           { label: CREATOR_FILTERS.address_in.label, value: counts.address_in, filter: "address_in" },
+          { label: CREATOR_FILTERS.order_made.label, value: counts.order_made, filter: "order_made" },
+          { label: CREATOR_FILTERS.posted.label, value: counts.posted, filter: "posted" },
           // To-do chips: only shown when there's something to do.
           ...(counts.needs_answer > 0
             ? [{ label: CREATOR_FILTERS.needs_answer.label, value: counts.needs_answer, filter: "needs_answer" }]
@@ -234,6 +276,10 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           ...(counts.stuck > 0 ? [{ label: CREATOR_FILTERS.stuck.label, value: counts.stuck, filter: "stuck" }] : []),
           ...(counts.pending > 0 ? [{ label: CREATOR_FILTERS.pending.label, value: counts.pending, filter: "pending" }] : []),
           ...(counts.declined > 0 ? [{ label: CREATOR_FILTERS.declined.label, value: counts.declined, filter: "declined" }] : []),
+          ...(counts.order_cancelled > 0
+            ? [{ label: CREATOR_FILTERS.order_cancelled.label, value: counts.order_cancelled, filter: "order_cancelled" }]
+            : []),
+          ...(counts.said_no > 0 ? [{ label: CREATOR_FILTERS.said_no.label, value: counts.said_no, filter: "said_no" }] : []),
         ].map((step) => {
           const selected = (step.filter ?? null) === activeFilter;
           return (
@@ -251,34 +297,6 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           );
         })}
       </nav>
-
-      {/* Products */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Products</CardTitle>
-          <Link href={`/campaigns/${campaignId}/products`} className={buttonVariants({ variant: "outline", size: "sm" })}>
-            {campaign.campaignProducts.length > 0 ? "Change product" : "Add a product"}
-          </Link>
-        </CardHeader>
-        <CardContent>
-          {campaign.campaignProducts.length > 0 ? (
-            <ul className="space-y-1">
-              {campaign.campaignProducts.map((cp) => (
-                <li key={cp.id}>
-                  {cp.product.name}
-                  {cp.product.retailValue ? (
-                    <span className="text-muted-foreground"> (${(cp.product.retailValue / 100).toFixed(2)})</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              No products yet. Pick the product you are gifting. If the list is empty, connect Shopify in Settings &gt; Connections first.
-            </p>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Creator List */}
       <Card id="creators">
@@ -342,9 +360,8 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   )}
                   {visibleCreators.map((cc) => {
                     const profile = cc.creator.profiles[0];
-                    const status = creatorStatus(cc);
-                    const pastFirstEmail =
-                      cc.reviewStatus === "approved" && !["ready", "opted_out"].includes(cc.lifecycleStatus);
+                    const status = STAGE_LABELS[cc.stage];
+                    const addressNote = addressLinkNote(cc.stage);
                     return (
                       <tr key={cc.id} className="border-b last:border-0">
                         <td className="py-3">
@@ -391,19 +408,21 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                             >
                               Review
                             </Link>
+                          ) : NOTHING_TO_DO.has(cc.stage) ? (
+                            <span className="text-muted-foreground">Nothing to do</span>
                           ) : (
                             <span className="text-muted-foreground">Waiting on them</span>
                           )}
                         </td>
                         <td className="py-3">
-                          {pastFirstEmail ? (
+                          {addressNote ? (
+                            <span className="text-muted-foreground">{addressNote}</span>
+                          ) : (
                             <GiftClaimLinkButton
                               campaignId={campaignId}
                               creatorId={cc.creatorId}
                               disabled={!hasCampaignProducts}
                             />
-                          ) : (
-                            <span className="text-muted-foreground">After you email them</span>
                           )}
                         </td>
                       </tr>

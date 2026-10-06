@@ -6,6 +6,8 @@ import { resolveProviderCredential } from "@/lib/integrations/state";
 import { loadCampaignPosts, type CampaignPost } from "../_components/campaign-posts";
 import { AddPostForm } from "./components/add-post-form";
 import { formatDate } from "@/lib/format/date";
+import { Play } from "lucide-react";
+import { EAGER_TILES, HIGH_PRIORITY_TILES } from "@/app/(platform)/content/post-media";
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
@@ -101,7 +103,7 @@ export default async function CampaignPostsPage({ params }: PageProps) {
           </div>
         ) : (
           <ul className="divide-y rounded-xl border bg-card">
-            {posts.map((post) => (
+            {posts.map((post, index) => (
               <li key={post.key} className="flex items-start gap-4 px-5 py-4">
                 <a
                   href={post.url ?? "#"}
@@ -112,7 +114,7 @@ export default async function CampaignPostsPage({ params }: PageProps) {
                 >
                   {post.imageUrl && post.isVideoFile ? (
                     <video
-                      src={post.imageUrl}
+                      src={post.imageUrl.includes("#") ? post.imageUrl : `${post.imageUrl}#t=0.1`}
                       className="h-full w-full object-cover"
                       muted
                       playsInline
@@ -120,10 +122,24 @@ export default async function CampaignPostsPage({ params }: PageProps) {
                     />
                   ) : post.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={post.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    <img
+                      src={post.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading={index < EAGER_TILES ? "eager" : "lazy"}
+                      fetchPriority={index < HIGH_PRIORITY_TILES ? "high" : "auto"}
+                      decoding="async"
+                    />
                   ) : (
                     <span className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                      No photo
+                      {post.kind === "video" || post.kind === "reel" ? (
+                        <>
+                          <Play aria-hidden="true" className="size-5" />
+                          <span className="sr-only">Video, no preview</span>
+                        </>
+                      ) : (
+                        "No photo"
+                      )}
                     </span>
                   )}
                 </a>

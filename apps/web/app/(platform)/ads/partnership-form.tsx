@@ -52,7 +52,7 @@ export function PartnershipForm({ adsManagerUrl }: { adsManagerUrl: string | nul
         {busy ? "Creating (up to a minute)..." : "Create paused ad"}
       </Button>
       {message && (
-        <p className={`text-sm sm:col-span-3 ${message.ok ? "text-green-700" : "text-red-600"}`}>{message.text}</p>
+        <p role="status" className={`text-sm sm:col-span-3 ${message.ok ? "text-green-700" : "text-red-600"}`}>{message.text}</p>
       )}
       {message && !message.ok && adsManagerUrl && adCode.trim() && (
         <div className="space-y-1 text-sm sm:col-span-3">

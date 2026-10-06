@@ -4,6 +4,7 @@ import {
   CURRENT_STAGES,
   countCampaignCreators,
   countCurrentStage,
+  countStages,
   countStepsReached,
   everEmailed,
   everReplied,
@@ -121,17 +122,17 @@ describe("to-do rules", () => {
 
 describe("where everyone is now", () => {
   it("stages add up to everyone on the main path", () => {
-    const lifecycle = lifecycleBreakdown([
+    const stages = countStages([
       creator({ lifecycleStatus: "ready" }),
       creator({ lifecycleStatus: "address_review" }),
       creator({ lifecycleStatus: "address_confirmed" }),
-      creator({ lifecycleStatus: "posted" }),
+      creator({ lifecycleStatus: "posted", postCount: 1 }),
       creator({ lifecycleStatus: "opted_out" }),
     ]);
-    const onPath = CURRENT_STAGES.reduce((sum, stage) => sum + countCurrentStage(lifecycle, stage.keys), 0);
+    const onPath = CURRENT_STAGES.reduce((sum, stage) => sum + countCurrentStage(stages, stage.stages), 0);
     expect(onPath).toBe(4);
     const addressIn = CURRENT_STAGES.find((s) => s.label === "Address in");
-    expect(countCurrentStage(lifecycle, addressIn?.keys ?? [])).toBe(2);
+    expect(countCurrentStage(stages, addressIn?.stages ?? [])).toBe(2);
   });
 });
 

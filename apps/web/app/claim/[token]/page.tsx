@@ -38,14 +38,24 @@ export default async function GiftClaimPage({ params }: PageProps) {
           ? "expired"
           : null;
   const isUnavailable = unavailableReason !== null;
-  const unavailableMessage =
+  // When the link can't be used, the reason is the heading, so nobody reads "Claim your gift" first.
+  const unavailable =
     unavailableReason === "revoked"
-      ? `This link was cancelled by ${brandName}. Ask them for a new one if you were expecting a gift.`
+      ? {
+          title: "This link was cancelled",
+          body: `${brandName} cancelled it. Ask them for a new one if you were expecting a gift.`,
+        }
       : unavailableReason === "submitted"
-        ? `Your details were already submitted, so there is nothing left to do here. ${brandName} will be in touch.`
+        ? {
+            title: "Your address is already in",
+            body: `There's nothing left to do here. ${brandName} will be in touch.`,
+          }
         : unavailableReason === "expired"
-          ? `This link has expired. Ask ${brandName} for a fresh one.`
-          : "It may have expired or already been used. Please ask the brand that sent it for a fresh link.";
+          ? { title: "This link has expired", body: `Ask ${brandName} for a fresh one.` }
+          : {
+              title: "This link doesn't work",
+              body: "It may have expired or already been used. Ask the brand that sent it for a fresh link.",
+            };
 
   return (
     <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
@@ -57,17 +67,14 @@ export default async function GiftClaimPage({ params }: PageProps) {
           ) : (
             <p className="text-xl font-semibold">{brand?.name ?? ""}</p>
           )}
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight">
-            Claim your gift
-          </h1>
-
           {isUnavailable || !claim ? (
-            <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <h2 className="font-semibold">This claim link is unavailable</h2>
-              <p className="mt-2 text-sm leading-6">{unavailableMessage}</p>
-            </div>
+            <>
+              <h1 className="mt-6 text-3xl font-semibold tracking-tight">{unavailable.title}</h1>
+              <p className="mt-3 text-base leading-7 text-neutral-700">{unavailable.body}</p>
+            </>
           ) : (
             <>
+              <h1 className="mt-6 text-3xl font-semibold tracking-tight">Claim your gift</h1>
               <p className="mt-3 text-sm leading-6 text-neutral-700">
                 You’re receiving{" "}
                 <span className="font-medium">
