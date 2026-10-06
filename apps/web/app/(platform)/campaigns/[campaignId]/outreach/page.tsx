@@ -110,6 +110,8 @@ export default function OutreachPage() {
   const [channel, setChannel] = useState<"email" | "instagram_dm">("email");
   const [additionalContext, setAdditionalContext] = useState("");
   const [drafts, setDrafts] = useState<GeneratedDraft[]>([]);
+  // Two separate screens: pick creators, then review and send their emails.
+  const [step, setStep] = useState<"choose" | "review">("choose");
   const [editedDrafts, setEditedDrafts] = useState<
     Record<string, { subject?: string; body: string }>
   >({});
@@ -319,6 +321,8 @@ export default function OutreachPage() {
       if (res.ok) {
         const data = await res.json();
         setDrafts(data.drafts);
+        setStep("review");
+        window.scrollTo({ top: 0 });
         // Initialize editable copies
         const edits: Record<string, { subject?: string; body: string }> = {};
         for (const d of data.drafts) {
@@ -375,7 +379,11 @@ export default function OutreachPage() {
       (data.results ?? []).filter((r) => r.status === "sent").map((r) => r.campaignCreatorId)
     );
     const failures = (data.results ?? []).filter((r) => r.status !== "sent");
-    setDrafts((prev) => prev.filter((d) => !sentIds.has(d.campaignCreatorId)));
+    setDrafts((prev) => {
+        const left = prev.filter((d) => !sentIds.has(d.campaignCreatorId));
+        if (left.length === 0) setStep("choose");
+        return left;
+      });
     setSelectedIds((prev) => new Set([...prev].filter((id) => !sentIds.has(id))));
     const sent = data.sent ?? sentIds.size;
     setNotice(
@@ -393,9 +401,15 @@ export default function OutreachPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Email creators</h1>
-        <p className="text-muted-foreground">
-          Pick creators, check each email, then send.
-        </p>
+        <ol className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-label="Steps">
+          <li className={step === "choose" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "choose" ? "step" : undefined}>
+            1. Choose creators
+          </li>
+          <li aria-hidden className="text-muted-foreground">→</li>
+          <li className={step === "review" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "review" ? "step" : undefined}>
+            2. Review and send
+          </li>
+        </ol>
       </div>
 
       {notice && (
@@ -512,6 +526,17 @@ export default function OutreachPage() {
       </Card>
       )}
 
+      {step === "choose" && drafts.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            {drafts.length} {drafts.length === 1 ? "email is" : "emails are"} written and waiting for you.
+          </span>
+          <Button onClick={() => setStep("review")}>Back to review and send</Button>
+        </div>
+      )}
+
+      {step === "choose" && (
+      <>
       {/* Creator Selection */}
       <Card>
         <CardHeader>
@@ -791,15 +816,25 @@ export default function OutreachPage() {
           </div>
         </div>
       </details>
+      </>
+      )}
 
       {/* Generated Drafts */}
-      {drafts.length > 0 && (
+      {step === "review" && drafts.length > 0 && (
         <Card id="review-emails">
           <CardHeader>
-            <CardTitle>Review emails</CardTitle>
-            <CardDescription>
-              Edit anything you like. Nothing sends until you click Send.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Review and send</CardTitle>
+                <CardDescription>
+                  {drafts.length} {drafts.length === 1 ? "email" : "emails"}. Edit anything you like. Nothing sends until
+                  you click Send.
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => setStep("choose")} disabled={sending}>
+                ← Choose different creators
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {drafts.map((draft) => (
@@ -945,6 +980,7 @@ export default function OutreachPage() {
                   setDrafts([]);
                   setEditedDrafts({});
                   setConfirmingSend(null);
+                  setStep("choose");
                 }}
               >
                 Discard
