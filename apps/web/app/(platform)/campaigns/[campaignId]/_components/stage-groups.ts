@@ -18,17 +18,27 @@ export type StageGroup = {
 };
 
 export const STAGE_GROUPS: readonly StageGroup[] = [
-  // Every stage whose next step is yours: review, email, answer, check, order, ship, re-send the link.
+  // Every stage whose next step is yours: review (or review again), email, answer, check, order, ship, re-send the link.
   {
     key: "needs_you",
     label: "Needs you",
-    stages: ["needs_review", "ready", "needs_answer", "address_to_check", "address_in", "order_made", "order_cancelled"],
+    stages: [
+      "needs_review",
+      "maybe_later",
+      "ready",
+      "needs_answer",
+      "address_to_check",
+      "address_in",
+      "order_made",
+      "order_cancelled",
+    ],
     always: true,
   },
   // The next step is theirs: a reply, an address, the parcel arriving, a post.
   { key: "waiting", label: "Waiting", stages: ["emailed", "replied", "said_yes", "not_now", "shipped", "delivered"], always: true },
   { key: "done", label: "Done", stages: ["posted", "done"], always: true },
-  { key: "said_no", label: "Not going ahead", stages: ["said_no", "not_a_fit", "maybe_later"], always: false },
+  // Named after exactly the two statuses inside it, so the chip and the rows agree.
+  { key: "said_no", label: "Said no or not a fit", stages: ["said_no", "not_a_fit"], always: false },
 ];
 
 const GROUP_BY_KEY = new Map(STAGE_GROUPS.map((g) => [g.key, g]));

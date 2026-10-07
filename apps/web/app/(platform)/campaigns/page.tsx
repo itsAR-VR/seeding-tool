@@ -14,6 +14,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { campaignStatus } from "./_components/campaign-status";
+import { countNeedsAnswerByCampaign } from "@/lib/stats/needs-you";
 
 export default async function CampaignsPage() {
   let membership;
@@ -38,7 +39,7 @@ export default async function CampaignsPage() {
     throw error;
   }
 
-  const [campaigns, toEmailRows] = await Promise.all([
+  const [campaigns, toEmailRows, toAnswerByCampaign] = await Promise.all([
     prisma.campaign.findMany({
       where: { brandId: membership.brandId },
       include: {
@@ -58,6 +59,7 @@ export default async function CampaignsPage() {
       },
       _count: { _all: true },
     }),
+    countNeedsAnswerByCampaign(membership.brandId),
   ]);
   const toEmailByCampaign = new Map(
     toEmailRows.map((r) => [r.campaignId, r._count._all]),
@@ -115,6 +117,7 @@ export default async function CampaignsPage() {
                       const status = campaignStatus(campaign.status, {
                         total: campaign._count.campaignCreators,
                         toEmail: toEmailByCampaign.get(campaign.id) ?? 0,
+                        toAnswer: toAnswerByCampaign.get(campaign.id) ?? 0,
                       });
                       return (
                         <StatusPill tone={status.tone}>

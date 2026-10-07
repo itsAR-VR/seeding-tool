@@ -7,7 +7,10 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
-import { UnifiedKeywordSelector, type KeywordGroup } from "@/components/unified-keyword-selector";
+import {
+  UnifiedKeywordSelector,
+  type KeywordGroup,
+} from "@/components/unified-keyword-selector";
 import { LocationInput } from "@/components/location-input";
 import type {
   CampaignOption,
@@ -17,6 +20,7 @@ import type {
 import { sourceLabel } from "./creator-filters";
 import { useModal } from "@/components/use-modal";
 import { X } from "lucide-react";
+import { AllowanceLeft } from "@/components/allowance-left";
 
 // ── Campaign Modal ──────────────────────────────────────────────────────
 
@@ -91,14 +95,19 @@ export function CampaignModal({
               <Button
                 onClick={onConfirm}
                 disabled={!selectedCampaignId || addingToCampaign}
-                aria-describedby={!selectedCampaignId ? "add-to-campaign-hint" : undefined}
+                aria-describedby={
+                  !selectedCampaignId ? "add-to-campaign-hint" : undefined
+                }
               >
                 {addingToCampaign ? "Adding..." : "Add to campaign"}
               </Button>
             )}
           </div>
           {campaigns.length > 0 && !selectedCampaignId && (
-            <p id="add-to-campaign-hint" className="text-right text-sm text-muted-foreground">
+            <p
+              id="add-to-campaign-hint"
+              className="text-right text-sm text-muted-foreground"
+            >
               Pick a campaign first
             </p>
           )}
@@ -117,7 +126,11 @@ type SearchModalProps = {
   selectedResults: Set<string>;
   importing: boolean;
   searchSources: Record<SearchSourceKey, boolean>;
-  setSearchSources: (fn: (current: Record<SearchSourceKey, boolean>) => Record<SearchSourceKey, boolean>) => void;
+  setSearchSources: (
+    fn: (
+      current: Record<SearchSourceKey, boolean>,
+    ) => Record<SearchSourceKey, boolean>,
+  ) => void;
   searchCategoriesLoading: boolean;
   keywordGroups: KeywordGroup[];
   selectedKeywords: string[];
@@ -182,7 +195,8 @@ export function SearchModal({
   onNewSearch,
 }: SearchModalProps) {
   const [pendingWords, setPendingWords] = useState("");
-  const nothingToSearch = selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim();
+  const nothingToSearch =
+    selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim();
   const boxRef = useRef<HTMLDivElement>(null);
   useModal(boxRef, onClose);
   return (
@@ -205,9 +219,12 @@ export function SearchModal({
             <X className="size-5" aria-hidden />
           </button>
           <CardTitle id="find-creators-title">Find creators</CardTitle>
-          <p id="find-creators-intro" className="mt-1 text-sm text-muted-foreground">
-            Type what their content is about. We search Instagram and Collabstr and score each creator against your
-            brand.
+          <p
+            id="find-creators-intro"
+            className="mt-1 text-sm text-muted-foreground"
+          >
+            Type what their content is about. We search Instagram and Collabstr
+            and score each creator against your brand.
           </p>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col">
@@ -244,9 +261,12 @@ export function SearchModal({
               <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4" />
               <p className="font-medium">Finding creators...</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                This takes a few minutes. You can close this and keep working; results stay on the Creators page.
+                This takes a few minutes. You can close this and keep working;
+                results stay on the Creators page.
               </p>
-              <span className="sr-only">Status: {searchStatus || "starting"}</span>
+              <span className="sr-only">
+                Status: {searchStatus || "starting"}
+              </span>
             </div>
           )}
 
@@ -275,10 +295,11 @@ export function SearchModal({
             {searchResults.length === 0 && !searching && (
               <Button
                 onClick={onStartSearch}
-                aria-describedby={nothingToSearch ? "modal-search-hint" : undefined}
+                aria-describedby={
+                  nothingToSearch ? "modal-search-hint" : undefined
+                }
                 disabled={
-                  nothingToSearch ||
-                  Boolean(searchLimitValidation.error)
+                  nothingToSearch || Boolean(searchLimitValidation.error)
                 }
               >
                 Find creators
@@ -292,7 +313,9 @@ export function SearchModal({
                 </Button>
                 <Button
                   onClick={onImportSelected}
-                  aria-describedby={selectedResults.size === 0 ? "modal-import-hint" : undefined}
+                  aria-describedby={
+                    selectedResults.size === 0 ? "modal-import-hint" : undefined
+                  }
                   disabled={selectedResults.size === 0 || importing}
                 >
                   {importing
@@ -303,15 +326,23 @@ export function SearchModal({
             )}
           </div>
           {searchResults.length === 0 && !searching && nothingToSearch && (
-            <p id="modal-search-hint" className="mt-2 text-right text-sm text-muted-foreground">
+            <p
+              id="modal-search-hint"
+              className="mt-2 text-right text-sm text-muted-foreground"
+            >
               Add something to search for
             </p>
           )}
-          {searchResults.length > 0 && !searching && selectedResults.size === 0 && (
-            <p id="modal-import-hint" className="mt-2 text-right text-sm text-muted-foreground">
-              Pick at least one creator
-            </p>
-          )}
+          {searchResults.length > 0 &&
+            !searching &&
+            selectedResults.size === 0 && (
+              <p
+                id="modal-import-hint"
+                className="mt-2 text-right text-sm text-muted-foreground"
+              >
+                Pick at least one creator
+              </p>
+            )}
         </CardContent>
       </Card>
     </div>
@@ -344,7 +375,11 @@ function SearchForm({
   onPendingWordsChange,
 }: {
   searchSources: Record<SearchSourceKey, boolean>;
-  setSearchSources: (fn: (current: Record<SearchSourceKey, boolean>) => Record<SearchSourceKey, boolean>) => void;
+  setSearchSources: (
+    fn: (
+      current: Record<SearchSourceKey, boolean>,
+    ) => Record<SearchSourceKey, boolean>,
+  ) => void;
   searchCategoriesLoading: boolean;
   keywordGroups: KeywordGroup[];
   selectedKeywords: string[];
@@ -371,8 +406,16 @@ function SearchForm({
   const sourceOptions: Array<[SearchSourceKey, string, string]> = [
     ["apify_search", "Instagram", "Search Instagram profiles for your words."],
     ["collabstr", "Collabstr", "Creators listed on the Collabstr marketplace."],
-    ["approved_seed_following", "Who your approved creators follow", "Finds similar creators. Slower."],
-    ["apify_keyword_email", "Instagram, emails first", "Only creators with a public email. Slower."],
+    [
+      "approved_seed_following",
+      "Who your approved creators follow",
+      "Finds similar creators. Slower.",
+    ],
+    [
+      "apify_keyword_email",
+      "Instagram, emails first",
+      "Only creators with a public email. Slower.",
+    ],
   ];
   const sourceCount = Object.values(searchSources).filter(Boolean).length;
 
@@ -434,12 +477,16 @@ function SearchForm({
         </fieldset>
       </div>
       {searchLimitValidation.error ? (
-        <p className="-mt-3 text-sm text-destructive">{searchLimitValidation.error}</p>
+        <p className="-mt-3 text-sm text-destructive">
+          {searchLimitValidation.error}
+        </p>
       ) : searchLimitWarning ? (
         <p className="-mt-3 text-sm text-amber-700">{searchLimitWarning}</p>
       ) : (
         <p className="-mt-3 text-sm text-muted-foreground">
-          Start with 10 to 25. Bigger searches take longer and use more of your search allowance.
+          Start with 10 to 25. Bigger searches take longer and use more of your
+          search allowance.
+          <AllowanceLeft />
         </p>
       )}
 
@@ -460,23 +507,39 @@ function SearchForm({
                   type="checkbox"
                   className="mt-1 size-4"
                   checked={searchSources[src]}
-                  onChange={() => setSearchSources((current) => ({ ...current, [src]: !current[src] }))}
+                  onChange={() =>
+                    setSearchSources((current) => ({
+                      ...current,
+                      [src]: !current[src],
+                    }))
+                  }
                 />
                 <span>
                   <span className="font-medium">{label}</span>
-                  <span className="block text-sm text-muted-foreground">{hint}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {hint}
+                  </span>
                 </span>
               </label>
             ))}
           </fieldset>
 
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium">Location (optional)</label>
-            <LocationInput value={searchLocation} onChange={setSearchLocation} suggestions={locationSuggestions} />
+            <label className="block text-sm font-medium">
+              Location (optional)
+            </label>
+            <LocationInput
+              value={searchLocation}
+              onChange={setSearchLocation}
+              suggestions={locationSuggestions}
+            />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="search-usernames" className="block text-sm font-medium">
+            <label
+              htmlFor="search-usernames"
+              className="block text-sm font-medium"
+            >
               Specific creators to check (optional)
             </label>
             <textarea
@@ -488,7 +551,11 @@ function SearchForm({
             />
             {usernameSuggestions.length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                Recent: {usernameSuggestions.slice(0, 4).map((option) => `@${option.value}`).join(", ")}
+                Recent:{" "}
+                {usernameSuggestions
+                  .slice(0, 4)
+                  .map((option) => `@${option.value}`)
+                  .join(", ")}
               </p>
             ) : null}
           </div>
@@ -511,12 +578,14 @@ function SearchResultsTable({
   onToggleResult: (id: string) => void;
   onToggleAll: () => void;
 }) {
-  const allSelected = selectedResults.size === results.length && results.length > 0;
+  const allSelected =
+    selectedResults.size === results.length && results.length > 0;
   return (
     <div className="min-h-0 flex-1 space-y-3 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">
-          {results.length} {results.length === 1 ? "creator" : "creators"} found.{" "}
+          {results.length} {results.length === 1 ? "creator" : "creators"}{" "}
+          found.{" "}
           <span className="font-normal text-muted-foreground">
             {selectedResults.size} selected.
           </span>
@@ -539,21 +608,33 @@ function SearchResultsTable({
                   onChange={onToggleAll}
                 />
               </th>
-              <th scope="col" className="p-3 font-medium">Creator</th>
-              <th scope="col" className="p-3 font-medium">Found through</th>
-              <th scope="col" className="p-3 font-medium">Followers</th>
-              <th scope="col" className="p-3 font-medium">Average views</th>
-              <th scope="col" className="p-3 font-medium">Bio</th>
+              <th scope="col" className="p-3 font-medium">
+                Creator
+              </th>
+              <th scope="col" className="p-3 font-medium">
+                Found through
+              </th>
+              <th scope="col" className="p-3 font-medium">
+                Followers
+              </th>
+              <th scope="col" className="p-3 font-medium">
+                Average views
+              </th>
+              <th scope="col" className="p-3 font-medium">
+                Bio
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y">
             {results.map((result) => {
               const labels = Array.from(
                 new Set(
-                  (result.sources ?? [result.primarySource || result.source || "manual"]).map(
-                    (src) => sourceLabel(src)
-                  )
-                )
+                  (
+                    result.sources ?? [
+                      result.primarySource || result.source || "manual",
+                    ]
+                  ).map((src) => sourceLabel(src)),
+                ),
               );
               const checked = selectedResults.has(result.id);
               return (
@@ -583,7 +664,9 @@ function SearchResultsTable({
                         />
                       )}
                       <div>
-                        {result.name && <p className="font-medium">{result.name}</p>}
+                        {result.name && (
+                          <p className="font-medium">{result.name}</p>
+                        )}
                         <InstagramHandleLink
                           handle={result.handle}
                           url={result.profileUrl}
@@ -603,8 +686,13 @@ function SearchResultsTable({
                       <span className="text-muted-foreground">Unknown</span>
                     )}
                   </td>
-                  <td className="max-w-[240px] truncate p-3" title={result.bio || result.bioCategory || undefined}>
-                    {result.bio || result.bioCategory || <span className="text-muted-foreground">No bio</span>}
+                  <td
+                    className="max-w-[240px] truncate p-3"
+                    title={result.bio || result.bioCategory || undefined}
+                  >
+                    {result.bio || result.bioCategory || (
+                      <span className="text-muted-foreground">No bio</span>
+                    )}
                   </td>
                 </tr>
               );

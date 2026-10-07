@@ -37,7 +37,7 @@ const COLUMNS: { key: ColumnKey; label: string; className?: string }[] = [
   { key: "views", label: "Average views", className: WIDE_ONLY },
   { key: "category", label: "Category", className: WIDE_ONLY },
   { key: "source", label: "Found through", className: "hidden lg:table-cell" },
-  { key: "campaigns", label: "Campaigns" },
+  { key: "campaigns", label: "Campaigns", className: "min-w-[14rem]" },
   { key: "actions", label: "" },
 ];
 

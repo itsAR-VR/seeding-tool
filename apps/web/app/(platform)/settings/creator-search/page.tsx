@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/safe-return-path";
 
-type Status = { hasOwnKey: boolean; usesShared: boolean };
+type Status = { hasOwnKey: boolean; usesShared: boolean; allowanceLeftPercent?: number | null };
 
 function CreatorSearchSettings() {
   const searchParams = useSearchParams();
@@ -96,6 +96,13 @@ function CreatorSearchSettings() {
 
       <section className="space-y-4 rounded-xl border bg-card p-5">
         <p className="font-medium">{current}</p>
+        {status?.allowanceLeftPercent != null && (
+          <p className="text-sm">
+            <span className="font-semibold tabular-nums">{status.allowanceLeftPercent}%</span> of this month&apos;s
+            search allowance is left.
+            {status.allowanceLeftPercent < 15 ? " Keep searches small until it resets next month." : ""}
+          </p>
+        )}
         {status?.usesShared && !status.hasOwnKey && (
           <p className="text-sm text-muted-foreground">You don&apos;t need to do anything. A key is only for running searches on your own account.</p>
         )}

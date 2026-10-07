@@ -12,6 +12,7 @@ import { campaignStatus } from "../campaigns/_components/campaign-status";
 import {
   countNeedsAnswer,
   findOutreachWaitingToSend,
+  countNeedsAnswerByCampaign,
   findStuckCreators,
   groupByCampaign,
 } from "@/lib/stats/needs-you";
@@ -138,6 +139,8 @@ export default async function DashboardPage() {
     outreachWaiting,
     stuckCreators,
     toEmailRows,
+    toAnswerByCampaign,
+    unwrittenRows,
   ] = await Promise.all([
     countNeedsAnswer(brandId),
     prisma.shopifyOrder.count({
@@ -166,6 +169,17 @@ export default async function DashboardPage() {
       where: { campaign: { brandId }, reviewStatus: "approved", lifecycleStatus: "ready" },
       _count: { _all: true },
     }),
+    countNeedsAnswerByCampaign(brandId),
+    // Not emailed yet and no email written: these need "Email them", not "Send them".
+    prisma.campaignCreator.findMany({
+      where: {
+        campaign: { brandId, status: { in: ["draft", "active", "paused"] } },
+        reviewStatus: "approved",
+        lifecycleStatus: "ready",
+        aiDrafts: { none: { type: "outreach", status: "draft" } },
+      },
+      select: { campaign: { select: { id: true, name: true } } },
+    }),
   ]);
   const toEmailByCampaign = new Map(toEmailRows.map((r) => [r.campaignId, r._count._all]));
 
@@ -189,16 +203,36 @@ export default async function DashboardPage() {
       href: `/campaigns/${group.campaignId}/outreach?written=1`,
     };
   });
+  // Approved, not emailed, and nothing written yet: they need their first email.
+  const unwrittenGroups = groupByCampaign(unwrittenRows);
+  const unwrittenTodos: Todo[] = unwrittenGroups.map((group) => ({
+    count: group.count,
+    text: plural(
+      group.count,
+      `creator in ${group.campaignName} is approved and not emailed yet`,
+      `creators in ${group.campaignName} are approved and not emailed yet`,
+    ),
+    action: "Email them",
+    href: `/campaigns/${group.campaignId}/outreach`,
+  }));
+
   const stuckGroups = groupByCampaign(stuckCreators);
+  const now = daysAgo(0).getTime();
   const stuckTodos: Todo[] = stuckGroups.map((group) => {
     // Always name the campaign: the link opens that campaign, not every stuck creator.
     const where = ` in ${group.campaignName}`;
+    // The real wait, from the quietest one, so "3 days" never hides 12.
+    const oldest = Math.min(
+      ...stuckCreators.filter((c) => c.campaign.id === group.campaignId).map((c) => new Date(c.updatedAt).getTime()),
+    );
+    const days = Math.max(STUCK_AFTER_DAYS, Math.floor((now - oldest) / 86_400_000));
+    const span = group.count > 1 && days > STUCK_AFTER_DAYS ? `${STUCK_AFTER_DAYS} to ${days} days` : `${days} days`;
     return {
       count: group.count,
       text: plural(
         group.count,
-        `creator${where} hasn't moved in ${STUCK_AFTER_DAYS} days`,
-        `creators${where} haven't moved in ${STUCK_AFTER_DAYS} days`,
+        `creator${where} hasn't moved in ${span}`,
+        `creators${where} haven't moved in ${span}`,
       ),
       action: "See who",
       href: `/campaigns/${group.campaignId}?filter=stuck#creators`,
@@ -213,6 +247,7 @@ export default async function DashboardPage() {
       href: "/inbox",
     },
     ...outreachTodos,
+    ...unwrittenTodos,
     {
       count: addressesToConfirm,
       text: plural(addressesToConfirm, "address to check", "addresses to check"),
@@ -359,6 +394,7 @@ export default async function DashboardPage() {
                       campaignStatus(campaign.status, {
                         total: campaign._count.campaignCreators,
                         toEmail: toEmailByCampaign.get(campaign.id) ?? 0,
+                        toAnswer: toAnswerByCampaign.get(campaign.id) ?? 0,
                       }).label
                     }
                   </span>

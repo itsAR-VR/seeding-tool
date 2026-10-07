@@ -398,14 +398,23 @@ export default function OutreachPage() {
   };
 
   // Arriving with ?written=1 opens the saved emails once everything has loaded.
+  // A row's "Send written email" (?select=<id>) opens just that one.
   const openedWritten = useRef(false);
   useEffect(() => {
-    if (!openWritten || openedWritten.current || checking || generating || writtenCreators.length === 0) return;
+    if (openedWritten.current || checking || generating) return;
+    const single = preselectId ? writtenCreators.find((c) => c.id === preselectId) : undefined;
+    if (single) {
+      openedWritten.current = true;
+      setSelectedIds(new Set([single.id]));
+      void generateDrafts([single.id]);
+      return;
+    }
+    if (!openWritten || writtenCreators.length === 0) return;
     openedWritten.current = true;
     openWrittenEmails();
     // Runs once (the ref guards it); the handler is rebuilt each render, so it isn't a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openWritten, checking, generating, writtenCreators.length]);
+  }, [openWritten, preselectId, checking, generating, writtenCreators.length]);
 
   const updateDraft = (
     ccId: string,
@@ -767,6 +776,8 @@ export default function OutreachPage() {
                   </div>
                   {queuedIds.has(cc.id) ? (
                     <StatusPill tone="waiting">Queued to send</StatusPill>
+                  ) : sendable && (cc.aiDrafts?.length ?? 0) > 0 ? (
+                    <StatusPill tone="waiting">Email written</StatusPill>
                   ) : (
                     <StatusPill tone={statusDisplay(cc).tone}>{statusDisplay(cc).label}</StatusPill>
                   )}

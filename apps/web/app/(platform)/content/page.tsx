@@ -118,11 +118,12 @@ export default async function ContentPage({
               ...(t.key === "all" ? {} : { tab: t.key }),
               ...(since ? { new: "1" } : {}),
             })}`}
-            className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm md:min-h-9 md:px-3 ${
+            aria-label={`${t.label}: ${countFor(t.key)}`}
+            className={`inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm md:min-h-9 md:px-3 ${
               tab === t.key ? "bg-foreground text-background" : "hover:bg-muted"
             }`}
           >
-            {t.label} <span className="opacity-70">{countFor(t.key)}</span>
+            {t.label} <span className="font-semibold tabular-nums opacity-80">{countFor(t.key)}</span>
           </Link>
         ))}
       </div>

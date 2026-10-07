@@ -129,10 +129,11 @@ export function stageNextStep(
   const conversation = ctx.threadId ? `/inbox/${ctx.threadId}` : "/inbox";
   switch (stage) {
     case "needs_review":
+    case "maybe_later":
       return { label: "Review", href: `${base}/review` };
     case "ready":
       return ctx.hasWrittenEmail
-        ? { label: "Send written email", href: `${base}/outreach?written=1` }
+        ? { label: "Send written email", href: `${base}/outreach?select=${ctx.campaignCreatorId}` }
         : { label: "Email them", href: `${base}/outreach?select=${ctx.campaignCreatorId}` };
     case "emailed":
     case "replied":
@@ -158,7 +159,6 @@ export function stageNextStep(
     case "said_no":
     case "not_now":
     case "not_a_fit":
-    case "maybe_later":
       return null;
     default: {
       const unhandled: never = stage;

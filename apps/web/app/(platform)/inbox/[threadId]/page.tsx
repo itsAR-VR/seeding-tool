@@ -850,6 +850,10 @@ function DecisionChoice({
                 }`}
               >
                 {c.label}
+                {/* The key sits on the button so nobody has to remember that L means later. */}
+                <kbd className="ml-1.5 rounded border px-1 font-sans text-xs opacity-70" aria-hidden="true">
+                  {c.key.toUpperCase()}
+                </kbd>
               </button>
             );
           })}
@@ -857,7 +861,7 @@ function DecisionChoice({
         {decision && <span className="text-sm text-muted-foreground">Now: {decisionStatusLabel(decision)}</span>}
       </div>
       <p className="text-sm text-muted-foreground" aria-hidden="true">
-        Shortcuts: Y yes, L not right now, N no, J next reply
+        Shortcuts: Y yes, L later (not right now), N no, J next reply
       </p>
       {after}
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}

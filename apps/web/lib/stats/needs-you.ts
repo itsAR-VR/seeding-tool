@@ -26,6 +26,27 @@ export async function countNeedsAnswer(brandId: string): Promise<number> {
     .length;
 }
 
+/**
+ * Same rule as countNeedsAnswer, per campaign, so a campaign's badge can say
+ * "Replies to answer" when its people are waiting on you.
+ */
+export async function countNeedsAnswerByCampaign(brandId: string): Promise<Map<string, number>> {
+  const threads = await prisma.conversationThread.findMany({
+    where: { brandId, campaignCreator: { replyDecision: null } },
+    select: {
+      campaignCreator: { select: { campaignId: true } },
+      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
+    },
+  });
+  const counts = new Map<string, number>();
+  for (const t of threads) {
+    if (!needsAnswer({ replyDecision: null, latestMessageDirection: t.messages[0]?.direction })) continue;
+    const id = t.campaignCreator.campaignId;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export type StuckCreator = {
   id: string;
   lifecycleStatus: string;

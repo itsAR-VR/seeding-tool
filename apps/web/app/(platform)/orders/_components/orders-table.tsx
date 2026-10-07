@@ -157,7 +157,9 @@ export function OrdersTable({
                   <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
                 </td>
                 <td className="px-5 py-4">
-                  {cancelled ? null : draft ? (
+                  {cancelled ? (
+                    <span className="text-muted-foreground">–</span>
+                  ) : draft ? (
                     <span className="text-muted-foreground">Not shipped</span>
                   ) : order.tracking?.trackingNumber ? (
                     <span>

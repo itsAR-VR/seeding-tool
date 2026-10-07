@@ -5,6 +5,7 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { getFeatureFlags } from "@/lib/feature-flags";
 import { StatusPill } from "@/components/status-pill";
 import { campaignStatus } from "../_components/campaign-status";
+import { countNeedsAnswerByCampaign } from "@/lib/stats/needs-you";
 import { CampaignTabs } from "./_components/campaign-tabs";
 
 /**
@@ -28,7 +29,7 @@ export default async function CampaignLayout({
     throw error;
   }
 
-  const [campaign, flags, toEmail] = await Promise.all([
+  const [campaign, flags, toEmail, toAnswerByCampaign] = await Promise.all([
     prisma.campaign.findFirst({
       where: { id: campaignId, brandId },
       select: { id: true, name: true, description: true, status: true, _count: { select: { campaignCreators: true } } },
@@ -37,10 +38,15 @@ export default async function CampaignLayout({
     prisma.campaignCreator.count({
       where: { campaignId, campaign: { brandId }, reviewStatus: "approved", lifecycleStatus: "ready" },
     }),
+    countNeedsAnswerByCampaign(brandId),
   ]);
   if (!campaign) notFound();
 
-  const status = campaignStatus(campaign.status, { total: campaign._count.campaignCreators, toEmail });
+  const status = campaignStatus(campaign.status, {
+    total: campaign._count.campaignCreators,
+    toEmail,
+    toAnswer: toAnswerByCampaign.get(campaign.id) ?? 0,
+  });
 
   return (
     <div className="space-y-6">

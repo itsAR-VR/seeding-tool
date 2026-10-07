@@ -14,6 +14,7 @@ import { LocationInput } from "@/components/location-input";
 import type { CategoryGroups } from "@/components/grouped-category-picker";
 import type { CreatorFacets } from "@/lib/creators/facets";
 import { isCanonicalDiscoveryCategory } from "@/lib/categories/catalog";
+import { AllowanceLeft } from "@/components/allowance-left";
 
 type SearchJob = {
   jobId: string;
@@ -62,9 +63,21 @@ const DEFAULT_SOURCES: Record<SearchSourceKey, boolean> = {
 
 const SOURCE_OPTIONS: Array<[SearchSourceKey, string, string]> = [
   ["apify_search", "Instagram", "Search Instagram profiles for your words."],
-  ["collabstr", "Collabstr marketplace", "Creators listed on the Collabstr marketplace."],
-  ["approved_seed_following", "Who your approved creators follow", "Finds similar creators. Slower."],
-  ["apify_keyword_email", "Instagram, emails first", "Only creators with a public email. Slower."],
+  [
+    "collabstr",
+    "Collabstr marketplace",
+    "Creators listed on the Collabstr marketplace.",
+  ],
+  [
+    "approved_seed_following",
+    "Who your approved creators follow",
+    "Finds similar creators. Slower.",
+  ],
+  [
+    "apify_keyword_email",
+    "Instagram, emails first",
+    "Only creators with a public email. Slower.",
+  ],
 ];
 
 function parsePositiveInteger(value: string) {
@@ -108,7 +121,8 @@ export default function DiscoverCreatorsPage() {
     limit: "25",
   });
   const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
-  const [categories, setCategories] = useState<CategoryGroups>(EMPTY_CATEGORIES);
+  const [categories, setCategories] =
+    useState<CategoryGroups>(EMPTY_CATEGORIES);
   const [brandKeywords, setBrandKeywords] = useState<string[]>([]);
   const [suggestionsLoading, setSuggestionsLoading] = useState(true);
   const [selectedWords, setSelectedWords] = useState<string[]>([]);
@@ -125,16 +139,19 @@ export default function DiscoverCreatorsPage() {
       (Object.entries(sources) as Array<[SearchSourceKey, boolean]>)
         .filter(([, enabled]) => enabled)
         .map(([source]) => source),
-    [sources]
+    [sources],
   );
 
   const parsedLimit = useMemo(
     () => parsePositiveInteger(filters.limit),
-    [filters.limit]
+    [filters.limit],
   );
 
   const searchDisabledReason =
-    !loading && !suggestionsLoading && selectedWords.length === 0 && !pendingWords
+    !loading &&
+    !suggestionsLoading &&
+    selectedWords.length === 0 &&
+    !pendingWords
       ? "Add something to search for"
       : null;
 
@@ -161,7 +178,7 @@ export default function DiscoverCreatorsPage() {
 
   const locationSuggestions = useMemo(
     () => facets.locations.map((l) => ({ value: l.value, count: l.count })),
-    [facets.locations]
+    [facets.locations],
   );
 
   useEffect(() => {
@@ -180,7 +197,10 @@ export default function DiscoverCreatorsPage() {
           const data = (await categoryResponse.json()) as CategoryGroups & {
             brandKeywords?: string[];
           };
-          setCategories({ apify: data.apify ?? [], collabstr: data.collabstr ?? [] });
+          setCategories({
+            apify: data.apify ?? [],
+            collabstr: data.collabstr ?? [],
+          });
           setBrandKeywords(data.brandKeywords ?? []);
         }
 
@@ -221,7 +241,7 @@ export default function DiscoverCreatorsPage() {
       setLoading(false);
     };
     const response = await fetch(
-      `/api/campaigns/${params.campaignId}/search/${jobId}`
+      `/api/campaigns/${params.campaignId}/search/${jobId}`,
     );
     if (!response.ok) {
       if (response.status === 404) {
@@ -258,7 +278,10 @@ export default function DiscoverCreatorsPage() {
     // free-text keywords.
     const words = [...selectedWords];
     const pending = pendingWords.trim();
-    if (pending && !words.some((w) => w.toLowerCase() === pending.toLowerCase())) {
+    if (
+      pending &&
+      !words.some((w) => w.toLowerCase() === pending.toLowerCase())
+    ) {
       words.push(pending);
     }
     const canonicalCategories = words.filter(isCanonicalDiscoveryCategory);
@@ -305,12 +328,15 @@ export default function DiscoverCreatorsPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
-        }
+        },
       );
 
       const data = (await response.json()) as SearchJob | { error: string };
       if (!response.ok) {
-        setError((data as { error: string }).error ?? "The search didn't start. Try again.");
+        setError(
+          (data as { error: string }).error ??
+            "The search didn't start. Try again.",
+        );
         setLoading(false);
         return;
       }
@@ -334,8 +360,8 @@ export default function DiscoverCreatorsPage() {
       <header>
         <h2 className="text-2xl font-semibold tracking-tight">Find creators</h2>
         <p className="mt-1 text-muted-foreground">
-          Search for creators who fit this campaign. The search runs in the background, and
-          matches wait for your review when it finishes.
+          Search for creators who fit this campaign. The search runs in the
+          background, and matches wait for your review when it finishes.
         </p>
       </header>
 
@@ -355,7 +381,10 @@ export default function DiscoverCreatorsPage() {
           <div className="space-y-1.5">
             <div className="flex flex-wrap gap-6">
               <div className="space-y-1.5">
-                <label htmlFor="discover-limit" className="block text-sm font-medium">
+                <label
+                  htmlFor="discover-limit"
+                  className="block text-sm font-medium"
+                >
                   How many creators
                 </label>
                 <Input
@@ -364,7 +393,9 @@ export default function DiscoverCreatorsPage() {
                   min={1}
                   step={1}
                   value={filters.limit}
-                  onChange={(event) => handleFilterChange("limit", event.target.value)}
+                  onChange={(event) =>
+                    handleFilterChange("limit", event.target.value)
+                  }
                   className="w-28"
                 />
               </div>
@@ -377,7 +408,9 @@ export default function DiscoverCreatorsPage() {
                     placeholder="Any"
                     aria-label="Fewest followers"
                     value={filters.minFollowers}
-                    onChange={(event) => handleFilterChange("minFollowers", event.target.value)}
+                    onChange={(event) =>
+                      handleFilterChange("minFollowers", event.target.value)
+                    }
                     className="w-32"
                   />
                   <span className="text-muted-foreground">to</span>
@@ -387,7 +420,9 @@ export default function DiscoverCreatorsPage() {
                     placeholder="Any"
                     aria-label="Most followers"
                     value={filters.maxFollowers}
-                    onChange={(event) => handleFilterChange("maxFollowers", event.target.value)}
+                    onChange={(event) =>
+                      handleFilterChange("maxFollowers", event.target.value)
+                    }
                     className="w-32"
                   />
                 </div>
@@ -399,7 +434,9 @@ export default function DiscoverCreatorsPage() {
               <p className="text-sm text-amber-700">{limitWarning}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Start with 10 to 25. Bigger searches take longer and use more of your search allowance.
+                Start with 10 to 25. Bigger searches take longer and use more of
+                your search allowance.
+                <AllowanceLeft />
               </p>
             )}
           </div>
@@ -426,14 +463,18 @@ export default function DiscoverCreatorsPage() {
                     />
                     <span>
                       <span className="font-medium">{label}</span>
-                      <span className="block text-sm text-muted-foreground">{hint}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {hint}
+                      </span>
                     </span>
                   </label>
                 ))}
               </fieldset>
 
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium">Location (optional)</label>
+                <label className="block text-sm font-medium">
+                  Location (optional)
+                </label>
                 <LocationInput
                   value={location}
                   onChange={setLocation}
@@ -446,7 +487,9 @@ export default function DiscoverCreatorsPage() {
           <div className="flex justify-end">
             <Button
               onClick={handleSearch}
-              aria-describedby={searchDisabledReason ? "find-creators-hint" : undefined}
+              aria-describedby={
+                searchDisabledReason ? "find-creators-hint" : undefined
+              }
               disabled={
                 loading ||
                 suggestionsLoading ||
@@ -458,7 +501,10 @@ export default function DiscoverCreatorsPage() {
             </Button>
           </div>
           {searchDisabledReason && (
-            <p id="find-creators-hint" className="text-right text-sm text-muted-foreground">
+            <p
+              id="find-creators-hint"
+              className="text-right text-sm text-muted-foreground"
+            >
               {searchDisabledReason}
             </p>
           )}
@@ -468,7 +514,9 @@ export default function DiscoverCreatorsPage() {
       {error ? (
         <Card className="border-red-200 bg-red-50">
           <CardContent className="p-4">
-            <p role="alert" className="text-sm text-red-700">{error}</p>
+            <p role="alert" className="text-sm text-red-700">
+              {error}
+            </p>
             {/apify|creator search/i.test(error) ? (
               <Link
                 href="/settings/creator-search"
@@ -482,7 +530,10 @@ export default function DiscoverCreatorsPage() {
       ) : null}
 
       {job ? (
-        <section aria-labelledby="search-heading" className="space-y-3 rounded-xl border bg-card p-5">
+        <section
+          aria-labelledby="search-heading"
+          className="space-y-3 rounded-xl border bg-card p-5"
+        >
           <h2 id="search-heading" className="text-lg font-semibold">
             Search: {jobStatusLabel(job.status)}
           </h2>
@@ -502,8 +553,12 @@ export default function DiscoverCreatorsPage() {
           </div>
 
           <p>
-            {typeof job.progressPercent === "number" ? `${job.progressPercent}% done. ` : ""}
-            {job.requestedCount != null ? `Looking for ${job.requestedCount}. ` : ""}
+            {typeof job.progressPercent === "number"
+              ? `${job.progressPercent}% done. `
+              : ""}
+            {job.requestedCount != null
+              ? `Looking for ${job.requestedCount}. `
+              : ""}
             Checked {job.validatedCount ?? 0}, skipped {job.invalidCount ?? 0},{" "}
             {job.resultCount ?? 0} ready to review.
             {typeof job.etaSeconds === "number" && job.etaSeconds > 0
@@ -512,16 +567,24 @@ export default function DiscoverCreatorsPage() {
           </p>
 
           {job.error ? (
-            <p role="alert" className="text-sm text-red-700">{job.error}</p>
+            <p role="alert" className="text-sm text-red-700">
+              {job.error}
+            </p>
           ) : null}
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={() => router.push(`/campaigns/${params.campaignId}/review`)}>
+            <Button
+              onClick={() =>
+                router.push(`/campaigns/${params.campaignId}/review`)
+              }
+            >
               Review creators
             </Button>
             <Button
               variant="outline"
-              onClick={() => router.push(`/campaigns/${params.campaignId}/seed-list`)}
+              onClick={() =>
+                router.push(`/campaigns/${params.campaignId}/seed-list`)
+              }
             >
               See suggested mix
             </Button>

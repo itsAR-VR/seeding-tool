@@ -35,25 +35,22 @@ import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-
 
 /**
  * The Address link column: the copy-link button only once they've said yes
- * and we're waiting on an address (or need a new one after a cancelled order).
- * Every other row gets a few quiet words on when it will be needed.
+ * and we're waiting on an address (or need a new one after a cancelled order),
+ * "Address received" once it's in, and a quiet dash otherwise.
  */
 function addressLinkNote(stage: DisplayStage): string | null {
   switch (stage) {
     case "said_yes":
     case "order_cancelled":
       return null;
+    // Before a yes, or not going ahead: nothing to do here yet, so the column stays quiet.
+    case "needs_review":
+    case "maybe_later":
+    case "ready":
     case "emailed":
     case "needs_answer":
     case "replied":
-      return "When they say yes";
-    case "needs_review":
-      return "After review";
-    case "ready":
-      return "After you email them";
-    // Not going ahead: the status pill already says why, so the column stays quiet.
     case "not_a_fit":
-    case "maybe_later":
     case "said_no":
     case "not_now":
       return "–";
@@ -168,7 +165,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     };
     return { ...countable, stage: displayStage(countable) };
   });
-  // Rows go in chip order (Needs you, Waiting, Done, Not going ahead), then by
+  // Rows go in chip order (Needs you, Waiting, Done, Said no or not a fit), then by
   // stage within each, so people at the same step sit together.
   const stageRank = new Map(
     STAGE_GROUPS.flatMap((g) => g.stages).map((stage, index) => [stage, index] as const),
