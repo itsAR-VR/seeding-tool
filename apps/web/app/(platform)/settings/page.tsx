@@ -6,8 +6,8 @@ import { ChevronRight } from "lucide-react";
 const settingsLinks = [
   {
     href: "/settings/brand",
-    title: "Brand",
-    description: "Your brand name, website, and who approves new creators.",
+    title: "Company details",
+    description: "Your company name, website, and who approves new creators.",
   },
   {
     href: "/settings/brand-kit",

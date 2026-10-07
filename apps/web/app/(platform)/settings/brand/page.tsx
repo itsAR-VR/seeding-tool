@@ -174,7 +174,7 @@ export default function BrandSettingsPage() {
     return (
       <div className="space-y-8">
         <header>
-          <h1 className="text-3xl font-bold tracking-tight">Brand</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Company details</h1>
         </header>
         <section className="rounded-xl border bg-card p-6 text-center">
           <p className="text-muted-foreground">
@@ -198,7 +198,7 @@ export default function BrandSettingsPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Brand</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Company details</h1>
         <p className="mt-1 text-muted-foreground">
           Your brand details and how new creators get approved.
         </p>

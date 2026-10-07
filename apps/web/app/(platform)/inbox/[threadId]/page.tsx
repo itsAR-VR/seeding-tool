@@ -144,10 +144,12 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   useEffect(() => {
     async function load() {
       try {
-        const [threadRes, brandRes] = await Promise.all([
-          fetch(`/api/inbox/${threadId}`),
-          fetch("/api/brands/current"),
-        ]);
+        // The brand only fills in details, so it never holds up the conversation.
+        void fetch("/api/brands/current")
+          .then((res) => (res.ok ? (res.json() as Promise<BrandData>) : null))
+          .then((data) => data && setBrand(data))
+          .catch(() => undefined);
+        const threadRes = await fetch(`/api/inbox/${threadId}`);
 
         if (threadRes.ok) {
           const loaded = (await threadRes.json()) as Thread & { followUpTemplate: string };
@@ -168,9 +170,6 @@ function ThreadDetail({ threadId }: { threadId: string }) {
           } else {
             setReplyText("");
           }
-        }
-        if (brandRes.ok) {
-          setBrand((await brandRes.json()) as BrandData);
         }
       } catch {
         // ignore
@@ -352,8 +351,11 @@ function ThreadDetail({ threadId }: { threadId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <p className="text-muted-foreground">Loading conversation…</p>
+      <div role="status" aria-busy="true" className="max-w-3xl space-y-4">
+        <span className="sr-only">Loading conversation…</span>
+        <div className="h-8 w-48 animate-pulse rounded-lg bg-muted motion-reduce:animate-none" />
+        <div className="h-32 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
+        <div className="h-24 animate-pulse rounded-xl bg-muted motion-reduce:animate-none" />
       </div>
     );
   }
@@ -818,7 +820,7 @@ function DecisionChoice({
       : decision === "later"
         ? "Parked. They're not on the do-not-send list."
         : aiGuess === "yes" || aiGuess === "no"
-          ? `AI guess: ${aiGuess === "yes" ? "Yes" : "No"}${
+          ? `Our guess: ${aiGuess === "yes" ? "Yes" : "No"}${
               confidence != null ? ` (${Math.round(confidence * 100)}% sure)` : ""
             }${decision ? (aiGuess === decision ? ". You agreed." : ". You decided differently.") : "."}`
           : null;

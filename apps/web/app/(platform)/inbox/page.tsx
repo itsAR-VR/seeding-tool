@@ -23,7 +23,7 @@ const TABS: Array<{ key: InboxTab; label: string }> = [
   { key: "needs", label: STAGE_DISPLAY.needs_answer.label },
   { key: "waiting", label: STAGE_DISPLAY.emailed.label },
   { key: "yes", label: STAGE_DISPLAY.said_yes.label },
-  { key: "no", label: `${STAGE_DISPLAY.not_now.label} or no` },
+  { key: "no", label: "Said no or not now" },
   { key: "all", label: "All" },
 ];
 
@@ -239,6 +239,7 @@ export default async function InboxPage({
                 : "bg-muted text-foreground/80 hover:bg-muted/70 hover:text-foreground"
             }`}
             aria-current={activeTab === t.key ? "page" : undefined}
+            aria-label={`${t.label}: ${counts[t.key]}`}
           >
             {t.label} <span className="font-semibold tabular-nums">{counts[t.key]}</span>
           </Link>
@@ -249,7 +250,7 @@ export default async function InboxPage({
 
       {decided.length > 0 && (
         <p className="text-sm text-muted-foreground">
-          The AI guessed yes or no the same way you did {aiMatches} of {decided.length} times.
+          Our yes-or-no guess matched yours {aiMatches} of {decided.length} times.
         </p>
       )}
 

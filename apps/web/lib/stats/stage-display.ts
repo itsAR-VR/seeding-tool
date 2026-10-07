@@ -57,7 +57,7 @@ export const STAGE_HELP: Record<DisplayStage, string> = {
   delivered: "Their gift arrived.",
   posted: "They posted about you.",
   done: "Nothing left to do for this creator.",
-  order_cancelled: "Their order was cancelled.",
+  order_cancelled: "Their order was cancelled. Send them a new address link to try again.",
   said_no: "They said no, or asked to be removed. They won't be emailed again.",
   not_now: "Not right now. They can be emailed again later.",
 };
@@ -150,8 +150,9 @@ export function stageNextStep(
       return { label: "Waiting for their post", href: null };
     case "posted":
       return { label: "Request rights", href: "/content" };
-    case "done":
     case "order_cancelled":
+      return { label: "Send a new address link", href: conversation };
+    case "done":
     case "said_no":
     case "not_now":
     case "not_a_fit":

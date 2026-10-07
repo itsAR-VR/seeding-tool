@@ -153,7 +153,8 @@ export default async function DashboardPage() {
     }),
     prisma.campaign.findMany({
       where: { brandId, status: { not: "archived" } },
-      orderBy: { updatedAt: "desc" },
+      // Same order as the Campaigns page, newest first.
+      orderBy: { createdAt: "desc" },
       take: 6,
       include: { _count: { select: { campaignCreators: true } } },
     }),

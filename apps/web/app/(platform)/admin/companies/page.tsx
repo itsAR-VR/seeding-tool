@@ -25,6 +25,8 @@ export default function CompaniesPage() {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Which company's search setting just saved (or is saving), shown next to its checkbox.
+  const [searchSaved, setSearchSaved] = useState<{ id: string; text: string } | null>(null);
   const [link, setLink] = useState<{ url: string; email: string; emailed: boolean } | null>(null);
 
   const load = useCallback(async () => {
@@ -39,12 +41,18 @@ export default function CompaniesPage() {
 
   async function setSharedApify(brandId: string, useSharedApify: boolean) {
     setError(null);
+    setSearchSaved({ id: brandId, text: "Saving..." });
     const res = await fetch(`/api/admin/companies/${brandId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ useSharedApify }),
-    });
-    if (!res.ok) setError("Couldn't change that company's search setting.");
+    }).catch(() => null);
+    if (!res?.ok) {
+      setSearchSaved(null);
+      setError("Couldn't change that company's search setting.");
+    } else {
+      setSearchSaved({ id: brandId, text: "Saved" });
+    }
     await load();
   }
 
@@ -141,6 +149,11 @@ export default function CompaniesPage() {
                     onChange={(e) => void setSharedApify(c.id, e.target.checked)}
                   />
                   Can use our search account
+                  {searchSaved?.id === c.id && (
+                    <span role="status" className="text-muted-foreground">
+                      {searchSaved.text}
+                    </span>
+                  )}
                 </label>
               )}
             </li>

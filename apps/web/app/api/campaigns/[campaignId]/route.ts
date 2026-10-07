@@ -11,9 +11,11 @@ type RouteContext = { params: Promise<{ campaignId: string }> };
 /**
  * GET /api/campaigns/:campaignId — Campaign detail with stats.
  */
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
+    // ?lite=1 skips every creator row, for pages that only need the setup (products, sender).
+    const lite = request.nextUrl.searchParams.get("lite") === "1";
     const membership = await getCurrentBrandMembership();
 
     const campaign = await prisma.campaign.findFirst({
@@ -22,13 +24,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         campaignProducts: {
           include: { product: true },
         },
-        campaignCreators: {
-          include: {
-            creator: {
-              include: { profiles: true },
+        campaignCreators: lite
+          ? false
+          : {
+              include: {
+                creator: {
+                  include: { profiles: true },
+                },
+              },
             },
-          },
-        },
       },
     });
 
@@ -40,7 +44,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     // Compute stats
-    const creators = campaign.campaignCreators;
+    const creators = campaign.campaignCreators ?? [];
     const stats = {
       total: creators.length,
       pendingReview: creators.filter((c) => c.reviewStatus === "pending")

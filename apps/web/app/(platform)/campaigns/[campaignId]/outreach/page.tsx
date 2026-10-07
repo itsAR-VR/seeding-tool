@@ -212,7 +212,7 @@ export default function OutreachPage() {
     async function loadSetup() {
       try {
         const [campaignRes, connectionsRes] = await Promise.all([
-          fetch(`/api/campaigns/${campaignId}`),
+          fetch(`/api/campaigns/${campaignId}?lite=1`),
           fetch("/api/connections/overview"),
         ]);
 
@@ -633,7 +633,9 @@ export default function OutreachPage() {
                 {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
                   sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
                   ? "Unselect all"
-                  : `Select the first ${MAX_BATCH_SIZE}`}
+                  : sendableCreators.length <= MAX_BATCH_SIZE
+                    ? `Select all ${sendableCreators.length}`
+                    : `Select the first ${MAX_BATCH_SIZE}`}
               </Button>
             )}
           </div>
@@ -773,7 +775,7 @@ export default function OutreachPage() {
       <details className="group rounded-xl border bg-card">
         <summary className="cursor-pointer list-none px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">
           <span className="group-open:hidden">▸</span>
-          <span className="hidden group-open:inline">▾</span> More options: sender, channel, AI writing
+          <span className="hidden group-open:inline">▾</span> More options: sender, channel, writing style
         </summary>
         <div className="space-y-4 px-6 pb-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -890,7 +892,7 @@ export default function OutreachPage() {
           </div>
 
           <div className="space-y-2">
-            <Label>AI instructions</Label>
+            <Label>Extra instructions</Label>
             <p className="text-sm text-muted-foreground">
               Only used for creators who don&apos;t already have a written email.
             </p>

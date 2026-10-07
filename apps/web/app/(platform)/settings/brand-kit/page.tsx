@@ -198,7 +198,7 @@ export default function BrandKitPage() {
       <header>
         <h1 className="text-3xl font-bold tracking-tight">Brand kit</h1>
         <p className="mt-1 text-muted-foreground">
-          Everything creators see from {kit.name}: your logo, how replies sound, and what the AI can say.
+          Everything creators see from {kit.name}: your logo, how replies sound, and what suggested replies can say.
         </p>
       </header>
 

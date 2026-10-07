@@ -23,8 +23,11 @@ describe("Overview stage groups", () => {
   it("maps old ?filter= keys to groups and leaves stuck alone", () => {
     expect(groupForFilter("needs_you")?.key).toBe("needs_you");
     expect(groupForFilter("needs_answer")?.key).toBe("needs_you");
-    expect(groupForFilter("to_email")?.key).toBe("waiting");
-    expect(groupForFilter("shipped")?.key).toBe("done");
+    expect(groupForFilter("to_email")?.key).toBe("needs_you");
+    expect(groupForFilter("address_in")?.key).toBe("needs_you");
+    expect(groupForFilter("order_cancelled")?.key).toBe("needs_you");
+    expect(groupForFilter("shipped")?.key).toBe("waiting");
+    expect(groupForFilter("posted")?.key).toBe("done");
     expect(groupForFilter("declined")?.key).toBe("said_no");
     expect(groupForFilter("stuck")).toBeNull();
     expect(groupForFilter(undefined)).toBeNull();

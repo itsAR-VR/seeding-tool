@@ -291,6 +291,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   href={filterHref(chip.key)}
                   scroll={false}
                   aria-current={selected ? "true" : undefined}
+                  aria-label={`${chip.label}: ${chip.value}`}
                   className={`rounded-full border px-4 py-2 text-sm transition-colors ${
                     selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
                   }`}
@@ -424,7 +425,11 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                         </td>
                         {showFollowers && (
                           <td className="py-3 tabular-nums">
-                            {profile?.followerCount?.toLocaleString() ?? <span className="text-muted-foreground">Unknown</span>}
+                            {profile?.followerCount?.toLocaleString() ?? (
+                              <span className="text-muted-foreground/70" aria-label="Unknown">
+                                ·
+                              </span>
+                            )}
                           </td>
                         )}
                         <td className="py-3">

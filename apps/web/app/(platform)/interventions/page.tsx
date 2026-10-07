@@ -75,7 +75,7 @@ export default async function ProblemsPage() {
 
       <section aria-labelledby="open-problems" className="space-y-3">
         <h2 id="open-problems" className="text-lg font-semibold">
-          Open problems
+          Problems to fix
         </h2>
         <ProblemsList />
       </section>

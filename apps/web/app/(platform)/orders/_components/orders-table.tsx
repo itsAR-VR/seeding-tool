@@ -46,11 +46,14 @@ export function orderPill(
   return { label: orderStatusLabel(order.status), tone: "good" };
 }
 
-/** "2 orders" or "2 orders, 1 cancelled". Cancelled orders aren't counted as made (lib/stats). */
+/** "2 orders", "2 orders, 1 cancelled", or "1 cancelled order". Cancelled orders aren't counted as made (lib/stats). */
 export function ordersHeading(orders: readonly { status: string }[]): string {
   const { made, cancelled } = countOrders(orders);
   const base = `${made} ${made === 1 ? "order" : "orders"}`;
-  return cancelled > 0 ? `${base}, ${cancelled} cancelled` : base;
+  if (cancelled === 0) return base;
+  const cancelledText = `${cancelled} cancelled ${cancelled === 1 ? "order" : "orders"}`;
+  // "1 cancelled order" alone reads better than "0 orders, 1 cancelled".
+  return made === 0 ? cancelledText : `${base}, ${cancelled} cancelled`;
 }
 
 export function OrdersTable({ orders, showCampaign = false }: { orders: readonly OrderTableRow[]; showCampaign?: boolean }) {

@@ -18,15 +18,17 @@ export type StageGroup = {
 };
 
 export const STAGE_GROUPS: readonly StageGroup[] = [
-  { key: "needs_you", label: "Needs you", stages: ["needs_review", "needs_answer", "said_yes", "address_to_check"], always: true },
-  { key: "waiting", label: "Waiting", stages: ["ready", "emailed", "replied", "not_now"], always: true },
+  // Every stage whose next step is yours: review, email, answer, check, order, ship, re-send the link.
   {
-    key: "done",
-    label: "Done",
-    stages: ["address_in", "order_made", "shipped", "delivered", "posted", "done"],
+    key: "needs_you",
+    label: "Needs you",
+    stages: ["needs_review", "ready", "needs_answer", "address_to_check", "address_in", "order_made", "order_cancelled"],
     always: true,
   },
-  { key: "said_no", label: "Said no", stages: ["said_no", "not_a_fit", "maybe_later", "order_cancelled"], always: false },
+  // The next step is theirs: a reply, an address, the parcel arriving, a post.
+  { key: "waiting", label: "Waiting", stages: ["emailed", "replied", "said_yes", "not_now", "shipped", "delivered"], always: true },
+  { key: "done", label: "Done", stages: ["posted", "done"], always: true },
+  { key: "said_no", label: "Not going ahead", stages: ["said_no", "not_a_fit", "maybe_later"], always: false },
 ];
 
 const GROUP_BY_KEY = new Map(STAGE_GROUPS.map((g) => [g.key, g]));
@@ -42,14 +44,14 @@ const LEGACY_FILTER_GROUP: Partial<Record<CreatorFilterKey, StageGroupKey>> = {
   pending: "needs_you",
   needs_answer: "needs_you",
   address_review: "needs_you",
-  to_email: "waiting",
+  to_email: "needs_you",
   emailed: "waiting",
   replied: "waiting",
-  address_in: "done",
-  order_made: "done",
+  address_in: "needs_you",
+  order_made: "needs_you",
   posted: "done",
   declined: "said_no",
-  order_cancelled: "said_no",
+  order_cancelled: "needs_you",
   said_no: "said_no",
 };
 

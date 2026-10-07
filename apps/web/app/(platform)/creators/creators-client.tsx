@@ -90,23 +90,15 @@ export function CreatorsContent({ openFind }: { openFind: boolean }) {
           <Button variant="outline" onClick={() => router.push("/creators/import")}>
             Import a list
           </Button>
-          <Button
-            variant="outline"
-            disabled={state.enriching || missingEmail.length === 0}
-            aria-describedby={!state.enriching && missingEmail.length === 0 ? "missing-emails-hint" : undefined}
-            onClick={() => void findMissingEmails()}
-          >
-            {state.enriching ? "Looking up emails..." : `Find missing emails (${missingEmail.length})`}
-          </Button>
+          {(state.enriching || missingEmail.length > 0) && (
+            <Button variant="outline" disabled={state.enriching} onClick={() => void findMissingEmails()}>
+              {state.enriching ? "Looking up emails..." : `Find missing emails (${missingEmail.length})`}
+            </Button>
+          )}
           <Button variant="ghost" onClick={() => router.push("/creators/identity-review")}>
             Review duplicates
           </Button>
         </div>
-        {!state.enriching && missingEmail.length === 0 && (
-          <p id="missing-emails-hint" className="text-sm text-muted-foreground">
-            Everyone shown already has an email
-          </p>
-        )}
         </div>
       </div>
 

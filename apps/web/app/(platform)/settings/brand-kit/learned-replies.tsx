@@ -28,7 +28,7 @@ export function LearnedReplies() {
 
   return (
     <section className="space-y-3 rounded-xl border bg-card p-5">
-      <h2 className="font-semibold">What the AI is learning from</h2>
+      <h2 className="font-semibold">Your replies it learns your voice from</h2>
       <p className="text-sm text-muted-foreground">
         Every reply you send to a creator teaches the suggested answers your voice. These are the latest ones it copies.
         Remove any you wouldn&apos;t want repeated.

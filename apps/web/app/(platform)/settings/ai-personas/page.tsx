@@ -200,7 +200,7 @@ export default function AiPersonasPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Writing styles</h1>
           <p className="mt-1 text-muted-foreground">
-            How the AI sounds when it drafts emails to creators. You pick a style on each
+            How suggested emails to creators sound. You pick a style on each
             campaign&apos;s Email creators page.
           </p>
         </div>
@@ -211,7 +211,7 @@ export default function AiPersonasPage() {
         <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit style" : "Add a style"}</DialogTitle>
-            <DialogDescription>Tell the AI how to write emails in this style.</DialogDescription>
+            <DialogDescription>Describe how emails in this style should read.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
