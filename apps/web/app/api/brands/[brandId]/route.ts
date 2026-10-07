@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { publicBrand } from "@/lib/brand/public";
 import {
   assertBrandAccess,
   requireOwnerAccess,
@@ -55,7 +56,7 @@ export async function GET(
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    return NextResponse.json(brand);
+    return NextResponse.json(publicBrand(brand));
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -77,7 +78,17 @@ export async function PATCH(
     const membership = await assertBrandAccess(brandId);
     requireOwnerAccess(membership);
 
-    const body = await request.json();
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Nothing to save. Try again." }, { status: 400 });
+    }
+    if (body.name !== undefined) {
+      const trimmed = typeof body.name === "string" ? body.name.trim() : "";
+      if (!trimmed) return NextResponse.json({ error: "Enter your brand name." }, { status: 400 });
+      if (trimmed.length > 80) {
+        return NextResponse.json({ error: "Keep the brand name under 80 characters." }, { status: 400 });
+      }
+    }
     const {
       name,
       websiteUrl,
@@ -116,7 +127,7 @@ export async function PATCH(
             error:
               error instanceof Error
                 ? error.message
-                : "Website URL must be a valid http(s) URL",
+                : "Enter a website like yourbrand.com, or leave it empty.",
           },
           { status: 400 }
         );
@@ -232,7 +243,7 @@ export async function PATCH(
       include: { settings: true },
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(updated && publicBrand(updated));
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -17,9 +17,9 @@ export type OutreachPersona = {
 export const BUILT_IN_PERSONAS: OutreachPersona[] = [
   {
     id: "builtin-professional",
-    name: "Professional",
+    name: "Polished",
     description:
-      "Polished, brand-forward tone suitable for established creators and formal partnerships.",
+      "Clear and warm, with no slang or emojis. Good for bigger creators and anyone who works with brands often.",
     tone: "professional",
     systemPrompt: `You are a brand partnership manager writing outreach messages to creators/influencers.
 Your tone is professional, warm, and respectful. You clearly communicate the value proposition
@@ -31,9 +31,9 @@ Address the creator by name when available. Highlight why they specifically were
   },
   {
     id: "builtin-casual",
-    name: "Casual / Friendly",
+    name: "Friendly",
     description:
-      "Relaxed, approachable tone that feels like a friend reaching out. Great for micro-influencers.",
+      "Relaxed and short, like a friend reaching out. Good for smaller creators.",
     tone: "casual",
     systemPrompt: `You are reaching out to creators on behalf of a brand in a friendly, casual way.
 Your tone is warm, genuine, and conversational — like a friend recommending something cool.
@@ -45,9 +45,9 @@ Don't be pushy. Make it feel personal, not templated.`,
   },
   {
     id: "builtin-influencer",
-    name: "Influencer-Native",
+    name: "Creator to creator",
     description:
-      "Speaks the creator's language. Feels like a DM from another creator, not a brand.",
+      "Sounds like a message from another creator, not a company. Best for Instagram messages.",
     tone: "influencer",
     systemPrompt: `You are writing outreach messages that feel native to how creators/influencers
 communicate with each other. Use the language of social media naturally — casual, authentic,

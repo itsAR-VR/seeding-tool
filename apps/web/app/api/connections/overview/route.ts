@@ -30,6 +30,7 @@ export async function GET(request: Request) {
           select: {
             address: true,
             isPrimary: true,
+            encryptedRefreshToken: true,
           },
           orderBy: [{ isPrimary: "desc" }, { updatedAt: "desc" }],
         },
@@ -55,8 +56,14 @@ export async function GET(request: Request) {
         if (provider === "gmail") {
           details.gmailAddress =
             primaryAlias?.address ?? state.connection?.externalId ?? null;
+          details.gmailAddresses = brand.emailAliases
+            .filter((alias) => alias.encryptedRefreshToken)
+            .map((alias) => alias.address);
           if (details.gmailAddress && state.connected) {
-            summary = `Connected as ${details.gmailAddress}`;
+            summary =
+              details.gmailAddresses.length > 1
+                ? `${details.gmailAddresses.length} inboxes connected`
+                : `Connected as ${details.gmailAddress}`;
           }
           externalId = details.gmailAddress ?? externalId;
         }
@@ -65,10 +72,20 @@ export async function GET(request: Request) {
           const metadata =
             state.connection?.metadata &&
             typeof state.connection.metadata === "object"
-              ? (state.connection.metadata as { igUsername?: string | null })
+              ? (state.connection.metadata as {
+                  igUsername?: string | null;
+                  igUserId?: string | null;
+                  igOptions?: Array<{ igId: string; username: string | null }>;
+                  adAccountId?: string | null;
+                  adAccountOptions?: Array<{ id: string; name: string | null }>;
+                })
               : null;
           details.instagramUsername =
             metadata?.igUsername ?? state.connection?.externalId ?? null;
+          details.igUserId = metadata?.igUserId ?? null;
+          details.igOptions = metadata?.igOptions ?? [];
+          details.adAccountId = metadata?.adAccountId ?? null;
+          details.adAccountOptions = metadata?.adAccountOptions ?? [];
           if (details.instagramUsername && state.connected) {
             summary = `Connected as @${details.instagramUsername}`;
           }
@@ -140,7 +157,12 @@ export async function GET(request: Request) {
       console.warn("[connections/overview]", message);
     }
 
-    const body: Record<string, unknown> = { error: message };
+    const body: Record<string, unknown> = {
+      error:
+        status === 500
+          ? "Couldn't load your connections. Refresh the page to try again."
+          : message,
+    };
     if (status === 500 && process.env.NODE_ENV !== "production") {
       body.debug = error instanceof Error ? error.stack : String(error);
     }

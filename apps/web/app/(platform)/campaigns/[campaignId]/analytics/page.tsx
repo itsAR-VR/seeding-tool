@@ -3,52 +3,23 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
   computeConversionRates,
   computeTimeToPost,
 } from "@/lib/analytics/conversion";
-import type {
-  AnalyticsResponse,
-  CreatorLeaderboardEntry,
-} from "@/lib/analytics/types";
+import type { CreatorLeaderboardEntry } from "@/lib/analytics/types";
+import {
+  countStages,
+  countStepsReached,
+  lifecycleBreakdown as countLifecycle,
+  postCountsByCreator,
+  type ResultsData,
+} from "@/lib/stats/campaign-counts";
+import { loadCampaignPosts } from "../_components/campaign-posts";
 import { AnalyticsDashboard } from "./components/analytics-dashboard";
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
 };
-
-const LIFECYCLE_STAGES = [
-  { key: "ready", label: "Ready", color: "bg-gray-100 text-gray-800" },
-  { key: "outreach_sent", label: "Outreach Sent", color: "bg-blue-100 text-blue-800" },
-  { key: "replied", label: "Replied", color: "bg-purple-100 text-purple-800" },
-  { key: "address_confirmed", label: "Address Confirmed", color: "bg-green-100 text-green-800" },
-  { key: "order_created", label: "Order Created", color: "bg-teal-100 text-teal-800" },
-  { key: "shipped", label: "Shipped", color: "bg-indigo-100 text-indigo-800" },
-  { key: "delivered", label: "Delivered", color: "bg-emerald-100 text-emerald-800" },
-  { key: "posted", label: "Posted", color: "bg-pink-100 text-pink-800" },
-  { key: "completed", label: "Completed", color: "bg-green-200 text-green-900" },
-  { key: "opted_out", label: "Opted Out", color: "bg-red-100 text-red-800" },
-  { key: "stalled", label: "Stalled", color: "bg-yellow-100 text-yellow-800" },
-] as const;
-
-function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(cents / 100);
-}
-
-function formatNumber(n: number): string {
-  return new Intl.NumberFormat("en-US").format(n);
-}
 
 export default async function CampaignAnalyticsPage({ params }: PageProps) {
   const { campaignId } = await params;
@@ -57,8 +28,8 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
   try {
     membership = await getCurrentBrandMembership();
   } catch (error) {
-    if (error instanceof BrandAccessError) return null;
-    return null;
+    if (error instanceof BrandAccessError) notFound();
+    throw error;
   }
 
   const campaign = await prisma.campaign.findFirst({
@@ -69,25 +40,37 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
 
   // Load all campaign creators
   const campaignCreators = await prisma.campaignCreator.findMany({
-    where: { campaignId },
+    where: { campaignId, campaign: { brandId: membership.brandId } },
     select: {
       id: true,
       lifecycleStatus: true,
       reviewStatus: true,
       creatorId: true,
+      outreachCount: true,
+      lastOutreachAt: true,
+      lastReplyAt: true,
+      replyDecision: true,
+      shopifyOrder: { select: { status: true } },
     },
   });
 
   const campaignCreatorIds = campaignCreators.map((cc) => cc.id);
   const totalCreators = campaignCreators.length;
 
-  // Lifecycle breakdown
-  const lifecycleBreakdown: Record<string, number> = {};
-  for (const stage of LIFECYCLE_STAGES) {
-    lifecycleBreakdown[stage.key] = campaignCreators.filter(
-      (cc) => cc.lifecycleStatus === stage.key
-    ).length;
-  }
+  // Posts: tagged Instagram posts from this campaign's creators plus posts
+  // added by hand. Same list as the Posts tab.
+  const posts = await loadCampaignPosts(membership.brandId, campaignId);
+  const postCounts = postCountsByCreator(posts);
+  const countable = campaignCreators.map((cc) => ({
+    ...cc,
+    orderStatus: cc.shopifyOrder?.status ?? null,
+    postCount: postCounts.get(cc.creatorId) ?? 0,
+  }));
+
+  // Where everyone is now (one stage per creator) and who ever reached each step.
+  const lifecycleBreakdown: Record<string, number> = countLifecycle(campaignCreators);
+  const steps = countStepsReached(countable);
+  const stages = countStages(countable);
 
   // Mention assets
   const mentionAssets = campaignCreatorIds.length > 0
@@ -120,7 +103,8 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       })
     : [];
 
-  const totalOrders = orders.length;
+  // Cancelled orders aren't orders made (lib/stats), same as the Orders tab.
+  const totalOrders = steps.ordersMade;
   const totalProductValueCents = orders.reduce(
     (sum, o) => sum + (o.totalPrice ?? 0),
     0
@@ -135,11 +119,6 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     : [];
 
   const totalCostCents = costRecords.reduce((sum, c) => sum + c.amount, 0);
-
-  // Creators who have posted
-  const postedCount =
-    (lifecycleBreakdown["posted"] ?? 0) +
-    (lifecycleBreakdown["completed"] ?? 0);
 
   // --- Conversion rates ---
   const conversionRates = computeConversionRates(lifecycleBreakdown);
@@ -204,7 +183,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
       const platform = creator?.instagramHandle ? "instagram" : "tiktok";
       return {
         creatorId,
-        creatorName: creator?.name ?? "Unknown",
+        creatorName: creator?.name ?? "Unnamed creator",
         handle,
         platform,
         totalLikes: stats.likes,
@@ -248,7 +227,7 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     {}
   );
 
-  const initialData: AnalyticsResponse = {
+  const initialData: ResultsData = {
     campaignId,
     summary: {
       totalCreators,
@@ -280,186 +259,39 @@ export default async function CampaignAnalyticsPage({ params }: PageProps) {
     timeToPost,
     creatorLeaderboard,
     costsByType,
+    steps,
+    stages,
+    postCount: posts.length,
   };
 
   return (
-    <div className="container mx-auto max-w-5xl py-8 px-4 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link href="/campaigns" className="hover:underline">
-              Campaigns
-            </Link>
-            <span>/</span>
-            <Link href={`/campaigns/${campaignId}`} className="hover:underline">
-              {campaign.name}
-            </Link>
-            <span>/</span>
-            <span>Analytics</span>
-          </div>
-          <h1 className="text-2xl font-bold">{campaign.name} — Analytics</h1>
+    <div className="space-y-8">
+      <header>
+        <h2 className="text-2xl font-semibold tracking-tight">Results</h2>
+        <p className="mt-1 text-muted-foreground">
+          How this campaign is going, from first email to posts.
+        </p>
+      </header>
+
+      {totalCreators === 0 ? (
+        <div className="rounded-xl border bg-card p-5">
+          <p>
+            No results yet. Add creators to this campaign and email them, and their replies, orders,
+            and posts will show up here.
+          </p>
+          <Link
+            href={`/campaigns/${campaignId}/discover`}
+            className="mt-2 inline-block font-medium underline"
+          >
+            Find creators
+          </Link>
         </div>
-        <Link href={`/campaigns/${campaignId}`}>
-          <Button variant="outline">&larr; Back to Campaign</Button>
-        </Link>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Creators</CardDescription>
-            <CardTitle className="text-3xl">{totalCreators}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Posted</CardDescription>
-            <CardTitle className="text-3xl">{postedCount}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
-            {totalCreators > 0
-              ? `${Math.round((postedCount / totalCreators) * 100)}% conversion`
-              : "\u2014"}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Total Mentions</CardDescription>
-            <CardTitle className="text-3xl">{totalMentions}</CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>Orders Created</CardDescription>
-            <CardTitle className="text-3xl">{totalOrders}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-xs text-muted-foreground">
-            {totalProductValueCents > 0
-              ? formatCurrency(totalProductValueCents) + " product value"
-              : "\u2014"}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Lifecycle Funnel (static server-rendered view) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Creator Lifecycle Funnel</CardTitle>
-          <CardDescription>
-            Distribution of creators across each stage of the seeding pipeline.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {LIFECYCLE_STAGES.map((stage) => {
-              const count = lifecycleBreakdown[stage.key] ?? 0;
-              const pct =
-                totalCreators > 0
-                  ? Math.round((count / totalCreators) * 100)
-                  : 0;
-              return (
-                <div key={stage.key} className="flex items-center gap-3">
-                  <div className="w-36 shrink-0">
-                    <Badge className={`${stage.color} text-xs`}>
-                      {stage.label}
-                    </Badge>
-                  </div>
-                  <div className="flex-1 bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      className="h-full bg-blue-500 rounded-full transition-all"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="w-16 text-right text-sm font-medium">
-                    {count}
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      ({pct}%)
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Engagement Metrics */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Engagement Metrics</CardTitle>
-          <CardDescription>
-            Aggregated engagement from creator mentions across all platforms.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-6 text-center">
-            <div>
-              <div className="text-3xl font-bold">
-                {formatNumber(totalLikes)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1">Likes</div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold">
-                {formatNumber(totalComments)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Comments
-              </div>
-            </div>
-            <div>
-              <div className="text-3xl font-bold">
-                {formatNumber(totalViews)}
-              </div>
-              <div className="text-sm text-muted-foreground mt-1">Views</div>
-            </div>
-          </div>
-          {totalMentions === 0 && (
-            <p className="text-sm text-muted-foreground text-center mt-4">
-              No mention data yet. Metrics will appear once creators start
-              posting.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Cost Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Campaign Cost Overview</CardTitle>
-          <CardDescription>
-            Total investment across product fulfillment and seeding costs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <div className="text-sm text-muted-foreground">
-                Product Value Sent
-              </div>
-              <div className="text-2xl font-bold mt-1">
-                {totalProductValueCents > 0
-                  ? formatCurrency(totalProductValueCents)
-                  : "\u2014"}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-muted-foreground">Total Cost</div>
-              <div className="text-2xl font-bold mt-1">
-                {totalCostCents > 0 ? formatCurrency(totalCostCents) : "\u2014"}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Interactive Dashboard (Client Components) */}
-      <AnalyticsDashboard
-        initialData={initialData}
-        campaignName={campaign.name}
-      />
+      ) : (
+        <AnalyticsDashboard
+          initialData={initialData}
+          campaignName={campaign.name}
+        />
+      )}
     </div>
   );
 }

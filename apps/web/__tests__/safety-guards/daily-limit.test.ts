@@ -37,7 +37,7 @@ const mockPrisma = {
     findFirst: vi.fn().mockResolvedValue(null),
   },
   emailSuppression: {
-    findUnique: vi.fn().mockResolvedValue(null),
+    findFirst: vi.fn().mockResolvedValue(null),
   },
   message: {
     create: vi.fn().mockResolvedValue({}),

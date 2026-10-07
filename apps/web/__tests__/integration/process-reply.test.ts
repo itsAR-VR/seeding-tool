@@ -494,7 +494,7 @@ describe("createOrderFromAddress — Inngest function integration", () => {
     createOrderHandler = mod.createOrderFromAddress as unknown as typeof createOrderHandler;
   });
 
-  it("creates Shopify draft order and records outcome", async () => {
+  it("creates Shopify draft order without recording order_created outcome", async () => {
     mocks.prisma.shippingAddressSnapshot.findUnique.mockResolvedValue({
       id: "snap-1",
       isActive: true,
@@ -513,11 +513,10 @@ describe("createOrderFromAddress — Inngest function integration", () => {
     });
 
     mocks.createDraftOrder.mockResolvedValue({
-      shopifyOrderId: "shopify-123",
+      shopifyDraftOrderId: "draft-123",
+      shopifyDraftOrderName: "#D001",
       orderId: "order-1",
     });
-
-    mocks.recordOutcomeEvent.mockResolvedValue(undefined);
 
     const event = makeEvent({
       snapshotId: "snap-1",
@@ -531,7 +530,7 @@ describe("createOrderFromAddress — Inngest function integration", () => {
     expect(result).toEqual(
       expect.objectContaining({
         status: "success",
-        shopifyOrderId: "shopify-123",
+        shopifyDraftOrderId: "draft-123",
       })
     );
 
@@ -542,11 +541,7 @@ describe("createOrderFromAddress — Inngest function integration", () => {
       "camp-1"
     );
 
-    // Outcome event recorded
-    expect(mocks.recordOutcomeEvent).toHaveBeenCalledWith({
-      campaignCreatorId: "cc-1",
-      event: { type: "order_created" },
-    });
+    expect(mocks.recordOutcomeEvent).not.toHaveBeenCalled();
   });
 
   it("returns early when feature flag is disabled", async () => {

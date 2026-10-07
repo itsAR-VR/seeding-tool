@@ -8,22 +8,28 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
  * - Updates CampaignCreator.lifecycleStatus to "posted"
  * - Cancels any pending reminders
  */
+export class MentionAccessError extends Error {}
+
 export async function attributeMention(
   mentionAssetId: string,
-  campaignCreatorId: string
+  campaignCreatorId: string,
+  brandId?: string
 ): Promise<void> {
-  // Verify both exist
+  // Verify both exist and, when a brand is given, both belong to it.
+  const brandScope = brandId ? { campaign: { brandId } } : {};
   const [mention, campaignCreator] = await Promise.all([
-    prisma.mentionAsset.findUnique({ where: { id: mentionAssetId } }),
-    prisma.campaignCreator.findUnique({ where: { id: campaignCreatorId } }),
+    prisma.mentionAsset.findFirst({
+      where: { id: mentionAssetId, ...(brandId ? { campaignCreator: brandScope } : {}) },
+    }),
+    prisma.campaignCreator.findFirst({ where: { id: campaignCreatorId, ...brandScope } }),
   ]);
 
   if (!mention) {
-    throw new Error(`MentionAsset ${mentionAssetId} not found`);
+    throw new MentionAccessError(`MentionAsset ${mentionAssetId} not found`);
   }
 
   if (!campaignCreator) {
-    throw new Error(`CampaignCreator ${campaignCreatorId} not found`);
+    throw new MentionAccessError(`CampaignCreator ${campaignCreatorId} not found`);
   }
 
   // Update mention to link to campaign creator (if not already)
@@ -94,21 +100,41 @@ export async function createAndAttributeMention(params: {
   postedAt?: Date;
   campaignCreatorId: string;
   attributionConfidence?: string;
+  /** When given, the campaign creator must belong to this brand. */
+  brandId?: string;
 }): Promise<string> {
-  // Dedupe: check if mention already exists for this platform + mediaUrl
-  const existing = await prisma.mentionAsset.findUnique({
+  const target = await prisma.campaignCreator.findFirst({
     where: {
-      platform_mediaUrl: {
-        platform: params.platform,
-        mediaUrl: params.mediaUrl,
-      },
+      id: params.campaignCreatorId,
+      ...(params.brandId ? { campaign: { brandId: params.brandId } } : {}),
+    },
+    select: { campaign: { select: { brandId: true } } },
+  });
+  if (!target) {
+    throw new MentionAccessError(`CampaignCreator ${params.campaignCreatorId} not found`);
+  }
+
+  // Already stored for this exact creator: nothing to do (and re-attributing
+  // another copy onto it would break the one-per-creator rule).
+  const exact = await prisma.mentionAsset.findFirst({
+    where: { platform: params.platform, mediaUrl: params.mediaUrl, campaignCreatorId: params.campaignCreatorId },
+    select: { id: true },
+  });
+  if (exact) return exact.id;
+
+  // Dedupe within the same brand only; another brand's copy of the same post is separate.
+  const existing = await prisma.mentionAsset.findFirst({
+    where: {
+      platform: params.platform,
+      mediaUrl: params.mediaUrl,
+      campaignCreator: { campaign: { brandId: target.campaign.brandId } },
     },
   });
 
   if (existing) {
-    // If it exists but points to a different creator, re-attribute
+    // If it exists but points to a different creator in this brand, re-attribute
     if (existing.campaignCreatorId !== params.campaignCreatorId) {
-      await attributeMention(existing.id, params.campaignCreatorId);
+      await attributeMention(existing.id, params.campaignCreatorId, target.campaign.brandId);
     }
     return existing.id;
   }

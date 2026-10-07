@@ -121,10 +121,13 @@ export function parsePositiveInteger(value: string) {
   return { value: parsed, error: null };
 }
 
-export function useCreatorsState() {
+export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoad?: boolean } = {}) {
   const [creators, setCreators] = useState<Creator[]>([]);
   const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  // Typing in the search box waits a beat before asking the server.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [minFollowers, setMinFollowers] = useState("");
   const [maxFollowers, setMaxFollowers] = useState("");
   const [minViews, setMinViews] = useState("");
@@ -132,9 +135,11 @@ export function useCreatorsState() {
   const [category, setCategory] = useState("");
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState<number>(50);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
+  const [facetsLoaded, setFacetsLoaded] = useState(false);
 
   // Add-to-campaign modal state
   const [showCampaignModal, setShowCampaignModal] = useState(false);
@@ -146,13 +151,17 @@ export function useCreatorsState() {
   const [addingToCampaign, setAddingToCampaign] = useState(false);
 
   // Search Creators modal state
-  const [showSearchModal, setShowSearchModal] = useState(false);
+  // Opened from "Find creators" in the menu: show the panel on the first
+  // render, without waiting for the creators list to load.
+  const [showSearchModal, setShowSearchModal] = useState(openSearchOnLoad);
   const [selectedKeywords, setSelectedKeywords] = useState<string[]>([]);
+  const [flash, setFlash] = useState<{ ok: boolean; text: string } | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [searchUsernames, setSearchUsernames] = useState("");
   const [searchLocation, setSearchLocation] = useState("");
   const [searchMinFollowers, setSearchMinFollowers] = useState("");
   const [searchMaxFollowers, setSearchMaxFollowers] = useState("");
-  const [searchLimit, setSearchLimit] = useState("50");
+  const [searchLimit, setSearchLimit] = useState("25");
   const [searchSources, setSearchSources] =
     useState<Record<SearchSourceKey, boolean>>(DEFAULT_SEARCH_SOURCES);
   const [brandKeywords, setBrandKeywords] = useState<string[]>([]);
@@ -173,12 +182,25 @@ export function useCreatorsState() {
   // Approval settings
   const [discoveryApprovalMode, setDiscoveryApprovalMode] = useState<"recommend" | "auto">("recommend");
   const [discoveryApprovalThreshold, setDiscoveryApprovalThreshold] = useState(0.75);
+  const facetsLoadedRef = useRef(false);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Only the latest list request may update the table; older ones are aborted.
+  const listRequestRef = useRef<AbortController | null>(null);
+
   const fetchCreators = useCallback(async () => {
+    listRequestRef.current?.abort();
+    const controller = new AbortController();
+    listRequestRef.current = controller;
     setLoading(true);
+    setListError(null);
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
+    if (debouncedSearch) params.set("search", debouncedSearch);
     if (minFollowers) params.set("minFollowers", minFollowers);
     if (maxFollowers) params.set("maxFollowers", maxFollowers);
     if (minViews) params.set("minViews", minViews);
@@ -186,25 +208,42 @@ export function useCreatorsState() {
     if (category) params.set("category", category);
     if (source) params.set("source", source);
     params.set("page", page.toString());
-    params.set("limit", "50");
-    params.set("includeFacets", "1");
+    params.set("limit", pageSize.toString());
+    // Filter options only need loading once; later pages and filters skip them.
+    if (!facetsLoadedRef.current) params.set("includeFacets", "1");
 
     try {
-      const res = await fetch(`/api/creators?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCreators(data.creators);
-        setTotalPages(data.pagination.totalPages);
-        setTotal(data.pagination.total);
-        setFacets(data.facets ?? EMPTY_FACETS);
+      const res = await fetch(`/api/creators?${params}`, { signal: controller.signal });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? "Couldn't load your creators.");
       }
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (controller.signal.aborted) return;
+      setCreators(data.creators ?? []);
+      setTotalPages(data.pagination?.totalPages ?? 1);
+      setTotal(data.pagination?.total ?? 0);
+      if (data.facets) {
+        setFacets(data.facets);
+        facetsLoadedRef.current = true;
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      setListError(
+        error instanceof Error && error.message !== "Failed to fetch"
+          ? error.message
+          : "Couldn't load your creators. Check your connection and try again."
+      );
     } finally {
-      setLoading(false);
+      // Always clear the skeleton for the latest request, even when it failed.
+      if (listRequestRef.current === controller) {
+        listRequestRef.current = null;
+        setLoading(false);
+        setFacetsLoaded(true);
+      }
     }
   }, [
-    search,
+    debouncedSearch,
     minFollowers,
     maxFollowers,
     minViews,
@@ -212,20 +251,38 @@ export function useCreatorsState() {
     category,
     source,
     page,
+    pageSize,
   ]);
 
+  // The list loads on its own; nothing else waits in front of it.
   useEffect(() => {
-    fetchCreators();
+    void fetchCreators();
+  }, [fetchCreators]);
+
+  useEffect(() => () => listRequestRef.current?.abort(), []);
+
+  /** Changing how many rows show starts again from the first page. */
+  const setPageSize = useCallback((size: number) => {
+    setPageSizeState(size);
+    setPage(1);
+  }, []);
+
+  // Approval settings load once, separately, and never hold up the list.
+  useEffect(() => {
+    let ignore = false;
     fetch("/api/settings/approval")
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { approvalMode?: "recommend" | "auto"; approvalThreshold?: number } | null) => {
-        if (data) {
+        if (data && !ignore) {
           setDiscoveryApprovalMode(data.approvalMode ?? "recommend");
           setDiscoveryApprovalThreshold(data.approvalThreshold ?? 0.75);
         }
       })
       .catch(() => {/* non-fatal */});
-  }, [fetchCreators]);
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -309,10 +366,10 @@ export function useCreatorsState() {
         setShowCampaignModal(false);
         fetchCreators();
       } else if (res.status === 409) {
-        alert("Creator is already in this campaign");
+        setFlash({ ok: false, text: "That creator is already in this campaign." });
       }
     } catch {
-      alert("Failed to add creator to campaign");
+      setFlash({ ok: false, text: "Couldn't add them to the campaign. Try again." });
     } finally {
       setAddingToCampaign(false);
     }
@@ -351,9 +408,10 @@ export function useCreatorsState() {
   }
 
   async function startSearch() {
+    setSearchError(null);
     const limitState = parsePositiveInteger(searchLimit);
     if (limitState.error) {
-      alert(limitState.error);
+      setSearchError(limitState.error);
       return;
     }
 
@@ -364,7 +422,7 @@ export function useCreatorsState() {
       .map(([src]) => src);
 
     if (selectedSources.length === 0) {
-      alert("Select at least one discovery source.");
+      setSearchError("Pick at least one place to look.");
       return;
     }
 
@@ -379,7 +437,7 @@ export function useCreatorsState() {
       selectedKeywords.length === 0 &&
       usernames.length === 0
     ) {
-      alert("Add keywords, categories, or exact usernames before searching.");
+      setSearchError("Add something to search for first.");
       return;
     }
 
@@ -423,7 +481,7 @@ export function useCreatorsState() {
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to start search");
+        setSearchError(err.error || "Couldn't start the search. Try again.");
         setSearching(false);
         setSearchStatus(null);
         return;
@@ -434,13 +492,14 @@ export function useCreatorsState() {
       setActiveSearchJob(queuedJob);
       setShowSearchModal(false);
 
+      window.dispatchEvent(new Event("creator-search-started"));
       pollRef.current = setInterval(() => {
         void pollCreatorSearchJob(queuedJob.jobId);
       }, 3000);
 
       void pollCreatorSearchJob(queuedJob.jobId);
     } catch {
-      alert("Failed to start search");
+      setSearchError("Couldn't start the search. Check your connection and try again.");
       setSearching(false);
       setSearchStatus(null);
     }
@@ -495,17 +554,18 @@ export function useCreatorsState() {
 
       if (res.ok) {
         const data = await res.json();
-        alert(
-          `Imported: ${data.validImported} valid, ${data.created} new, ${data.updated} updated, ${data.invalidDropped} invalid dropped, ${data.skipped} skipped`
-        );
+        setFlash({
+          ok: true,
+          text: `Added ${data.created} new ${data.created === 1 ? "creator" : "creators"}${data.updated ? ` and updated ${data.updated}` : ""}.`,
+        });
         setShowSearchModal(false);
         resetSearchState();
         fetchCreators();
       } else {
-        alert("Failed to import creators");
+        setFlash({ ok: false, text: "Couldn't add those creators. Try again." });
       }
     } catch {
-      alert("Failed to import creators");
+      setFlash({ ok: false, text: "Couldn't add those creators. Try again." });
     } finally {
       setImporting(false);
     }
@@ -530,7 +590,7 @@ export function useCreatorsState() {
     setSearchLocation("");
     setSearchMinFollowers("");
     setSearchMaxFollowers("");
-    setSearchLimit("50");
+    setSearchLimit("25");
     setSearchSources(DEFAULT_SEARCH_SOURCES);
   }
 
@@ -578,6 +638,7 @@ export function useCreatorsState() {
     // List state
     creators,
     loading,
+    listError,
     search,
     setSearch,
     minFollowers,
@@ -594,6 +655,8 @@ export function useCreatorsState() {
     setSource,
     page,
     setPage,
+    pageSize,
+    setPageSize,
     totalPages,
     total,
     facets,
@@ -628,6 +691,8 @@ export function useCreatorsState() {
     searchSources,
     setSearchSources,
     searchCategoriesLoading,
+    /** Suggested words, places, and handles are still on their way. */
+    suggestionsLoading: searchCategoriesLoading || !facetsLoaded,
     searching,
     searchStatus,
     activeSearchJob,
@@ -638,6 +703,10 @@ export function useCreatorsState() {
     setEnriching,
     discoveryApprovalMode,
     discoveryApprovalThreshold,
+    flash,
+    setFlash,
+    searchError,
+    setSearchError,
 
     // Search actions
     startSearch,

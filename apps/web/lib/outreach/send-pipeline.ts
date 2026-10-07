@@ -24,7 +24,8 @@ import { recordOutcomeEvent } from "@/lib/seeding/outcome-recorder";
 import { DailyLimitExceededError } from "@/lib/outreach/errors";
 import { isInEarlyWarmup } from "@/lib/outreach/warmup";
 import { escapeHtml } from "@/lib/outreach/html-escape";
-import { renderBaseTemplate } from "@/lib/outreach/templates/base";
+import { renderPersonalTemplate } from "@/lib/outreach/templates/personal";
+import { BOUNCE_CLASSIFICATION } from "@/lib/inbox/auto-messages";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -72,19 +73,15 @@ export async function sendOutreachBatch(
     }
   }
 
-  // Find email alias for the brand (for Gmail sends)
-  let emailAliasId: string | null = null;
-  let fromAddress: string | null = null;
+  // Primary email alias for the brand; a campaign's chosen sender overrides it.
+  let primaryAlias: { id: string; address: string } | null = null;
   const hasAnyEmail = drafts.some((d) => d.channel === "email");
   if (hasAnyEmail) {
-    const alias = await prisma.emailAlias.findFirst({
+    primaryAlias = await prisma.emailAlias.findFirst({
       where: { brandId, isPrimary: true, isPaused: false },
       orderBy: { updatedAt: "desc" },
+      select: { id: true, address: true },
     });
-    if (alias) {
-      emailAliasId = alias.id;
-      fromAddress = alias.address;
-    }
   }
 
   for (let i = 0; i < drafts.length; i++) {
@@ -104,6 +101,14 @@ export async function sendOutreachBatch(
       select: {
         id: true,
         creatorId: true,
+        lifecycleStatus: true,
+        campaign: {
+          select: {
+            senderAlias: {
+              select: { id: true, address: true, brandId: true, isPaused: true },
+            },
+          },
+        },
         creator: {
           select: {
             id: true,
@@ -155,7 +160,26 @@ export async function sendOutreachBatch(
     //   have accepted the send before local persistence failed (thread is
     //   marked "sending" just before the Gmail call). NOT safe to resend.
     // No thread → new send.
+    // A bounced email never arrived. Once their address is changed (lifecycle back
+    // to "ready"), the same conversation is reused for one new send, but only
+    // while the bounce is still its latest message and no send is mid-flight.
+    let reuseThreadId: string | null = null;
     if (campaignCreator.conversationThread) {
+      const existingThread = campaignCreator.conversationThread;
+      const latest = await prisma.message.findFirst({
+        where: { threadId: existingThread.id },
+        orderBy: { createdAt: "desc" },
+        select: { classification: true },
+      });
+      if (
+        campaignCreator.lifecycleStatus === "ready" &&
+        latest?.classification === BOUNCE_CLASSIFICATION &&
+        existingThread.status !== "sending"
+      ) {
+        reuseThreadId = existingThread.id;
+      }
+    }
+    if (campaignCreator.conversationThread && !reuseThreadId) {
       const existingThread = campaignCreator.conversationThread;
       const hasOutboundMessage = await prisma.message.findFirst({
         where: { threadId: existingThread.id, direction: "outbound" },
@@ -199,6 +223,20 @@ export async function sendOutreachBatch(
 
     if (draft.channel === "email") {
       // --- Email channel ---
+      // Never fall back to a different inbox when the campaign names one.
+      const campaignSender = campaignCreator.campaign.senderAlias;
+      if (campaignSender && (campaignSender.brandId !== brandId || campaignSender.isPaused)) {
+        results.push({
+          ...draft,
+          status: "failed",
+          error: `Campaign sender ${campaignSender.address} is paused or unavailable.`,
+        });
+        continue;
+      }
+      const sender = campaignSender ?? primaryAlias;
+      const emailAliasId = sender?.id ?? null;
+      const fromAddress = sender?.address ?? null;
+
       if (!creator.email) {
         results.push({
           ...draft,
@@ -223,22 +261,27 @@ export async function sendOutreachBatch(
         // Status lifecycle: "preparing" → "sending" (just before the Gmail
         // call) → "open" (after the outbound message is persisted). The retry
         // path above only deletes empty threads still in "preparing".
-        const thread = await prisma.conversationThread.create({
-          data: {
-            brandId,
-            campaignCreatorId: draft.campaignCreatorId,
-            channel: "email",
-            status: "preparing",
-          },
-        });
+        const thread = reuseThreadId
+          ? await prisma.conversationThread.update({
+              where: { id: reuseThreadId },
+              // The new address starts a new Gmail thread; replies match on the new id.
+              data: { status: "preparing", externalThreadId: null },
+            })
+          : await prisma.conversationThread.create({
+              data: {
+                brandId,
+                campaignCreatorId: draft.campaignCreatorId,
+                channel: "email",
+                status: "preparing",
+              },
+            });
 
         // Resolve HTML body: use provided, or wrap plain text in base template
         let resolvedBodyHtml = draft.bodyHtml;
         if (!resolvedBodyHtml) {
-          const unsubUrl = buildUnsubscribeUrl(creator.email);
-          resolvedBodyHtml = renderBaseTemplate({
-            bodyContent: `<p>${escapeHtml(draft.body).replace(/\n/g, "<br/>")}</p>`,
-            brandName: "Our Team",
+          const unsubUrl = buildUnsubscribeUrl(creator.email, brandId);
+          resolvedBodyHtml = renderPersonalTemplate({
+            bodyContent: draft.body.split(/\n{2,}/).map((para) => `<p style="margin:0 0 12px 0;">${escapeHtml(para).replace(/\n/g, "<br/>")}</p>`).join(""),
             unsubscribeUrl: unsubUrl,
           });
         }
@@ -306,6 +349,16 @@ export async function sendOutreachBatch(
             outreachCount: { increment: 1 },
             lastOutreachAt: new Date(),
           },
+        });
+        // First real send moves a draft campaign to active.
+        await prisma.campaign.updateMany({
+          where: { status: "draft", campaignCreators: { some: { id: draft.campaignCreatorId } } },
+          data: { status: "active" },
+        });
+        // Retire the pre-written draft so it is never offered again.
+        await prisma.aIDraft.updateMany({
+          where: { campaignCreatorId: draft.campaignCreatorId, type: "outreach", status: "draft" },
+          data: { status: "sent" },
         });
         await recordOutcomeEvent({
           campaignCreatorId: draft.campaignCreatorId,

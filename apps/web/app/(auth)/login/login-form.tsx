@@ -1,0 +1,99 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { signInAndBootstrapLogin } from "./login-bootstrap";
+
+/** `next` is already checked to be a same-site path; `initialError` explains a failed email link. */
+export function LoginForm({ next, initialError }: { next: string; initialError: string | null }) {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(initialError);
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    const result = await signInAndBootstrapLogin({
+      supabase: createClient(),
+      email,
+      password,
+    });
+
+    if (!result.ok) {
+      setError(result.error);
+      setLoading(false);
+      return;
+    }
+
+    router.push(next);
+    router.refresh();
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="flex items-center justify-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/kalm-logo.png" alt="Kalm" className="h-7 w-auto" />
+            <span className="h-6 w-px bg-border" aria-hidden />
+            <p className="text-2xl font-semibold tracking-tight">Seed Scale</p>
+          </div>
+          <CardTitle className="text-2xl font-bold">Creator seeding</CardTitle>
+          <CardDescription>
+            Sign in to your workspace
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+              />
+            </div>
+
+            {error && (
+              <p role="alert" className="text-sm text-red-600 [overflow-wrap:anywhere]">{error}</p>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in…" : "Sign in"}
+            </Button>
+          </form>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Joined from an invite and never set a password? Open your invite email again and use its link to get a
+            sign-in link.
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

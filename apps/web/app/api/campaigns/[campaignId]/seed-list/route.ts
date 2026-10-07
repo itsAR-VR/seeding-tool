@@ -23,7 +23,7 @@ async function buildSeedList(campaignId: string, configOverride?: Record<string,
   const flags = await getFeatureFlags(campaign.brandId);
   if (!flags.portfolioOptimizerEnabled || !flags.decisionEngineScoringEnabled) {
     throw new BrandAccessError(
-      "Portfolio preview is disabled for this brand",
+      "The suggested creator mix is turned off. Turn on 'Suggested creator mix' and 'Detailed match scores' in Settings > Features.",
       403
     );
   }
@@ -153,7 +153,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
     console.error("[campaigns/[campaignId]/seed-list/GET]", error);
     return NextResponse.json(
-      { error: "Failed to build seed list preview" },
+      { error: "Couldn't build the suggested list. Try again in a minute." },
       { status: 500 }
     );
   }
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     }
     console.error("[campaigns/[campaignId]/seed-list/POST]", error);
     return NextResponse.json(
-      { error: "Failed to save seed list configuration" },
+      { error: "Couldn't save these settings. Try again in a minute." },
       { status: 500 }
     );
   }

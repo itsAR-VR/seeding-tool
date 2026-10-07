@@ -52,6 +52,7 @@ vi.mock("@/lib/prisma", () => ({
     },
     mentionAsset: {
       findUnique: mocks.mentionAssetFindUnique,
+      findFirst: mocks.mentionAssetFindUnique,
       create: mocks.mentionAssetCreate,
     },
     campaignCreator: {

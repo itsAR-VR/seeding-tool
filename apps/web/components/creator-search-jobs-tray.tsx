@@ -40,6 +40,20 @@ export function CreatorSearchJobsTray() {
   useEffect(() => {
     let cancelled = false;
 
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let running = false;
+
+    // Check often only while a search is running; otherwise once a minute,
+    // and never while the tab is hidden.
+    function schedule() {
+      clearTimeout(timer);
+      timer = setTimeout(() => void tick(), running ? 4000 : 60000);
+    }
+    async function tick() {
+      if (!document.hidden) await loadJobs();
+      if (!cancelled) schedule();
+    }
+
     async function loadJobs() {
       try {
         const [activeResponse, recentResponse] = await Promise.all([
@@ -54,6 +68,7 @@ export function CreatorSearchJobsTray() {
         const recentPayload = (await recentResponse.json()) as {
           jobs: SearchJobSummary[];
         };
+        running = activePayload.jobs.length > 0;
         if (!cancelled) {
           setActiveJobs(activePayload.jobs);
           setRecentJobs(recentPayload.jobs);
@@ -63,14 +78,18 @@ export function CreatorSearchJobsTray() {
       }
     }
 
-    void loadJobs();
-    const interval = setInterval(() => {
-      void loadJobs();
-    }, 4000);
+    // A search started on this page should show up right away.
+    const onStarted = () => {
+      running = true;
+      void tick();
+    };
+    window.addEventListener("creator-search-started", onStarted);
+    void tick();
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearTimeout(timer);
+      window.removeEventListener("creator-search-started", onStarted);
     };
   }, []);
 
@@ -97,7 +116,7 @@ export function CreatorSearchJobsTray() {
           <div className="mb-3 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold">Discovery Jobs</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Active and recent creator searches
               </p>
             </div>
@@ -117,7 +136,7 @@ export function CreatorSearchJobsTray() {
                   <Badge variant={statusTone(job.status)}>{job.status}</Badge>
                   <Link
                     href={jobTarget(job)}
-                    className="text-xs font-medium text-blue-600 hover:underline"
+                    className="text-sm font-medium text-blue-600 hover:underline"
                   >
                     Open
                   </Link>
@@ -128,7 +147,7 @@ export function CreatorSearchJobsTray() {
                     style={{ width: `${job.progressPercent}%` }}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                   <span>Requested: {job.requestedCount}</span>
                   <span>Ready: {job.resultCount}</span>
                   <span>Validated: {job.validatedCount}</span>
@@ -139,7 +158,7 @@ export function CreatorSearchJobsTray() {
                   </span>
                 </div>
                 {job.error ? (
-                  <p className="mt-2 text-xs text-red-700">{job.error}</p>
+                  <p className="mt-2 text-sm text-red-700">{job.error}</p>
                 ) : null}
               </div>
             ))}
@@ -153,7 +172,7 @@ export function CreatorSearchJobsTray() {
         onClick={() => setOpen((current) => !current)}
       >
         Discovery Jobs
-        <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-xs text-foreground">
+        <span className="ml-2 rounded-full bg-background px-2 py-0.5 text-sm text-foreground">
           {activeJobs.length}
         </span>
       </Button>

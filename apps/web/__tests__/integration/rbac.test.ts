@@ -297,7 +297,7 @@ describe("RBAC — multi-brand cookie resolution", () => {
     });
   });
 
-  it("returns 403 when cookie specifies a brand the user is not a member of", async () => {
+  it("never uses a cookie brand the user is not a member of (falls back to none here)", async () => {
     setupAuthenticatedUser();
 
     // Cookie points to brand-evil
@@ -310,6 +310,8 @@ describe("RBAC — multi-brand cookie resolution", () => {
 
     // User is NOT a member of brand-evil
     mocks.prisma.brandMembership.findUnique.mockResolvedValue(null);
+    // ...and has no brand of their own to fall back to.
+    mocks.prisma.brandMembership.findFirst.mockResolvedValue(null);
 
     const res = await POST(makeRequest(), makeContext());
 

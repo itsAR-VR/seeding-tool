@@ -32,7 +32,13 @@ export type ConnectionOverviewItem = {
   summary?: string;
   details?: {
     gmailAddress?: string | null;
+    gmailAddresses?: string[];
     instagramUsername?: string | null;
+    /** Instagram accounts and ad accounts the user can pick between. */
+    igUserId?: string | null;
+    igOptions?: Array<{ igId: string; username: string | null }>;
+    adAccountId?: string | null;
+    adAccountOptions?: Array<{ id: string; name: string | null }>;
     storeDomain?: string | null;
     accountId?: string | null;
     lastSyncAt?: string | null;

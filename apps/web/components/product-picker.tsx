@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
 import { Input } from "@/components/ui/input";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDateTime } from "@/lib/format/date";
 
 interface Variant {
   id: string;
@@ -52,12 +54,13 @@ interface ShopifyStatus {
 }
 
 function normalizeErrorMessage(message: string) {
+  // Older servers sent internal wording; keep translating it for safety.
   if (message.includes("No valid Shopify credential found")) {
-    return "Shopify is not connected for this brand yet.";
+    return "Shopify is not connected yet. Connect it in Settings > Connections.";
   }
 
   if (message.includes("No connected Shopify store found")) {
-    return "Shopify is connected without a store domain. Reconnect it from Settings.";
+    return "Shopify is connected without a store address. Reconnect it in Settings > Connections.";
   }
 
   return message;
@@ -132,13 +135,13 @@ export function ProductPicker({
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(normalizeErrorMessage(data.error ?? "Sync failed"));
+        throw new Error(normalizeErrorMessage(data.error ?? "Couldn't refresh products. Try again."));
       }
       await fetchProducts();
       await fetchStatus();
     } catch (err) {
       setError(
-        err instanceof Error ? normalizeErrorMessage(err.message) : "Sync failed"
+        err instanceof Error ? normalizeErrorMessage(err.message) : "Couldn't refresh products. Try again."
       );
       await fetchStatus();
     } finally {
@@ -173,7 +176,7 @@ export function ProductPicker({
 
   function variantSummary(variants: Variant[]): string {
     if (variants.length <= 1) return "";
-    // Group by option type — simplify "Default Title" variants
+    // Group by option type; simplify "Default Title" variants
     const titles = variants
       .map((v) => v.title)
       .filter((t) => t !== "Default Title");
@@ -220,15 +223,15 @@ export function ProductPicker({
           </div>
           <h3 className="text-lg font-semibold">Shopify not connected</h3>
           <p className="mt-1 max-w-sm text-center text-sm text-muted-foreground">
-            Connect your Shopify admin domain and access token before syncing
-            products into this campaign.
+            Connect Shopify in Settings &gt; Connections so we can bring in
+            your products. Then come back here to pick what you are gifting.
           </p>
           {showSyncButton && (
             <Link
               href="/settings/connections"
               className={buttonVariants({ className: "mt-4" })}
             >
-              Open Shopify settings
+              Connect Shopify
             </Link>
           )}
         </CardContent>
@@ -236,7 +239,7 @@ export function ProductPicker({
     );
   }
 
-  // Empty state — no products synced
+  // Empty state: no products brought in yet
   if (products.length === 0 && !error) {
     return (
       <Card className="border-dashed">
@@ -256,9 +259,9 @@ export function ProductPicker({
               />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold">No products synced</h3>
+          <h3 className="text-lg font-semibold">No products yet</h3>
           <p className="mt-1 text-sm text-muted-foreground text-center max-w-sm">
-            Sync your Shopify product catalog to select products for this campaign.
+            Bring in your products from Shopify, then pick the one you are gifting.
           </p>
           {showSyncButton && (
             <Button
@@ -287,10 +290,10 @@ export function ProductPicker({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
                     />
                   </svg>
-                  Syncing…
+                  Refreshing…
                 </>
               ) : (
-                "Sync Products from Shopify"
+                "Get products from Shopify"
               )}
             </Button>
           )}
@@ -313,7 +316,7 @@ export function ProductPicker({
                 onClick={handleSync}
                 disabled={syncing}
               >
-                {syncing ? "Retrying…" : "Retry sync"}
+                {syncing ? "Trying again…" : "Try again"}
               </Button>
             ) : (
               <Link
@@ -331,24 +334,22 @@ export function ProductPicker({
         <div className="rounded-md border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
           <div className="flex flex-wrap items-center gap-2">
             <span>
-              Store: <strong>{shopifyStatus.storeDomain ?? "Connected"}</strong>
+              Connected to <strong>your Shopify store</strong>
             </span>
             {shopifyStatus.lastSyncAt && (
               <span>
-                Last sync:{" "}
-                <strong>
-                  {new Date(shopifyStatus.lastSyncAt).toLocaleString()}
-                </strong>
+                Last refreshed:{" "}
+                <strong>{formatDateTime(shopifyStatus.lastSyncAt)}</strong>
               </span>
             )}
             {typeof shopifyStatus.lastSyncedCount === "number" && (
               <span>{shopifyStatus.lastSyncedCount} products</span>
             )}
-            {shopifyStatus.truncated && <span>Partial sync</span>}
+            {shopifyStatus.truncated && <span>Only some products came in</span>}
           </div>
           {shopifyStatus.lastSyncError && (
             <p className="mt-2 text-red-700">
-              Last sync failed: {shopifyStatus.lastSyncError}
+              Last refresh didn&apos;t work: {shopifyStatus.lastSyncError}
             </p>
           )}
         </div>
@@ -384,7 +385,7 @@ export function ProductPicker({
             onClick={handleSync}
             disabled={syncing || !shopifyStatus.connected}
           >
-            {syncing ? "Syncing…" : "Re-sync"}
+            {syncing ? "Refreshing…" : "Refresh products"}
           </Button>
         )}
         {selectedProductIds.size > 0 && (
@@ -466,7 +467,7 @@ export function ProductPicker({
                     <div className="absolute bottom-2 left-2">
                       <Badge
                         variant="secondary"
-                        className="bg-black/60 text-white text-[10px] backdrop-blur-sm border-0"
+                        className="bg-black/60 text-white text-sm backdrop-blur-sm border-0"
                       >
                         {product.productType}
                       </Badge>
@@ -483,7 +484,7 @@ export function ProductPicker({
                       {priceRange(product.variants)}
                     </span>
                     {product.variants.length > 1 && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-sm text-muted-foreground">
                         {variantSummary(product.variants) ||
                           `${product.variants.length} variants`}
                       </span>
@@ -494,7 +495,7 @@ export function ProductPicker({
                   {product.variants.length > 1 && (
                     <button
                       type="button"
-                      className="mt-2 text-xs text-primary hover:underline"
+                      className="mt-2 text-sm text-primary hover:underline"
                       onClick={(e) => {
                         e.stopPropagation();
                         setExpandedProduct(isExpanded ? null : product.id);
@@ -510,7 +511,7 @@ export function ProductPicker({
                       {product.variants.map((v) => (
                         <div
                           key={v.id}
-                          className="flex items-center justify-between text-xs"
+                          className="flex items-center justify-between text-sm"
                         >
                           <span className="text-muted-foreground truncate max-w-[60%]">
                             {v.title === "Default Title" ? "Standard" : v.title}

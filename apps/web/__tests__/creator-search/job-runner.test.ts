@@ -11,6 +11,13 @@ const mocks = vi.hoisted(() => ({
   orchestrate: vi.fn(),
 }));
 
+vi.mock("@/lib/apify/token", () => ({
+  ApifyKeyMissingError: class ApifyKeyMissingError extends Error {},
+  resolveApifyToken: vi.fn().mockResolvedValue("apify-test-token"),
+  withBrandApify: (_brandId: string, fn: () => Promise<unknown>) => fn(),
+  currentApifyToken: () => "apify-test-token",
+}));
+
 vi.mock("@/lib/inngest/client", () => ({
   inngest: {
     send: vi.fn(),

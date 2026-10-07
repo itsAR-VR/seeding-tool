@@ -9,6 +9,11 @@ type CreatorLeaderboardProps = {
   readonly entries: readonly CreatorLeaderboardEntry[];
 };
 
+const PLATFORM_LABELS: Record<string, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+};
+
 function formatNumber(n: number): string {
   return new Intl.NumberFormat("en-US").format(n);
 }
@@ -42,8 +47,8 @@ export function CreatorLeaderboard({ entries }: CreatorLeaderboardProps) {
 
   if (entries.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-        No creator mention data yet.
+      <div className="rounded-xl border bg-card p-5 text-muted-foreground">
+        No posts with likes or views yet. Creators show up here once their posts get some.
       </div>
     );
   }
@@ -52,56 +57,48 @@ export function CreatorLeaderboard({ entries }: CreatorLeaderboardProps) {
     { field: "totalLikes", label: "Likes" },
     { field: "totalComments", label: "Comments" },
     { field: "totalViews", label: "Views" },
-    { field: "mentionCount", label: "Mentions" },
+    { field: "mentionCount", label: "Posts" },
   ];
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-xl border bg-card">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b text-left">
-            <th className="py-2 pr-4 font-medium text-muted-foreground">#</th>
-            <th className="py-2 pr-4 font-medium text-muted-foreground">
-              Creator
-            </th>
+          <tr className="border-b text-left text-muted-foreground">
+            <th className="px-5 py-3 font-medium">Creator</th>
             {columns.map((col) => (
               <th
                 key={col.field}
-                className="py-2 pr-4 font-medium text-muted-foreground text-right cursor-pointer select-none hover:text-foreground"
-                onClick={() => handleSort(col.field)}
+                className="px-5 py-3 text-right font-medium"
+                aria-sort={col.field === sortBy ? (sortDesc ? "descending" : "ascending") : "none"}
               >
-                {col.label}
-                {sortIndicator(col.field)}
+                <button
+                  type="button"
+                  onClick={() => handleSort(col.field)}
+                  className="hover:text-foreground"
+                >
+                  {col.label}
+                  {sortIndicator(col.field)}
+                </button>
               </th>
             ))}
           </tr>
         </thead>
-        <tbody>
-          {sorted.map((entry, idx) => (
-            <tr key={entry.creatorId} className="border-b last:border-0">
-              <td className="py-2 pr-4 text-muted-foreground">{idx + 1}</td>
-              <td className="py-2 pr-4">
-                <div className="font-medium">
-                  {entry.creatorName || "Unknown"}
-                </div>
+        <tbody className="divide-y">
+          {sorted.map((entry) => (
+            <tr key={entry.creatorId}>
+              <td className="px-5 py-3">
+                <div className="font-medium">{entry.creatorName || "Unnamed creator"}</div>
                 {entry.handle && (
-                  <div className="text-xs text-muted-foreground">
-                    @{entry.handle} ({entry.platform})
+                  <div className="text-muted-foreground">
+                    @{entry.handle} on {PLATFORM_LABELS[entry.platform] ?? "social media"}
                   </div>
                 )}
               </td>
-              <td className="py-2 pr-4 text-right tabular-nums">
-                {formatNumber(entry.totalLikes)}
-              </td>
-              <td className="py-2 pr-4 text-right tabular-nums">
-                {formatNumber(entry.totalComments)}
-              </td>
-              <td className="py-2 pr-4 text-right tabular-nums">
-                {formatNumber(entry.totalViews)}
-              </td>
-              <td className="py-2 pr-4 text-right tabular-nums">
-                {formatNumber(entry.mentionCount)}
-              </td>
+              <td className="px-5 py-3 text-right tabular-nums">{formatNumber(entry.totalLikes)}</td>
+              <td className="px-5 py-3 text-right tabular-nums">{formatNumber(entry.totalComments)}</td>
+              <td className="px-5 py-3 text-right tabular-nums">{formatNumber(entry.totalViews)}</td>
+              <td className="px-5 py-3 text-right tabular-nums">{formatNumber(entry.mentionCount)}</td>
             </tr>
           ))}
         </tbody>

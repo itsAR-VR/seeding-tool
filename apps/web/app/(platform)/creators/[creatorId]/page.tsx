@@ -1,8 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
+import { STAGE_DISPLAY, displayStage, type StageDisplay } from "@/lib/stats/stage-display";
+import { sourceLabel } from "../components/creator-filters";
+import { ChangeEmail } from "./change-email";
 
 type ProvenancePayload = {
   creator: {
@@ -25,105 +32,263 @@ type ProvenancePayload = {
       platform: string;
       handle: string;
       profileUrl: string | null;
-      contactPoints: Array<{ contactType: string; contactValue: string; confidence: number }>;
     }>;
   } | null;
 };
 
+type CreatorSummary = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  instagramHandle: string | null;
+  followerCount: number | null;
+  bio: string | null;
+  optedOut: boolean;
+  campaignCreators: Array<{
+    id: string;
+    reviewStatus: string;
+    lifecycleStatus: string;
+    replyDecision: string | null;
+    campaign: { id: string; name: string };
+    conversationThread: { id: string } | null;
+  }>;
+};
+
+const CHECK_LABELS: Record<string, string> = {
+  "Validation status unknown": "We couldn't confirm this account is active.",
+  "Validation status retry": "We couldn't confirm this account is active yet. We'll try again.",
+  "Single source only": "Only one place listed this creator.",
+  "Low authenticity score": "Some of their followers may not be real.",
+  "Contact point may be stale": "Their contact details may be out of date.",
+};
+
+function readable(map: Record<string, string>, value: string): string {
+  return map[value] ?? value.replace(/_/g, " ");
+}
+
+/**
+ * Same words and tone as the campaign Overview (lib/stats/stage-display).
+ * Orders and posts aren't loaded here, so the stored step is trusted for those.
+ */
+function campaignStatus(cc: CreatorSummary["campaignCreators"][number]): StageDisplay {
+  return STAGE_DISPLAY[displayStage(cc)];
+}
+
+const backLink = (
+  <Link
+    href="/creators"
+    className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+  >
+    <ArrowLeft className="size-4" aria-hidden />
+    All creators
+  </Link>
+);
+
 export default function CreatorProvenancePage() {
   const params = useParams<{ creatorId: string }>();
   const [payload, setPayload] = useState<ProvenancePayload | null>(null);
+  const [summary, setSummary] = useState<CreatorSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/creators/${params.creatorId}/provenance`);
-        const data = await res.json();
-        if (res.ok) {
-          setPayload(data);
-        }
-      } finally {
-        setLoading(false);
-      }
+  const [saved, setSaved] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const [summaryRes, res] = await Promise.all([
+        fetch(`/api/creators/${params.creatorId}/summary`),
+        fetch(`/api/creators/${params.creatorId}/provenance`),
+      ]);
+      if (summaryRes.ok) setSummary((await summaryRes.json()) as CreatorSummary);
+      if (res.ok) setPayload((await res.json()) as ProvenancePayload);
+    } catch {
+      // Falls through to the "couldn't load" message below.
+    } finally {
+      setLoading(false);
     }
-    void load();
   }, [params.creatorId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading creator provenance…</div>;
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <span className="sr-only" role="status">Loading creator</span>
+        <div className="space-y-2">
+          <Skeleton className="h-9 w-64" />
+          <Skeleton className="h-5 w-80" />
+        </div>
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+    );
   }
 
-  if (!payload) {
-    return <div className="p-6 text-sm text-muted-foreground">Creator provenance unavailable.</div>;
+  if (!summary) {
+    return (
+      <div className="space-y-4">
+        {backLink}
+        <div className="rounded-xl border bg-card p-6">
+          <p className="font-medium">We couldn&apos;t find this creator.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            They may have been merged with another record. Go back to your creators and search by name or handle.
+          </p>
+        </div>
+      </div>
+    );
   }
+
+  const bounced = summary.campaignCreators.some((cc) => cc.lifecycleStatus === "bounced");
+  const checks = payload?.riskFlags ?? [];
+  const touches = payload?.discoveryTouches ?? [];
+  const otherProfiles = payload?.identity?.profiles ?? [];
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="space-y-2">
+        {backLink}
         <h1 className="text-3xl font-bold tracking-tight">
-          {payload.creator.name ?? payload.creator.instagramHandle ?? "Creator"}
+          {summary.name ?? (summary.instagramHandle ? `@${summary.instagramHandle}` : "Creator")}
         </h1>
         <p className="text-muted-foreground">
-          Confidence: {payload.confidenceBand} · Validation: {payload.creator.validationStatus}
+          {[
+            summary.instagramHandle ? `@${summary.instagramHandle}` : null,
+            summary.email ?? "No email yet",
+            summary.followerCount ? `${summary.followerCount.toLocaleString()} followers` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
         </p>
+        {summary.optedOut && !bounced && (
+          <p role="status" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+            On the do-not-send list. We won&apos;t email this creator.
+          </p>
+        )}
+        <ChangeEmail
+          key={summary.email ?? "none"}
+          creatorId={summary.id}
+          currentEmail={summary.email}
+          bounced={bounced}
+          onSaved={(message) => {
+            setSaved(message);
+            void load();
+          }}
+        />
+        {saved && (
+          <p role="status" className="text-sm text-green-800">
+            {saved}
+          </p>
+        )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Decision stack</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium">Risk flags</p>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                {payload.riskFlags.length > 0 ? (
-                  payload.riskFlags.map((flag) => <li key={flag}>{flag}</li>)
-                ) : (
-                  <li>No active risk flags.</li>
-                )}
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium">Score decomposition</p>
-              <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
-                {JSON.stringify(payload.scoreDecomposition, null, 2)}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
+      <section className="rounded-xl border bg-card">
+        <h2 className="border-b px-5 py-4 font-semibold">Campaigns</h2>
+        {summary.campaignCreators.length === 0 ? (
+          <p className="px-5 py-4 text-sm text-muted-foreground">
+            Not in a campaign yet.{" "}
+            <Link href="/creators" className="text-blue-700 hover:underline">
+              Add them from your creators list
+            </Link>
+            .
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {summary.campaignCreators.map((cc) => (
+              <li key={cc.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm">
+                <div className="min-w-0 space-y-1">
+                  <Link href={`/campaigns/${cc.campaign.id}`} className="block font-medium hover:underline">
+                    {cc.campaign.name}
+                  </Link>
+                  <StatusPill tone={campaignStatus(cc).tone}>{campaignStatus(cc).label}</StatusPill>
+                </div>
+                {cc.conversationThread ? (
+                  <Link href={`/inbox/${cc.conversationThread.id}`} className="text-blue-700 hover:underline">
+                    Open conversation
+                  </Link>
+                ) : cc.reviewStatus === "approved" && cc.lifecycleStatus === "ready" ? (
+                  <Link
+                    href={`/campaigns/${cc.campaign.id}/outreach?select=${cc.id}`}
+                    className="text-blue-700 hover:underline"
+                  >
+                    Write the first email
+                  </Link>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Identity & provenance</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div>
-              <p className="font-medium">Discovery touches</p>
-              <ul className="list-disc pl-5 text-muted-foreground">
-                {payload.discoveryTouches.map((touch, index) => (
-                  <li key={`${touch.source}-${index}`}>
-                    {touch.source} · {new Date(touch.createdAt).toLocaleString()}
+      {summary.bio && (
+        <section className="rounded-xl border bg-card">
+          <h2 className="border-b px-5 py-4 font-semibold">Bio</h2>
+          <p className="whitespace-pre-wrap px-5 py-4 text-sm">{summary.bio}</p>
+        </section>
+      )}
+
+      {payload && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="rounded-xl border bg-card">
+            <h2 className="border-b px-5 py-4 font-semibold">Worth checking</h2>
+            {checks.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">Nothing stands out about this creator.</p>
+            ) : (
+              <ul className="divide-y text-sm">
+                {checks.map((flag) => (
+                  <li key={flag} className="px-5 py-3">
+                    {readable(CHECK_LABELS, flag)}
                   </li>
                 ))}
               </ul>
-            </div>
-            {payload.identity ? (
-              <div>
-                <p className="font-medium">Linked profiles</p>
-                <ul className="list-disc pl-5 text-muted-foreground">
-                  {payload.identity.profiles.map((profile) => (
-                    <li key={profile.id}>
-                      {profile.platform} · @{profile.handle}
-                    </li>
-                  ))}
-                </ul>
+            )}
+          </section>
+
+          <section className="rounded-xl border bg-card">
+            <h2 className="border-b px-5 py-4 font-semibold">Where they came from</h2>
+            {touches.length === 0 && otherProfiles.length === 0 ? (
+              <p className="px-5 py-4 text-sm text-muted-foreground">No history recorded yet.</p>
+            ) : (
+              <div className="space-y-4 px-5 py-4 text-sm">
+                {touches.length > 0 && (
+                  <ul className="space-y-1">
+                    {touches.map((touch, index) => (
+                      <li key={`${touch.source}-${index}`}>
+                        {sourceLabel(touch.source)}
+                        <span className="text-muted-foreground">
+                          {" "}
+                          on {formatDate(touch.createdAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {otherProfiles.length > 0 && (
+                  <div>
+                    <p className="font-medium">Their accounts</p>
+                    <ul className="mt-1 space-y-1">
+                      {otherProfiles.map((profile) => (
+                        <li key={profile.id}>
+                          {profile.profileUrl ? (
+                            <a
+                              href={profile.profileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 hover:underline"
+                            >
+                              @{profile.handle}
+                            </a>
+                          ) : (
+                            <>@{profile.handle}</>
+                          )}
+                          <span className="capitalize text-muted-foreground"> on {profile.platform}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
-      </div>
+            )}
+          </section>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,24 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { OrdersTable, ordersHeading, type OrderTableRow } from "@/app/(platform)/orders/_components/orders-table";
 
 type OrderRow = {
   id: string;
-  shopifyOrderId: string;
+  shopifyOrderId: string | null;
   shopifyOrderNumber: string | null;
+  shopifyDraftOrderId: string | null;
+  shopifyDraftOrderName: string | null;
+  shopifyAdminUrl?: string | null;
   status: string;
   createdAt: string;
   campaignCreator: {
     id: string;
+    creatorId: string;
     lifecycleStatus: string;
     creator: {
       name: string | null;
@@ -42,13 +40,21 @@ type EligibleCreator = {
   };
 };
 
-const statusColors: Record<string, string> = {
-  created: "bg-blue-100 text-blue-800",
-  processing: "bg-yellow-100 text-yellow-800",
-  shipped: "bg-indigo-100 text-indigo-800",
-  delivered: "bg-green-100 text-green-800",
-  cancelled: "bg-red-100 text-red-800",
-};
+function toTableRow(order: OrderRow): OrderTableRow {
+  const creator = order.campaignCreator.creator;
+  return {
+    id: order.id,
+    status: order.status,
+    shopifyOrderId: order.shopifyOrderId,
+    shopifyOrderNumber: order.shopifyOrderNumber,
+    shopifyDraftOrderId: order.shopifyDraftOrderId,
+    shopifyDraftOrderName: order.shopifyDraftOrderName,
+    createdAt: order.createdAt,
+    adminUrl: order.shopifyAdminUrl ?? null,
+    creator: { id: order.campaignCreator.creatorId, name: creator.name || creator.email || "Unnamed creator" },
+    tracking: order.fulfillmentEvents?.[0] ?? null,
+  };
+}
 
 export default function OrdersPage() {
   const params = useParams();
@@ -57,14 +63,16 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [eligible, setEligible] = useState<EligibleCreator[]>([]);
   const [loading, setLoading] = useState(true);
-  const [placing, setPlacing] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
   async function loadData() {
     setLoading(true);
+    setLoadError(null);
     try {
       // Fetch creators to build order list and eligible list
       const creatorsRes = await fetch(
@@ -89,6 +97,7 @@ export default function OrdersPage() {
             ...cc.shopifyOrder,
             campaignCreator: {
               id: cc.id,
+              creatorId: cc.creatorId,
               lifecycleStatus: cc.lifecycleStatus,
               creator: cc.creator,
             },
@@ -107,33 +116,9 @@ export default function OrdersPage() {
       setEligible(eligibleRows);
     } catch (error) {
       console.error("Failed to load data:", error);
+      setLoadError("Couldn't load orders. Refresh the page to try again.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function placeOrder(creatorId: string) {
-    setPlacing(creatorId);
-    try {
-      const res = await fetch(
-        `/api/campaigns/${campaignId}/creators/${creatorId}/order`,
-        { method: "POST" }
-      );
-
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || "Failed to place order");
-      }
-
-      // Reload data
-      await loadData();
-    } catch (error) {
-      console.error("Failed to place order:", error);
-      alert(
-        error instanceof Error ? error.message : "Failed to place order"
-      );
-    } finally {
-      setPlacing(null);
     }
   }
 
@@ -146,123 +131,55 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Orders</h1>
-        <p className="text-muted-foreground">
-          Manage Shopify gift orders for this campaign
+    <div className="space-y-8">
+      <header>
+        <h2 className="text-2xl font-semibold tracking-tight">Orders</h2>
+        <p className="mt-1 text-muted-foreground">
+          Gift orders for this campaign. Drafts wait for you in Shopify; complete one there to ship it.
         </p>
-      </div>
+      </header>
 
-      {/* Eligible creators — ready to place orders */}
       {eligible.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">
-              Ready to Order ({eligible.length})
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {eligible.map((cc) => (
-                <div
-                  key={cc.id}
-                  className="flex items-center justify-between rounded-lg border p-3"
-                >
-                  <div>
-                    <p className="font-medium">
-                      {cc.creator.name || cc.creator.email || "Unknown"}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Address confirmed
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => placeOrder(cc.creatorId)}
-                    disabled={placing === cc.creatorId}
-                  >
-                    {placing === cc.creatorId
-                      ? "Placing…"
-                      : "Place Order"}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <section aria-labelledby="eligible-heading" className="space-y-3">
+          <h2 id="eligible-heading" className="text-lg font-semibold">
+            Address received, order not started ({eligible.length})
+          </h2>
+          <ul className="divide-y rounded-xl border bg-card">
+            {eligible.map((cc) => (
+              <li key={cc.id} className="px-5 py-4">
+                <Link href={`/creators/${cc.creatorId}`} className="font-medium hover:underline">
+                  {cc.creator.name || cc.creator.email || "Unnamed creator"}
+                </Link>
+                <p className="text-sm text-muted-foreground">
+                  We have their address. The Shopify draft order isn&apos;t made yet.
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
-      {/* Orders table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">
-            Orders ({orders.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {orders.length === 0 ? (
-            <p className="py-8 text-center text-muted-foreground">
-              No orders yet
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-left">
-                    <th className="pb-2 pr-4 font-medium">Creator</th>
-                    <th className="pb-2 pr-4 font-medium">Order ID</th>
-                    <th className="pb-2 pr-4 font-medium">Status</th>
-                    <th className="pb-2 pr-4 font-medium">Tracking</th>
-                    <th className="pb-2 font-medium">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((order) => (
-                    <tr key={order.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4">
-                        {order.campaignCreator.creator.name ||
-                          order.campaignCreator.creator.email ||
-                          "Unknown"}
-                      </td>
-                      <td className="py-3 pr-4 font-mono text-xs">
-                        {order.shopifyOrderNumber ||
-                          order.shopifyOrderId}
-                      </td>
-                      <td className="py-3 pr-4">
-                        <Badge
-                          className={
-                            statusColors[order.status] ||
-                            "bg-gray-100 text-gray-800"
-                          }
-                        >
-                          {order.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3 pr-4">
-                        {order.fulfillmentEvents?.[0]?.trackingNumber ? (
-                          <span className="font-mono text-xs">
-                            {order.fulfillmentEvents[0].carrier &&
-                              `${order.fulfillmentEvents[0].carrier}: `}
-                            {order.fulfillmentEvents[0].trackingNumber}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            —
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <section aria-labelledby="orders-heading" className="space-y-3">
+        <h2 id="orders-heading" className="text-lg font-semibold">
+          {ordersHeading(orders)}
+        </h2>
+        {loadError ? (
+          <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-5 text-red-800">
+            {loadError}
+          </p>
+        ) : orders.length === 0 ? (
+          <div className="rounded-xl border bg-card p-5 text-muted-foreground">
+            No orders yet. An order starts when a creator sends their address. Make sure Shopify is
+            connected in{" "}
+            <Link href="/settings/connections" className="font-medium text-foreground underline">
+              Settings &gt; Connections
+            </Link>
+            .
+          </div>
+        ) : (
+          <OrdersTable orders={orders.map(toTableRow)} campaignId={campaignId} />
+        )}
+      </section>
     </div>
   );
 }

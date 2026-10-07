@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => {
     message: { findFirst: vi.fn(), create: vi.fn() },
     sendingMetric: { findUnique: vi.fn(), upsert: vi.fn() },
     activityLog: { create: vi.fn() },
+    aIDraft: { updateMany: vi.fn() },
+    campaign: { updateMany: vi.fn() },
     creator: { findFirst: vi.fn() },
     emailSuppression: { findUnique: vi.fn() },
   };
@@ -68,6 +70,7 @@ function setupCampaignCreator(overrides: Record<string, unknown> = {}) {
   mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
     id: "cc-1",
     creatorId: "creator-1",
+    campaign: { senderAlias: null },
     creator: {
       id: "creator-1",
       email: "creator@example.com",
@@ -118,6 +121,8 @@ beforeEach(() => {
   mocks.prisma.message.create.mockResolvedValue({});
   mocks.prisma.campaignCreator.update.mockResolvedValue({});
   mocks.prisma.activityLog.create.mockResolvedValue({});
+  mocks.prisma.aIDraft.updateMany.mockResolvedValue({ count: 0 });
+  mocks.prisma.campaign.updateMany.mockResolvedValue({ count: 0 });
   mocks.recordOutcomeEvent.mockResolvedValue(undefined);
 });
 
@@ -228,6 +233,7 @@ describe("sendOutreachBatch — integration", () => {
         .mockResolvedValueOnce({
           id: "cc-1",
           creatorId: "creator-1",
+          campaign: { senderAlias: null },
           creator: {
             id: "creator-1",
             email: "first@example.com",
@@ -239,6 +245,7 @@ describe("sendOutreachBatch — integration", () => {
         .mockResolvedValueOnce({
           id: "cc-2",
           creatorId: "creator-2",
+          campaign: { senderAlias: null },
           creator: {
             id: "creator-2",
             email: "second@example.com",
@@ -277,6 +284,7 @@ describe("sendOutreachBatch — integration", () => {
       mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
         id: "cc-1",
         creatorId: "creator-1",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-1",
           email: "creator@example.com",
@@ -315,6 +323,7 @@ describe("sendOutreachBatch — integration", () => {
       mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
         id: "cc-1",
         creatorId: "creator-1",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-1",
           email: "creator@example.com",
@@ -390,6 +399,7 @@ describe("sendOutreachBatch — integration", () => {
       mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
         id: "cc-1",
         creatorId: "creator-REAL",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-REAL",
           email: "real@example.com",
@@ -421,6 +431,7 @@ describe("sendOutreachBatch — integration", () => {
       const cc1 = {
         id: "cc-1",
         creatorId: "creator-1",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-1",
           email: "a@example.com",
@@ -432,6 +443,7 @@ describe("sendOutreachBatch — integration", () => {
       const cc2 = {
         id: "cc-2",
         creatorId: "creator-2",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-2",
           email: "b@example.com",
@@ -485,6 +497,7 @@ describe("sendOutreachBatch — integration", () => {
       mocks.prisma.campaignCreator.findUnique.mockResolvedValue({
         id: "cc-1",
         creatorId: "creator-1",
+        campaign: { senderAlias: null },
         creator: {
           id: "creator-1",
           email: null,
@@ -512,6 +525,49 @@ describe("sendOutreachBatch — integration", () => {
       expect(results).toHaveLength(1);
       expect(results[0].status).toBe("failed");
       expect(results[0].error).toContain("CampaignCreator not found");
+    });
+  });
+  describe("per-campaign sender", () => {
+    it("sends from the campaign's chosen inbox instead of the primary", async () => {
+      setupCampaignCreator({
+        campaign: {
+          senderAlias: {
+            id: "alias-2",
+            address: "kam@gmail.com",
+            brandId: "brand-1",
+            isPaused: false,
+          },
+        },
+      });
+      setupEmailAlias();
+      setupSuccessfulEmailSend();
+
+      const results = await sendOutreachBatch([makeDraft()], "brand-1");
+
+      expect(results[0].status).toBe("sent");
+      expect(mocks.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ aliasId: "alias-2" })
+      );
+    });
+
+    it("fails rather than falling back when the campaign's inbox is paused", async () => {
+      setupCampaignCreator({
+        campaign: {
+          senderAlias: {
+            id: "alias-2",
+            address: "kam@gmail.com",
+            brandId: "brand-1",
+            isPaused: true,
+          },
+        },
+      });
+      setupEmailAlias();
+
+      const results = await sendOutreachBatch([makeDraft()], "brand-1");
+
+      expect(results[0].status).toBe("failed");
+      expect(results[0].error).toContain("kam@gmail.com");
+      expect(mocks.sendEmail).not.toHaveBeenCalled();
     });
   });
 });

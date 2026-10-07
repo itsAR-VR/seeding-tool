@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
+import { decrypt } from "@/lib/encryption";
 import {
   isSuppressed,
   SuppressedRecipientError,
@@ -10,6 +11,7 @@ import {
   DailyLimitExceededError,
   AliasPausedError,
   CrossBrandAliasError,
+  GmailNotConnectedError,
 } from "@/lib/outreach/errors";
 import { getEffectiveDailyLimit } from "@/lib/outreach/warmup";
 import {
@@ -24,10 +26,11 @@ const GMAIL_SIZE_WARN_BYTES = 100 * 1024;
  * Build the unsubscribe URL for a given recipient email.
  * Shared by both the List-Unsubscribe MIME header and the visible HTML footer link.
  */
-export function buildUnsubscribeUrl(recipientEmail: string): string {
+export function buildUnsubscribeUrl(recipientEmail: string, brandId?: string): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.seedscale.io";
-  const token = generateUnsubscribeToken(recipientEmail);
-  return `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(recipientEmail)}&token=${token}`;
+  const token = generateUnsubscribeToken(recipientEmail, brandId);
+  const brandParam = brandId ? `&b=${encodeURIComponent(brandId)}` : "";
+  return `${appUrl}/api/webhooks/unsubscribe?email=${encodeURIComponent(recipientEmail)}${brandParam}&token=${token}`;
 }
 
 /**
@@ -45,8 +48,10 @@ export function buildRawEmail(params: {
   bodyHtml?: string;
   inReplyTo?: string;
   references?: string;
+  /** Brand sending the email; the unsubscribe link only opts out of this brand. */
+  brandId?: string;
 }): string {
-  const unsubUrl = buildUnsubscribeUrl(params.to);
+  const unsubUrl = buildUnsubscribeUrl(params.to, params.brandId);
 
   // Sanitize header values to prevent CRLF injection
   const sanitize = (v: string) => v.replace(/[\r\n]/g, "");
@@ -191,11 +196,6 @@ async function sendWithRetryOn401(
  * 4. Persist Message row with direction: "outbound"
  */
 export async function sendEmail(params: SendEmailParams) {
-  // INVARIANT: Suppressed recipients never receive email — checked before every send
-  if (await isSuppressed(params.to)) {
-    throw new SuppressedRecipientError(params.to);
-  }
-
   // 1. Look up alias with pause/limit fields
   const alias = await prisma.emailAlias.findUnique({
     where: { id: params.aliasId },
@@ -208,11 +208,18 @@ export async function sendEmail(params: SendEmailParams) {
       dailyLimit: true,
       isWarmedUp: true,
       warmupStartedAt: true,
+      encryptedRefreshToken: true,
     },
   });
 
   if (!alias) {
-    throw new Error("Email alias not found");
+    throw new GmailNotConnectedError();
+  }
+
+  // INVARIANT: Suppressed recipients never receive email — checked before every send.
+  // Opt-outs are per brand, so check against the sending alias's brand.
+  if (await isSuppressed(params.to, alias.brandId)) {
+    throw new SuppressedRecipientError(params.to);
   }
 
   // Safety: reject paused aliases
@@ -299,13 +306,14 @@ export async function sendEmail(params: SendEmailParams) {
 
   let sentExternally = false;
   try {
-    const resolved = await resolveProviderCredential(alias.brandId, "gmail");
-  if (!resolved.decryptedValue) {
-    throw new Error("No valid Gmail credential for this brand");
+  // 2. Use this address's own token; older aliases fall back to the brand token.
+  const refreshToken = alias.encryptedRefreshToken
+    ? decrypt(alias.encryptedRefreshToken)
+    : (await resolveProviderCredential(alias.brandId, "gmail")).decryptedValue;
+  if (!refreshToken) {
+    throw new GmailNotConnectedError();
   }
 
-  // 2. Decrypt refresh token and get access token
-  const refreshToken = resolved.decryptedValue;
   const accessToken = await getGmailAccessToken(refreshToken);
 
   // 3. Build and send email
@@ -319,6 +327,7 @@ export async function sendEmail(params: SendEmailParams) {
     subject: params.subject,
     body: params.body,
     bodyHtml: params.bodyHtml,
+    brandId: alias.brandId,
   });
 
   const sendBody: Record<string, string> = {

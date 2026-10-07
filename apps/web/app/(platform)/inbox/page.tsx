@@ -1,22 +1,109 @@
+import { Suspense } from "react";
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { STAGE_DISPLAY, type DisplayStage } from "@/lib/stats/stage-display";
+import { StageHelp } from "@/components/stage-help";
+import { SyncReplies } from "./sync-replies";
+import { InboxList, type InboxRow } from "./inbox-list";
+import { InboxSearch } from "./inbox-search";
+import { needsYourCall } from "./next-reply";
+import { decodeEntities } from "@/lib/format/html-entities";
 
-const statusColors: Record<string, string> = {
-  open: "bg-green-100 text-green-800",
-  closed: "bg-gray-100 text-gray-600",
-  snoozed: "bg-yellow-100 text-yellow-800",
-};
+type InboxTab = "needs" | "bounced" | "waiting" | "yes" | "no" | "all";
 
-export default async function InboxPage() {
+// Keys stay as they are so old links (?tab=needs) keep working.
+const TABS: Array<{ key: InboxTab; label: string }> = [
+  { key: "needs", label: STAGE_DISPLAY.needs_answer.label },
+  // Only shows when someone's email bounced: their fix is a new address, not an answer.
+  { key: "bounced", label: STAGE_DISPLAY.bounced.label },
+  { key: "waiting", label: STAGE_DISPLAY.emailed.label },
+  { key: "yes", label: STAGE_DISPLAY.said_yes.label },
+  { key: "no", label: "Said no or not now" },
+  { key: "all", label: "All" },
+];
+
+/** The statuses the inbox shows, for "What do these mean?". */
+const INBOX_STAGES: readonly DisplayStage[] = [
+  "needs_answer",
+  "bounced",
+  "emailed",
+  "said_yes",
+  "address_to_check",
+  "not_now",
+  "said_no",
+];
+
+const MAX_QUERY_LENGTH = 100;
+
+/** Brand-scoped filter: creator name, handle, email, or any message text. */
+function searchWhere(q: string): Prisma.ConversationThreadWhereInput {
+  const contains = { contains: q, mode: "insensitive" as const };
+  const handle = q.replace(/^@/, "");
+  const handleContains = { contains: handle, mode: "insensitive" as const };
+  return {
+    OR: [
+      {
+        campaignCreator: {
+          creator: {
+            OR: [
+              { name: contains },
+              { email: contains },
+              { instagramHandle: handleContains },
+              { tiktokHandle: handleContains },
+              { profiles: { some: { handle: handleContains } } },
+            ],
+          },
+        },
+      },
+      { messages: { some: { body: contains } } },
+    ],
+  };
+}
+
+/** Inbox link that keeps the search and campaign filter. Pass tab null to leave it out. */
+function inboxHref({ tab, q, campaign }: { tab: string | null; q: string; campaign: string | null }): string {
+  const params = new URLSearchParams();
+  if (tab) params.set("tab", tab);
+  if (q) params.set("q", q);
+  if (campaign) params.set("campaign", campaign);
+  const query = params.toString();
+  return query ? `/inbox?${query}` : "/inbox";
+}
+
+/** Their latest message a person wrote: auto-replies and bounces don't count as replies. */
+function latestReal<T extends { direction: string }>(messages: T[]): T | undefined {
+  return messages.find((m) => m.direction !== "auto");
+}
+
+function tabFor(thread: {
+  campaignCreator: { replyDecision: string | null; lifecycleStatus: string };
+  messages: Array<{ direction: string; classification: string | null }>;
+}): Exclude<InboxTab, "all"> {
+  const decision = thread.campaignCreator.replyDecision;
+  // Stays here until the first email to a new address goes out (then a newer message exists).
+  if (thread.campaignCreator.lifecycleStatus === "bounced" || thread.messages[0]?.classification === "bounce") {
+    return "bounced";
+  }
+  if (decision === "no" || decision === "later") return "no";
+  if (decision === "yes") return "yes";
+  return needsYourCall(decision, latestReal(thread.messages)?.direction) ? "needs" : "waiting";
+}
+
+export default async function InboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; q?: string; campaign?: string }>;
+}) {
+  const { tab: tabParam, q: rawQuery, campaign: campaignParam } = await searchParams;
+  const q = (rawQuery ?? "").trim().slice(0, MAX_QUERY_LENGTH);
   let membership;
   try {
     membership = await getCurrentBrandMembership();
@@ -29,25 +116,39 @@ export default async function InboxPage() {
             <CardHeader>
               <CardTitle>No brand found</CardTitle>
               <CardDescription>
-                Complete onboarding to access your inbox.
+                Finish setting up your company to use the inbox.
               </CardDescription>
             </CardHeader>
           </Card>
         </div>
       );
     }
-    return null;
+    throw error;
   }
 
+  // ?campaign=<id>: only this campaign's threads. Unknown or other-brand ids are ignored.
+  const onlyCampaign = campaignParam
+    ? await prisma.campaign.findFirst({
+        where: { id: campaignParam, brandId: membership.brandId },
+        select: { id: true, name: true },
+      })
+    : null;
+  const campaignId = onlyCampaign?.id ?? null;
+  const href = (tab: string | null, query = q) => inboxHref({ tab, q: query, campaign: campaignId });
+
+  const scope: Prisma.ConversationThreadWhereInput = {
+    brandId: membership.brandId,
+    ...(campaignId ? { campaignCreator: { campaignId } } : {}),
+  };
   const threads = await prisma.conversationThread.findMany({
-    where: { brandId: membership.brandId },
+    where: q ? { AND: [scope, searchWhere(q)] } : scope,
     include: {
       campaignCreator: {
         include: {
           creator: { include: { profiles: true } },
           campaign: { select: { id: true, name: true } },
           aiDrafts: {
-            where: { status: "draft" },
+            where: { status: "draft", type: "reply" },
             orderBy: { createdAt: "desc" },
             take: 1,
           },
@@ -56,118 +157,192 @@ export default async function InboxPage() {
             orderBy: { createdAt: "desc" },
             take: 1,
           },
+          _count: {
+            select: { shippingSnapshots: { where: { confirmedAt: { not: null } } } },
+          },
         },
       },
+      // A few, so a reply still counts when an auto-reply came in after it.
       messages: {
         orderBy: { createdAt: "desc" },
-        take: 1,
+        take: 5,
       },
     },
     orderBy: { updatedAt: "desc" },
   });
 
-  const needsReview = threads.filter(
-    (t) => t.campaignCreator.aiDrafts.length > 0
+  const counts: Record<InboxTab, number> = { needs: 0, bounced: 0, waiting: 0, yes: 0, no: 0, all: threads.length };
+  for (const t of threads) counts[tabFor(t)]++;
+  const activeTab: InboxTab = TABS.some((t) => t.key === tabParam)
+    ? (tabParam as InboxTab)
+    : !q && counts.needs > 0
+      ? "needs"
+      : "all";
+  const visibleThreads = activeTab === "all" ? threads : threads.filter((t) => tabFor(t) === activeTab);
+
+  const rows: InboxRow[] = visibleThreads.map((thread) => {
+    const cc = thread.campaignCreator;
+    const lastMessage = thread.messages[0];
+    const decision = cc.replyDecision;
+    return {
+      id: thread.id,
+      name: cc.creator.name ?? cc.creator.profiles[0]?.handle ?? "Unknown creator",
+      campaignId: cc.campaign.id,
+      campaignName: cc.campaign.name,
+      lastMessage: lastMessage
+        ? {
+            direction: lastMessage.direction,
+            // A bounce's own text is mail-server jargon; say what it means instead.
+            body:
+              lastMessage.classification === "bounce"
+                ? cc.lifecycleStatus === "bounced"
+                  ? "Your email didn't reach them. The address doesn't work."
+                  : "New email saved. Their first email to it hasn't gone out yet."
+                : decodeEntities(lastMessage.body).slice(0, 200),
+            // Only while it's still unfixed; a saved new email clears it.
+            bounce: lastMessage.classification === "bounce" && cc.lifecycleStatus === "bounced",
+            fixed: lastMessage.classification === "bounce" && cc.lifecycleStatus !== "bounced",
+          }
+        : null,
+      updatedAt: new Date(thread.updatedAt).toISOString(),
+      decision,
+      needsCall: needsYourCall(decision, latestReal(thread.messages)?.direction),
+      hasDraft: cc.aiDrafts.length > 0,
+      addressToConfirm: cc.shippingSnapshots.length > 0 && cc._count.shippingSnapshots === 0,
+    };
+  });
+
+  const decided = threads.filter(
+    (t) =>
+      (t.campaignCreator.replyDecision === "yes" || t.campaignCreator.replyDecision === "no") &&
+      t.campaignCreator.aiSuggestion &&
+      t.campaignCreator.aiSuggestion !== "unclear"
   );
-  const hasAddress = threads.filter(
-    (t) => t.campaignCreator.shippingSnapshots.length > 0
-  );
+  const aiMatches = decided.filter(
+    (t) => t.campaignCreator.aiSuggestion === t.campaignCreator.replyDecision
+  ).length;
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
-        <p className="text-muted-foreground">
-          Unified inbox for creator communications.
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Inbox</h1>
+          <p className="mt-1 text-muted-foreground">
+            Replies from creators you emailed.{" "}
+            <Link href="/settings/do-not-send" className="underline hover:text-foreground">
+              Do-not-send list
+            </Link>
+          </p>
+        </div>
+        <SyncReplies />
+      </div>
+
+      <Suspense fallback={<div className="h-10 w-full max-w-md" />}>
+        <InboxSearch initialQuery={q} />
+      </Suspense>
+
+      {onlyCampaign && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="inline-flex items-center gap-1 rounded-full border bg-card py-1 pl-3 pr-1">
+            Only: <span className="font-medium">{onlyCampaign.name}</span>
+            <Link
+              href={inboxHref({ tab: tabParam ?? null, q, campaign: null })}
+              aria-label={`Show all campaigns, not only ${onlyCampaign.name}`}
+              className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span aria-hidden="true">×</span>
+            </Link>
+          </span>
         </p>
+      )}
+
+      <div className="flex flex-wrap gap-2 border-b pb-3">
+        {TABS.filter((t) => t.key !== "bounced" || counts.bounced > 0 || activeTab === "bounced").map((t) => (
+          <Link
+            key={t.key}
+            href={href(t.key)}
+            className={`rounded-full px-3 py-1 text-sm transition-colors ${
+              activeTab === t.key
+                ? "bg-foreground text-background"
+                : "bg-muted text-foreground/80 hover:bg-muted/70 hover:text-foreground"
+            }`}
+            aria-current={activeTab === t.key ? "page" : undefined}
+            aria-label={`${t.label}: ${counts[t.key]}`}
+          >
+            {t.label} <span className="font-semibold tabular-nums">{counts[t.key]}</span>
+          </Link>
+        ))}
       </div>
 
-      {/* Quick stats */}
-      <div className="flex gap-4">
-        <Badge variant="outline">{threads.length} total threads</Badge>
-        {needsReview.length > 0 && (
-          <Badge className="bg-purple-100 text-purple-800">
-            {needsReview.length} drafts to review
-          </Badge>
-        )}
-        {hasAddress.length > 0 && (
-          <Badge className="bg-teal-100 text-teal-800">
-            {hasAddress.length} addresses to confirm
-          </Badge>
-        )}
-      </div>
+      <StageHelp stages={INBOX_STAGES} />
 
-      {threads.length === 0 ? (
+      {decided.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Our yes-or-no guess matched yours {aiMatches} of {decided.length} times.
+        </p>
+      )}
+
+      {threads.length > 0 && visibleThreads.length === 0 && (
+        <p className="text-muted-foreground">
+          {q ? (
+            <>
+              No conversations match in this tab.{" "}
+              <Link href={href("all")} className="underline hover:text-foreground">
+                See all matches
+              </Link>
+            </>
+          ) : activeTab === "needs" ? (
+            "No replies need you right now."
+          ) : (
+            "Nothing here right now."
+          )}
+        </p>
+      )}
+
+      {q && threads.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No conversations yet</CardTitle>
+            <CardTitle>No conversations match</CardTitle>
             <CardDescription>
-              When you send outreach to creators and they reply, their
-              conversations will appear here.
+              Nothing found for &ldquo;{q}&rdquo;. Try part of their name, their handle, or their
+              email.
             </CardDescription>
+            <div className="pt-2 text-sm">
+              <Link
+                href={href(tabParam ?? null, "")}
+                className="font-medium text-blue-600 hover:underline"
+              >
+                Clear search
+              </Link>
+            </div>
+          </CardHeader>
+        </Card>
+      ) : threads.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{onlyCampaign ? `No conversations in ${onlyCampaign.name} yet` : "No conversations yet"}</CardTitle>
+            <CardDescription>
+              When you email creators and they reply, the conversation shows up here. Start by
+              emailing creators from a campaign. Replies come in through Gmail, so connect it first
+              if you haven&apos;t.
+            </CardDescription>
+            <div className="flex flex-wrap gap-3 pt-2 text-sm">
+              <Link href="/campaigns" className="font-medium text-blue-600 hover:underline">
+                Go to campaigns
+              </Link>
+              <Link href="/settings/connections" className="font-medium text-blue-600 hover:underline">
+                Connect Gmail in Settings &gt; Connections
+              </Link>
+            </div>
           </CardHeader>
         </Card>
       ) : (
-        <div className="grid gap-2">
-          {threads.map((thread) => {
-            const creator = thread.campaignCreator.creator;
-            const profile = creator.profiles[0];
-            const lastMessage = thread.messages[0];
-            const hasDraft = thread.campaignCreator.aiDrafts.length > 0;
-            const hasAddr =
-              thread.campaignCreator.shippingSnapshots.length > 0;
-
-            return (
-              <Link
-                key={thread.id}
-                href={`/inbox/${thread.id}`}
-                className="block"
-              >
-                <Card className="transition-colors hover:bg-muted/50">
-                  <CardContent className="flex items-center justify-between p-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">
-                          {creator.name ?? profile?.handle ?? "Unknown"}
-                        </p>
-                        <Badge
-                          className={
-                            statusColors[thread.status] ??
-                            statusColors.open
-                          }
-                        >
-                          {thread.status}
-                        </Badge>
-                        {hasDraft && (
-                          <Badge className="bg-purple-100 text-purple-800">
-                            Draft
-                          </Badge>
-                        )}
-                        {hasAddr && (
-                          <Badge className="bg-teal-100 text-teal-800">
-                            Address
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">
-                        {thread.campaignCreator.campaign.name}
-                      </p>
-                      {lastMessage && (
-                        <p className="mt-1 truncate text-sm text-muted-foreground">
-                          {lastMessage.direction === "inbound" ? "↙ " : "↗ "}
-                          {lastMessage.body.slice(0, 100)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="ml-4 shrink-0 text-xs text-muted-foreground">
-                      {new Date(thread.updatedAt).toLocaleDateString()}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+        <InboxList
+          key={activeTab}
+          rows={rows}
+          selectable={activeTab === "needs"}
+          showNeedsPill={activeTab !== "needs"}
+        />
       )}
     </div>
   );

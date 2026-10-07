@@ -1,18 +1,7 @@
-import type { Metadata } from "next";
-import HomeContent from "./components/HomeContent";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Seeding OS | Run Seeding Like a System",
-  description:
-    "See how Seeding OS helps teams find the right creators, run the workflow, and verify what actually posted.",
-  openGraph: {
-    title: "Seeding OS | Run Seeding Like a System",
-    description:
-      "See how Seeding OS helps teams find the right creators, run the workflow, and verify what actually posted.",
-    type: "website",
-  },
-};
-
+// Kalm's instance is an internal tool, not a marketing site: the root address
+// opens the dashboard. The platform layout sends signed-out visitors to /login.
 export default function HomePage() {
-  return <HomeContent />;
+  redirect("/dashboard");
 }

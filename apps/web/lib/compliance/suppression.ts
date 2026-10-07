@@ -12,82 +12,104 @@ import { createHmac, timingSafeEqual } from "crypto";
  * // INVARIANT: Suppressed recipients never receive email — checked before every send
  */
 
+/** Reasons that apply to every brand: the address itself is bad or reported us. */
+const GLOBAL_REASONS = new Set(["BOUNCE", "COMPLAINT"]);
+
+function normalize(email: string): string {
+  return email.toLowerCase().trim();
+}
+
 /**
- * Check if an email address is suppressed (opted out).
- * Returns true if the email should NOT receive any outbound messages.
+ * Check if an email address is suppressed for a brand.
+ * True when the person opted out of THIS brand, or the address is blocked for
+ * every brand (bounce/complaint). A "no" to one brand never blocks another.
  */
-export async function isSuppressed(email: string): Promise<boolean> {
+export async function isSuppressed(email: string, brandId: string): Promise<boolean> {
   if (!email) return false;
+  const normalizedEmail = normalize(email);
 
-  const normalizedEmail = email.toLowerCase().trim();
-
-  // Check Creator-based suppression
   const creator = await prisma.creator.findFirst({
-    where: {
-      email: normalizedEmail,
-      optedOut: true,
-    },
+    where: { brandId, email: normalizedEmail, optedOut: true },
     select: { id: true },
   });
-
   if (creator) return true;
 
-  // Check durable EmailSuppression table (for emails not in Creator table)
-  const suppression = await prisma.emailSuppression.findUnique({
-    where: { email: normalizedEmail },
+  const suppression = await prisma.emailSuppression.findFirst({
+    where: { email: normalizedEmail, OR: [{ brandId }, { brandId: null }] },
     select: { id: true },
   });
-
   return !!suppression;
 }
 
 /**
- * Add suppression for a creator by email.
- *
- * @param email - The email to suppress
- * @param _reason - Reason for suppression (logged, not stored separately)
+ * Suppress an email for one brand (opt-outs, "no" decisions), or for every
+ * brand when brandId is null (bounces, complaints).
  */
 export async function addSuppression(
   email: string,
-  reason: string
+  reason: string,
+  brandId: string | null
 ): Promise<void> {
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = normalize(email);
+  const scope = GLOBAL_REASONS.has(reason) ? null : brandId;
+  // brandId null with a per-brand reason = a global block (e.g. an old link
+  // from someone we can't match to a brand).
 
-  // Write to durable EmailSuppression table (upsert — idempotent)
-  await prisma.emailSuppression.upsert({
-    where: { email: normalizedEmail },
-    create: {
-      email: normalizedEmail,
-      reason,
-      suppressedAt: new Date(),
-    },
-    update: {}, // Already suppressed — no-op
-  });
-
-  // Update all Creator records matching this email
-  await prisma.creator.updateMany({
-    where: { email: normalizedEmail },
-    data: {
-      optedOut: true,
-      optOutDate: new Date(),
-    },
-  });
-
-  // Also update any CampaignCreator lifecycleStatus to opted_out
-  const creators = await prisma.creator.findMany({
-    where: { email: normalizedEmail },
+  // One row per reason, so undoing a "no" can't lift an unsubscribe.
+  const existing = await prisma.emailSuppression.findFirst({
+    where: { email: normalizedEmail, brandId: scope, reason },
     select: { id: true },
   });
+  if (!existing) {
+    await prisma.emailSuppression.create({
+      data: { email: normalizedEmail, reason, brandId: scope, suppressedAt: new Date() },
+    });
+  }
 
+  const creatorScope = scope ? { brandId: scope } : {};
+  await prisma.creator.updateMany({
+    where: { email: normalizedEmail, ...creatorScope },
+    data: { optedOut: true, optOutDate: new Date() },
+  });
+
+  const creators = await prisma.creator.findMany({
+    where: { email: normalizedEmail, ...creatorScope },
+    select: { id: true },
+  });
   if (creators.length > 0) {
     await prisma.campaignCreator.updateMany({
       where: {
         creatorId: { in: creators.map((c) => c.id) },
-        lifecycleStatus: {
-          notIn: ["completed", "opted_out"],
-        },
+        lifecycleStatus: { notIn: ["completed", "opted_out"] },
       },
       data: { lifecycleStatus: "opted_out" },
+    });
+  }
+}
+
+/**
+ * Lift one brand's suppression of a given reason (e.g. undoing a "no"),
+ * leaving other brands and global blocks untouched.
+ */
+export async function removeSuppression(
+  email: string,
+  reason: string,
+  brandId: string
+): Promise<void> {
+  const normalizedEmail = normalize(email);
+  const { count } = await prisma.emailSuppression.deleteMany({
+    where: { email: normalizedEmail, brandId, reason },
+  });
+  if (count === 0) return;
+  // Still blocked for another reason (an unsubscribe, a bounce): stay opted out.
+  const stillBlocked = await prisma.emailSuppression.findFirst({
+    where: { email: normalizedEmail, OR: [{ brandId }, { brandId: null }] },
+    select: { id: true },
+  });
+  if (!stillBlocked) {
+    await prisma.creator.updateMany({
+      where: { email: normalizedEmail, brandId },
+      data: { optedOut: false, optOutDate: null },
     });
   }
 }
@@ -106,34 +128,27 @@ function getEncryptionKey(): string {
   return key;
 }
 
+function hmac(value: string): string {
+  return createHmac("sha256", getEncryptionKey()).update(value).digest("hex");
+}
+
 /**
- * Generate an HMAC token for unsubscribe links.
+ * Generate an HMAC token for an unsubscribe link. With a brandId the token is
+ * bound to that brand; without one it's the legacy email-only token.
  */
-export function generateUnsubscribeToken(email: string): string {
-  const secret = getEncryptionKey();
-  return createHmac("sha256", secret)
-    .update(email.toLowerCase().trim())
-    .digest("hex");
+export function generateUnsubscribeToken(email: string, brandId?: string): string {
+  const normalizedEmail = normalize(email);
+  return hmac(brandId ? `${normalizedEmail}|${brandId}` : normalizedEmail);
 }
 
 /**
  * Verify an HMAC unsubscribe token using constant-time comparison.
  * SECURITY: Uses timingSafeEqual to prevent timing attacks.
  */
-export function verifyUnsubscribeToken(
-  email: string,
-  token: string
-): boolean {
-  const expected = generateUnsubscribeToken(email);
-
-  // timingSafeEqual requires buffers of equal length
+export function verifyUnsubscribeToken(email: string, token: string, brandId?: string): boolean {
+  const expectedBuf = Buffer.from(generateUnsubscribeToken(email, brandId));
   const tokenBuf = Buffer.from(token);
-  const expectedBuf = Buffer.from(expected);
-
-  if (tokenBuf.length !== expectedBuf.length) {
-    return false;
-  }
-
+  if (tokenBuf.length !== expectedBuf.length) return false;
   return timingSafeEqual(tokenBuf, expectedBuf);
 }
 

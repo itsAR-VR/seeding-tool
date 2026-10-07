@@ -31,7 +31,39 @@ export async function GET(request: NextRequest) {
       priority,
     });
 
-    return NextResponse.json(interventions);
+    // Attach where each case points, so the UI can link straight to it.
+    const ccIds = [
+      ...new Set(interventions.map((i) => i.campaignCreatorId).filter((id): id is string => Boolean(id))),
+    ];
+    const targets = ccIds.length
+      ? await prisma.campaignCreator.findMany({
+          where: { id: { in: ccIds }, campaign: { brandId: membership.brandId } },
+          select: {
+            id: true,
+            creatorId: true,
+            creator: { select: { name: true, instagramHandle: true } },
+            conversationThread: { select: { id: true } },
+          },
+        })
+      : [];
+    const byId = new Map(targets.map((t) => [t.id, t]));
+
+    return NextResponse.json(
+      interventions.map((i) => {
+        const target = i.campaignCreatorId ? byId.get(i.campaignCreatorId) : undefined;
+        return {
+          ...i,
+          link: target
+            ? {
+                label: target.creator.name ?? target.creator.instagramHandle ?? "Creator",
+                href: target.conversationThread
+                  ? `/inbox/${target.conversationThread.id}`
+                  : `/creators/${target.creatorId}`,
+              }
+            : null,
+        };
+      })
+    );
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

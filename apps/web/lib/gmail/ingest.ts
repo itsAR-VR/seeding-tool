@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { getGmailAccessToken } from "@/lib/gmail/token";
+import { decrypt } from "@/lib/encryption";
+import type { AutoHeaders } from "@/lib/inbox/auto-messages";
 
 type GmailMessageHeader = {
   name: string;
@@ -31,6 +33,17 @@ type GmailMessage = {
 function decodeBase64Url(data: string): string {
   const padded = data.replace(/-/g, "+").replace(/_/g, "/");
   return Buffer.from(padded, "base64").toString("utf-8");
+}
+
+/** The headers that mark automatic mail (auto-replies and bounces). */
+function autoHeaders(headers: GmailMessageHeader[]): AutoHeaders {
+  return {
+    autoSubmitted: getHeader(headers, "Auto-Submitted") || undefined,
+    precedence: getHeader(headers, "Precedence") || undefined,
+    xAutoreply: getHeader(headers, "X-Autoreply") || undefined,
+    xAutoresponse: getHeader(headers, "X-Autorespond") || undefined,
+    failedRecipients: getHeader(headers, "X-Failed-Recipients") || undefined,
+  };
 }
 
 /**
@@ -82,23 +95,37 @@ function extractBody(payload: GmailMessage["payload"]): {
 
 /**
  * Fetch new messages from Gmail for a brand.
+ * When `emailAddress` names a connected inbox with its own token, that inbox
+ * is read; otherwise the brand-level Gmail credential is used.
  * Returns normalized message data ready for processing.
  */
-export async function fetchNewMessages(brandId: string) {
-  const resolved = await resolveProviderCredential(brandId, "gmail");
+export async function fetchNewMessages(
+  brandId: string,
+  emailAddress?: string,
+  query = "is:inbox newer_than:1d"
+) {
+  const alias = emailAddress
+    ? await prisma.emailAlias.findUnique({
+        where: { brandId_address: { brandId, address: emailAddress } },
+        select: { encryptedRefreshToken: true },
+      })
+    : null;
 
-  if (!resolved.decryptedValue) {
+  const refreshToken = alias?.encryptedRefreshToken
+    ? decrypt(alias.encryptedRefreshToken)
+    : (await resolveProviderCredential(brandId, "gmail")).decryptedValue;
+
+  if (!refreshToken) {
     throw new Error("No valid Gmail credential for brand");
   }
 
-  const refreshToken = resolved.decryptedValue;
   const accessToken = await getGmailAccessToken(refreshToken);
 
   // List recent messages (last 24 hours of unread)
   const listResponse = await fetch(
     "https://gmail.googleapis.com/gmail/v1/users/me/messages?" +
       new URLSearchParams({
-        q: "is:inbox newer_than:1d",
+        q: query,
         maxResults: "50",
       }),
     {
@@ -143,6 +170,7 @@ export async function fetchNewMessages(brandId: string) {
       body: text || html.replace(/<[^>]*>/g, " ").trim(),
       bodyHtml: html || undefined,
       internalDate: gmailMsg.internalDate,
+      headers: autoHeaders(headers),
     });
   }
 

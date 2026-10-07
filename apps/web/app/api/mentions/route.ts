@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   attributeMention,
   createAndAttributeMention,
+  MentionAccessError,
 } from "@/lib/mentions/attribution";
 import {
   getCurrentBrandMembership,
@@ -21,24 +22,17 @@ export async function GET(request: NextRequest) {
 
     const campaignId = request.nextUrl.searchParams.get("campaignId");
 
-    const where: Record<string, unknown> = {};
-
-    if (campaignId) {
-      const campaignCreators = await prisma.campaignCreator.findMany({
-        where: {
-          campaignId,
-          campaign: { brandId: membership.brandId },
-        },
-        select: { id: true },
-      });
-
-      where.campaignCreatorId = {
-        in: campaignCreators.map((cc) => cc.id),
-      };
-    }
-
+    // Always scope to the caller's brand. Without a campaignId this used to
+    // return every company's mentions.
     const mentions = await prisma.mentionAsset.findMany({
-      where,
+      where: {
+        campaignCreator: {
+          campaign: {
+            brandId: membership.brandId,
+            ...(campaignId ? { id: campaignId } : {}),
+          },
+        },
+      },
       include: {
         campaignCreator: {
           include: {
@@ -61,7 +55,7 @@ export async function GET(request: NextRequest) {
     }
     console.error("[mentions/GET]", error);
     return NextResponse.json(
-      { error: "Failed to fetch mentions" },
+      { error: "Couldn't load posts. Refresh the page to try again." },
       { status: 500 }
     );
   }
@@ -83,7 +77,8 @@ export async function POST(request: NextRequest) {
     if (body.mentionAssetId && body.campaignCreatorId) {
       await attributeMention(
         body.mentionAssetId as string,
-        body.campaignCreatorId as string
+        body.campaignCreatorId as string,
+        membership.brandId
       );
       return NextResponse.json({ success: true, action: "attributed" });
     }
@@ -100,6 +95,7 @@ export async function POST(request: NextRequest) {
         views: body.views ? Number(body.views) : undefined,
         postedAt: body.postedAt ? new Date(body.postedAt as string) : undefined,
         campaignCreatorId: body.campaignCreatorId as string,
+        brandId: membership.brandId,
       });
 
       return NextResponse.json({
@@ -112,7 +108,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Invalid request. Provide { mentionAssetId, campaignCreatorId } or { platform, mediaUrl, campaignCreatorId }",
+          "Add the post link and pick the creator who posted it.",
       },
       { status: 400 }
     );
@@ -120,9 +116,13 @@ export async function POST(request: NextRequest) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    const message =
-      error instanceof Error ? error.message : "Failed to process mention";
-    console.error("[mentions/POST]", message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    if (error instanceof MentionAccessError) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    console.error("[mentions/POST]", error);
+    return NextResponse.json(
+      { error: "Couldn't save that post. Try again in a minute." },
+      { status: 500 }
+    );
   }
 }

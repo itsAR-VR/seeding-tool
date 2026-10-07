@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => {
     interventionCreate: vi.fn(),
     getFeatureFlags: vi.fn(),
     createDraftOrder: vi.fn(),
-    recordOutcomeEvent: vi.fn(),
     mockCreateFunction: vi.fn((_config: unknown, _trigger: unknown, handler: (...args: unknown[]) => unknown) => {
       capturedHandler.fn = handler;
       return handler;
@@ -46,10 +45,6 @@ vi.mock("@/lib/shopify/orders", () => ({
       this.name = "OrderAlreadyExistsError";
     }
   },
-}));
-
-vi.mock("@/lib/seeding/outcome-recorder", () => ({
-  recordOutcomeEvent: mocks.recordOutcomeEvent,
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -90,7 +85,7 @@ describe("createOrderFromAddress Inngest function", () => {
     vi.clearAllMocks();
   });
 
-  it("creates order and records outcome on success", async () => {
+  it("creates a draft without recording order_created outcome on success", async () => {
     mocks.snapshotFindUnique.mockResolvedValue({
       id: "snap-1",
       isActive: true,
@@ -104,17 +99,17 @@ describe("createOrderFromAddress Inngest function", () => {
     });
     mocks.getFeatureFlags.mockResolvedValue({ shopifyOrderEnabled: true });
     mocks.createDraftOrder.mockResolvedValue({
-      shopifyOrderId: "so-1",
+      shopifyDraftOrderId: "draft-1",
+      shopifyDraftOrderName: "#D001",
       orderId: "order-1",
     });
-    mocks.recordOutcomeEvent.mockResolvedValue({});
 
     const handler = getHandler();
     const result = await handler(makeEvent());
 
     expect(result).toEqual({
       status: "success",
-      shopifyOrderId: "so-1",
+      shopifyDraftOrderId: "draft-1",
       orderId: "order-1",
     });
 
@@ -124,11 +119,6 @@ describe("createOrderFromAddress Inngest function", () => {
       "creator-1",
       "camp-1"
     );
-
-    expect(mocks.recordOutcomeEvent).toHaveBeenCalledWith({
-      campaignCreatorId: "cc-1",
-      event: { type: "order_created" },
-    });
   });
 
   it("skips when feature flag is disabled", async () => {

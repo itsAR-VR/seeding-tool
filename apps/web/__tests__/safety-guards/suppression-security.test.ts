@@ -24,8 +24,9 @@ const mockPrisma = {
     updateMany: vi.fn().mockResolvedValue({ count: 0 }),
   },
   emailSuppression: {
-    findUnique: vi.fn(),
-    upsert: vi.fn().mockResolvedValue({ id: "es-1" }),
+    findFirst: vi.fn(),
+    create: vi.fn().mockResolvedValue({ id: "es-1" }),
+    deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
   },
 };
 
@@ -89,51 +90,97 @@ describe("Suppression security hardening", () => {
     );
   });
 
-  it("addSuppression writes to durable EmailSuppression table", async () => {
+  it("addSuppression writes a brand-scoped row and only touches that brand's creators", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue(null);
     const { addSuppression } = await import("@/lib/compliance/suppression");
 
-    await addSuppression("unsub@example.com", "UNSUBSCRIBE");
+    await addSuppression("Unsub@Example.com ", "UNSUBSCRIBE", "brand-a");
 
-    expect(mockPrisma.emailSuppression.upsert).toHaveBeenCalledWith(
+    expect(mockPrisma.emailSuppression.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ email: "unsub@example.com", reason: "UNSUBSCRIBE", brandId: "brand-a" }),
+    });
+    expect(mockPrisma.creator.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: "unsub@example.com", brandId: "brand-a" } })
+    );
+  });
+
+  it("bounces are global regardless of the brand passed", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue(null);
+    const { addSuppression } = await import("@/lib/compliance/suppression");
+
+    await addSuppression("dead@example.com", "BOUNCE", "brand-a");
+
+    expect(mockPrisma.emailSuppression.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ brandId: null, reason: "BOUNCE" }),
+    });
+    expect(mockPrisma.creator.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: "dead@example.com" } })
+    );
+  });
+
+  it("addSuppression does not duplicate an existing row", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue({ id: "es-1" });
+    const { addSuppression } = await import("@/lib/compliance/suppression");
+    await addSuppression("again@example.com", "DECLINED", "brand-a");
+    expect(mockPrisma.emailSuppression.create).not.toHaveBeenCalled();
+  });
+
+  it("isSuppressed checks this brand and global blocks only", async () => {
+    mockPrisma.creator.findFirst.mockResolvedValue(null);
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue(null);
+
+    const { isSuppressed } = await import("@/lib/compliance/suppression");
+    const result = await isSuppressed("someone@example.com", "brand-b");
+
+    expect(result).toBe(false);
+    expect(mockPrisma.creator.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ brandId: "brand-b" }) })
+    );
+    expect(mockPrisma.emailSuppression.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { email: "unsub@example.com" },
-        create: expect.objectContaining({
-          email: "unsub@example.com",
-          reason: "UNSUBSCRIBE",
-        }),
+        where: { email: "someone@example.com", OR: [{ brandId: "brand-b" }, { brandId: null }] },
       })
     );
   });
 
-  it("isSuppressed returns true when email is in EmailSuppression table but not Creator", async () => {
+  it("isSuppressed returns true for a suppression row", async () => {
     mockPrisma.creator.findFirst.mockResolvedValue(null);
-    mockPrisma.emailSuppression.findUnique.mockResolvedValue({
-      id: "es-1",
-      email: "unknown@example.com",
-    });
-
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue({ id: "es-1" });
     const { isSuppressed } = await import("@/lib/compliance/suppression");
-    const result = await isSuppressed("unknown@example.com");
-    expect(result).toBe(true);
+    expect(await isSuppressed("unknown@example.com", "brand-a")).toBe(true);
   });
 
-  it("isSuppressed returns true when email is in Creator table (opted out)", async () => {
+  it("isSuppressed returns true when the brand's creator opted out, without a table lookup", async () => {
     mockPrisma.creator.findFirst.mockResolvedValue({ id: "creator-1" });
-
     const { isSuppressed } = await import("@/lib/compliance/suppression");
-    const result = await isSuppressed("opted-out@example.com");
-    expect(result).toBe(true);
-
-    // Should not even check EmailSuppression since Creator already matched
-    expect(mockPrisma.emailSuppression.findUnique).not.toHaveBeenCalled();
+    expect(await isSuppressed("opted-out@example.com", "brand-a")).toBe(true);
+    expect(mockPrisma.emailSuppression.findFirst).not.toHaveBeenCalled();
   });
 
-  it("isSuppressed returns false when email is not suppressed anywhere", async () => {
-    mockPrisma.creator.findFirst.mockResolvedValue(null);
-    mockPrisma.emailSuppression.findUnique.mockResolvedValue(null);
+  it("removeSuppression keeps the creator opted out while an unsubscribe remains", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue({ id: "es-unsub" });
+    const { removeSuppression } = await import("@/lib/compliance/suppression");
+    await removeSuppression("x@example.com", "DECLINED", "brand-a");
+    expect(mockPrisma.creator.updateMany).not.toHaveBeenCalled();
+  });
 
-    const { isSuppressed } = await import("@/lib/compliance/suppression");
-    const result = await isSuppressed("active@example.com");
-    expect(result).toBe(false);
+  it("removeSuppression lifts only this brand's rows of that reason", async () => {
+    mockPrisma.emailSuppression.findFirst.mockResolvedValue(null);
+    const { removeSuppression } = await import("@/lib/compliance/suppression");
+    await removeSuppression("x@example.com", "DECLINED", "brand-a");
+    expect(mockPrisma.emailSuppression.deleteMany).toHaveBeenCalledWith({
+      where: { email: "x@example.com", brandId: "brand-a", reason: "DECLINED" },
+    });
+    expect(mockPrisma.creator.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: "x@example.com", brandId: "brand-a" } })
+    );
+  });
+
+  it("unsubscribe tokens are bound to the brand", async () => {
+    const { generateUnsubscribeToken, verifyUnsubscribeToken } = await import("@/lib/compliance/suppression");
+    const token = generateUnsubscribeToken("a@example.com", "brand-a");
+    expect(verifyUnsubscribeToken("a@example.com", token, "brand-a")).toBe(true);
+    expect(verifyUnsubscribeToken("a@example.com", token, "brand-b")).toBe(false);
+    expect(verifyUnsubscribeToken("a@example.com", token)).toBe(false);
   });
 });

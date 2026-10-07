@@ -1,22 +1,20 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { Badge } from "@/components/ui/badge";
+import {
+  getCurrentBrandMembership,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-
-const statusColors: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-800",
-  active: "bg-green-100 text-green-800",
-  paused: "bg-yellow-100 text-yellow-800",
-  completed: "bg-blue-100 text-blue-800",
-  archived: "bg-gray-100 text-gray-500",
-};
+import { buttonVariants } from "@/components/ui/button-variants";
+import { StatusPill } from "@/components/status-pill";
+import { formatDate } from "@/lib/format/date";
+import { campaignStatus } from "./_components/campaign-status";
+import { countNeedsAnswerByCampaign } from "@/lib/stats/needs-you";
 
 export default async function CampaignsPage() {
   let membership;
@@ -38,19 +36,34 @@ export default async function CampaignsPage() {
         </div>
       );
     }
-    return null;
+    throw error;
   }
 
-  const campaigns = await prisma.campaign.findMany({
-    where: { brandId: membership.brandId },
-    include: {
-      _count: { select: { campaignCreators: true } },
-      campaignProducts: {
-        include: { product: { select: { name: true } } },
+  const [campaigns, toEmailRows, toAnswerByCampaign] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { brandId: membership.brandId },
+      include: {
+        _count: { select: { campaignCreators: true } },
+        campaignProducts: {
+          include: { product: { select: { name: true } } },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.campaignCreator.groupBy({
+      by: ["campaignId"],
+      where: {
+        campaign: { brandId: membership.brandId },
+        reviewStatus: "approved",
+        lifecycleStatus: "ready",
+      },
+      _count: { _all: true },
+    }),
+    countNeedsAnswerByCampaign(membership.brandId),
+  ]);
+  const toEmailByCampaign = new Map(
+    toEmailRows.map((r) => [r.campaignId, r._count._all]),
+  );
 
   return (
     <div className="space-y-6">
@@ -58,11 +71,11 @@ export default async function CampaignsPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
           <p className="text-muted-foreground">
-            Create and manage your seeding campaigns.
+            Each campaign is one product sent to a list of creators.
           </p>
         </div>
-        <Link href="/campaigns/new">
-          <Button>+ New Campaign</Button>
+        <Link href="/campaigns/new" className={buttonVariants()}>
+          New campaign
         </Link>
       </div>
 
@@ -71,8 +84,14 @@ export default async function CampaignsPage() {
           <CardHeader>
             <CardTitle>No campaigns yet</CardTitle>
             <CardDescription>
-              Create your first campaign to start seeding products to creators.
+              A campaign is one product gifted to a list of creators. Start one,
+              then pick your product and find creators.
             </CardDescription>
+            <div className="pt-2">
+              <Link href="/campaigns/new" className={buttonVariants()}>
+                Start your first campaign
+              </Link>
+            </div>
           </CardHeader>
         </Card>
       ) : (
@@ -87,40 +106,40 @@ export default async function CampaignsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-lg">
-                        {campaign.name}
-                      </CardTitle>
+                      <CardTitle className="text-lg">{campaign.name}</CardTitle>
                       {campaign.description && (
                         <CardDescription className="mt-1">
                           {campaign.description}
                         </CardDescription>
                       )}
                     </div>
-                    <Badge
-                      className={
-                        statusColors[campaign.status] ?? statusColors.draft
-                      }
-                    >
-                      {campaign.status}
-                    </Badge>
+                    {(() => {
+                      const status = campaignStatus(campaign.status, {
+                        total: campaign._count.campaignCreators,
+                        toEmail: toEmailByCampaign.get(campaign.id) ?? 0,
+                        toAnswer: toAnswerByCampaign.get(campaign.id) ?? 0,
+                      });
+                      return (
+                        <StatusPill tone={status.tone}>
+                          {status.label}
+                        </StatusPill>
+                      );
+                    })()}
                   </div>
-                  <div className="mt-3 flex gap-4 text-sm text-muted-foreground">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>
                       {campaign._count.campaignCreators} creator
                       {campaign._count.campaignCreators !== 1 ? "s" : ""}
                     </span>
                     {campaign.campaignProducts.length > 0 && (
                       <span>
-                        Products:{" "}
+                        Gifting{" "}
                         {campaign.campaignProducts
                           .map((cp) => cp.product.name)
                           .join(", ")}
                       </span>
                     )}
-                    <span>
-                      Created{" "}
-                      {new Date(campaign.createdAt).toLocaleDateString()}
-                    </span>
+                    <span>Created {formatDate(campaign.createdAt)}</span>
                   </div>
                 </CardHeader>
               </Card>

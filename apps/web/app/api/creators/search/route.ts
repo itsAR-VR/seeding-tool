@@ -1,6 +1,7 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { inngest } from "@/lib/inngest/client";
+import { dispatchCreatorSearch } from "@/lib/creator-search/dispatch";
+import { ApifyKeyMissingError, resolveApifyToken } from "@/lib/apify/token";
 import {
   buildUnifiedDiscoveryQueryFromManualSearch,
   normalizeUnifiedDiscoveryQuery,
@@ -23,6 +24,9 @@ import {
   requireWriteAccess,
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
+
+/** Searches run inside this request (no paid scheduler); Apify can take minutes. */
+export const maxDuration = 800;
 
 /**
  * POST /api/creators/search — Start an Apify creator discovery search.
@@ -80,6 +84,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 2. Create search job record BEFORE debiting (so debit only happens for valid requests)
+    // Fail fast with a clear message when this company has no Apify key yet.
+    await resolveApifyToken(membership.brandId);
+
     const job = await prisma.creatorSearchJob.create({
       data: {
         status: "pending",
@@ -120,15 +127,12 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      await inngest.send({
-        name: "creator-search/requested",
-        data: {
+      await dispatchCreatorSearch({
           jobId: job.id,
           campaignId: "", // standalone search, not campaign-bound
           brandId: membership.brandId,
           query: unifiedQuery,
-        },
-      });
+        });
     } catch (dispatchError) {
       if (!isLocalCreatorSearchFallbackEnabled()) {
         // Dispatch failed with no fallback — refund credits and fail the job
@@ -187,6 +191,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof ApifyKeyMissingError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
     console.error("[creators/search/POST]", error);
     return NextResponse.json(

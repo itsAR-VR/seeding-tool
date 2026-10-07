@@ -92,8 +92,15 @@ Classify the creator's reply into one of these intents:
 - "positive": Creator is interested, willing to participate
 - "negative": Creator declines, not interested, opts out
 - "address": Creator is providing their shipping address
-- "question": Creator has questions about the campaign/product
+- "question": Creator has questions about the campaign/product, including interested replies that also ask something (e.g. "I'd love one! Do you ship to Canada?")
 - "other": Anything else (auto-replies, irrelevant content)
+
+Special cases:
+- Asking to be paid, quoting a rate, or sending a media kit instead of accepting a gift: "other"
+- Redirecting to a manager, agent, or another email address: "other"
+- Out-of-office or auto-replies: "other"
+- "Maybe later", "not right now", "busy right now": "other" (not "negative")
+- "Remove me", "unsubscribe", "stop emailing me": "negative"
 
 Respond with JSON: { "intent": string, "confidence": number (0-1) }`;
 

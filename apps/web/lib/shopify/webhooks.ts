@@ -21,6 +21,7 @@ const REQUIRED_TOPICS = [
   "orders/updated",
   "fulfillments/create",
   "fulfillments/update",
+  "draft_orders/delete",
 ] as const;
 
 function shopifyFetch(

@@ -1,0 +1,143 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { sendEmail } from "@/lib/gmail/send";
+import { emailSendErrorResponse } from "@/lib/outreach/error-response";
+import {
+  getCurrentBrandMembership,
+  requireWriteAccess,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
+import {
+  ADDRESS_LINK_PLACEHOLDER,
+  GiftClaimIssueError,
+  issueGiftClaimLink,
+} from "@/lib/gift-claims/issue";
+import { learnFromSentReply } from "@/lib/inbox/learned-replies";
+import { BOUNCE_CLASSIFICATION } from "@/lib/inbox/auto-messages";
+
+type RouteContext = { params: Promise<{ threadId: string }> };
+
+/**
+ * POST /api/inbox/:threadId/reply
+ * Body: { body: string }
+ *
+ * Sends a human-written reply in the existing email thread, from the inbox
+ * that started it. If the body contains "{address link}", a fresh private gift
+ * claim link is issued for this creator and inserted.
+ */
+export async function POST(request: NextRequest, context: RouteContext) {
+  try {
+    const { threadId } = await context.params;
+    const membership = await getCurrentBrandMembership();
+    requireWriteAccess(membership);
+
+    const { body, draftId } = (await request.json()) as { body?: string; draftId?: string };
+    if (!body?.trim()) {
+      return NextResponse.json({ error: "Write a message first" }, { status: 400 });
+    }
+
+    const thread = await prisma.conversationThread.findFirst({
+      where: { id: threadId, brandId: membership.brandId, channel: "email" },
+      include: {
+        campaignCreator: { include: { creator: true } },
+        messages: {
+          where: { direction: "outbound" },
+          orderBy: { createdAt: "asc" },
+          take: 1,
+        },
+      },
+    });
+    if (!thread) {
+      return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
+    // After a bounce, a reply would go nowhere (or, after a new email is saved, as a "Re:"
+    // to someone who never got the first one). The first email goes from Email creators.
+    const latest = await prisma.message.findFirst({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: "desc" },
+      select: { classification: true },
+    });
+    if (latest?.classification === BOUNCE_CLASSIFICATION) {
+      return NextResponse.json(
+        {
+          error:
+            "The last email to this creator bounced. Save a new email on their creator page, then send their first email from Email creators.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const recipient = thread.campaignCreator.creator.email;
+    if (!recipient) {
+      return NextResponse.json({ error: "This creator has no email address. Add one on their creator page first." }, { status: 400 });
+    }
+
+    const firstOutbound = thread.messages[0];
+    const alias = firstOutbound?.fromAddress
+      ? await prisma.emailAlias.findUnique({
+          where: {
+            brandId_address: { brandId: membership.brandId, address: firstOutbound.fromAddress },
+          },
+          select: { id: true },
+        })
+      : await prisma.emailAlias.findFirst({
+          where: { brandId: membership.brandId, isPrimary: true },
+          select: { id: true },
+        });
+    if (!alias) {
+      return NextResponse.json({ error: "Connect Gmail in Settings > Connections to send emails." }, { status: 400 });
+    }
+
+    let finalBody = body.trim();
+    if (finalBody.includes(ADDRESS_LINK_PLACEHOLDER)) {
+      const issued = await issueGiftClaimLink({
+        campaignCreatorId: thread.campaignCreatorId,
+        createdBy: membership.userId,
+      });
+      finalBody = finalBody.split(ADDRESS_LINK_PLACEHOLDER).join(issued.claimUrl);
+    }
+
+    const baseSubject = (firstOutbound?.subject ?? "").replace(/^re:\s*/i, "");
+    const result = await sendEmail({
+      aliasId: alias.id,
+      to: recipient,
+      subject: baseSubject ? `Re: ${baseSubject}` : "Re:",
+      body: finalBody,
+      threadId: thread.id,
+      externalThreadId: thread.externalThreadId ?? undefined,
+      senderBrandId: membership.brandId,
+    });
+
+    await prisma.conversationThread.update({
+      where: { id: thread.id },
+      data: { updatedAt: new Date() },
+    });
+
+    // Teach future suggestions this brand's real answer. Never blocks the send.
+    await learnFromSentReply({ brandId: membership.brandId, threadId: thread.id, answer: body }).catch((error) =>
+      console.warn("[inbox/reply] couldn't save learned reply", error),
+    );
+
+    // The suggested answer was used (edited or not); retire it.
+    if (draftId) {
+      await prisma.aIDraft.updateMany({
+        where: { id: draftId, campaignCreatorId: thread.campaignCreatorId, status: "draft" },
+        data: { status: "sent" },
+      });
+    }
+
+    return NextResponse.json({ success: true, gmailMessageId: result.gmailMessageId });
+  } catch (error) {
+    if (error instanceof BrandAccessError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof GiftClaimIssueError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    const known = emailSendErrorResponse(error);
+    if (known) return known;
+    console.error("[inbox/reply]", error);
+    return NextResponse.json({ error: "Your reply didn't send. Try again in a minute." }, { status: 500 });
+  }
+}

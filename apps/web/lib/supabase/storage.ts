@@ -39,7 +39,7 @@ async function ensureBucket(): Promise<void> {
   if (error && error.message?.includes("not found")) {
     const { error: createError } = await supabase.storage.createBucket(BUCKET, {
       public: true,
-      fileSizeLimit: 100 * 1024 * 1024, // 100 MB (videos can be large)
+      fileSizeLimit: 50 * 1024 * 1024, // 50 MB, the Supabase plan maximum
     });
 
     if (createError) {
@@ -199,4 +199,32 @@ export async function deleteMentionMedia(path: string): Promise<void> {
   }
 
   log("info", "supabase.storage.delete_success", { path });
+}
+
+/**
+ * Create a one-time URL a browser can upload a file to directly (skipping our
+ * server, whose request size limit is far below a video's size).
+ */
+export async function createMediaUploadUrl(
+  path: string
+): Promise<{ path: string; token: string; publicUrl: string }> {
+  await ensureBucket();
+  const supabase = getStorageClient();
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) {
+    throw new Error(`Could not create upload URL for ${path}: ${error?.message}`);
+  }
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return { path: data.path, token: data.token, publicUrl };
+}
+
+/** True when a file exists at this path in the media bucket. */
+export async function mediaFileExists(path: string): Promise<boolean> {
+  const supabase = getStorageClient();
+  const folder = path.split("/").slice(0, -1).join("/");
+  const name = path.split("/").pop();
+  const { data } = await supabase.storage.from(BUCKET).list(folder, { search: name });
+  return Boolean(data?.some((f) => f.name === name));
 }

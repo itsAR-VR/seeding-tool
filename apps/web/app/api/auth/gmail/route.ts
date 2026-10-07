@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
       "https://www.googleapis.com/auth/userinfo.email",
     ].join(" "),
     access_type: "offline",
-    prompt: "consent",
+    prompt: "consent select_account",
     state: encodeIntegrationOAuthState({ brandId, returnTo }),
   });
 

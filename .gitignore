@@ -22,3 +22,6 @@ scripts/archive/
 scripts/.collabstr-influencers.checkpoint.json
 .env*.local
 .gitnexus
+
+# Supabase CLI local state
+**/supabase/.temp/

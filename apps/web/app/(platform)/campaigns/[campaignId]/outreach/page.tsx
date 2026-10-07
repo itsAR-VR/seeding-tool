@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
   Card,
   CardContent,
@@ -20,21 +22,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BUILT_IN_PERSONAS } from "@/lib/ai/personas";
+import { STAGE_DISPLAY, displayStage, type StageDisplay } from "@/lib/stats/stage-display";
 
 type CampaignCreator = {
   id: string;
   reviewStatus: string;
   lifecycleStatus: string;
+  replyDecision?: string | null;
+  shopifyOrder?: { status: string } | null;
+  /** A saved, unsent first email (empty when none). */
+  aiDrafts?: Array<{ id: string }>;
   creator: {
     id: string;
     name: string | null;
     instagramHandle: string | null;
+    email: string | null;
     followerCount: number | null;
     bio: string | null;
   };
 };
+
+type Notice = { tone: "success" | "error"; text: string };
+
+/** Same status words and tone as the campaign Overview (lib/stats/stage-display). */
+function statusDisplay(cc: CampaignCreator): StageDisplay {
+  return STAGE_DISPLAY[
+    displayStage({
+      ...cc,
+      // Orders come with this list (null = no order); posts don't, so the stored step is used for those.
+      orderStatus: cc.shopifyOrder === undefined ? undefined : (cc.shopifyOrder?.status ?? null),
+    })
+  ];
+}
 
 type CustomPersona = {
   id: string;
@@ -53,9 +75,20 @@ type GeneratedDraft = {
   error: string | null;
 };
 
+type SenderOption = {
+  id: string;
+  address: string;
+  isPrimary: boolean;
+  isPaused: boolean;
+};
+
 type CampaignSetup = {
   campaignProducts?: Array<{ id: string }>;
+  senderAliasId?: string | null;
+  senderOptions?: SenderOption[];
 };
+
+const DEFAULT_SENDER = "__primary";
 
 type ConnectionsOverview = {
   providers: Array<{
@@ -66,6 +99,10 @@ type ConnectionsOverview = {
 
 export default function OutreachPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
+  const searchParams = useSearchParams();
+  const preselectId = searchParams.get("select");
+  // Home and the campaign page link here with ?written=1 to open the saved emails straight away.
+  const openWritten = searchParams.get("written") === "1";
 
   const [creators, setCreators] = useState<CampaignCreator[]>([]);
   const [customPersonas, setCustomPersonas] = useState<CustomPersona[]>([]);
@@ -74,6 +111,32 @@ export default function OutreachPage() {
   const [channel, setChannel] = useState<"email" | "instagram_dm">("email");
   const [additionalContext, setAdditionalContext] = useState("");
   const [drafts, setDrafts] = useState<GeneratedDraft[]>([]);
+  // Emails queued by "Send all" go out one every 3 minutes in the background.
+  type QueueState = { waitingIds: string[]; waiting: number; sent: number; nextAt: string | null; finishesAt: string | null };
+  const [queue, setQueue] = useState<QueueState | null>(null);
+  const [queueLoaded, setQueueLoaded] = useState(false);
+  const loadQueue = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`);
+      if (res.ok) setQueue((await res.json()) as QueueState);
+    } finally {
+      setQueueLoaded(true);
+    }
+  }, [campaignId]);
+  useEffect(() => {
+    void loadQueue();
+  }, [loadQueue]);
+  useEffect(() => {
+    if (!queue?.waiting) return;
+    const timer = setInterval(() => void loadQueue(), 20000);
+    return () => clearInterval(timer);
+  }, [queue?.waiting, loadQueue]);
+  const queuedIds = new Set(queue?.waitingIds ?? []);
+  const clock = (iso: string | null) =>
+    iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "";
+
+  // Two separate screens: pick creators, then review and send their emails.
+  const [step, setStep] = useState<"choose" | "review">("choose");
   const [editedDrafts, setEditedDrafts] = useState<
     Record<string, { subject?: string; body: string }>
   >({});
@@ -82,28 +145,56 @@ export default function OutreachPage() {
   const [connections, setConnections] = useState<ConnectionsOverview | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
-  const [sending, setSending] = useState(false);
+  // Which send is running: one creator's id, or "all". Only that button shows progress.
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const sending = sendingIds.size > 0;
+  const startSending = (id: string) => setSendingIds((cur) => new Set(cur).add(id));
+  const stopSending = (id: string) =>
+    setSendingIds((cur) => {
+      const next = new Set(cur);
+      next.delete(id);
+      return next;
+    });
   const [sendProgress, setSendProgress] = useState("");
+  const [savingSender, setSavingSender] = useState(false);
+  const [senderError, setSenderError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  // Which send is waiting for a second click: "all", or one campaignCreatorId.
+  const [confirmingSend, setConfirmingSend] = useState<string | null>(null);
 
   // Load campaign creators
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`/api/campaigns/${campaignId}/creators`);
-        if (res.ok) {
-          const data = await res.json();
-          // data might be array or { creators: [...] }
-          const list = Array.isArray(data) ? data : data.creators ?? [];
-          setCreators(list);
-        }
-      } catch (err) {
-        console.error("Failed to load creators:", err);
-      } finally {
-        setLoadingCreators(false);
+  const loadCreators = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/creators`);
+      if (res.ok) {
+        const data = await res.json();
+        // data might be array or { creators: [...] }
+        const list = Array.isArray(data) ? data : data.creators ?? [];
+        setCreators(list);
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setNotice({ tone: "error", text: data?.error ?? "Couldn't load this campaign's creators. Refresh the page." });
       }
+    } catch (err) {
+      console.error("Failed to load creators:", err);
+      setNotice({ tone: "error", text: "Couldn't load this campaign's creators. Check your connection and refresh." });
+    } finally {
+      setLoadingCreators(false);
     }
-    load();
   }, [campaignId]);
+
+  useEffect(() => {
+    void loadCreators();
+  }, [loadCreators]);
+
+  // Arriving from a creator's "Email →" link pre-selects that creator.
+  useEffect(() => {
+    if (!preselectId) return;
+    const target = creators.find((c) => c.id === preselectId);
+    if (target && target.reviewStatus === "approved" && target.lifecycleStatus === "ready") {
+      setSelectedIds((prev) => (prev.has(preselectId) ? prev : new Set([...prev, preselectId])));
+    }
+  }, [preselectId, creators]);
 
   // Load custom personas
   useEffect(() => {
@@ -125,7 +216,7 @@ export default function OutreachPage() {
     async function loadSetup() {
       try {
         const [campaignRes, connectionsRes] = await Promise.all([
-          fetch(`/api/campaigns/${campaignId}`),
+          fetch(`/api/campaigns/${campaignId}?lite=1`),
           fetch("/api/connections/overview"),
         ]);
 
@@ -146,12 +237,58 @@ export default function OutreachPage() {
     loadSetup();
   }, [campaignId]);
 
+  async function handleSenderChange(value: string) {
+    const senderAliasId = value === DEFAULT_SENDER ? null : value;
+    setSavingSender(true);
+    setSenderError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderAliasId }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setSenderError(data?.error ?? "Could not save the sender.");
+        return;
+      }
+      setCampaignSetup((current) =>
+        current ? { ...current, senderAliasId } : current
+      );
+    } catch {
+      setSenderError("Could not save the sender.");
+    } finally {
+      setSavingSender(false);
+    }
+  }
+
   const MAX_BATCH_SIZE = 20;
 
   // Derive approved list here so all handlers below have access
   const approvedCreators = creators.filter(
     (c) => c.reviewStatus === "approved"
   );
+  // Only creators who have not been contacted can be drafted and sent.
+  const sendableCreators = approvedCreators.filter(
+    (c) => c.lifecycleStatus === "ready" && !queuedIds.has(c.id)
+  );
+  // Already written and saved, so opening them costs nothing and changes no wording.
+  const writtenCreators = sendableCreators.filter((c) => (c.aiDrafts?.length ?? 0) > 0);
+
+  // Creators, setup, and the send queue all decide what this page says. Until
+  // every one has loaded, show a neutral "Checking" state, never a blocker.
+  const checking = loadingCreators || setupLoading || !queueLoaded;
+  // Nobody approved is left to email: say so plainly instead of showing an empty chooser.
+  const everyoneEmailed = !checking && approvedCreators.length > 0 && sendableCreators.length === 0;
+  // The 1 → 2 steps only help while there's something to choose or send.
+  const showSteps = !(everyoneEmailed && drafts.length === 0);
+  const pendingReviewCount = creators.filter((c) => c.reviewStatus === "pending").length;
+  const queuedCount = approvedCreators.filter((c) => queuedIds.has(c.id)).length;
+  const creatorByCcId = new Map(creators.map((c) => [c.id, c]));
+  const senderAddress =
+    (campaignSetup?.senderAliasId
+      ? campaignSetup.senderOptions?.find((o) => o.id === campaignSetup.senderAliasId)?.address
+      : campaignSetup?.senderOptions?.find((o) => o.isPrimary)?.address) ?? null;
   const hasProducts = Boolean(campaignSetup?.campaignProducts?.length);
   const hasGmail =
     connections?.providers.some(
@@ -162,15 +299,19 @@ export default function OutreachPage() {
       (provider) => provider.provider === "unipile" && provider.connected
     ) ?? false;
   const selectedChannelConnected = channel === "email" ? hasGmail : hasUnipile;
-  const draftBlocker = !hasProducts
-    ? "Attach at least one campaign product before drafting outreach."
-    : null;
-  const sendBlocker = !hasProducts
-    ? "Attach at least one campaign product before sending outreach."
+  const draftBlocker = setupLoading
+    ? null
+    : !hasProducts
+      ? "Add a product to this campaign before writing emails."
+      : null;
+  const sendBlocker = setupLoading
+    ? null
+    : !hasProducts
+    ? "Add a product to this campaign before sending."
     : !selectedChannelConnected
       ? channel === "email"
-        ? "Connect Gmail in Settings → Connections before sending emails."
-        : "Connect Unipile in Settings → Connections before sending Instagram DMs."
+        ? "Connect Gmail in Settings > Connections before sending emails."
+        : "Connect Instagram messages in Settings > Connections before sending DMs."
       : null;
 
   const toggleCreator = (id: string) => {
@@ -183,7 +324,7 @@ export default function OutreachPage() {
   };
 
   const selectAll = () => {
-    const batch = approvedCreators.slice(0, MAX_BATCH_SIZE);
+    const batch = sendableCreators.slice(0, MAX_BATCH_SIZE);
     const allBatchSelected = batch.length > 0 && batch.every((c) => selectedIds.has(c.id));
     if (allBatchSelected) {
       setSelectedIds(new Set());
@@ -192,13 +333,53 @@ export default function OutreachPage() {
     }
   };
 
-  const generateDrafts = async () => {
-    if (selectedIds.size === 0) return;
-    if (selectedIds.size > MAX_BATCH_SIZE) {
-      alert(`Please select ${MAX_BATCH_SIZE} or fewer creators per batch. You have ${selectedIds.size} selected.`);
+  // Keep checked or edited emails for another day. They come back under
+  // "N emails are already written" and open exactly as saved.
+  const [savingForLater, setSavingForLater] = useState(false);
+  const saveForLater = async () => {
+    const toSave = drafts
+      .filter((d) => !d.error && d.body)
+      .map((d) => ({
+        campaignCreatorId: d.campaignCreatorId,
+        subject: editedDrafts[d.campaignCreatorId]?.subject ?? d.subject ?? null,
+        body: editedDrafts[d.campaignCreatorId]?.body ?? d.body!,
+      }));
+    if (toSave.length === 0) return;
+    setSavingForLater(true);
+    const res = await fetch("/api/outreach/draft/save", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drafts: toSave }),
+    }).catch(() => null);
+    const data = (await res?.json().catch(() => null)) as { saved?: number; error?: string } | null;
+    setSavingForLater(false);
+    if (!res?.ok) {
+      setNotice({ tone: "error", text: data?.error ?? "Couldn't save them. Try again." });
+      return;
+    }
+    setDrafts([]);
+    setEditedDrafts({});
+    setConfirmingSend(null);
+    setSelectedIds(new Set());
+    setStep("choose");
+    setNotice({
+      tone: "success",
+      text: `Saved ${data?.saved ?? toSave.length} emails. Come back any time and click "Open written emails" to send them.`,
+    });
+    await loadCreators();
+  };
+
+  const generateDrafts = async (ids: string[] = Array.from(selectedIds)) => {
+    if (ids.length === 0) return;
+    if (ids.length > MAX_BATCH_SIZE) {
+      setNotice({
+        tone: "error",
+        text: `You can email up to ${MAX_BATCH_SIZE} creators at a time. You picked ${ids.length}, so unselect a few.`,
+      });
       return;
     }
     setGenerating(true);
+    setNotice(null);
     setDrafts([]);
     setEditedDrafts({});
 
@@ -207,7 +388,7 @@ export default function OutreachPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          campaignCreatorIds: Array.from(selectedIds),
+          campaignCreatorIds: ids,
           personaId,
           channel,
           additionalContext: additionalContext || undefined,
@@ -217,6 +398,8 @@ export default function OutreachPage() {
       if (res.ok) {
         const data = await res.json();
         setDrafts(data.drafts);
+        setStep("review");
+        window.scrollTo({ top: 0 });
         // Initialize editable copies
         const edits: Record<string, { subject?: string; body: string }> = {};
         for (const d of data.drafts) {
@@ -228,16 +411,46 @@ export default function OutreachPage() {
           }
         }
         setEditedDrafts(edits);
+        window.setTimeout(() => {
+          document.getElementById("review-emails")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 50);
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => null);
         console.error("Draft generation failed:", err);
+        setNotice({ tone: "error", text: err?.error ?? "Couldn't load drafts. Try again." });
       }
     } catch (err) {
       console.error("Draft generation error:", err);
+      setNotice({ tone: "error", text: "Couldn't load drafts. Try again." });
     } finally {
       setGenerating(false);
     }
   };
+
+  const openWrittenEmails = () => {
+    const ids = writtenCreators.slice(0, MAX_BATCH_SIZE).map((c) => c.id);
+    setSelectedIds(new Set(ids));
+    void generateDrafts(ids);
+  };
+
+  // Arriving with ?written=1 opens the saved emails once everything has loaded.
+  // A row's "Send written email" (?select=<id>) opens just that one.
+  const openedWritten = useRef(false);
+  useEffect(() => {
+    if (openedWritten.current || checking || generating) return;
+    const single = preselectId ? writtenCreators.find((c) => c.id === preselectId) : undefined;
+    if (single) {
+      openedWritten.current = true;
+      setSelectedIds(new Set([single.id]));
+      void generateDrafts([single.id]);
+      return;
+    }
+    if (!openWritten || writtenCreators.length === 0) return;
+    openedWritten.current = true;
+    openWrittenEmails();
+    // Runs once (the ref guards it); the handler is rebuilt each render, so it isn't a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openWritten, preselectId, checking, generating, writtenCreators.length]);
 
   const updateDraft = (
     ccId: string,
@@ -246,34 +459,122 @@ export default function OutreachPage() {
   ) => {
     setEditedDrafts((prev) => ({
       ...prev,
-      [ccId]: { ...prev[ccId]!, [field]: value },
+      [ccId]: { ...(prev[ccId] ?? { body: "" }), [field]: value },
     }));
   };
+
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Draft Outreach</h1>
-        <p className="text-muted-foreground">
-          Generate AI-powered outreach messages for campaign creators.
-        </p>
+        <h2 className="text-2xl font-semibold tracking-tight">Email creators</h2>
+        {showSteps && (
+          <ol className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-label="Steps">
+            <li className={step === "choose" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "choose" ? "step" : undefined}>
+              1. Choose creators
+            </li>
+            <li aria-hidden className="text-muted-foreground">→</li>
+            <li className={step === "review" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "review" ? "step" : undefined}>
+              2. Review and send
+            </li>
+          </ol>
+        )}
       </div>
 
-      <Card
-        className={
-          draftBlocker || sendBlocker
-            ? "border-amber-200 bg-amber-50"
-            : "border-green-200 bg-green-50"
-        }
-      >
+      {queue && queue.waiting > 0 && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            <span className="font-medium">Sending in the background:</span> {queue.waiting}{" "}
+            {queue.waiting === 1 ? "email" : "emails"} left
+            {queue.nextAt ? `, next at ${clock(queue.nextAt)}` : ""}
+            {queue.finishesAt ? `, done around ${clock(queue.finishesAt)}` : ""}.
+          </span>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`, { method: "DELETE" });
+              setNotice({ tone: "success", text: "Stopped. Emails that hadn't gone out yet were not sent." });
+              await loadQueue();
+              await loadCreators();
+            }}
+          >
+            Stop sending
+          </Button>
+        </div>
+      )}
+
+      {notice && (
+        <div
+          role="status"
+          className={`flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-sm ${
+            notice.tone === "success"
+              ? "border-green-200 bg-green-50 text-green-900"
+              : "border-red-200 bg-red-50 text-red-900"
+          }`}
+        >
+          <span>{notice.tone === "success" ? "✓ " : ""}{notice.text}</span>
+          <button
+            type="button"
+            className="text-sm underline underline-offset-2 opacity-80 hover:opacity-100"
+            onClick={() => setNotice(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {checking ? (
+        <div
+          role="status"
+          aria-busy="true"
+          className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground"
+        >
+          <Skeleton className="h-4 w-4 rounded-full" />
+          Checking your setup…
+        </div>
+      ) : everyoneEmailed ? (
+        <div role="status" className="space-y-1 rounded-lg border bg-card px-4 py-3">
+          <p className="font-medium">
+            {queuedCount > 0
+              ? "Everyone in this campaign has been emailed or is queued to send"
+              : "Everyone in this campaign has been emailed"}
+          </p>
+          {pendingReviewCount > 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {pendingReviewCount} more {pendingReviewCount === 1 ? "creator needs" : "creators need"} a yes or no
+              first.{" "}
+              <Link href={`/campaigns/${campaignId}/review`} className="font-medium text-foreground underline">
+                Review creators
+              </Link>
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Replies show up in your inbox. Want to reach more people?{" "}
+              <Link href={`/campaigns/${campaignId}/discover`} className="font-medium text-foreground underline">
+                Find creators
+              </Link>
+            </p>
+          )}
+        </div>
+      ) : !draftBlocker && !sendBlocker ? (
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
+          <span className="font-medium">Ready to send</span>
+          <span>✓ {campaignSetup?.campaignProducts?.length ?? 0} product</span>
+          <span>✓ {sendableCreators.length} not yet contacted</span>
+          <span>
+            ✓ {channel === "email" ? `Gmail${senderAddress ? ` · ${senderAddress}` : ""}` : "Instagram messages"}
+          </span>
+        </div>
+      ) : (
+      <Card className="border-amber-200 bg-amber-50">
         <CardHeader>
-          <CardTitle>Outreach readiness</CardTitle>
+          <CardTitle>Finish setup before sending</CardTitle>
           <CardDescription>
-            Products are required for outreach context. Send actions also require the channel-specific integration to be connected.
+            Each campaign needs a product, and the channel you send on has to be connected.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-3">
             {[
               {
                 label: "Products",
@@ -295,79 +596,281 @@ export default function OutreachPage() {
                 ready: hasGmail,
                 helper: hasGmail ? "Email sending ready" : "Not connected",
               },
-              {
-                label: "Unipile",
-                ready: hasUnipile,
-                helper: hasUnipile ? "DM sending ready" : "Not connected",
-              },
+              ...(channel === "instagram_dm"
+                ? [
+                    {
+                      label: "Instagram messages",
+                      ready: hasUnipile,
+                      helper: hasUnipile ? "Ready to send messages" : "Not connected",
+                    },
+                  ]
+                : []),
             ].map((item) => (
               <div key={item.label} className="rounded-lg border bg-white p-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-medium">{item.label}</span>
-                  <Badge variant={item.ready ? "default" : "secondary"}>
+                  <StatusPill tone={item.ready ? "good" : "waiting"}>
                     {item.ready ? "Ready" : "Needs setup"}
-                  </Badge>
+                  </StatusPill>
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{item.helper}</p>
               </div>
             ))}
           </div>
 
-          {setupLoading ? (
-            <p className="text-sm text-muted-foreground">Checking current setup…</p>
-          ) : draftBlocker || sendBlocker ? (
+          {draftBlocker || sendBlocker ? (
             <div className="flex flex-wrap gap-2">
               {!hasProducts ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = `/campaigns/${campaignId}/products`;
-                  }}
-                >
+                <Link href={`/campaigns/${campaignId}/products`} className={buttonVariants({ variant: "outline" })}>
                   Add products
-                </Button>
+                </Link>
               ) : null}
               {!selectedChannelConnected ? (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    window.location.href = "/settings/connections";
-                  }}
-                >
-                  Open connections
-                </Button>
+                <Link href="/settings/connections" className={buttonVariants({ variant: "outline" })}>
+                  {channel === "email" ? "Connect Gmail" : "Connect Instagram messages"}
+                </Link>
               ) : null}
             </div>
           ) : (
-            <p className="text-sm text-green-900">
-              This campaign is ready for draft generation and send review.
-            </p>
+            null
           )}
+        </CardContent>
+      </Card>
+      )}
+
+      {step === "choose" && drafts.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            {drafts.length} {drafts.length === 1 ? "email is" : "emails are"} written and waiting for you.
+          </span>
+          <Button onClick={() => setStep("review")}>Back to review and send</Button>
+        </div>
+      )}
+
+      {step === "choose" && drafts.length === 0 && !checking && writtenCreators.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            {writtenCreators.length} {writtenCreators.length === 1 ? "email is" : "emails are"} already written and
+            saved.
+            {writtenCreators.length > MAX_BATCH_SIZE ? ` The first ${MAX_BATCH_SIZE} open together.` : ""}
+          </span>
+          <Button onClick={openWrittenEmails} disabled={generating}>
+            {generating
+              ? "Opening…"
+              : `Open ${Math.min(writtenCreators.length, MAX_BATCH_SIZE)} written ${
+                  Math.min(writtenCreators.length, MAX_BATCH_SIZE) === 1 ? "email" : "emails"
+                }`}
+          </Button>
+        </div>
+      )}
+
+      {step === "choose" && !checking && !everyoneEmailed && (
+      <>
+      {/* Creator Selection */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Choose creators</CardTitle>
+              <CardDescription>
+                {loadingCreators
+                  ? "Loading…"
+                  : `Click the creators you want to email. ${sendableCreators.length} of ${creators.length} in this campaign still need a first email.${
+                      creators.length > approvedCreators.length
+                        ? ` ${creators.length - approvedCreators.length} still to review or not a fit aren't listed.`
+                        : ""
+                    }`}
+              </CardDescription>
+            </div>
+            {sendableCreators.length > 0 && (
+              <Button variant="outline" size="sm" onClick={selectAll}>
+                {selectedIds.size === sendableCreators.slice(0, MAX_BATCH_SIZE).length &&
+                  sendableCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
+                  ? "Unselect all"
+                  : sendableCreators.length <= MAX_BATCH_SIZE
+                    ? `Select all ${sendableCreators.length}`
+                    : `Select the first ${MAX_BATCH_SIZE}`}
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingCreators ? (
+            <p className="text-sm text-muted-foreground">
+              Loading creators...
+            </p>
+          ) : approvedCreators.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No approved creators in this campaign yet. Add creators, then approve the ones you
+                want to email.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link href={`/campaigns/${campaignId}/review`} className={buttonVariants({ size: "sm" })}>
+                  Review creators
+                </Link>
+                <Link
+                  href={`/campaigns/${campaignId}/discover`}
+                  className={buttonVariants({ size: "sm", variant: "outline" })}
+                >
+                  Find creators
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {(() => {
+                const renderRow = (cc: (typeof approvedCreators)[number]) => {
+                const sendable = cc.lifecycleStatus === "ready" && !queuedIds.has(cc.id);
+                return (
+                <div
+                  key={cc.id}
+                  role="checkbox"
+                  aria-checked={selectedIds.has(cc.id)}
+                  aria-disabled={!sendable}
+                  tabIndex={sendable ? 0 : -1}
+                  onClick={() => sendable && toggleCreator(cc.id)}
+                  onKeyDown={(e) => {
+                    if (sendable && (e.key === " " || e.key === "Enter")) {
+                      e.preventDefault();
+                      toggleCreator(cc.id);
+                    }
+                  }}
+                  className={`flex select-none items-center gap-3 rounded-lg border p-3 transition-colors ${
+                    !sendable
+                      ? "cursor-not-allowed bg-muted/40 opacity-70"
+                      : selectedIds.has(cc.id)
+                        ? "cursor-pointer border-foreground/40 bg-accent"
+                        : "cursor-pointer hover:bg-accent/50"
+                  }`}
+                >
+                  <Checkbox
+                    checked={selectedIds.has(cc.id)}
+                    disabled={!sendable}
+                    className="pointer-events-none"
+                    tabIndex={-1}
+                    aria-hidden
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">
+                        {cc.creator.name ??
+                          cc.creator.instagramHandle ??
+                          "Unnamed creator"}
+                      </span>
+                      {cc.creator.instagramHandle && (
+                        <span className="text-sm text-muted-foreground">
+                          @{cc.creator.instagramHandle}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {[
+                        cc.creator.email,
+                        cc.creator.followerCount
+                          ? `${cc.creator.followerCount.toLocaleString()} followers`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  </div>
+                  {queuedIds.has(cc.id) ? (
+                    <StatusPill tone="waiting">Queued to send</StatusPill>
+                  ) : sendable && (cc.aiDrafts?.length ?? 0) > 0 ? (
+                    <StatusPill tone="waiting">Email written</StatusPill>
+                  ) : (
+                    <StatusPill tone={statusDisplay(cc).tone}>{statusDisplay(cc).label}</StatusPill>
+                  )}
+                </div>
+                );
+                };
+                const sendableIds = new Set(sendableCreators.map((c) => c.id));
+                const alreadyEmailed = approvedCreators.filter((c) => !sendableIds.has(c.id));
+                return (
+                  <>
+                    {/* The ones you can pick come first; everyone already emailed folds away below. */}
+                    <div className="space-y-2">{sendableCreators.map(renderRow)}</div>
+                    {alreadyEmailed.length > 0 && (
+                      <details className="group">
+                        <summary className="w-fit cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                          Already emailed or queued ({alreadyEmailed.length})
+                        </summary>
+                        <div className="mt-2 space-y-2">{alreadyEmailed.map(renderRow)}</div>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          <div className="sticky bottom-4 mt-4 flex items-center justify-end gap-3 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur">
+            <span id="write-emails-hint" className="mr-auto text-sm text-muted-foreground">
+              {selectedIds.size === 0
+                ? "Click a creator to select them"
+                : `${selectedIds.size} selected`}
+            </span>
+            {draftBlocker ? (
+              <span id="write-emails-blocker" className="text-sm font-medium text-amber-700">
+                {draftBlocker}
+              </span>
+            ) : null}
+            {selectedIds.size > MAX_BATCH_SIZE && (
+              <span id="write-emails-limit" className="text-sm font-medium text-red-700">
+                Up to {MAX_BATCH_SIZE} at a time. Unselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}.
+              </span>
+            )}
+            <Button
+              size="lg"
+              onClick={() => void generateDrafts()}
+              aria-describedby={
+                [
+                  "write-emails-hint",
+                  draftBlocker ? "write-emails-blocker" : null,
+                  selectedIds.size > MAX_BATCH_SIZE ? "write-emails-limit" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              }
+              disabled={setupLoading || Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
+            >
+              {generating
+                ? "Writing emails…"
+                : selectedIds.size === 0
+                  ? "Pick creators to email"
+                  : `Write ${selectedIds.size} ${selectedIds.size === 1 ? "email" : "emails"}`}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
       {/* Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Configuration</CardTitle>
-          <CardDescription>
-            Choose your persona, channel, and add any extra context.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <details className="group rounded-xl border bg-card">
+        <summary className="cursor-pointer list-none px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <span className="group-open:hidden">▸</span>
+          <span className="hidden group-open:inline">▾</span> More options: sender, channel, writing style
+        </summary>
+        <div className="space-y-4 px-6 pb-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>Persona</Label>
+              <Label>Writing style</Label>
               <Select value={personaId} onValueChange={(v) => v && setPersonaId(v)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select persona" />
+                  <SelectValue placeholder="Select a style">
+                    {(value: string | null) =>
+                      BUILT_IN_PERSONAS.find((p) => p.id === value)?.name ??
+                      customPersonas.find((p) => p.id === value)?.name ??
+                      "Select a style"
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {/* Built-in personas */}
                   <SelectItem
                     disabled
                     value="__header_builtin"
-                    className="text-xs font-semibold text-muted-foreground"
+                    className="text-sm font-semibold text-muted-foreground"
                   >
                     Built-in
                   </SelectItem>
@@ -382,7 +885,7 @@ export default function OutreachPage() {
                       <SelectItem
                         disabled
                         value="__header_custom"
-                        className="text-xs font-semibold text-muted-foreground"
+                        className="text-sm font-semibold text-muted-foreground"
                       >
                         Custom
                       </SelectItem>
@@ -406,7 +909,9 @@ export default function OutreachPage() {
                 }
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue>
+                    {(value: string | null) => (value === "instagram_dm" ? "Instagram DM" : "Email")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="email">📧 Email</SelectItem>
@@ -416,123 +921,83 @@ export default function OutreachPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {channel === "email" && (campaignSetup?.senderOptions?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <Label>Send from</Label>
+                <Select
+                  value={campaignSetup?.senderAliasId ?? DEFAULT_SENDER}
+                  onValueChange={(v) => void handleSenderChange(v ?? DEFAULT_SENDER)}
+                  disabled={savingSender}
+                >
+                  <SelectTrigger>
+                    <SelectValue>
+                      {(value: string | null) =>
+                        value && value !== DEFAULT_SENDER
+                          ? campaignSetup?.senderOptions?.find((o) => o.id === value)?.address ?? value
+                          : `Default (${campaignSetup?.senderOptions?.find((o) => o.isPrimary)?.address ?? "primary Gmail"})`
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_SENDER}>
+                      Default (
+                      {campaignSetup?.senderOptions?.find((o) => o.isPrimary)?.address ??
+                        "primary Gmail"}
+                      )
+                    </SelectItem>
+                    {campaignSetup?.senderOptions?.map((option) => (
+                      <SelectItem
+                        key={option.id}
+                        value={option.id}
+                        disabled={option.isPaused}
+                      >
+                        {option.address}
+                        {option.isPaused ? " (paused)" : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {senderError && (
+                  <p className="text-sm text-red-600">{senderError}</p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label>Additional Context / Talking Points</Label>
+            <Label>Extra instructions</Label>
+            <p className="text-sm text-muted-foreground">
+              Only used for creators who don&apos;t already have a written email.
+            </p>
             <Textarea
-              placeholder="Add any specific brand context, talking points, or instructions for the AI..."
+              placeholder="Anything to mention, like a launch date or a discount code"
               value={additionalContext}
               onChange={(e) => setAdditionalContext(e.target.value)}
               rows={3}
             />
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Creator Selection */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Select Creators</CardTitle>
-              <CardDescription>
-                {loadingCreators
-                  ? "Loading..."
-                  : `${approvedCreators.length} approved creators available`}
-              </CardDescription>
-            </div>
-            {approvedCreators.length > 0 && (
-              <Button variant="outline" size="sm" onClick={selectAll}>
-                {selectedIds.size === approvedCreators.slice(0, MAX_BATCH_SIZE).length &&
-                  approvedCreators.slice(0, MAX_BATCH_SIZE).every((c) => selectedIds.has(c.id))
-                  ? "Deselect All"
-                  : `Select All (up to ${MAX_BATCH_SIZE})`}
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {loadingCreators ? (
-            <p className="text-sm text-muted-foreground">
-              Loading creators...
-            </p>
-          ) : approvedCreators.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No approved creators in this campaign yet.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {approvedCreators.map((cc) => (
-                <div
-                  key={cc.id}
-                  className="flex items-center gap-3 rounded-lg border p-3 hover:bg-accent/50 transition-colors"
-                >
-                  <Checkbox
-                    checked={selectedIds.has(cc.id)}
-                    onCheckedChange={() => toggleCreator(cc.id)}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">
-                        {cc.creator.name ??
-                          cc.creator.instagramHandle ??
-                          "Unknown"}
-                      </span>
-                      {cc.creator.instagramHandle && (
-                        <span className="text-sm text-muted-foreground">
-                          @{cc.creator.instagramHandle}
-                        </span>
-                      )}
-                    </div>
-                    {cc.creator.followerCount && (
-                      <span className="text-xs text-muted-foreground">
-                        {cc.creator.followerCount.toLocaleString()} followers
-                      </span>
-                    )}
-                  </div>
-                  <Badge
-                    variant="outline"
-                    className="text-xs"
-                  >
-                    {cc.lifecycleStatus.replace(/_/g, " ")}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center justify-end gap-3">
-            {draftBlocker ? (
-              <span className="text-sm font-medium text-amber-700">
-                {draftBlocker}
-              </span>
-            ) : null}
-            {selectedIds.size > MAX_BATCH_SIZE && (
-              <span className="text-sm text-red-500 font-medium">
-                Max {MAX_BATCH_SIZE} per batch — deselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}
-              </span>
-            )}
-            <Button
-              onClick={generateDrafts}
-              disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
-            >
-              {generating
-                ? "Generating..."
-                : `Generate Drafts (${selectedIds.size})`}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </details>
+      </>
+      )}
 
       {/* Generated Drafts */}
-      {drafts.length > 0 && (
-        <Card>
+      {step === "review" && drafts.length > 0 && (
+        <Card id="review-emails">
           <CardHeader>
-            <CardTitle>Generated Drafts</CardTitle>
-            <CardDescription>
-              Review and edit each draft before sending.
-            </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle>Review and send</CardTitle>
+                <CardDescription>
+                  {drafts.length} {drafts.length === 1 ? "email" : "emails"}. Edit anything you like. Nothing sends until
+                  you click Send.
+                </CardDescription>
+              </div>
+              <Button variant="outline" onClick={() => setStep("choose")} disabled={sending}>
+                ← Choose different creators
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {drafts.map((draft) => (
@@ -540,85 +1005,111 @@ export default function OutreachPage() {
                 key={draft.campaignCreatorId}
                 className="rounded-lg border p-4 space-y-3"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="font-medium">
-                      {draft.creatorName ?? draft.creatorHandle}
-                    </span>
-                    <span className="ml-2 text-sm text-muted-foreground">
-                      @{draft.creatorHandle}
-                    </span>
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 space-y-0.5">
+                    <div>
+                      <span className="font-medium">
+                        {draft.creatorName ?? draft.creatorHandle}
+                      </span>
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        @{draft.creatorHandle}
+                      </span>
+                    </div>
+                    {channel === "email" && (
+                      <p className="text-sm text-muted-foreground">
+                        {senderAddress ? `From ${senderAddress} · ` : ""}To{" "}
+                        {creatorByCcId.get(draft.campaignCreatorId)?.creator.email ?? "no email on file"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">
-                      {draft.tokens} tokens
-                    </span>
-                    {!draft.error && draft.body && (
+                    {!draft.error && draft.body && confirmingSend === draft.campaignCreatorId ? (
+                      <>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmingSend(null)}>
+                          Cancel
+                        </Button>
+                        <Button
+                          size="sm"
+                          aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
+                          disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
+                          onClick={async () => {
+                            setConfirmingSend(null);
+                            startSending(draft.campaignCreatorId);
+                            try {
+                              // One email joins the same line as "Send all", so sends stay
+                              // 3 minutes apart however they're pressed.
+                              const res = await fetch("/api/outreach/queue", {
+                                method: "POST",
+                                headers: {
+                                  "Content-Type": "application/json",
+                                },
+                                body: JSON.stringify({
+                                  campaignId,
+                                  drafts: [
+                                    {
+                                      campaignCreatorId: draft.campaignCreatorId,
+                                      creatorId: draft.creatorId,
+                                      channel,
+                                      subject:
+                                        editedDrafts[draft.campaignCreatorId]?.subject ??
+                                        draft.subject ??
+                                        undefined,
+                                      body: editedDrafts[draft.campaignCreatorId]?.body ?? draft.body!,
+                                    },
+                                  ],
+                                }),
+                              });
+                              const data = (await res.json().catch(() => ({}))) as {
+                                finishesAt?: string | null;
+                                error?: string;
+                              };
+                              if (!res.ok) {
+                                setNotice({ tone: "error", text: data.error || "Couldn't send it. Nothing was sent." });
+                              } else {
+                                setDrafts((prev) => {
+                                  const left = prev.filter((d) => d.campaignCreatorId !== draft.campaignCreatorId);
+                                  if (left.length === 0) setStep("choose");
+                                  return left;
+                                });
+                                setSelectedIds((prev) => new Set([...prev].filter((id) => id !== draft.campaignCreatorId)));
+                                setNotice({
+                                  tone: "success",
+                                  text: `@${draft.creatorHandle}'s email is in line to send${
+                                    data.finishesAt ? ` at about ${clock(data.finishesAt)}` : ""
+                                  }, 3 minutes after the one before it.`,
+                                });
+                                await loadQueue();
+                              }
+                            } catch {
+                              setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
+                            } finally {
+                              stopSending(draft.campaignCreatorId);
+                            }
+                          }}
+                        >
+                          Yes, send to @{draft.creatorHandle}
+                        </Button>
+                      </>
+                    ) : !draft.error && draft.body ? (
                       <Button
                         size="sm"
-                        variant="outline"
-                        disabled={sending || Boolean(sendBlocker)}
-                        onClick={async () => {
-                          const confirmed = confirm(
-                            `Send ${channel === "email" ? "email" : "DM"} to @${draft.creatorHandle}?`
-                          );
-                          if (!confirmed) return;
-                          setSending(true);
-                          try {
-                            const res = await fetch("/api/outreach/send", {
-                              method: "POST",
-                              headers: {
-                                "Content-Type": "application/json",
-                              },
-                              body: JSON.stringify({
-                                drafts: [
-                                  {
-                                    campaignCreatorId:
-                                      draft.campaignCreatorId,
-                                    creatorId: draft.creatorId,
-                                    channel,
-                                    subject:
-                                      editedDrafts[draft.campaignCreatorId]
-                                        ?.subject ??
-                                      draft.subject ??
-                                      undefined,
-                                    body:
-                                      editedDrafts[draft.campaignCreatorId]
-                                        ?.body ?? draft.body!,
-                                  },
-                                ],
-                              }),
-                            });
-                            const data = await res.json();
-                            if (!res.ok) {
-                              alert(data.error || "Send failed");
-                            } else {
-                              alert(
-                                data.sent > 0
-                                  ? `Sent to @${draft.creatorHandle}`
-                                  : `Failed: ${data.results?.[0]?.error || "Unknown error"}`
-                              );
-                            }
-                          } catch {
-                            alert("Send failed");
-                          } finally {
-                            setSending(false);
-                          }
-                        }}
+                        aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
+                        disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
+                        onClick={() => setConfirmingSend(draft.campaignCreatorId)}
                       >
-                        Send
+                        {sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") ? "Sending..." : "Send"}
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 
                 {draft.error ? (
-                  <p className="text-sm text-red-500">{draft.error}</p>
+                  <p className="text-sm text-red-700">{draft.error}</p>
                 ) : (
                   <>
                     {channel === "email" && (
                       <div className="space-y-1">
-                        <Label className="text-xs">Subject</Label>
+                        <Label className="text-sm">Subject</Label>
                         <input
                           type="text"
                           className="w-full rounded-md border px-3 py-2 text-sm"
@@ -636,7 +1127,7 @@ export default function OutreachPage() {
                       </div>
                     )}
                     <div className="space-y-1">
-                      <Label className="text-xs">
+                      <Label className="text-sm">
                         {channel === "email" ? "Body" : "Message"}
                       </Label>
                       <Textarea
@@ -650,11 +1141,12 @@ export default function OutreachPage() {
                             e.target.value
                           )
                         }
-                        rows={channel === "instagram_dm" ? 3 : 8}
+                        rows={channel === "instagram_dm" ? 3 : 9}
+                        className="leading-relaxed"
                       />
                     </div>
                     {sendBlocker ? (
-                      <p className="text-xs font-medium text-amber-700">
+                      <p className="text-sm font-medium text-amber-800">
                         {sendBlocker}
                       </p>
                     ) : null}
@@ -665,22 +1157,23 @@ export default function OutreachPage() {
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               {sendBlocker ? (
-                <p className="mr-auto text-sm font-medium text-amber-700">
+                <p id="send-all-blocker" className="mr-auto text-sm font-medium text-amber-700">
                   {sendBlocker}
                 </p>
               ) : null}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDrafts([]);
-                  setEditedDrafts({});
-                }}
-              >
-                Discard All
+              {/* Written emails are already saved; this keeps her edits too, for sending another day. */}
+              <Button variant="outline" disabled={savingForLater || sending} onClick={() => void saveForLater()}>
+                {savingForLater ? "Saving..." : "Save and send later"}
               </Button>
+              {confirmingSend === "all" ? (
+                <Button variant="ghost" onClick={() => setConfirmingSend(null)}>
+                  Cancel
+                </Button>
+              ) : null}
               <Button
+                aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
                 disabled={
-                  Boolean(sendBlocker) ||
+                  setupLoading || Boolean(sendBlocker) ||
                   sending ||
                   drafts.filter((d) => !d.error).length === 0
                 }
@@ -690,13 +1183,15 @@ export default function OutreachPage() {
                   );
                   if (validDrafts.length === 0) return;
 
-                  const confirmed = confirm(
-                    `Send ${validDrafts.length} ${channel === "email" ? "email(s)" : "DM(s)"}? This action cannot be undone.`
-                  );
-                  if (!confirmed) return;
+                  // First click asks, second click sends: a sent email can't be taken back.
+                  if (confirmingSend !== "all") {
+                    setConfirmingSend("all");
+                    return;
+                  }
+                  setConfirmingSend(null);
 
-                  setSending(true);
-                  setSendProgress(`Sending 0/${validDrafts.length}...`);
+                  startSending("all");
+                  setSendProgress("Queueing…");
 
                   try {
                     const payload = validDrafts.map((d) => ({
@@ -711,33 +1206,45 @@ export default function OutreachPage() {
                         editedDrafts[d.campaignCreatorId]?.body ?? d.body!,
                     }));
 
-                    const res = await fetch("/api/outreach/send", {
+                    const res = await fetch("/api/outreach/queue", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ drafts: payload }),
+                      body: JSON.stringify({ campaignId, drafts: payload }),
                     });
-
-                    const data = await res.json();
-
+                    const data = (await res.json().catch(() => ({}))) as {
+                      queued?: number;
+                      finishesAt?: string | null;
+                      error?: string;
+                    };
                     if (!res.ok) {
-                      alert(data.error || "Send failed");
+                      setNotice({ tone: "error", text: data.error || "Couldn't queue the emails. Nothing was sent." });
                     } else {
-                      setSendProgress("");
-                      alert(
-                        `Send complete: ${data.sent} sent, ${data.failed} failed, ${data.noContact} missing contact info`
-                      );
+                      const queuedSet = new Set(payload.map((p) => p.campaignCreatorId));
+                      setDrafts([]);
+                      setEditedDrafts({});
+                      setSelectedIds((prev) => new Set([...prev].filter((id) => !queuedSet.has(id))));
+                      setStep("choose");
+                      setNotice({
+                        tone: "success",
+                        text: `${data.queued ?? payload.length} emails are queued. They go out one every 3 minutes${
+                          data.finishesAt ? `, finishing around ${clock(data.finishesAt)}` : ""
+                        }. You can close this page.`,
+                      });
+                      await loadQueue();
                     }
                   } catch {
-                    alert("Send request failed");
+                    setNotice({ tone: "error", text: "Couldn't queue the emails. Nothing was sent." });
                   } finally {
-                    setSending(false);
+                    stopSending("all");
                     setSendProgress("");
                   }
                 }}
               >
-                {sending
-                  ? sendProgress || "Sending..."
-                  : `Send All (${drafts.filter((d) => !d.error).length})`}
+                {sendingIds.has("all")
+                  ? sendProgress || "Sending…"
+                  : confirmingSend === "all"
+                    ? `Yes, send ${drafts.filter((d) => !d.error).length}, spaced out`
+                    : `Send all (${drafts.filter((d) => !d.error).length})`}
               </Button>
             </div>
           </CardContent>

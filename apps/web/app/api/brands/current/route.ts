@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicBrand } from "@/lib/brand/public";
 import { prisma } from "@/lib/prisma";
 import {
   getCurrentBrandMembership,
@@ -45,7 +46,7 @@ export async function GET() {
       return NextResponse.json({ error: "Brand not found" }, { status: 404 });
     }
 
-    return NextResponse.json(brand);
+    return NextResponse.json(publicBrand(brand));
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

@@ -5,6 +5,8 @@
  * Handles rate limiting (200 req/hr), retry with exponential backoff, and error parsing.
  */
 
+// Instagram Login tokens use graph.instagram.com; this app connects through
+// Facebook Login for Business, whose tokens only work on graph.facebook.com.
 const GRAPH_BASE = "https://graph.instagram.com";
 const FACEBOOK_GRAPH_BASE = "https://graph.facebook.com/v21.0";
 
@@ -21,6 +23,8 @@ export interface InstagramMedia {
   caption?: string;
   media_type?: string; // IMAGE | VIDEO | CAROUSEL_ALBUM
   media_url?: string;
+  thumbnail_url?: string;
+  username?: string;
   permalink?: string;
   timestamp?: string;
   like_count?: number;
@@ -166,7 +170,7 @@ function sleep(ms: number): Promise<void> {
 export async function getTaggedMedia(
   igUserId: string,
   accessToken: string,
-  fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
+  fields = "id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,username,like_count,comments_count"
 ): Promise<InstagramPaginatedResponse<InstagramMedia>> {
   const params = new URLSearchParams({
     fields,
@@ -174,29 +178,33 @@ export async function getTaggedMedia(
   });
 
   return graphFetch<InstagramPaginatedResponse<InstagramMedia>>(
-    `${GRAPH_BASE}/${igUserId}/tags?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}/tags?${params}`
   );
 }
 
 /**
- * Get media where the user is mentioned (requires media_id from a webhook or tag).
- * GET /{ig-user-id}/mentioned_media
+ * Get a post where the user was @mentioned in the caption (the media ID comes
+ * from a "mentions" webhook).
+ * GET /{ig-user-id}?fields=mentioned_media.media_id({media-id}){fields}
  */
 export async function getMentionedMedia(
   igUserId: string,
   mediaId: string,
   accessToken: string,
-  fields = "id,caption,media_type,media_url,permalink,timestamp,like_count,comments_count"
+  fields = "id,caption,media_type,media_url,timestamp,username,like_count,comments_count"
 ): Promise<InstagramMedia> {
   const params = new URLSearchParams({
-    fields,
-    media_id: mediaId,
+    fields: `mentioned_media.media_id(${mediaId}){${fields}}`,
     access_token: accessToken,
   });
 
-  return graphFetch<InstagramMedia>(
-    `${GRAPH_BASE}/${igUserId}/mentioned_media?${params}`
+  const result = await graphFetch<{ mentioned_media?: InstagramMedia }>(
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}?${params}`
   );
+  if (!result.mentioned_media) {
+    throw new InstagramApiError("Mentioned media not found", 404, "NotFound", 404);
+  }
+  return result.mentioned_media;
 }
 
 /**
@@ -218,7 +226,7 @@ export async function getMediaInsights(
   });
 
   return graphFetch<InstagramPaginatedResponse<InstagramInsight>>(
-    `${GRAPH_BASE}/${mediaId}/insights?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${mediaId}/insights?${params}`
   );
 }
 
@@ -237,7 +245,7 @@ export async function getMediaDetails(
   });
 
   return graphFetch<InstagramMedia>(
-    `${GRAPH_BASE}/${mediaId}?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${mediaId}?${params}`
   );
 }
 
@@ -262,7 +270,7 @@ export async function getUserProfile(
   });
 
   return graphFetch(
-    `${GRAPH_BASE}/${igUserId}?${params}`
+    `${FACEBOOK_GRAPH_BASE}/${igUserId}?${params}`
   );
 }
 
@@ -362,4 +370,58 @@ export async function getUserPages(
   return graphFetch(
     `${FACEBOOK_GRAPH_BASE}/me/accounts?${params}`
   );
+}
+
+/**
+ * Subscribe a Page to the app's webhooks so Instagram story mentions and
+ * caption @mentions for its linked account are delivered.
+ * POST /{page-id}/subscribed_apps
+ */
+export async function subscribePageToWebhooks(
+  pageId: string,
+  pageAccessToken: string
+): Promise<void> {
+  const params = new URLSearchParams({
+    // Any Page field enables the app's Instagram webhooks (mentions, story
+    // mentions); "messages" would need pages_messaging, which we don't use.
+    subscribed_fields: "feed",
+    access_token: pageAccessToken,
+  });
+  await graphFetch<{ success: boolean }>(
+    `${FACEBOOK_GRAPH_BASE}/${pageId}/subscribed_apps?${params}`,
+    { method: "POST" }
+  );
+}
+
+/**
+ * Look up the Instagram username of someone who messaged the account
+ * (story mentions arrive as messages with a scoped sender ID).
+ * GET /{igsid}?fields=username,name
+ */
+export async function getMessagingUser(
+  igScopedId: string,
+  accessToken: string
+): Promise<{ username?: string; name?: string }> {
+  const params = new URLSearchParams({ fields: "username,name", access_token: accessToken });
+  return graphFetch<{ username?: string; name?: string }>(
+    `${FACEBOOK_GRAPH_BASE}/${igScopedId}?${params}`
+  );
+}
+
+/**
+ * Ad accounts the connecting user can manage.
+ * GET /me/adaccounts
+ */
+export async function getAdAccounts(
+  userAccessToken: string
+): Promise<Array<{ id: string; name?: string; account_status?: number }>> {
+  const params = new URLSearchParams({
+    fields: "id,name,account_status",
+    limit: "50",
+    access_token: userAccessToken,
+  });
+  const result = await graphFetch<{ data?: Array<{ id: string; name?: string; account_status?: number }> }>(
+    `${FACEBOOK_GRAPH_BASE}/me/adaccounts?${params}`
+  );
+  return result.data ?? [];
 }

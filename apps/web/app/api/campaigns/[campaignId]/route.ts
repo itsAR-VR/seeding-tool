@@ -11,9 +11,11 @@ type RouteContext = { params: Promise<{ campaignId: string }> };
 /**
  * GET /api/campaigns/:campaignId — Campaign detail with stats.
  */
-export async function GET(_request: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   try {
     const { campaignId } = await context.params;
+    // ?lite=1 skips every creator row, for pages that only need the setup (products, sender).
+    const lite = request.nextUrl.searchParams.get("lite") === "1";
     const membership = await getCurrentBrandMembership();
 
     const campaign = await prisma.campaign.findFirst({
@@ -22,13 +24,15 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         campaignProducts: {
           include: { product: true },
         },
-        campaignCreators: {
-          include: {
-            creator: {
-              include: { profiles: true },
+        campaignCreators: lite
+          ? false
+          : {
+              include: {
+                creator: {
+                  include: { profiles: true },
+                },
+              },
             },
-          },
-        },
       },
     });
 
@@ -40,7 +44,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     }
 
     // Compute stats
-    const creators = campaign.campaignCreators;
+    const creators = campaign.campaignCreators ?? [];
     const stats = {
       total: creators.length,
       pendingReview: creators.filter((c) => c.reviewStatus === "pending")
@@ -57,7 +61,14 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       ).length,
     };
 
-    return NextResponse.json({ ...campaign, stats });
+    // Connected Gmail inboxes this campaign can send from.
+    const senderOptions = await prisma.emailAlias.findMany({
+      where: { brandId: membership.brandId, encryptedRefreshToken: { not: null } },
+      select: { id: true, address: true, isPrimary: true, isPaused: true },
+      orderBy: [{ isPrimary: "desc" }, { address: "asc" }],
+    });
+
+    return NextResponse.json({ ...campaign, stats, senderOptions });
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -95,7 +106,33 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       name?: string;
       description?: string;
       status?: string;
+      senderAliasId?: string | null;
     };
+
+    const CAMPAIGN_STATUSES = ["draft", "active", "paused", "completed", "archived"];
+    if (body.status !== undefined && !CAMPAIGN_STATUSES.includes(body.status)) {
+      return NextResponse.json(
+        { error: "Pick a campaign status: not started, sending, paused, finished, or archived." },
+        { status: 400 }
+      );
+    }
+
+    if (body.senderAliasId) {
+      const alias = await prisma.emailAlias.findFirst({
+        where: {
+          id: body.senderAliasId,
+          brandId: membership.brandId,
+          encryptedRefreshToken: { not: null },
+        },
+        select: { id: true },
+      });
+      if (!alias) {
+        return NextResponse.json(
+          { error: "That Gmail inbox is not connected to this brand" },
+          { status: 400 }
+        );
+      }
+    }
 
     const campaign = await prisma.campaign.update({
       where: { id: campaignId },
@@ -103,6 +140,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
         name: body.name?.trim(),
         description: body.description?.trim(),
         status: body.status,
+        senderAliasId: body.senderAliasId,
       },
     });
 

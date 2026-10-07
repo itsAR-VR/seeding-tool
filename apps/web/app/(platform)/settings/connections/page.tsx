@@ -8,9 +8,13 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { AppIcon } from "@/components/app-icon";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { safeReturnPath } from "@/lib/safe-return-path";
+import { allowanceText, allowanceUsedUp, useSearchAllowance } from "@/components/allowance-left";
 
-import { Button } from "@/components/ui/button";
 import {
   type ConnectionOverviewItem,
   type ConnectionsOverviewResponse,
@@ -24,6 +28,7 @@ import {
   UnipileConnectionCard,
 } from "./provider-cards";
 import {
+  ConnectionStatus,
   ConnectionsErrorState,
   ConnectionsLoadingState,
   ConnectionsReturnBanner,
@@ -58,19 +63,29 @@ function ConnectionsContent({
   const [shopifySaving, setShopifySaving] = useState(false);
   const [instagramLoading, setInstagramLoading] = useState(false);
   const [unipileSaving, setUnipileSaving] = useState(false);
+  // Creator search runs on Apify: ready when the company has a key or may use the shared one.
+  const [searchReady, setSearchReady] = useState<boolean | null>(null);
+  const searchAllowance = useSearchAllowance();
+  const searchUsedUp = allowanceUsedUp(searchAllowance);
+  useEffect(() => {
+    void fetch("/api/settings/apify")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { hasOwnKey?: boolean; usesShared?: boolean } | null) =>
+        setSearchReady(Boolean(d?.hasOwnKey || d?.usesShared)),
+      )
+      .catch(() => setSearchReady(false));
+  }, []);
   const [shopifyForm, setShopifyForm] = useState({
     storeDomain: "",
     accessToken: "",
+    apiSecret: "",
     oauthShop: "",
-  });
-  const [unipileForm, setUnipileForm] = useState({
-    apiKey: "",
-    accountId: "",
   });
 
   const connected = searchParams.get("connected");
   const error = searchParams.get("error");
-  const returnTo = initialReturnTo ?? searchParams.get("returnTo");
+  // Only ever send people back to a path on this site (never "javascript:" or another domain).
+  const returnTo = safeReturnPath(initialReturnTo ?? searchParams.get("returnTo"));
   const authReturnTo = useMemo(() => {
     if (!returnTo) {
       return undefined;
@@ -99,7 +114,7 @@ function ConnectionsContent({
         const body = await res.json().catch(() => null) as { error?: string } | null;
         setLoadError({
           status: res.status,
-          message: body?.error ?? "Failed to load connections",
+          message: body?.error ?? "Couldn't load your connections.",
         });
         setOverview(null);
         return;
@@ -107,7 +122,7 @@ function ConnectionsContent({
 
       setOverview((await res.json()) as ConnectionsOverviewResponse);
     } catch {
-      setLoadError({ status: 0, message: "Network error" });
+      setLoadError({ status: 0, message: "Check your internet connection and try again." });
       setOverview(null);
     } finally {
       setLoading(false);
@@ -125,9 +140,9 @@ function ConnectionsContent({
 
     const provider = connected as IntegrationProvider;
     const textByProvider: Partial<Record<IntegrationProvider, string>> = {
-      gmail: "Gmail connected successfully.",
-      instagram: "Instagram connected successfully.",
-      shopify: "Shopify connected successfully.",
+      gmail: "Gmail is connected.",
+      instagram: "Instagram is connected.",
+      shopify: "Shopify is connected.",
     };
 
     if (textByProvider[provider]) {
@@ -175,15 +190,15 @@ function ConnectionsContent({
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to switch method"));
+        throw new Error(await readErrorMessage(res, "Couldn't switch. Try again."));
       }
 
       setProviderMessage(provider, {
         tone: "success",
         text:
           method === "oauth"
-            ? "Switched to OAuth. Finish reconnecting to activate this provider."
-            : "Switched to manual credentials. Finish setup to activate this provider.",
+            ? "Switched to signing in. Finish connecting to turn it on."
+            : "Switched to pasting a token. Fill in the form below to connect.",
       });
       await refreshConnectionData();
     } catch (methodError) {
@@ -192,7 +207,7 @@ function ConnectionsContent({
         text:
           methodError instanceof Error
             ? methodError.message
-            : "Failed to switch connection method.",
+            : "Couldn't switch. Try again.",
       });
     } finally {
       setSwitchingProvider(null);
@@ -210,7 +225,7 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Instagram")
+          await readErrorMessage(res, "Couldn't disconnect Instagram. Try again.")
         );
       }
 
@@ -225,7 +240,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Instagram.",
+            : "Couldn't disconnect Instagram. Try again.",
       });
     } finally {
       setInstagramLoading(false);
@@ -248,11 +263,12 @@ function ConnectionsContent({
         body: JSON.stringify({
           storeDomain: shopifyForm.storeDomain.trim(),
           accessToken: shopifyForm.accessToken.trim(),
+          apiSecret: shopifyForm.apiSecret.trim(),
         }),
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to connect Shopify"));
+        throw new Error(await readErrorMessage(res, "Couldn't connect Shopify. Check the store address and token, then try again."));
       }
 
       const data = (await res.json()) as { storeDomain?: string };
@@ -262,10 +278,11 @@ function ConnectionsContent({
         ...current,
         storeDomain: savedStoreDomain,
         accessToken: "",
+        apiSecret: "",
       }));
       setProviderMessage("shopify", {
         tone: "success",
-        text: `Shopify connected to ${savedStoreDomain}.`,
+        text: "Shopify is connected to your store.",
       });
       await refreshConnectionData();
     } catch (saveError) {
@@ -274,7 +291,7 @@ function ConnectionsContent({
         text:
           saveError instanceof Error
             ? saveError.message
-            : "Failed to connect Shopify.",
+            : "Couldn't connect Shopify. Check the store address and token, then try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -292,7 +309,7 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Shopify")
+          await readErrorMessage(res, "Couldn't disconnect Shopify. Try again.")
         );
       }
 
@@ -307,7 +324,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Shopify.",
+            : "Couldn't disconnect Shopify. Try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -324,7 +341,7 @@ function ConnectionsContent({
       });
 
       if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to sync products"));
+        throw new Error(await readErrorMessage(res, "Couldn't update your products. Try again."));
       }
 
       const data = (await res.json()) as {
@@ -335,8 +352,8 @@ function ConnectionsContent({
       setProviderMessage("shopify", {
         tone: "success",
         text: data.truncated
-          ? `Shopify sync completed with a partial catalog (${data.synced} products).`
-          : `Shopify sync completed (${data.synced} products).`,
+          ? `Updated ${data.synced} products. Some products were skipped.`
+          : `Updated ${data.synced} products.`,
       });
       await refreshConnectionData();
     } catch (syncError) {
@@ -345,7 +362,7 @@ function ConnectionsContent({
         text:
           syncError instanceof Error
             ? syncError.message
-            : "Failed to sync products.",
+            : "Couldn't update your products. Try again.",
       });
     } finally {
       setShopifySaving(false);
@@ -365,47 +382,6 @@ function ConnectionsContent({
     return `/api/auth/shopify?${params.toString()}`;
   }
 
-  async function handleSaveUnipile() {
-    if (!overview?.brand.id || !unipileForm.apiKey.trim()) {
-      return;
-    }
-
-    setUnipileSaving(true);
-    setProviderMessage("unipile", null);
-
-    try {
-      const res = await fetch("/api/connections/unipile", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey: unipileForm.apiKey.trim(),
-          accountId: unipileForm.accountId.trim() || undefined,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(await readErrorMessage(res, "Failed to save Unipile"));
-      }
-
-      setProviderMessage("unipile", {
-        tone: "success",
-        text: "Unipile connected successfully.",
-      });
-      setUnipileForm({ apiKey: "", accountId: "" });
-      await refreshConnectionData();
-    } catch (saveError) {
-      setProviderMessage("unipile", {
-        tone: "error",
-        text:
-          saveError instanceof Error
-            ? saveError.message
-            : "Network error saving credentials.",
-      });
-    } finally {
-      setUnipileSaving(false);
-    }
-  }
-
   async function handleDisconnectUnipile() {
     setUnipileSaving(true);
     setProviderMessage("unipile", null);
@@ -417,13 +393,13 @@ function ConnectionsContent({
 
       if (!res.ok) {
         throw new Error(
-          await readErrorMessage(res, "Failed to disconnect Unipile")
+          await readErrorMessage(res, "Couldn't disconnect Instagram messages. Try again.")
         );
       }
 
       setProviderMessage("unipile", {
         tone: "success",
-        text: "Unipile disconnected.",
+        text: "Instagram messages disconnected.",
       });
       await refreshConnectionData();
     } catch (disconnectError) {
@@ -432,7 +408,7 @@ function ConnectionsContent({
         text:
           disconnectError instanceof Error
             ? disconnectError.message
-            : "Failed to disconnect Unipile.",
+            : "Couldn't disconnect Instagram messages. Try again.",
       });
     } finally {
       setUnipileSaving(false);
@@ -461,16 +437,19 @@ function ConnectionsContent({
   const unipile = getProvider("unipile");
 
   const errorText = getConnectionErrorText(error);
+  const mainProviders = [gmail, instagram, shopify].filter(Boolean);
+  const connectedCount = mainProviders.filter((p) => p?.connected).length + (searchReady ? 1 : 0);
+  const totalCount = mainProviders.length + 1;
 
   return (
-    <div className={embedded ? "space-y-4" : "space-y-6"}>
+    <div className={embedded ? "space-y-4" : "space-y-8"}>
       {!embedded && (
-        <div>
+        <header>
           <h1 className="text-3xl font-bold tracking-tight">Connections</h1>
-          <p className="text-muted-foreground">
-            Manage your connected services and choose how each provider authenticates.
+          <p className="mt-1 text-muted-foreground">
+            The accounts this tool sends email from, creates orders in, and finds posts in.
           </p>
-        </div>
+        </header>
       )}
 
       {showSupportCta && <ConnectionsSupportBanner />}
@@ -485,12 +464,23 @@ function ConnectionsContent({
       )}
 
       {errorText && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          Connection failed: {errorText}
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          That didn&apos;t connect. {errorText}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {!embedded && (
+        <p className="font-medium">
+          {connectedCount} of {totalCount} connected
+          {connectedCount < totalCount
+            ? ". Connect the rest when you're ready."
+            : searchUsedUp
+              ? ". Creator search is used up for this month."
+              : ". You're all set."}
+        </p>
+      )}
+
+      <div className="grid max-w-3xl gap-4">
         {gmail && (
           <GmailConnectionCard
             provider={gmail}
@@ -503,36 +493,6 @@ function ConnectionsContent({
                 params.set("returnTo", authReturnTo);
               }
               window.location.href = `/api/auth/gmail?${params.toString()}`;
-            }}
-          />
-        )}
-
-        {shopify && (
-          <ShopifyConnectionCard
-            provider={shopify}
-            message={messages.shopify ?? null}
-            switching={switchingProvider === "shopify"}
-            saving={shopifySaving}
-            storeDomain={shopifyForm.storeDomain}
-            accessToken={shopifyForm.accessToken}
-            oauthShop={shopifyForm.oauthShop}
-            onMethodChange={(method) => void handleMethodChange("shopify", method)}
-            onStoreDomainChange={(value) =>
-              setShopifyForm((current) => ({ ...current, storeDomain: value }))
-            }
-            onAccessTokenChange={(value) =>
-              setShopifyForm((current) => ({ ...current, accessToken: value }))
-            }
-            onOauthShopChange={(value) =>
-              setShopifyForm((current) => ({ ...current, oauthShop: value }))
-            }
-            onSave={(event) => void handleSaveShopify(event)}
-            onDisconnect={() => void handleDisconnectShopify()}
-            onSync={() => void handleSyncShopify()}
-            onOAuthConnect={() => {
-              window.location.href = buildShopifyOAuthUrl(
-                brandIdOverride ?? overview.brand.id,
-              );
             }}
           />
         )}
@@ -555,20 +515,83 @@ function ConnectionsContent({
           />
         )}
 
-        {unipile && (
+        {shopify && (
+          <ShopifyConnectionCard
+            provider={shopify}
+            message={messages.shopify ?? null}
+            switching={switchingProvider === "shopify"}
+            saving={shopifySaving}
+            storeDomain={shopifyForm.storeDomain}
+            accessToken={shopifyForm.accessToken}
+            apiSecret={shopifyForm.apiSecret}
+            onApiSecretChange={(value) =>
+              setShopifyForm((current) => ({ ...current, apiSecret: value }))
+            }
+            oauthShop={shopifyForm.oauthShop}
+            onMethodChange={(method) => void handleMethodChange("shopify", method)}
+            onStoreDomainChange={(value) =>
+              setShopifyForm((current) => ({ ...current, storeDomain: value }))
+            }
+            onAccessTokenChange={(value) =>
+              setShopifyForm((current) => ({ ...current, accessToken: value }))
+            }
+            onOauthShopChange={(value) =>
+              setShopifyForm((current) => ({ ...current, oauthShop: value }))
+            }
+            onSave={(event) => void handleSaveShopify(event)}
+            onDisconnect={() => void handleDisconnectShopify()}
+            onSync={() => void handleSyncShopify()}
+            onOAuthConnect={() => {
+              window.location.href = buildShopifyOAuthUrl(
+                brandIdOverride ?? overview.brand.id,
+              );
+            }}
+          />
+        )}
+
+        <section className="rounded-xl border bg-card" aria-labelledby="conn-search">
+          <div className="flex items-start gap-4 p-5">
+            <AppIcon name="search" />
+            <div className="min-w-0 flex-1 space-y-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="conn-search" className="text-lg font-semibold">
+                  Creator search
+                </h2>
+                <ConnectionStatus
+                  connected={searchReady === true && !searchUsedUp}
+                  tone={searchReady === false || searchUsedUp ? "waiting" : undefined}
+                  label={
+                    searchReady === null
+                      ? "Checking..."
+                      : !searchReady
+                        ? "Needs a key"
+                        : searchUsedUp
+                          ? "Used up this month"
+                          : "Ready"
+                  }
+                />
+              </div>
+              <p className="text-muted-foreground">Finds creators on Instagram and Collabstr, with their emails.</p>
+              {searchAllowance && searchReady && (
+                <p className={searchUsedUp ? "text-sm font-medium text-destructive" : "text-sm"}>
+                  {allowanceText(searchAllowance)}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="border-t px-5 py-4">
+            <Link href="/settings/creator-search" className={buttonVariants({ variant: "outline" })}>
+              {searchReady ? "Manage creator search" : "Set up creator search"}
+            </Link>
+          </div>
+        </section>
+
+        {/* Unipile is an extra paid service. Only show it to brands that already connected it. */}
+        {unipile && unipile.connected && (
           <UnipileConnectionCard
             provider={unipile}
             message={messages.unipile ?? null}
             saving={unipileSaving}
-            apiKey={unipileForm.apiKey}
-            accountId={unipileForm.accountId}
-            onApiKeyChange={(value) =>
-              setUnipileForm((current) => ({ ...current, apiKey: value }))
-            }
-            onAccountIdChange={(value) =>
-              setUnipileForm((current) => ({ ...current, accountId: value }))
-            }
-            onSave={() => void handleSaveUnipile()}
             onDisconnect={() => void handleDisconnectUnipile()}
           />
         )}

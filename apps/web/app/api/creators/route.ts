@@ -22,6 +22,8 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get("category");
     const source = searchParams.get("source");
     const includeInvalid = searchParams.get("includeInvalid") === "1";
+    // Filter options scan every creator, so only build them when asked.
+    const includeFacets = searchParams.get("includeFacets") === "1";
     const page = parseInt(searchParams.get("page") ?? "1", 10);
     const limit = Math.min(
       parseInt(searchParams.get("limit") ?? "50", 10),
@@ -97,7 +99,9 @@ export async function GET(request: NextRequest) {
         take: limit,
       }),
       prisma.creator.count({ where }),
-      prisma.creator.findMany({
+      !includeFacets
+        ? Promise.resolve(null)
+        : prisma.creator.findMany({
         where: includeInvalid
           ? { brandId: membership.brandId }
           : {
@@ -121,7 +125,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       creators,
-      facets: buildCreatorFacets(facetRows),
+      facets: facetRows ? buildCreatorFacets(facetRows) : undefined,
       pagination: {
         page,
         limit,

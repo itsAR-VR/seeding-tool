@@ -2,7 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
-import { getUserBySupabaseId } from "@/lib/tenancy";
+import { getOrAcceptInvitedUser } from "@/lib/invite-user";
 import { prisma } from "@/lib/prisma";
 
 // ── Constants ───────────────────────────────────────────────
@@ -86,7 +86,7 @@ export function requireOwnerAccess(
 
 // ── Auth helpers ────────────────────────────────────────────
 
-async function getCurrentUserRecord() {
+export async function getCurrentUserRecord() {
   const supabase = await createClient();
   const {
     data: { user: authUser },
@@ -96,7 +96,9 @@ async function getCurrentUserRecord() {
     throw new BrandAccessError("Unauthorized", 401);
   }
 
-  const user = await getUserBySupabaseId(authUser.id);
+  // Also joins an open invite for someone who signed in from their invite
+  // email but never pressed "Accept invite", so no page strands them.
+  const user = await getOrAcceptInvitedUser(authUser);
   if (!user) {
     throw new BrandAccessError("User not found", 404);
   }
@@ -111,7 +113,10 @@ async function getCurrentUserRecord() {
  *
  * Resolution order:
  * 1. If `seed-active-brand` cookie is set, look up membership for that brand.
- * 2. Otherwise, fall back to the user's oldest brand (backward compat).
+ * 2. Otherwise, or when the cookie names a company they're no longer in (or
+ *    another account's company on a shared browser), fall back to the user's
+ *    oldest brand. Only ever the user's own memberships, so nothing leaks;
+ *    and a stale cookie can't loop pages between Home and setup.
  *
  * Uses cookies (not headers) so RSC pages can also resolve the brand.
  */
@@ -123,14 +128,17 @@ export async function getCurrentBrandMembership(
   const cookieStore = await cookies();
   const brandId = cookieStore.get(BRAND_COOKIE_NAME)?.value;
 
-  const membership = brandId
+  const chosen = brandId
     ? await prisma.brandMembership.findUnique({
         where: { userId_brandId: { userId: user.id, brandId } },
       })
-    : await prisma.brandMembership.findFirst({
-        where: { userId: user.id },
-        orderBy: { createdAt: "asc" },
-      });
+    : null;
+  const membership =
+    chosen ??
+    (await prisma.brandMembership.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    }));
 
   if (!membership) {
     throw new BrandAccessError("No brand found", 404);

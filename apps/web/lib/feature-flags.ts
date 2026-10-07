@@ -21,6 +21,8 @@ export interface FeatureFlags {
   portfolioOptimizerEnabled: boolean;
   outcomeLearningEnabled: boolean;
   instagramMentionPollEnabled: boolean;
+  /** Creator claim-form submissions create a Shopify draft order right away (never completed). */
+  claimAutoDraftEnabled: boolean;
 }
 
 export const DEFAULT_FLAGS: FeatureFlags = {
@@ -34,6 +36,7 @@ export const DEFAULT_FLAGS: FeatureFlags = {
   portfolioOptimizerEnabled: false,
   outcomeLearningEnabled: false,
   instagramMentionPollEnabled: true,
+  claimAutoDraftEnabled: false,
 };
 
 /**

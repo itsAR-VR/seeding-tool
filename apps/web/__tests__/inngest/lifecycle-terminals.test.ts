@@ -65,10 +65,12 @@ vi.mock("@/lib/prisma", () => ({
       findMany: mocks.fulfillmentEventFindMany,
       update: mocks.fulfillmentEventUpdate,
       upsert: mocks.fulfillmentEventUpsert,
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     shopifyOrder: {
       update: mocks.shopifyOrderUpdate,
       findUnique: mocks.shopifyOrderFindUnique,
+      findFirst: mocks.shopifyOrderFindUnique,
     },
     campaignCreator: {
       update: mocks.campaignCreatorUpdate,

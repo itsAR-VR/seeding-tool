@@ -30,13 +30,14 @@ const mockPrisma = {
     findFirst: vi.fn().mockResolvedValue({ brandId: "brand-1" }),
   },
   shopifyOrder: {
-    findUnique: vi.fn().mockResolvedValue(null),
+    findFirst: vi.fn().mockResolvedValue(null),
     update: vi.fn().mockResolvedValue({}),
   },
   campaignCreator: {
     update: vi.fn().mockResolvedValue({}),
   },
   fulfillmentEvent: {
+    findUnique: vi.fn().mockResolvedValue(null),
     upsert: vi.fn().mockResolvedValue({}),
   },
 };
@@ -109,13 +110,13 @@ describe("Shopify webhook handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPrisma.webhookEvent.findUnique.mockResolvedValue(null);
-    mockPrisma.shopifyOrder.findUnique.mockResolvedValue(null);
+    mockPrisma.shopifyOrder.findFirst.mockResolvedValue(null);
     mockPrisma.brandConnection.findFirst.mockResolvedValue({ brandId: "brand-1" });
   });
 
   describe("orders/create", () => {
     it("updates ShopifyOrder status to processing when order exists", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
         status: "created",
@@ -127,7 +128,7 @@ describe("Shopify webhook handler", () => {
       expect(res.status).toBe(200);
       expect(mockPrisma.shopifyOrder.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { shopifyOrderId: "12345678" },
+          where: { id: "so-1" },
           data: expect.objectContaining({ status: "processing" }),
         })
       );
@@ -143,7 +144,7 @@ describe("Shopify webhook handler", () => {
 
   describe("orders/fulfilled", () => {
     it("updates order to shipped and updates CampaignCreator lifecycle", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
         campaignCreatorId: "cc-1",
@@ -161,7 +162,7 @@ describe("Shopify webhook handler", () => {
       expect(res.status).toBe(200);
       expect(mockPrisma.shopifyOrder.update).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { shopifyOrderId: "12345678" },
+          where: { id: "so-1" },
           data: { status: "shipped" },
         })
       );
@@ -174,7 +175,7 @@ describe("Shopify webhook handler", () => {
     });
 
     it("does not downgrade lifecycle if already delivered/posted/completed", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
         campaignCreatorId: "cc-1",
@@ -196,7 +197,7 @@ describe("Shopify webhook handler", () => {
 
   describe("orders/updated", () => {
     it("syncs cancelled_at to cancelled status", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
         status: "processing",
@@ -218,7 +219,7 @@ describe("Shopify webhook handler", () => {
 
   describe("fulfillments/create", () => {
     it("creates FulfillmentEvent with tracking info", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
       });
@@ -241,7 +242,7 @@ describe("Shopify webhook handler", () => {
 
   describe("fulfillments/update", () => {
     it("detects delivery and updates order + lifecycle", async () => {
-      mockPrisma.shopifyOrder.findUnique.mockResolvedValue({
+      mockPrisma.shopifyOrder.findFirst.mockResolvedValue({
         id: "so-1",
         shopifyOrderId: "12345678",
         campaignCreatorId: "cc-1",

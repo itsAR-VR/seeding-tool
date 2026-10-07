@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { InstagramHandleLink } from "@/components/instagram-handle-link";
+import { sourceLabel } from "../../../creators/components/creator-filters";
 
 type Creator = {
   id: string;
@@ -40,16 +41,20 @@ export default function CampaignImportPage() {
     invalid: number;
   } | null>(null);
   const [campaignName, setCampaignName] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       // Fetch all brand creators
       const creatorsRes = await fetch("/api/creators?limit=100");
-      if (creatorsRes.ok) {
-        const data = await creatorsRes.json();
+      if (!creatorsRes.ok) {
+        setError("Couldn't load your creators. Refresh the page to try again.");
+      } else {
+        const data = (await creatorsRes.json()) as { creators?: Creator[] };
         // Filter out creators already in this campaign
-        const available = (data.creators as Creator[]).filter(
+        const available = (data.creators ?? []).filter(
           (c) =>
             !c.campaignCreators.some(
               (cc) => cc.campaignId === params.campaignId
@@ -59,15 +64,13 @@ export default function CampaignImportPage() {
       }
 
       // Fetch campaign name
-      const campaignRes = await fetch(
-        `/api/campaigns/${params.campaignId}/creators?reviewStatus=pending`
-      );
+      const campaignRes = await fetch(`/api/campaigns/${params.campaignId}`);
       if (campaignRes.ok) {
-        // We just need to know the campaign exists
-        setCampaignName(params.campaignId);
+        const campaign = (await campaignRes.json()) as { name?: string };
+        setCampaignName(campaign.name ?? "");
       }
     } catch {
-      // ignore
+      setError("Couldn't load your creators. Check your connection and refresh the page.");
     } finally {
       setLoading(false);
     }
@@ -101,6 +104,7 @@ export default function CampaignImportPage() {
     if (selected.size === 0) return;
 
     setImporting(true);
+    setError(null);
     try {
       const res = await fetch(
         `/api/campaigns/${params.campaignId}/import`,
@@ -117,9 +121,12 @@ export default function CampaignImportPage() {
         setSelected(new Set());
         // Refresh list to remove imported creators
         fetchData();
+      } else {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(data?.error ?? "Couldn't add those creators. Try again.");
       }
     } catch {
-      alert("Import failed");
+      setError("Couldn't add those creators. Check your connection and try again.");
     } finally {
       setImporting(false);
     }
@@ -135,66 +142,76 @@ export default function CampaignImportPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Import Creators to Campaign
-          </h1>
-          <p className="text-muted-foreground">
-            Select existing creators to add to campaign {campaignName}.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          onClick={() =>
-            router.push(`/campaigns/${params.campaignId}`)
-          }
-        >
-          ← Back to Campaign
-        </Button>
-      </div>
+      <header>
+        <h2 className="text-2xl font-semibold tracking-tight">Add creators from your list</h2>
+        <p className="mt-1 text-muted-foreground">
+          Pick creators you already saved to add them to{" "}
+          {campaignName ? campaignName : "this campaign"}.
+        </p>
+      </header>
+
+      {error && (
+        <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-800">
+          {error}
+        </p>
+      )}
 
       {result && (
-        <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-          ✅ {result.added} creators added, {result.skipped} already in
-          campaign, {result.invalid} invalid
+        <div role="status" className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-sm text-green-800">
+          {result.added} added. {result.skipped} were already in this campaign
+          {result.invalid > 0 ? `, ${result.invalid} couldn't be added` : ""}.
         </div>
       )}
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">
-              Available Creators ({creators.length})
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-lg">
+              Saved creators not in this campaign ({creators.length})
             </CardTitle>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={toggleAll}>
-                {selected.size === creators.length
-                  ? "Deselect All"
-                  : "Select All"}
+                {selected.size === creators.length && creators.length > 0
+                  ? "Unselect all"
+                  : "Select all"}
               </Button>
               <Button
                 size="sm"
                 onClick={handleImport}
+                aria-describedby={selected.size === 0 && creators.length > 0 ? "import-hint" : undefined}
                 disabled={selected.size === 0 || importing}
               >
                 {importing
                   ? "Adding…"
-                  : `Add ${selected.size} Selected to Campaign`}
+                  : `Add ${selected.size} to campaign`}
               </Button>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Avg Views means the average of the latest 12 reels/video posts when
-            that enrichment is available.
+          {selected.size === 0 && creators.length > 0 && (
+            <p id="import-hint" className="text-sm text-muted-foreground">
+              Pick at least one creator to add
+            </p>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Average views is from their latest 12 videos, when we have it.
           </p>
         </CardHeader>
         <CardContent>
           {creators.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              All creators are already in this campaign, or no creators exist
-              yet.
-            </p>
+            <div className="space-y-3 py-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                No saved creators to add. Everyone you saved is already in this campaign, or you
+                haven&apos;t saved any yet.
+              </p>
+              <div className="flex justify-center gap-2">
+                <Button size="sm" onClick={() => router.push(`/campaigns/${params.campaignId}/discover`)}>
+                  Find creators
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => router.push("/creators/import")}>
+                  Upload a list
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -203,6 +220,7 @@ export default function CampaignImportPage() {
                     <th className="pb-2 pr-4 w-8">
                       <input
                         type="checkbox"
+                        aria-label="Select all creators"
                         checked={
                           selected.size === creators.length &&
                           creators.length > 0
@@ -212,7 +230,7 @@ export default function CampaignImportPage() {
                     </th>
                     <th className="pb-2 pr-4 font-medium">Handle</th>
                     <th className="pb-2 pr-4 font-medium">Followers</th>
-                    <th className="pb-2 pr-4 font-medium">Avg Views</th>
+                    <th className="pb-2 pr-4 font-medium">Average views</th>
                     <th className="pb-2 pr-4 font-medium">Category</th>
                     <th className="pb-2 font-medium">Source</th>
                   </tr>
@@ -227,13 +245,15 @@ export default function CampaignImportPage() {
                       <tr
                         key={creator.id}
                         className={`border-b cursor-pointer ${
-                          selected.has(creator.id) ? "bg-blue-50" : ""
+                          selected.has(creator.id) ? "bg-muted" : ""
                         }`}
                         onClick={() => toggleSelect(creator.id)}
                       >
                       <td className="py-2 pr-4">
                         <input
                           type="checkbox"
+                          aria-label={`Select ${creator.instagramHandle ?? creator.name ?? "creator"}`}
+                          onClick={(e) => e.stopPropagation()}
                           checked={selected.has(creator.id)}
                           onChange={() => toggleSelect(creator.id)}
                         />
@@ -242,25 +262,25 @@ export default function CampaignImportPage() {
                         <InstagramHandleLink
                           handle={creator.instagramHandle}
                           url={instagramProfile?.url}
-                          className="font-mono text-xs text-blue-600 hover:underline"
+                          className="font-medium hover:underline"
                         >
                           {creator.instagramHandle
                             ? `@${creator.instagramHandle.replace(/^@/, "")}`
-                            : creator.name || "—"}
+                            : creator.name || "Unnamed creator"}
                         </InstagramHandleLink>
                       </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.followerCount?.toLocaleString() ?? "—"}
+                      <td className="py-2 pr-4">
+                        {creator.followerCount?.toLocaleString() ?? <span className="text-muted-foreground">Not known</span>}
                       </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.avgViews?.toLocaleString() ?? "—"}
+                      <td className="py-2 pr-4">
+                        {creator.avgViews?.toLocaleString() ?? <span className="text-muted-foreground">Not known</span>}
                       </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {creator.bioCategory || "—"}
+                      <td className="py-2 pr-4">
+                        {creator.bioCategory || <span className="text-muted-foreground">Not set</span>}
                       </td>
                       <td className="py-2">
-                        <Badge variant="outline" className="text-xs">
-                          {creator.discoverySource}
+                        <Badge variant="outline">
+                          {sourceLabel(creator.discoverySource)}
                         </Badge>
                       </td>
                       </tr>

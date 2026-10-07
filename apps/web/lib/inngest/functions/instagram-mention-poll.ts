@@ -150,12 +150,11 @@ export const instagramMentionPoll = inngest.createFunction(
                 for (const media of page.data) {
                   if (!media.permalink) continue;
 
-                  const existing = await prisma.mentionAsset.findUnique({
+                  const existing = await prisma.mentionAsset.findFirst({
                     where: {
-                      platform_mediaUrl: {
-                        platform: "instagram",
-                        mediaUrl: media.permalink,
-                      },
+                      platform: "instagram",
+                      mediaUrl: media.permalink,
+                      campaignCreator: { campaign: { brandId: cred.brandId } },
                     },
                   });
 

@@ -125,10 +125,11 @@ export async function GET(request: NextRequest) {
         externalId: emailAddress,
       });
 
-      // Newest connected Gmail becomes the primary sender for this phase.
-      await tx.emailAlias.updateMany({
-        where: { brandId },
-        data: { isPrimary: false },
+      // First connected Gmail becomes the primary sender. Additional inboxes
+      // keep their own token and can be chosen per campaign.
+      const existingPrimary = await tx.emailAlias.findFirst({
+        where: { brandId, isPrimary: true, NOT: { address: emailAddress } },
+        select: { id: true },
       });
 
       await tx.emailAlias.upsert({
@@ -139,13 +140,14 @@ export async function GET(request: NextRequest) {
           brandId,
           address: emailAddress,
           displayName: emailAddress.split("@")[0],
-          isPrimary: true,
+          isPrimary: !existingPrimary,
           isWarmedUp: false,
           warmupStartedAt: new Date(),
+          encryptedRefreshToken,
         },
         update: {
-          displayName: emailAddress.split("@")[0],
-          isPrimary: true,
+          encryptedRefreshToken,
+          ...(existingPrimary ? {} : { isPrimary: true }),
         },
       });
     });

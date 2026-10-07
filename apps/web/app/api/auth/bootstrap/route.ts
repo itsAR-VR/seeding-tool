@@ -1,55 +1,44 @@
 import { NextResponse } from "next/server";
 import { addGoogleTestUser } from "@/lib/google/oauth-admin";
-import { bootstrapNewUser, getUserBySupabaseId } from "@/lib/tenancy";
+import { ensureAppUser, getOrAcceptInvitedUser } from "@/lib/invite-user";
 import { createClient } from "@/lib/supabase/server";
 
 /**
  * POST /api/auth/bootstrap
  * Called after Supabase signup to create User + Organization + Membership.
  *
- * Body: { supabaseUserId: string, email: string, orgName: string }
- *
- * Security: we trust the *server-side* Supabase session over the client-
- * supplied supabaseUserId. If a session cookie is present and valid, we
- * use that user's ID (prevents ghost-user mismatch when Supabase returns
- * a fake ID for duplicate-email signups with email confirmation on).
+ * Body: { orgName?: string }. The user comes only from the server session.
  */
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { supabaseUserId: clientUserId, email: clientEmail, orgName } = body;
+    const body = (await request.json().catch(() => ({}))) as { orgName?: string };
+    const { orgName } = body;
 
-    // Prefer the server-verified session user over the client-supplied ID
+    // Only the signed-in, confirmed user can be bootstrapped. Never trust an
+    // id or email from the request body: that would let anyone claim an email.
     const supabase = await createClient();
     const { data: { user: sessionUser } } = await supabase.auth.getUser();
-
-    const supabaseUserId = sessionUser?.id ?? clientUserId;
-    const email = sessionUser?.email ?? clientEmail;
-
-    if (!supabaseUserId || !email) {
-      return NextResponse.json(
-        { error: "supabaseUserId and email are required" },
-        { status: 400 }
-      );
+    if (!sessionUser?.email || !sessionUser.email_confirmed_at) {
+      return NextResponse.json({ error: "Sign in first" }, { status: 401 });
     }
+    const supabaseUserId = sessionUser.id;
+    const email = sessionUser.email;
 
-    // Idempotency: if user already exists, skip bootstrap
-    const existing = await getUserBySupabaseId(supabaseUserId);
+    // Existing user, or an invitee who set a password but never pressed
+    // "Accept invite": join their invite now instead of making an empty
+    // account that would leave the invite unused.
+    const existing = await getOrAcceptInvitedUser(sessionUser);
     if (existing) {
       return NextResponse.json({ ok: true, userId: existing.id });
     }
 
-    const { user, org } = await bootstrapNewUser(
-      supabaseUserId,
-      email,
-      orgName || email.split("@")[0]
-    );
+    const user = await ensureAppUser(supabaseUserId, email, orgName || email.split("@")[0]);
 
     addGoogleTestUser(email).catch((error) =>
       console.warn("Failed to add Google test user", error)
     );
 
-    return NextResponse.json({ ok: true, userId: user.id, orgId: org.id });
+    return NextResponse.json({ ok: true, userId: user.id });
   } catch (err) {
     console.error("[auth/bootstrap]", err);
     return NextResponse.json(

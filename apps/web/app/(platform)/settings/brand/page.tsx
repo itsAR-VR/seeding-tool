@@ -1,14 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -33,6 +27,16 @@ interface ApprovalSettings {
   approvalThreshold: number;
 }
 
+const MATCH_LEVELS: Array<{ value: number; label: string; help: string }> = [
+  {
+    value: 0.85,
+    label: "Strict",
+    help: "Only very close matches. Fewer creators.",
+  },
+  { value: 0.75, label: "Balanced", help: "A good place to start." },
+  { value: 0.6, label: "Broad", help: "More creators, more to sort through." },
+];
+
 export default function BrandSettingsPage() {
   const [brand, setBrand] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,10 +50,8 @@ export default function BrandSettingsPage() {
   const [logoUrl, setLogoUrl] = useState("");
 
   // Approval settings state
-  const [approvalSettings, setApprovalSettings] =
-    useState<ApprovalSettings | null>(null);
   const [approvalMode, setApprovalMode] = useState<"auto" | "recommend">(
-    "recommend"
+    "recommend",
   );
   const [approvalThreshold, setApprovalThreshold] = useState(0.75);
   const [approvalSaving, setApprovalSaving] = useState(false);
@@ -61,11 +63,10 @@ export default function BrandSettingsPage() {
       const res = await fetch("/api/settings/approval");
       if (!res.ok) return;
       const data = (await res.json()) as ApprovalSettings;
-      setApprovalSettings(data);
       setApprovalMode(data.approvalMode);
       setApprovalThreshold(data.approvalThreshold);
     } catch {
-      // non-fatal — approval section shows with defaults
+      // Non-fatal: the section shows with defaults.
     }
   }, []);
 
@@ -93,14 +94,23 @@ export default function BrandSettingsPage() {
       const logoMatch = voice.match(/Logo URL: (.+)/);
       if (logoMatch) setLogoUrl(logoMatch[1]);
     } catch {
-      setError("Failed to load brand settings");
+      setError(
+        "Couldn't load your brand details. Refresh the page to try again.",
+      );
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleSave(e: React.FormEvent) {
+  /** One Save for the whole page: brand details and the approval choice together. */
+  async function handleSaveAll(e: React.FormEvent) {
     e.preventDefault();
+    setMessage("");
+    setApprovalMessage("");
+    await Promise.all([handleSave(), handleApprovalSave()]);
+  }
+
+  async function handleSave() {
     if (!brand) return;
 
     setSaving(true);
@@ -120,27 +130,29 @@ export default function BrandSettingsPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Failed to save");
+        throw new Error(
+          data.error ?? "Couldn't save. Check the details and try again.",
+        );
       }
 
-      setMessage("Settings saved successfully");
+      setMessage("Saved.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(
+        err instanceof Error ? err.message : "Couldn't save. Try again.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleApprovalSave(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleApprovalSave() {
     setApprovalSaving(true);
     setApprovalMessage("");
     setApprovalError("");
 
-    // Validate threshold
     const t = Number(approvalThreshold);
     if (isNaN(t) || t <= 0 || t > 1) {
-      setApprovalError("Threshold must be between 0.01 and 1.00");
+      setApprovalError("Pick how close a match should be, then save again.");
       setApprovalSaving(false);
       return;
     }
@@ -149,25 +161,23 @@ export default function BrandSettingsPage() {
       const res = await fetch("/api/settings/approval", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          approvalMode,
-          approvalThreshold: t,
-        }),
+        body: JSON.stringify({ approvalMode, approvalThreshold: t }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error ?? "Failed to save approval settings");
+        throw new Error(data.error ?? "Couldn't save. Try again.");
       }
 
       const updated = (await res.json()) as ApprovalSettings;
-      setApprovalSettings(updated);
       setApprovalMode(updated.approvalMode);
       setApprovalThreshold(updated.approvalThreshold);
-      setApprovalMessage("Approval settings saved");
+      setApprovalMessage(
+        "New creator choices apply to your next creator search.",
+      );
     } catch (err) {
       setApprovalError(
-        err instanceof Error ? err.message : "Something went wrong"
+        err instanceof Error ? err.message : "Couldn't save. Try again.",
       );
     } finally {
       setApprovalSaving(false);
@@ -177,51 +187,51 @@ export default function BrandSettingsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground">Loading…</p>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     );
   }
 
   if (!brand) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Brand Settings</h1>
-        <Card>
-          <CardContent className="py-8 text-center">
-            <p className="text-muted-foreground">
-              No brand found. Complete onboarding first.
-            </p>
-            <Button
-              className="mt-4"
-              onClick={() => (window.location.href = "/onboarding")}
+      <div className="space-y-8">
+        <header>
+          <h1 className="text-3xl font-bold tracking-tight">Company details</h1>
+        </header>
+        <section className="rounded-xl border bg-card p-6 text-center">
+          <p className="text-muted-foreground">
+            {error || "You haven't set up your brand yet."}
+          </p>
+          {!error && (
+            <Link
+              href="/onboarding"
+              className="mt-4 inline-block rounded-lg bg-foreground px-4 py-2 font-medium text-background"
             >
-              Start Onboarding
-            </Button>
-          </CardContent>
-        </Card>
+              Set up your brand
+            </Link>
+          )}
+        </section>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Brand Settings</h1>
-        <p className="text-muted-foreground">
-          Update your brand information and preferences.
-        </p>
-      </div>
+  const matchPercent = Math.round(approvalThreshold * 100);
 
-      {/* ── Brand Information ────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Brand Information</CardTitle>
-          <CardDescription>Basic details about your brand.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSave} className="space-y-4">
+  return (
+    <div className="space-y-8">
+      <header>
+        <h1 className="text-3xl font-bold tracking-tight">Company details</h1>
+        <p className="mt-1 text-muted-foreground">
+          Your brand details and how new creators get approved.
+        </p>
+      </header>
+
+      <form onSubmit={(e) => void handleSaveAll(e)} className="space-y-8">
+        <section className="space-y-4 rounded-xl border bg-card p-5">
+          <h2 className="font-semibold">Your brand</h2>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="brandName">Brand Name</Label>
+              <Label htmlFor="brandName">Brand name</Label>
               <Input
                 id="brandName"
                 value={name}
@@ -230,7 +240,7 @@ export default function BrandSettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="website">Website URL</Label>
+              <Label htmlFor="website">Website</Label>
               <Input
                 id="website"
                 type="url"
@@ -239,191 +249,148 @@ export default function BrandSettingsPage() {
                 onChange={(e) => setWebsiteUrl(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="logo">Logo URL</Label>
-              <Input
-                id="logo"
-                type="url"
-                placeholder="https://example.com/logo.png"
-                value={logoUrl}
-                onChange={(e) => setLogoUrl(e.target.value)}
-              />
-            </div>
 
-            {message && <p className="text-sm text-green-600">{message}</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+        </section>
 
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save Changes"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      {/* ── Creator Discovery — Approval Controls ────────────────────────── */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Creator Discovery — Approval Controls</CardTitle>
-          <CardDescription>
-            Control how the AI-driven creator discovery pipeline handles
-            approval decisions. Changes take effect on the next search run.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleApprovalSave} className="space-y-6">
-            {/* Approval Mode */}
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Approval Mode</Label>
-              <div className="space-y-3">
-                {/* Recommend (default/safe) */}
-                <label
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                    approvalMode === "recommend"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-accent/30"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="approvalMode"
-                    value="recommend"
-                    checked={approvalMode === "recommend"}
-                    onChange={() => setApprovalMode("recommend")}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <p className="font-medium">
-                      Recommend{" "}
-                      <span className="ml-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-normal text-green-700">
-                        Safer · Default
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      The AI scores and ranks creators but the final
-                      approve/decline is yours. All discovered creators land in
-                      a pending review queue with AI reasoning attached. An
-                      operator works through the queue before any creator is
-                      added to a campaign.
-                    </p>
-                  </div>
-                </label>
-
-                {/* Auto */}
-                <label
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                    approvalMode === "auto"
-                      ? "border-primary bg-primary/5"
-                      : "border-border hover:bg-accent/30"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="approvalMode"
-                    value="auto"
-                    checked={approvalMode === "auto"}
-                    onChange={() => setApprovalMode("auto")}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <p className="font-medium">
-                      Auto{" "}
-                      <span className="ml-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-normal text-yellow-700">
-                        Faster · Less oversight
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      The AI decision is final. Creators at or above the
-                      threshold are immediately marked approved and become ready
-                      for outreach. Creators below are declined automatically.
-                      No human review step.
-                    </p>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Approval Threshold */}
-            <div className="space-y-2">
-              <Label htmlFor="approvalThreshold" className="text-sm font-medium">
-                Approval Threshold
-              </Label>
-              <div className="flex items-center gap-3">
+        <section className="space-y-4 rounded-xl border bg-card p-5">
+          <div>
+            <h2 className="font-semibold">New creators from search</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              When a creator search finds people, decide who approves them.
+            </p>
+          </div>
+          <div className="space-y-5">
+            <fieldset className="space-y-3">
+              <legend className="sr-only">Who approves new creators</legend>
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                  approvalMode === "recommend"
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-accent/30"
+                }`}
+              >
                 <input
-                  id="approvalThreshold"
-                  type="range"
-                  min="0.50"
-                  max="0.95"
-                  step="0.05"
-                  value={approvalThreshold}
-                  onChange={(e) =>
-                    setApprovalThreshold(parseFloat(e.target.value))
-                  }
-                  className="h-2 w-full cursor-pointer accent-primary"
+                  type="radio"
+                  name="approvalMode"
+                  value="recommend"
+                  checked={approvalMode === "recommend"}
+                  onChange={() => setApprovalMode("recommend")}
+                  className="mt-1"
                 />
-                <span className="w-12 text-right font-mono text-sm font-semibold tabular-nums">
-                  {(approvalThreshold * 100).toFixed(0)}%
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Creators scoring at or above{" "}
-                <strong>{(approvalThreshold * 100).toFixed(0)}%</strong> are
-                considered a good fit by the AI.{" "}
-                {approvalMode === "auto"
-                  ? "In Auto mode, they are approved immediately."
-                  : "In Recommend mode, they are flagged as higher-priority in your review queue."}
-                {" "}Raise the threshold to reduce false-positives; lower it for
-                broader coverage.
-              </p>
+                <div>
+                  <p className="font-medium">I review each one (recommended)</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    New creators wait for you to approve or skip them. Good
+                    matches are shown first.
+                  </p>
+                </div>
+              </label>
 
-              {/* Visual guide */}
-              <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-                <span>
-                  🔒 <strong>Conservative (80–95%)</strong> — very tight fit
-                  required, fewer creators pass
-                </span>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                <span>
-                  ⚖️ <strong>Balanced (70–80%)</strong> — recommended starting
-                  point
-                </span>
-                <span className="mx-1 text-muted-foreground/40">·</span>
-                <span>
-                  📣 <strong>Broad (50–70%)</strong> — more coverage, more
-                  manual filtering
-                </span>
-              </div>
-            </div>
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                  approvalMode === "auto"
+                    ? "border-primary bg-primary/5"
+                    : "hover:bg-accent/30"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="approvalMode"
+                  value="auto"
+                  checked={approvalMode === "auto"}
+                  onChange={() => setApprovalMode("auto")}
+                  className="mt-1"
+                />
+                <div>
+                  <p className="font-medium">Approve good matches for me</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Good matches are approved and ready to email right away. The
+                    rest are skipped. You won&apos;t review them first.
+                  </p>
+                </div>
+              </label>
+            </fieldset>
 
-            {/* Current saved state */}
-            {approvalSettings && (
-              <div className="rounded-lg border border-muted bg-muted/20 p-3 text-xs text-muted-foreground">
-                Current saved settings:{" "}
-                <strong>
-                  {approvalSettings.approvalMode === "recommend"
-                    ? "Recommend"
-                    : "Auto"}
-                </strong>{" "}
-                mode ·{" "}
-                <strong>
-                  {(approvalSettings.approvalThreshold * 100).toFixed(0)}%
-                </strong>{" "}
-                threshold
+            <details className="rounded-lg border p-4">
+              <summary className="cursor-pointer font-medium">
+                More options
+              </summary>
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  How close to your brand a creator needs to be to count as a
+                  good match.
+                </p>
+                <div
+                  className="flex flex-wrap gap-2"
+                  role="radiogroup"
+                  aria-label="How close a match"
+                >
+                  {MATCH_LEVELS.map((level) => {
+                    const selected =
+                      Math.abs(approvalThreshold - level.value) < 0.001;
+                    return (
+                      <button
+                        key={level.label}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setApprovalThreshold(level.value)}
+                        className={`rounded-lg border px-4 py-2 text-left text-sm ${
+                          selected
+                            ? "border-primary bg-primary/5"
+                            : "hover:bg-accent/30"
+                        }`}
+                      >
+                        <span className="block font-medium">{level.label}</span>
+                        <span className="block text-muted-foreground">
+                          {level.help}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="approvalThreshold">
+                    Or set it yourself: {matchPercent}% match
+                  </Label>
+                  <input
+                    id="approvalThreshold"
+                    type="range"
+                    min="0.50"
+                    max="0.95"
+                    step="0.05"
+                    value={approvalThreshold}
+                    onChange={(e) =>
+                      setApprovalThreshold(parseFloat(e.target.value))
+                    }
+                    className="h-2 w-full cursor-pointer accent-primary"
+                  />
+                </div>
               </div>
-            )}
+            </details>
 
-            {approvalMessage && (
-              <p className="text-sm text-green-600">{approvalMessage}</p>
-            )}
             {approvalError && (
               <p className="text-sm text-destructive">{approvalError}</p>
             )}
+          </div>
+        </section>
 
-            <Button type="submit" disabled={approvalSaving}>
-              {approvalSaving ? "Saving…" : "Save Approval Settings"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="submit" disabled={saving || approvalSaving}>
+            {saving || approvalSaving ? "Saving..." : "Save"}
+          </Button>
+          {message && !error && !approvalError && (
+            <p
+              role="status"
+              className="text-sm text-green-700 dark:text-green-400"
+            >
+              {message} {approvalMessage}
+            </p>
+          )}
+        </div>
+      </form>
     </div>
   );
 }

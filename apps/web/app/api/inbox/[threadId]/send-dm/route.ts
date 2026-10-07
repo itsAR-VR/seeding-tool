@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { checkDailyLimit, getOrCreateChat, sendDm } from "@/lib/unipile/dms";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { UnipileNotConnectedError } from "@/lib/unipile/client";
 import {
   getCurrentBrandMembership,
   requireWriteAccess,
@@ -25,7 +26,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     // Feature flag guard: Unipile DM must be enabled
     const flags = await getFeatureFlags(membership.brandId);
     if (!flags.unipileDmEnabled) {
-      return NextResponse.json({ error: "Instagram DM sending is disabled for this brand" }, { status: 403 });
+      return NextResponse.json({ error: "Instagram messages are turned off. Turn on 'Send Instagram messages' in Settings > Features." }, { status: 403 });
     }
 
     // Load thread
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         {
           error:
-            "Creator has no Instagram handle. Cannot send DM.",
+            "This creator has no Instagram handle saved. Add it on their creator page first.",
         },
         { status: 400 }
       );
@@ -140,11 +141,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
+    if (error instanceof UnipileNotConnectedError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("[inbox/send-dm/POST]", error);
-
-    const errMsg =
-      error instanceof Error ? error.message : "Failed to send DM";
-
-    return NextResponse.json({ error: errMsg }, { status: 500 });
+    return NextResponse.json(
+      { error: "Your Instagram message didn't send. Try again in a minute." },
+      { status: 502 }
+    );
   }
 }

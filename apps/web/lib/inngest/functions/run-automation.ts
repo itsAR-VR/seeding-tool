@@ -2,18 +2,7 @@ import { inngest } from "@/lib/inngest/client";
 import { prisma } from "@/lib/prisma";
 import { log } from "@/lib/logger";
 import { computeNextRunAt } from "@/lib/automations/schedule";
-import { buildUnifiedDiscoveryQueryFromAutomationConfig } from "@/lib/creator-search/contracts";
-
-function toHashtag(value: string | undefined) {
-  if (!value) return undefined;
-
-  const normalized = value
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "");
-
-  return normalized || undefined;
-}
+import { startAutomationSearch } from "@/lib/automations/start";
 
 /**
  * Inngest cron function: checks for due automations every 5 minutes
@@ -51,82 +40,20 @@ export const runAutomations = inngest.createFunction(
       for (const automation of dueAutomations) {
         try {
           if (automation.type === "creator_discovery") {
-            const config = automation.config as {
-              searchMode?: "hashtag" | "profile";
-              hashtag?: string;
-              usernames?: string[];
-              limit?: number;
-              platform?: string;
-              autoImport?: boolean;
-              query?: Record<string, unknown>;
-              categories?: {
-                apify?: string[];
-                collabstr?: string[];
-              };
-            };
-            const derivedHashtag =
-              config.hashtag ||
-              toHashtag(config.categories?.apify?.[0]) ||
-              toHashtag(config.categories?.collabstr?.[0]);
-
-            const job = await prisma.creatorSearchJob.create({
-              data: {
-                status: "pending",
-                platform: config.platform || "instagram",
-                requestedCount: config.limit || 50,
-                progressPercent: 0,
-                query:
-                  config.query && typeof config.query === "object"
-                    ? {
-                        ...(config.query as Record<string, unknown>),
-                        automationId: automation.id,
-                      }
-                    : {
-                        searchMode: config.searchMode || "hashtag",
-                        hashtag: derivedHashtag,
-                        usernames: config.usernames,
-                        limit: config.limit || 50,
-                        categories: config.categories,
-                        automationId: automation.id,
-                      },
-                brandId: automation.brandId,
-              },
-            });
-
+            const data = await startAutomationSearch(automation);
+            const job = { id: data.jobId };
             try {
               await inngest.send({
                 name: "creator-search/requested",
-                data: {
-                  jobId: job.id,
-                  campaignId: "",
-                  brandId: automation.brandId,
-                  query: config.query
-                    ? (config.query as Record<string, unknown>)
-                    : buildUnifiedDiscoveryQueryFromAutomationConfig({
-                        platform: config.platform || "instagram",
-                        searchMode: config.searchMode || "hashtag",
-                        hashtag: derivedHashtag,
-                        usernames: config.usernames,
-                        limit: config.limit || 50,
-                        categories: config.categories,
-                      }),
-                },
+                data: { ...data, campaignId: "", query: data.query as Record<string, unknown> | undefined },
               });
             } catch (dispatchError) {
               const dispatchMessage =
-                dispatchError instanceof Error
-                  ? dispatchError.message
-                  : "Unknown dispatch error";
-
+                dispatchError instanceof Error ? dispatchError.message : "Unknown dispatch error";
               await prisma.creatorSearchJob.update({
                 where: { id: job.id },
-                data: {
-                  status: "failed",
-                  error: dispatchMessage,
-                  finishedAt: new Date(),
-                },
+                data: { status: "failed", error: dispatchMessage, finishedAt: new Date() },
               });
-
               throw dispatchError;
             }
 

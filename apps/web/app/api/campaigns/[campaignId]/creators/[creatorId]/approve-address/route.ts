@@ -18,7 +18,11 @@ const bodySchema = z.object({
   snapshotId: z.string().min(1, "snapshotId is required"),
 });
 
-const ALLOWED_LIFECYCLE_STATUSES = ["replied", "address_confirmed"] as const;
+const ALLOWED_LIFECYCLE_STATUSES = [
+  "replied",
+  "address_review",
+  "address_confirmed",
+] as const;
 
 /**
  * POST /api/campaigns/[campaignId]/creators/[creatorId]/approve-address
@@ -28,7 +32,7 @@ const ALLOWED_LIFECYCLE_STATUSES = ["replied", "address_confirmed"] as const;
  * Validations:
  * 1. RBAC: user must have write access to the brand
  * 2. Feature flag: shopifyOrderEnabled must be true
- * 3. Lifecycle: creator must be in "replied" or "address_confirmed" state
+ * 3. Lifecycle: creator must be in "replied", "address_review", or "address_confirmed" state
  * 4. Snapshot: must exist and belong to this campaign creator
  * 5. Shopify connection: brand must have a connected Shopify store
  * 6. Campaign product: at least one product with a shopifyVariantId
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const flags = await getFeatureFlags(brandId);
     if (!flags.shopifyOrderEnabled) {
       return NextResponse.json(
-        { error: "Shopify order creation is disabled for this brand" },
+        { error: "Gift orders are turned off. Turn on 'Create Shopify gift orders' in Settings > Features." },
         { status: 403 }
       );
     }
@@ -98,7 +102,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
     ) {
       return NextResponse.json(
         {
-          error: `Cannot approve address in lifecycle state "${status}". Allowed: ${ALLOWED_LIFECYCLE_STATUSES.join(", ")}`,
+          error: "This creator isn't at the address step yet, so there is no address to approve.",
         },
         { status: 409 }
       );
@@ -125,7 +129,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
     if (!shopifyConnection || shopifyConnection.status !== "connected") {
       return NextResponse.json(
-        { error: "No active Shopify connection found for this brand" },
+        { error: "Connect Shopify in Settings > Connections to make gift orders." },
         { status: 422 }
       );
     }
@@ -145,7 +149,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
       return NextResponse.json(
         {
           error:
-            "No campaign product with a Shopify variant configured. Add a product first.",
+            "Pick a Shopify product for this campaign first, on the campaign's Products page.",
         },
         { status: 422 }
       );

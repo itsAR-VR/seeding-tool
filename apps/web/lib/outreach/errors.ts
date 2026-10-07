@@ -47,3 +47,16 @@ export class CrossBrandAliasError extends Error {
     this.name = "CrossBrandAliasError";
   }
 }
+
+/**
+ * Thrown when a brand has no Gmail inbox to send from (never connected, or
+ * the saved Gmail sign-in is gone).
+ */
+export class GmailNotConnectedError extends Error {
+  readonly code = "GMAIL_NOT_CONNECTED";
+
+  constructor() {
+    super("Connect Gmail in Settings > Connections to send emails.");
+    this.name = "GmailNotConnectedError";
+  }
+}

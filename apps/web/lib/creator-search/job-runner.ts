@@ -22,6 +22,7 @@ import {
   searchResultMetadata,
   persistDiscoveredCandidate,
 } from "./job-persistence";
+import { ApifyKeyMissingError, withBrandApify } from "@/lib/apify/token";
 
 export type CreatorSearchRequestedEvent = {
   jobId: string;
@@ -149,6 +150,22 @@ async function claimPendingCreatorSearchJob({
 }
 
 export async function runCreatorSearchJob(
+  input: CreatorSearchRequestedEvent
+) {
+  // Every Apify call in this search runs on this brand's own Apify account.
+  try {
+    return await withBrandApify(input.brandId, () => runCreatorSearchJobForBrand(input));
+  } catch (error) {
+    if (!(error instanceof ApifyKeyMissingError)) throw error;
+    await prisma.creatorSearchJob.updateMany({
+      where: { id: input.jobId, brandId: input.brandId, status: "pending" },
+      data: { status: "failed", error: error.message, finishedAt: new Date() },
+    });
+    return { status: "skipped", reason: "apify_key_missing" as const };
+  }
+}
+
+async function runCreatorSearchJobForBrand(
   input: CreatorSearchRequestedEvent
 ) {
   const claim = await claimPendingCreatorSearchJob(input);

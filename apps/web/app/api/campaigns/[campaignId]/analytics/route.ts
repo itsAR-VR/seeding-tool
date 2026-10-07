@@ -9,22 +9,16 @@ import {
   computeTimeToPost,
 } from "@/lib/analytics/conversion";
 import type { CreatorLeaderboardEntry } from "@/lib/analytics/types";
+import {
+  countStages,
+  countStepsReached,
+  lifecycleBreakdown as countLifecycle,
+  postCountsByCreator,
+  type ResultsData,
+} from "@/lib/stats/campaign-counts";
+import { loadCampaignPosts } from "@/app/(platform)/campaigns/[campaignId]/_components/campaign-posts";
 
 type RouteContext = { params: Promise<{ campaignId: string }> };
-
-const LIFECYCLE_STAGES = [
-  "ready",
-  "outreach_sent",
-  "replied",
-  "address_confirmed",
-  "order_created",
-  "shipped",
-  "delivered",
-  "posted",
-  "completed",
-  "opted_out",
-  "stalled",
-] as const;
 
 /**
  * GET /api/campaigns/:campaignId/analytics
@@ -88,20 +82,32 @@ export async function GET(request: NextRequest, context: RouteContext) {
         lifecycleStatus: true,
         reviewStatus: true,
         creatorId: true,
+        outreachCount: true,
+        lastOutreachAt: true,
+        lastReplyAt: true,
+        replyDecision: true,
+        shopifyOrder: { select: { status: true } },
       },
     });
 
     const totalCreators = campaignCreators.length;
 
-    const lifecycleBreakdown = LIFECYCLE_STAGES.reduce<Record<string, number>>(
-      (acc, stage) => ({
-        ...acc,
-        [stage]: campaignCreators.filter(
-          (cc) => cc.lifecycleStatus === stage
-        ).length,
-      }),
-      {}
+    // Posts from the same list as the Posts tab, limited to these creators.
+    const creatorIdSet = new Set(campaignCreators.map((cc) => cc.creatorId));
+    const posts = (await loadCampaignPosts(membership.brandId, campaignId)).filter(
+      (post) => post.creatorId != null && creatorIdSet.has(post.creatorId),
     );
+    const postCounts = postCountsByCreator(posts);
+    const countable = campaignCreators.map((cc) => ({
+      ...cc,
+      orderStatus: cc.shopifyOrder?.status ?? null,
+      postCount: postCounts.get(cc.creatorId) ?? 0,
+    }));
+
+    // Where everyone is now, and who ever reached each step (lib/stats).
+    const lifecycleBreakdown: Record<string, number> = countLifecycle(campaignCreators);
+    const steps = countStepsReached(countable);
+    const stages = countStages(countable);
 
     const reviewBreakdown = {
       pending: campaignCreators.filter((cc) => cc.reviewStatus === "pending")
@@ -168,7 +174,8 @@ export async function GET(request: NextRequest, context: RouteContext) {
           })
         : [];
 
-    const totalOrders = orders.length;
+    // Cancelled orders aren't orders made (lib/stats), same as the Orders tab.
+    const totalOrders = steps.ordersMade;
     const orderStatusBreakdown = orders.reduce<Record<string, number>>(
       (acc, o) => ({
         ...acc,
@@ -293,7 +300,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       {}
     );
 
-    return NextResponse.json({
+    const body: ResultsData = {
       campaignId,
       summary: {
         totalCreators,
@@ -324,7 +331,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
       timeToPost,
       creatorLeaderboard,
       costsByType,
-    });
+      steps,
+      stages,
+      postCount: posts.length,
+    };
+    return NextResponse.json(body);
   } catch (error) {
     if (error instanceof BrandAccessError) {
       return NextResponse.json(

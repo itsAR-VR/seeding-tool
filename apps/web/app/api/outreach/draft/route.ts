@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   generateOutreachDraft,
+  nicheFromNotes,
   type CreatorProfile,
   type CampaignInfo,
   type DraftChannel,
 } from "@/lib/ai/outreach-drafter";
+import { getBrandKit } from "@/lib/brand/kit";
 import {
   getBuiltInPersona,
   isBuiltInPersonaId,
@@ -41,14 +43,14 @@ export async function POST(request: NextRequest) {
       campaignCreatorIds.length === 0
     ) {
       return NextResponse.json(
-        { error: "campaignCreatorIds is required and must be a non-empty array" },
+        { error: "Pick at least one creator to write to." },
         { status: 400 }
       );
     }
 
     if (campaignCreatorIds.length > 20) {
       return NextResponse.json(
-        { error: "Maximum 20 creators per batch" },
+        { error: "You can write to up to 20 creators at a time. Pick fewer." },
         { status: 400 }
       );
     }
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
       const builtIn = getBuiltInPersona(personaId);
       if (!builtIn) {
         return NextResponse.json(
-          { error: "Invalid built-in persona ID" },
+          { error: "That writing style wasn't found. Pick another one." },
           { status: 400 }
         );
       }
@@ -71,7 +73,7 @@ export async function POST(request: NextRequest) {
       });
       if (!dbPersona) {
         return NextResponse.json(
-          { error: "Persona not found" },
+          { error: "That writing style wasn't found. Pick another one." },
           { status: 404 }
         );
       }
@@ -105,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     if (campaignCreators.length === 0) {
       return NextResponse.json(
-        { error: "No matching campaign creators found" },
+        { error: "We couldn't find those creators in this campaign. Refresh the page." },
         { status: 404 }
       );
     }
@@ -116,6 +118,17 @@ export async function POST(request: NextRequest) {
       select: { name: true },
     });
 
+    // Who signs it, and the brand's last first email that actually went out: new
+    // emails reuse that approved wording instead of inventing a new one.
+    const [kit, lastSent] = await Promise.all([
+      getBrandKit(membership.brandId),
+      prisma.aIDraft.findFirst({
+        where: { type: "outreach", status: "sent", body: { not: "" }, campaignCreator: { campaign: { brandId: membership.brandId } } },
+        orderBy: { updatedAt: "desc" },
+        select: { body: true },
+      }),
+    ]);
+
     // Generate drafts for each creator
     const drafts = await Promise.all(
       campaignCreators.map(async (cc) => {
@@ -124,7 +137,8 @@ export async function POST(request: NextRequest) {
           name: cc.creator.name,
           followerCount: cc.creator.followerCount,
           bio: cc.creator.bio,
-          niche: cc.creator.bioCategory,
+          // CSV imports have no bio or category, only topics in their notes.
+          niche: cc.creator.bioCategory ?? nicheFromNotes(cc.creator.notes),
         };
 
         const campaignInfo: CampaignInfo = {
@@ -138,6 +152,37 @@ export async function POST(request: NextRequest) {
           })),
         };
 
+        // An empty saved draft (from when the writer returned nothing) is never reused.
+        if (channel === "email") {
+          await prisma.aIDraft.updateMany({
+            where: { campaignCreatorId: cc.id, type: "outreach", status: "draft", body: "" },
+            data: { status: "discarded" },
+          });
+        }
+
+        // A pre-written outreach draft for this creator wins over AI writing.
+        const saved =
+          channel === "email"
+            ? await prisma.aIDraft.findFirst({
+                where: { campaignCreatorId: cc.id, type: "outreach", status: "draft", body: { not: "" } },
+                orderBy: { updatedAt: "desc" },
+                select: { subject: true, body: true },
+              })
+            : null;
+        if (saved) {
+          return {
+            campaignCreatorId: cc.id,
+            creatorId: cc.creatorId,
+            creatorHandle:
+              cc.creator.instagramHandle ?? cc.creator.name ?? "Unknown",
+            creatorName: cc.creator.name,
+            subject: saved.subject,
+            body: saved.body,
+            tokens: 0,
+            error: null,
+          };
+        }
+
         try {
           const draft = await generateOutreachDraft({
             creatorProfile,
@@ -146,7 +191,27 @@ export async function POST(request: NextRequest) {
             channel,
             additionalContext,
             brandName: brand?.name,
+            senderFirstName: kit?.senderFirstName || null,
+            approvedExample: lastSent?.body ?? null,
           });
+
+          // Saved as soon as it's written, so it survives leaving the page and can be
+          // checked today and sent tomorrow. Next time it opens as-is (see "saved" above).
+          if (channel === "email" && draft.body.trim()) {
+            try {
+              await prisma.aIDraft.create({
+                data: {
+                  campaignCreatorId: cc.id,
+                  type: "outreach",
+                  status: "draft",
+                  subject: draft.subject,
+                  body: draft.body,
+                },
+              });
+            } catch (error) {
+              console.warn("[outreach/draft] couldn't save the draft", error);
+            }
+          }
 
           return {
             campaignCreatorId: cc.id,
@@ -173,7 +238,7 @@ export async function POST(request: NextRequest) {
             subject: null,
             body: null,
             tokens: 0,
-            error: "Failed to generate draft",
+            error: "Couldn't write this email. Try again, or write it yourself.",
           };
         }
       })
@@ -193,7 +258,7 @@ export async function POST(request: NextRequest) {
     }
     console.error("[outreach/draft/POST]", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Couldn't write the emails. Try again in a minute." },
       { status: 500 }
     );
   }

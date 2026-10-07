@@ -1,147 +1,50 @@
-import {
-  FlaskConical,
-  Link2,
-  WandSparkles,
-} from "lucide-react";
+import type { BrandProfileSnapshot } from "@/lib/brands/profile";
 
-export const ONBOARDING_STEPS = [
-  "brand",
-  "discovery",
-  "connect",
-  "preset",
-  "done",
+export const ONBOARDING_STEPS = ["brand", "kit", "connect"] as const;
+export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
+
+export const STEP_LABELS: Record<OnboardingStep, string> = {
+  brand: "Your brand",
+  kit: "Gift and replies",
+  connect: "Accounts",
+};
+
+/** Same limit the brand route enforces. */
+export const MAX_BRAND_NAME_LENGTH = 80;
+
+/** Shown one after another while the website is read (takes up to a minute). */
+export const READING_MESSAGES = [
+  "Opening your website",
+  "Reading what you sell and who it's for",
+  "Picking words to find creators with",
+  "Almost done",
 ] as const;
 
-export const BRAND_ENTRY_PILLARS = [
-  {
-    step: "1",
-    title: "Ingest the site",
-    description:
-      "Scrape the homepage, capture metadata, and pull the strongest on-page signals.",
-    icon: Link2,
-  },
-  {
-    step: "2",
-    title: "Shape the DNA",
-    description:
-      "Turn raw site evidence into a typed Business DNA with GPT-5-mini.",
-    icon: FlaskConical,
-  },
-  {
-    step: "3",
-    title: "Guide discovery",
-    description:
-      "Hand step 2 a cleaner audience, tone, keywords, and visual direction.",
-    icon: WandSparkles,
-  },
-] as const;
-
-export const BRAND_ANALYSIS_STEPS = [
-  {
-    label: "Opening the homepage",
-    detail:
-      "Reading the submitted URL and validating the page structure.",
-  },
-  {
-    label: "Capturing metadata",
-    detail:
-      "Collecting titles, descriptions, open graph fields, and social previews.",
-  },
-  {
-    label: "Pulling the hero story",
-    detail:
-      "Extracting the strongest headings and visible copy blocks.",
-  },
-  {
-    label: "Curating image candidates",
-    detail:
-      "Keeping the most usable hero visuals and filtering junk assets.",
-  },
-  {
-    label: "Tracing offer language",
-    detail:
-      "Finding the product, proof, and positioning signals worth keeping.",
-  },
-  {
-    label: "Mapping the audience",
-    detail:
-      "Distilling who the brand is for and how it wants to be perceived.",
-  },
-  {
-    label: "Resolving voice and tone",
-    detail:
-      "Turning copy patterns into a usable creator-facing voice reference.",
-  },
-  {
-    label: "Generating discovery keywords",
-    detail:
-      "Creating supported keyword hints the next step can act on.",
-  },
-  {
-    label: "Composing the Business DNA",
-    detail:
-      "Assembling the structured brief from the evidence instead of prose alone.",
-  },
-  {
-    label: "Preparing your reveal",
-    detail:
-      "Packaging the strongest signals into a reviewable editorial summary.",
-  },
-] as const;
-
-export type OnboardingAnalysisStatus =
-  | "complete"
-  | "partial"
-  | "failed"
-  | "skipped";
+export type OnboardingAnalysisStatus = "complete" | "partial" | "failed" | "skipped";
 
 export type BrandCreationResponse = {
   brandId: string;
   slug: string;
-  brandProfile: import("@/lib/brands/profile").BrandProfileSnapshot | null;
+  brandProfile: BrandProfileSnapshot | null;
   analysisStatus: OnboardingAnalysisStatus;
   analysisNote: string | null;
 };
 
-export function getStepIndex(step: string) {
-  const index = ONBOARDING_STEPS.indexOf(
-    step as (typeof ONBOARDING_STEPS)[number]
-  );
-
-  return index === -1 ? 0 : index;
+/** Old links (discovery, preset, done) land on the closest current step. */
+export function normalizeStep(step: string | null): OnboardingStep {
+  if (step === "kit" || step === "connect") return step;
+  if (step === "discovery") return "kit";
+  if (step === "preset" || step === "done") return "connect";
+  return "brand";
 }
 
-export function parsePositiveInteger(value: string) {
-  if (!value.trim()) {
-    return { value: null, error: "Daily creator target is required." };
-  }
-
-  const parsed = Number(value);
-
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return {
-      value: null,
-      error: "Daily creator target must be a positive integer.",
-    };
-  }
-
-  return { value: parsed, error: null };
-}
-
-export function buildOnboardingParams(
-  step: (typeof ONBOARDING_STEPS)[number],
-  values: { brandName?: string; brandId?: string }
-) {
+/**
+ * The wizard's URL. It never carries a brandId: which company is being set up
+ * comes from /api/onboarding/status, so a copied or edited link can't change it.
+ */
+export function buildOnboardingParams(step: OnboardingStep, values: { brandName?: string }) {
   const params = new URLSearchParams({ step });
-
-  if (values.brandName?.trim()) {
-    params.set("brandName", values.brandName.trim());
-  }
-
-  if (values.brandId?.trim()) {
-    params.set("brandId", values.brandId.trim());
-  }
-
+  if (values.brandName?.trim()) params.set("brandName", values.brandName.trim());
   return params.toString();
 }
 
@@ -155,26 +58,22 @@ export function parseKeywordsDraft(value: string) {
       value
         .split(/[\n,]/)
         .map((entry) => entry.trim())
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 }
 
-export function collectProfileImages(
-  profile: import("@/lib/brands/profile").BrandProfileSnapshot | null
-) {
-  if (!profile) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      [
-        ...(profile.imageCandidates ?? []),
-        ...(profile.heroImageCandidates ?? []),
-        profile.ogImage,
-        profile.twitterImage,
-      ].filter((value): value is string => Boolean(value?.trim()))
-    )
+/** A starting point for the product facts, built from what the website said. */
+export function starterProductFacts(profile: BrandProfileSnapshot | null, websiteUrl: string): string {
+  const lines: string[] = [];
+  const product = profile?.keyProducts?.[0];
+  lines.push(
+    product
+      ? `- The gift is ${product}. It's free, and shipping is on us.`
+      : "- The gift is [your product]. It's free, and shipping is on us.",
   );
+  lines.push("- How to use it: [one line]");
+  const domain = websiteUrl.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (domain) lines.push(`- Website: ${domain}`);
+  return lines.join("\n");
 }
