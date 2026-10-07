@@ -186,7 +186,7 @@ export default async function DashboardPage() {
         `emails${where} are written and waiting for you to send`,
       ),
       action: "Send them",
-      href: `/campaigns/${group.campaignId}/outreach`,
+      href: `/campaigns/${group.campaignId}/outreach?written=1`,
     };
   });
   const stuckGroups = groupByCampaign(stuckCreators);

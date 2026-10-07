@@ -112,6 +112,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             },
             shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
             shopifyOrder: { select: { status: true } },
+            aiDrafts: { where: { type: "outreach", status: "draft" }, select: { id: true }, take: 1 },
           },
           orderBy: { createdAt: "desc" },
         },
@@ -167,11 +168,19 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     };
     return { ...countable, stage: displayStage(countable) };
   });
-  const visibleCreators = groupFilter
+  // Rows go in chip order (Needs you, Waiting, Done, Not going ahead), then by
+  // stage within each, so people at the same step sit together.
+  const stageRank = new Map(
+    STAGE_GROUPS.flatMap((g) => g.stages).map((stage, index) => [stage, index] as const),
+  );
+  const filteredCreators = groupFilter
     ? creators.filter((cc) => groupFilter.stages.includes(cc.stage))
     : legacyFilter
       ? creators.filter(CREATOR_FILTERS[legacyFilter].match)
       : creators;
+  const visibleCreators = [...filteredCreators].sort(
+    (a, b) => (stageRank.get(a.stage) ?? 99) - (stageRank.get(b.stage) ?? 99),
+  );
   const activeFilterLabel = groupFilter
     ? groupFilter.label
     : legacyFilter
@@ -404,6 +413,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                       campaignId,
                       campaignCreatorId: cc.id,
                       threadId: cc.conversationThread?.id ?? null,
+                      hasWrittenEmail: cc.aiDrafts.length > 0,
                     });
                     const addressNote = addressLinkNote(cc.stage);
                     return (
@@ -425,8 +435,8 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                         {showFollowers && (
                           <td className="py-3 tabular-nums">
                             {profile?.followerCount?.toLocaleString() ?? (
-                              <span className="text-muted-foreground/70" aria-label="Unknown">
-                                ·
+                              <span className="text-muted-foreground" aria-label="Unknown">
+                                –
                               </span>
                             )}
                           </td>

@@ -46,6 +46,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
         creator: {
           include: { profiles: true },
         },
+        // Whether a first email is already written and saved (Outreach opens those as-is).
+        aiDrafts: {
+          where: { type: "outreach", status: "draft" },
+          select: { id: true },
+          take: 1,
+        },
         shopifyOrder: {
           include: {
             fulfillmentEvents: {

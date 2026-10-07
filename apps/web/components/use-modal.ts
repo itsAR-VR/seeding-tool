@@ -18,7 +18,11 @@ export function useModal(ref: RefObject<HTMLElement | null>, onClose: () => void
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const box = ref.current;
-    box?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+    // Start in the first field when there is one, not on the close button.
+    (
+      box?.querySelector<HTMLElement>("input:not([disabled]):not([type=hidden]), textarea, select") ??
+      box?.querySelector<HTMLElement>(FOCUSABLE)
+    )?.focus();
 
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
@@ -31,10 +35,12 @@ export function useModal(ref: RefObject<HTMLElement | null>, onClose: () => void
       if (items.length === 0) return;
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const active = document.activeElement;
+      const outside = !active || !box.contains(active);
+      if (event.shiftKey && (active === first || outside)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && (active === last || outside)) {
         event.preventDefault();
         first.focus();
       }

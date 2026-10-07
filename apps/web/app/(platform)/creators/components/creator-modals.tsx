@@ -16,6 +16,7 @@ import type {
 } from "../hooks/use-creators-state";
 import { sourceLabel } from "./creator-filters";
 import { useModal } from "@/components/use-modal";
+import { X } from "lucide-react";
 
 // ── Campaign Modal ──────────────────────────────────────────────────────
 
@@ -194,7 +195,15 @@ export function SearchModal({
         aria-describedby="find-creators-intro"
         className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden"
       >
-        <CardHeader className="shrink-0 border-b pb-4">
+        <CardHeader className="relative shrink-0 border-b pb-4 pr-14">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 top-3 flex size-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-5" aria-hidden />
+          </button>
           <CardTitle id="find-creators-title">Find creators</CardTitle>
           <p id="find-creators-intro" className="mt-1 text-sm text-muted-foreground">
             Type what their content is about. We search Instagram and Collabstr and score each creator against your

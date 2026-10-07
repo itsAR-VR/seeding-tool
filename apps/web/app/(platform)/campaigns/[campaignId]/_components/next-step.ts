@@ -34,7 +34,7 @@ export function campaignNextStep(input: NextStepInput): NextStep {
   if (input.writtenEmailsWaiting > 0) {
     return {
       label: `Send ${n(input.writtenEmailsWaiting, "written email", "written emails")}`,
-      href: `${base}/outreach`,
+      href: `${base}/outreach?written=1`,
     };
   }
   if (input.readyToEmail > 0) {

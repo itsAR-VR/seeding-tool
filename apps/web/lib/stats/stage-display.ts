@@ -26,7 +26,7 @@ export const STAGE_DISPLAY: Record<DisplayStage, StageDisplay> = {
   ready: { label: "Not emailed yet", tone: "neutral" },
   emailed: { label: "Waiting for reply", tone: "neutral" },
   needs_answer: { label: "Needs your answer", tone: "waiting" },
-  replied: { label: "Replied", tone: "neutral" },
+  replied: { label: "You answered", tone: "neutral" },
   said_yes: { label: "Said yes", tone: "good" },
   address_to_check: { label: "Address to check", tone: "waiting" },
   address_in: { label: "Address received", tone: "good" },
@@ -123,7 +123,7 @@ export type StageNextStep = { label: string; href: string | null } | null;
  */
 export function stageNextStep(
   stage: DisplayStage,
-  ctx: { campaignId: string; campaignCreatorId: string; threadId: string | null },
+  ctx: { campaignId: string; campaignCreatorId: string; threadId: string | null; hasWrittenEmail?: boolean },
 ): StageNextStep {
   const base = `/campaigns/${ctx.campaignId}`;
   const conversation = ctx.threadId ? `/inbox/${ctx.threadId}` : "/inbox";
@@ -131,7 +131,9 @@ export function stageNextStep(
     case "needs_review":
       return { label: "Review", href: `${base}/review` };
     case "ready":
-      return { label: "Email them", href: `${base}/outreach?select=${ctx.campaignCreatorId}` };
+      return ctx.hasWrittenEmail
+        ? { label: "Send written email", href: `${base}/outreach?written=1` }
+        : { label: "Email them", href: `${base}/outreach?select=${ctx.campaignCreatorId}` };
     case "emailed":
     case "replied":
       return { label: "Waiting on them", href: null };

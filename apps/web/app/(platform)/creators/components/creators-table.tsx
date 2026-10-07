@@ -58,8 +58,8 @@ function visibleColumns(creators: Creator[]) {
 
 function Unknown({ label }: { label: string }) {
   return (
-    <span className="text-muted-foreground/70" aria-label={label}>
-      ·
+    <span className="text-muted-foreground" aria-label={label}>
+      –
     </span>
   );
 }
@@ -71,8 +71,13 @@ function CampaignBadges({ creator }: { creator: Creator }) {
   return (
     <div className="flex flex-wrap gap-1">
       {creator.campaignCreators.map((cc) => (
-        <Badge key={cc.id} variant="secondary" className="max-w-[14rem] text-sm font-normal" title={cc.campaign.name}>
-          <span className="truncate">{cc.campaign.name}</span>
+        // Long names wrap instead of cutting off, so two similar campaigns stay tellable apart.
+        <Badge
+          key={cc.id}
+          variant="secondary"
+          className="h-auto max-w-[16rem] whitespace-normal py-0.5 text-left text-sm font-normal"
+        >
+          {cc.campaign.name}
         </Badge>
       ))}
     </div>

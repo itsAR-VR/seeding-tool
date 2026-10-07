@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,8 @@ type CampaignCreator = {
   lifecycleStatus: string;
   replyDecision?: string | null;
   shopifyOrder?: { status: string } | null;
+  /** A saved, unsent first email (empty when none). */
+  aiDrafts?: Array<{ id: string }>;
   creator: {
     id: string;
     name: string | null;
@@ -99,6 +101,8 @@ export default function OutreachPage() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const searchParams = useSearchParams();
   const preselectId = searchParams.get("select");
+  // Home and the campaign page link here with ?written=1 to open the saved emails straight away.
+  const openWritten = searchParams.get("written") === "1";
 
   const [creators, setCreators] = useState<CampaignCreator[]>([]);
   const [customPersonas, setCustomPersonas] = useState<CustomPersona[]>([]);
@@ -268,6 +272,9 @@ export default function OutreachPage() {
   const sendableCreators = approvedCreators.filter(
     (c) => c.lifecycleStatus === "ready" && !queuedIds.has(c.id)
   );
+  // Already written and saved, so opening them costs nothing and changes no wording.
+  const writtenCreators = sendableCreators.filter((c) => (c.aiDrafts?.length ?? 0) > 0);
+
   // Creators, setup, and the send queue all decide what this page says. Until
   // every one has loaded, show a neutral "Checking" state, never a blocker.
   const checking = loadingCreators || setupLoading || !queueLoaded;
@@ -326,12 +333,12 @@ export default function OutreachPage() {
     }
   };
 
-  const generateDrafts = async () => {
-    if (selectedIds.size === 0) return;
-    if (selectedIds.size > MAX_BATCH_SIZE) {
+  const generateDrafts = async (ids: string[] = Array.from(selectedIds)) => {
+    if (ids.length === 0) return;
+    if (ids.length > MAX_BATCH_SIZE) {
       setNotice({
         tone: "error",
-        text: `You can email up to ${MAX_BATCH_SIZE} creators at a time. You picked ${selectedIds.size}, so unselect a few.`,
+        text: `You can email up to ${MAX_BATCH_SIZE} creators at a time. You picked ${ids.length}, so unselect a few.`,
       });
       return;
     }
@@ -345,7 +352,7 @@ export default function OutreachPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          campaignCreatorIds: Array.from(selectedIds),
+          campaignCreatorIds: ids,
           personaId,
           channel,
           additionalContext: additionalContext || undefined,
@@ -383,6 +390,22 @@ export default function OutreachPage() {
       setGenerating(false);
     }
   };
+
+  const openWrittenEmails = () => {
+    const ids = writtenCreators.slice(0, MAX_BATCH_SIZE).map((c) => c.id);
+    setSelectedIds(new Set(ids));
+    void generateDrafts(ids);
+  };
+
+  // Arriving with ?written=1 opens the saved emails once everything has loaded.
+  const openedWritten = useRef(false);
+  useEffect(() => {
+    if (!openWritten || openedWritten.current || checking || generating || writtenCreators.length === 0) return;
+    openedWritten.current = true;
+    openWrittenEmails();
+    // Runs once (the ref guards it); the handler is rebuilt each render, so it isn't a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openWritten, checking, generating, writtenCreators.length]);
 
   const updateDraft = (
     ccId: string,
@@ -614,6 +637,23 @@ export default function OutreachPage() {
         </div>
       )}
 
+      {step === "choose" && drafts.length === 0 && !checking && writtenCreators.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3">
+          <span>
+            {writtenCreators.length} {writtenCreators.length === 1 ? "email is" : "emails are"} already written and
+            saved.
+            {writtenCreators.length > MAX_BATCH_SIZE ? ` The first ${MAX_BATCH_SIZE} open together.` : ""}
+          </span>
+          <Button onClick={openWrittenEmails} disabled={generating}>
+            {generating
+              ? "Opening…"
+              : `Open ${Math.min(writtenCreators.length, MAX_BATCH_SIZE)} written ${
+                  Math.min(writtenCreators.length, MAX_BATCH_SIZE) === 1 ? "email" : "emails"
+                }`}
+          </Button>
+        </div>
+      )}
+
       {step === "choose" && !checking && !everyoneEmailed && (
       <>
       {/* Creator Selection */}
@@ -627,7 +667,7 @@ export default function OutreachPage() {
                   ? "Loading…"
                   : `Click the creators you want to email. ${sendableCreators.length} of ${creators.length} in this campaign still need a first email.${
                       creators.length > approvedCreators.length
-                        ? ` ${creators.length - approvedCreators.length} not approved aren't listed.`
+                        ? ` ${creators.length - approvedCreators.length} still to review or not a fit aren't listed.`
                         : ""
                     }`}
               </CardDescription>
@@ -771,7 +811,7 @@ export default function OutreachPage() {
             )}
             <Button
               size="lg"
-              onClick={generateDrafts}
+              onClick={() => void generateDrafts()}
               aria-describedby={
                 [
                   "write-emails-hint",
