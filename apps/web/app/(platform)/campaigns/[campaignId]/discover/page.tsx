@@ -507,6 +507,14 @@ export default function DiscoverCreatorsPage() {
               className="text-right text-sm text-muted-foreground"
             >
               {searchDisabledReason}
+              {usedUp && (
+                <>
+                  .{" "}
+              <Link href="/settings/creator-search" className="font-medium text-foreground underline">
+                See options
+              </Link>
+                </>
+              )}
             </p>
           )}
         </CardContent>

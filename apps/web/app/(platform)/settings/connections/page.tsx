@@ -472,7 +472,11 @@ function ConnectionsContent({
       {!embedded && (
         <p className="font-medium">
           {connectedCount} of {totalCount} connected
-          {connectedCount < totalCount ? ". Connect the rest when you're ready." : ". You're all set."}
+          {connectedCount < totalCount
+            ? ". Connect the rest when you're ready."
+            : searchUsedUp
+              ? ". Creator search is used up for this month."
+              : ". You're all set."}
         </p>
       )}
 

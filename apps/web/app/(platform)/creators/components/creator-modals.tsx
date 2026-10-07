@@ -331,7 +331,16 @@ export function SearchModal({
               id="modal-search-hint"
               className="mt-2 text-right text-sm text-muted-foreground"
             >
-              {usedUp ? "Search allowance used up for this month" : "Add something to search for"}
+              {usedUp ? (
+                <>
+                  Search allowance used up for this month.{" "}
+              <Link href="/settings/creator-search" className="font-medium text-foreground underline">
+                See options
+              </Link>
+                </>
+              ) : (
+                "Add something to search for"
+              )}
             </p>
           )}
           {searchResults.length > 0 &&
