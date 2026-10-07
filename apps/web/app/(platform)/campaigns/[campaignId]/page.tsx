@@ -34,17 +34,19 @@ import {
 import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-you";
 
 /**
- * The Address link column: the copy-link button only while we're waiting on
- * an address (or need a new one after a cancelled order). Otherwise one word on why not.
+ * The Address link column: the copy-link button only once they've said yes
+ * and we're waiting on an address (or need a new one after a cancelled order).
+ * Every other row gets a few quiet words on when it will be needed.
  */
 function addressLinkNote(stage: DisplayStage): string | null {
   switch (stage) {
-    case "emailed":
-    case "needs_answer":
-    case "replied":
     case "said_yes":
     case "order_cancelled":
       return null;
+    case "emailed":
+    case "needs_answer":
+    case "replied":
+      return "When they say yes";
     case "needs_review":
       return "After review";
     case "ready":

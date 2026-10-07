@@ -12,7 +12,7 @@ const settingsLinks = [
   {
     href: "/settings/brand-kit",
     title: "Brand kit",
-    description: "Logo, product facts for AI replies, your \"yes\" message, and ad defaults.",
+    description: "Logo, product facts for suggested replies, your \"yes\" message, and ad defaults.",
   },
   {
     href: "/settings/team",

@@ -7,6 +7,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { STUCK_AFTER_DAYS, addressToCheck, needsAnswer } from "./campaign-counts";
+import { displayStage, type DisplayStage } from "./stage-display";
 
 /** Statuses where a creator is finished, so a quiet week isn't a problem. */
 const FINISHED_STATUSES = ["posted", "completed", "opted_out", "closed"];
@@ -28,6 +29,8 @@ export async function countNeedsAnswer(brandId: string): Promise<number> {
 export type StuckCreator = {
   id: string;
   lifecycleStatus: string;
+  /** Same stage the campaign Overview shows for them. */
+  stage: DisplayStage;
   updatedAt: Date;
   campaign: { id: string; name: string };
   creator: { name: string | null; instagramHandle: string | null };
@@ -52,7 +55,11 @@ export async function findStuckCreators(
     },
     select: {
       id: true,
+      reviewStatus: true,
       lifecycleStatus: true,
+      outreachCount: true,
+      lastOutreachAt: true,
+      lastReplyAt: true,
       updatedAt: true,
       replyDecision: true,
       campaign: { select: { id: true, name: true } },
@@ -79,6 +86,17 @@ export async function findStuckCreators(
     .map((r) => ({
       id: r.id,
       lifecycleStatus: r.lifecycleStatus,
+      stage: displayStage({
+        reviewStatus: r.reviewStatus,
+        lifecycleStatus: r.lifecycleStatus,
+        outreachCount: r.outreachCount,
+        lastOutreachAt: r.lastOutreachAt,
+        lastReplyAt: r.lastReplyAt,
+        replyDecision: r.replyDecision,
+        latestMessageDirection: r.conversationThread?.messages[0]?.direction,
+        shippingSnapshots: r.shippingSnapshots,
+        orderStatus: r.shopifyOrder?.status ?? null,
+      }),
       updatedAt: r.updatedAt,
       campaign: r.campaign,
       creator: r.creator,

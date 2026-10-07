@@ -8,6 +8,7 @@ import { resolveProviderCredential } from "@/lib/integrations/state";
 import { CampaignHealthWidget } from "./components/campaign-health";
 import type { HealthSnapshotData } from "@/lib/health/types";
 import { ADDRESS_TO_CHECK_WHERE, STUCK_AFTER_DAYS } from "@/lib/stats/campaign-counts";
+import { campaignStatus } from "../campaigns/_components/campaign-status";
 import {
   countNeedsAnswer,
   findOutreachWaitingToSend,
@@ -94,13 +95,6 @@ async function fetchSetupItems(brandId: string, hasCampaign: boolean): Promise<S
 
 // ── Home page ────────────────────────────────────────────────
 
-const CAMPAIGN_STATUS_LABELS: Record<string, string> = {
-  draft: "Not started",
-  active: "Sending",
-  paused: "Paused",
-  completed: "Finished",
-};
-
 type Todo = { count: number; text: string; action: string; href: string };
 
 function daysAgo(days: number): Date {
@@ -143,6 +137,7 @@ export default async function DashboardPage() {
     healthSnapshots,
     outreachWaiting,
     stuckCreators,
+    toEmailRows,
   ] = await Promise.all([
     countNeedsAnswer(brandId),
     prisma.shopifyOrder.count({
@@ -165,7 +160,13 @@ export default async function DashboardPage() {
     fetchHealthSnapshots(brandId),
     findOutreachWaitingToSend(brandId),
     findStuckCreators(brandId),
+    prisma.campaignCreator.groupBy({
+      by: ["campaignId"],
+      where: { campaign: { brandId }, reviewStatus: "approved", lifecycleStatus: "ready" },
+      _count: { _all: true },
+    }),
   ]);
+  const toEmailByCampaign = new Map(toEmailRows.map((r) => [r.campaignId, r._count._all]));
 
   const setupItems = await fetchSetupItems(brandId, campaigns.length > 0);
   const setupDone = setupItems.filter((i) => i.done).length;
@@ -351,8 +352,13 @@ export default async function DashboardPage() {
                     {campaign._count.campaignCreators}{" "}
                     {plural(campaign._count.campaignCreators, "creator", "creators")}
                   </span>
-                  <span className="w-24 text-right text-sm">
-                    {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
+                  <span className="w-28 text-right text-sm">
+                    {
+                      campaignStatus(campaign.status, {
+                        total: campaign._count.campaignCreators,
+                        toEmail: toEmailByCampaign.get(campaign.id) ?? 0,
+                      }).label
+                    }
                   </span>
                   <ArrowRight className="size-4 text-muted-foreground" aria-hidden />
                 </Link>

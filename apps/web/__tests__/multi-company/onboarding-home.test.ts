@@ -44,7 +44,7 @@ vi.mock("@/lib/prisma", () => ({
     shopifyOrder: { count },
     contentPost: { count },
     interventionCase: { count },
-    campaignCreator: { count, findMany },
+    campaignCreator: { count, findMany, groupBy: vi.fn(async () => []) },
     campaign: { findMany },
     campaignHealthSnapshot: { findMany },
     brand: { findUnique: vi.fn(async () => ({ productFacts: null, apifyTokenEnc: null, useSharedApify: false })) },

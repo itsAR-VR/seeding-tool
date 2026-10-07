@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  getCurrentBrandMembership,
+  BrandAccessError,
+} from "@/lib/integrations/brand-access";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
@@ -30,16 +38,30 @@ export default async function CampaignsPage() {
     throw error;
   }
 
-  const campaigns = await prisma.campaign.findMany({
-    where: { brandId: membership.brandId },
-    include: {
-      _count: { select: { campaignCreators: true } },
-      campaignProducts: {
-        include: { product: { select: { name: true } } },
+  const [campaigns, toEmailRows] = await Promise.all([
+    prisma.campaign.findMany({
+      where: { brandId: membership.brandId },
+      include: {
+        _count: { select: { campaignCreators: true } },
+        campaignProducts: {
+          include: { product: { select: { name: true } } },
+        },
       },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.campaignCreator.groupBy({
+      by: ["campaignId"],
+      where: {
+        campaign: { brandId: membership.brandId },
+        reviewStatus: "approved",
+        lifecycleStatus: "ready",
+      },
+      _count: { _all: true },
+    }),
+  ]);
+  const toEmailByCampaign = new Map(
+    toEmailRows.map((r) => [r.campaignId, r._count._all]),
+  );
 
   return (
     <div className="space-y-6">
@@ -60,8 +82,8 @@ export default async function CampaignsPage() {
           <CardHeader>
             <CardTitle>No campaigns yet</CardTitle>
             <CardDescription>
-              A campaign is one product gifted to a list of creators. Start one, then pick your
-              product and find creators.
+              A campaign is one product gifted to a list of creators. Start one,
+              then pick your product and find creators.
             </CardDescription>
             <div className="pt-2">
               <Link href="/campaigns/new" className={buttonVariants()}>
@@ -82,18 +104,24 @@ export default async function CampaignsPage() {
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
-                      <CardTitle className="text-lg">
-                        {campaign.name}
-                      </CardTitle>
+                      <CardTitle className="text-lg">{campaign.name}</CardTitle>
                       {campaign.description && (
                         <CardDescription className="mt-1">
                           {campaign.description}
                         </CardDescription>
                       )}
                     </div>
-                    <StatusPill tone={campaignStatus(campaign.status).tone}>
-                      {campaignStatus(campaign.status).label}
-                    </StatusPill>
+                    {(() => {
+                      const status = campaignStatus(campaign.status, {
+                        total: campaign._count.campaignCreators,
+                        toEmail: toEmailByCampaign.get(campaign.id) ?? 0,
+                      });
+                      return (
+                        <StatusPill tone={status.tone}>
+                          {status.label}
+                        </StatusPill>
+                      );
+                    })()}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                     <span>

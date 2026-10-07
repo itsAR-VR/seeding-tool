@@ -31,7 +31,7 @@ type Field = {
 const SECTIONS: Array<{ title: string; intro: string; fields: Field[] }> = [
   {
     title: "Who's writing",
-    intro: "Used in AI-drafted replies to creators.",
+    intro: "Used in suggested replies to creators.",
     fields: [
       { key: "senderFirstName", label: "Your first name", help: "Replies are written as you, e.g. \"Kam\".", placeholder: "Alex" },
       {
@@ -45,7 +45,7 @@ const SECTIONS: Array<{ title: string; intro: string; fields: Field[] }> = [
   },
   {
     title: "Product facts",
-    intro: "The AI only answers creator questions with these facts. Leave this empty to turn AI replies off.",
+    intro: "Suggested replies only answer creator questions with these facts. Leave this empty and you won't get suggested replies.",
     fields: [
       {
         key: "productFacts",
@@ -57,7 +57,7 @@ const SECTIONS: Array<{ title: string; intro: string; fields: Field[] }> = [
       {
         key: "replyExamples",
         label: "Example answers (optional)",
-        help: "A few real questions with the answer you'd send. These teach the AI your voice.",
+        help: "A few real questions with the answer you'd send. These teach suggested replies your voice.",
         rows: 8,
         placeholder: "Their reply: Do I have to post about it?\nGood answer:\nI'd love for you to try it first, and share only if you love it!",
       },

@@ -80,7 +80,7 @@ function CreatorSearchSettings() {
       ? "Couldn't load this. Refresh the page to try again."
       : "Loading..."
     : status.hasOwnKey
-      ? "Searches use your own key, so they come out of your Apify account."
+      ? "Searches run on your own search account, so they use its allowance, not ours."
       : status.usesShared
         ? "Creator search is included. Seed Scale covers your searches."
         : "Not set up yet. Add a key below to find creators.";
@@ -99,13 +99,15 @@ function CreatorSearchSettings() {
         {status?.usesShared && !status.hasOwnKey && (
           <p className="text-sm text-muted-foreground">You don&apos;t need to do anything. A key is only for running searches on your own account.</p>
         )}
-        <details open={!status || status.hasOwnKey || !status.usesShared} className="group">
-          {status?.usesShared && !status.hasOwnKey && (
+        {/* Wait for the status so people on the included search never see the key form flash open. */}
+        {status && (
+        <details open={status.hasOwnKey || !status.usesShared} className="group">
+          {status.usesShared && !status.hasOwnKey && (
             <summary className="cursor-pointer text-sm font-medium underline">Use your own search key instead</summary>
           )}
         <form onSubmit={(e) => void save(e)} className="mt-3 space-y-3">
           <label className="block text-sm font-medium">
-            {status?.hasOwnKey ? "Replace your search account key (from Apify)" : "Your search account key (from Apify)"}
+            {status.hasOwnKey ? "Replace your search account key (from Apify)" : "Your search account key (from Apify)"}
             <input
               type="password"
               value={token}
@@ -115,7 +117,7 @@ function CreatorSearchSettings() {
               className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2"
             />
             <span className="mt-1 block text-sm text-muted-foreground">
-              This key lets creator search run on your own account, so searches come out of your Apify account. To find it, open Apify, go to Settings, then API &amp; Integrations, and copy your personal token.
+              Your search account is with Apify. To find the key, open Apify, go to Settings, then API &amp; Integrations, and copy your personal token.
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-4">
@@ -127,7 +129,7 @@ function CreatorSearchSettings() {
             >
               {busy ? "Checking..." : "Save key"}
             </button>
-            {status?.hasOwnKey && (
+            {status.hasOwnKey && (
               <button type="button" disabled={busy} onClick={() => void remove()} className="text-sm font-medium underline">
                 Remove key
               </button>
@@ -140,6 +142,7 @@ function CreatorSearchSettings() {
           )}
         </form>
         </details>
+        )}
         {notice && <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>}
       </section>
 

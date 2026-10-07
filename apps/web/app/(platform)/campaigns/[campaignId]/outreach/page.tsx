@@ -778,7 +778,7 @@ export default function OutreachPage() {
         <div className="space-y-4 px-6 pb-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label>AI writing style</Label>
+              <Label>Writing style</Label>
               <Select value={personaId} onValueChange={(v) => v && setPersonaId(v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a style">

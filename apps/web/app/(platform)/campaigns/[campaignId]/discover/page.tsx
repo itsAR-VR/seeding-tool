@@ -399,7 +399,7 @@ export default function DiscoverCreatorsPage() {
               <p className="text-sm text-amber-700">{limitWarning}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Start with 10 to 25. Bigger searches take longer and use more creator search credit.
+                Start with 10 to 25. Bigger searches take longer and use more of your search allowance.
               </p>
             )}
           </div>

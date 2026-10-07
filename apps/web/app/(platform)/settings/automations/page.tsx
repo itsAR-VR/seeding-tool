@@ -226,7 +226,7 @@ export default function AutomationsPage() {
           </div>
         </div>
         <p className="text-sm text-muted-foreground">
-          Each run uses creator search credit, so start with every day or every week and 10 to 25 creators.
+          Each run uses some of your search allowance, so start with every day or every week and 10 to 25 creators.
         </p>
         {notice && (
           <p role="status" className={`text-sm ${notice.ok ? "text-green-800" : "text-destructive"}`}>

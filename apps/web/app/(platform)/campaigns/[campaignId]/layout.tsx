@@ -28,16 +28,19 @@ export default async function CampaignLayout({
     throw error;
   }
 
-  const [campaign, flags] = await Promise.all([
+  const [campaign, flags, toEmail] = await Promise.all([
     prisma.campaign.findFirst({
       where: { id: campaignId, brandId },
-      select: { id: true, name: true, description: true, status: true },
+      select: { id: true, name: true, description: true, status: true, _count: { select: { campaignCreators: true } } },
     }),
     getFeatureFlags(brandId),
+    prisma.campaignCreator.count({
+      where: { campaignId, campaign: { brandId }, reviewStatus: "approved", lifecycleStatus: "ready" },
+    }),
   ]);
   if (!campaign) notFound();
 
-  const status = campaignStatus(campaign.status);
+  const status = campaignStatus(campaign.status, { total: campaign._count.campaignCreators, toEmail });
 
   return (
     <div className="space-y-6">
