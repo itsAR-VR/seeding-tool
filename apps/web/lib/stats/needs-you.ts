@@ -40,7 +40,8 @@ export type StuckCreator = {
  * Creators in sending campaigns with no progress for 3+ days. Leaves out
  * people not emailed yet (they're waiting on you to start, not stuck) and
  * anyone another Home row already covers: a reply to answer, an address to
- * check, or a gift order to finish. Home and System status both use this.
+ * check, or a gift order to finish. Anyone who posted or said no is finished,
+ * so they never show here. Home and System status both use this.
  */
 export async function findStuckCreators(
   brandId: string,
@@ -55,6 +56,8 @@ export async function findStuckCreators(
     },
     select: {
       id: true,
+      creatorId: true,
+      createdAt: true,
       reviewStatus: true,
       lifecycleStatus: true,
       outreachCount: true,
@@ -69,23 +72,26 @@ export async function findStuckCreators(
       },
       shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
       shopifyOrder: { select: { status: true } },
+      _count: { select: { mentionAssets: true } },
     },
     orderBy: { updatedAt: "asc" },
   });
 
+  // Posts count the same way as the campaign page: hand-added links, plus tagged
+  // posts that went up after they joined. Someone who posted is finished, not stuck.
+  const tagged = rows.length
+    ? await prisma.contentPost.findMany({
+        where: { brandId, hidden: false, creatorId: { in: [...new Set(rows.map((r) => r.creatorId))] } },
+        select: { creatorId: true, postedAt: true, createdAt: true },
+      })
+    : [];
+  const postCount = (r: (typeof rows)[number]) =>
+    r._count.mentionAssets +
+    tagged.filter((p) => p.creatorId === r.creatorId && (p.postedAt ?? p.createdAt) >= r.createdAt).length;
+
   return rows
-    .filter(
-      (r) =>
-        !needsAnswer({
-          replyDecision: r.replyDecision,
-          latestMessageDirection: r.conversationThread?.messages[0]?.direction,
-        }) &&
-        !addressToCheck({ shippingSnapshots: r.shippingSnapshots }) &&
-        r.shopifyOrder?.status !== "draft_created",
-    )
     .map((r) => ({
-      id: r.id,
-      lifecycleStatus: r.lifecycleStatus,
+      r,
       stage: displayStage({
         reviewStatus: r.reviewStatus,
         lifecycleStatus: r.lifecycleStatus,
@@ -96,7 +102,23 @@ export async function findStuckCreators(
         latestMessageDirection: r.conversationThread?.messages[0]?.direction,
         shippingSnapshots: r.shippingSnapshots,
         orderStatus: r.shopifyOrder?.status ?? null,
+        postCount: postCount(r),
       }),
+    }))
+    .filter(({ stage }) => stage !== "posted" && stage !== "done" && stage !== "said_no")
+    .filter(
+      ({ r }) =>
+        !needsAnswer({
+          replyDecision: r.replyDecision,
+          latestMessageDirection: r.conversationThread?.messages[0]?.direction,
+        }) &&
+        !addressToCheck({ shippingSnapshots: r.shippingSnapshots }) &&
+        r.shopifyOrder?.status !== "draft_created",
+    )
+    .map(({ r, stage }) => ({
+      id: r.id,
+      lifecycleStatus: r.lifecycleStatus,
+      stage,
       updatedAt: r.updatedAt,
       campaign: r.campaign,
       creator: r.creator,

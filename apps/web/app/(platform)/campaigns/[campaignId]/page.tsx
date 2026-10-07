@@ -51,13 +51,12 @@ function addressLinkNote(stage: DisplayStage): string | null {
       return "After review";
     case "ready":
       return "After you email them";
+    // Not going ahead: the status pill already says why, so the column stays quiet.
     case "not_a_fit":
     case "maybe_later":
-      return "Not needed";
     case "said_no":
-      return "Said no";
     case "not_now":
-      return "Not right now";
+      return "–";
     case "address_to_check":
     case "address_in":
     case "order_made":
@@ -442,7 +441,11 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                             </Link>
                           ) : next ? (
                             <span className="text-muted-foreground">{next.label}</span>
-                          ) : null}
+                          ) : (
+                            <span className="text-muted-foreground" aria-label="No next step">
+                              –
+                            </span>
+                          )}
                         </td>
                         <td className="py-3">
                           {addressNote ? (
@@ -452,6 +455,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                               campaignId={campaignId}
                               creatorId={cc.creatorId}
                               disabled={!hasCampaignProducts}
+                              label={cc.stage === "order_cancelled" ? "Copy a new address link" : undefined}
                             />
                           )}
                         </td>

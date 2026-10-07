@@ -625,7 +625,11 @@ export default function OutreachPage() {
               <CardDescription>
                 {loadingCreators
                   ? "Loading…"
-                  : `Click the creators you want to email. ${sendableCreators.length} of ${approvedCreators.length} haven't been emailed yet.`}
+                  : `Click the creators you want to email. ${sendableCreators.length} of ${creators.length} in this campaign still need a first email.${
+                      creators.length > approvedCreators.length
+                        ? ` ${creators.length - approvedCreators.length} not approved aren't listed.`
+                        : ""
+                    }`}
               </CardDescription>
             </div>
             {sendableCreators.length > 0 && (
@@ -664,8 +668,9 @@ export default function OutreachPage() {
               </div>
             </div>
           ) : (
-            <div className="space-y-2">
-              {approvedCreators.map((cc) => {
+            <div className="space-y-4">
+              {(() => {
+                const renderRow = (cc: (typeof approvedCreators)[number]) => {
                 const sendable = cc.lifecycleStatus === "ready" && !queuedIds.has(cc.id);
                 return (
                 <div
@@ -727,7 +732,24 @@ export default function OutreachPage() {
                   )}
                 </div>
                 );
-              })}
+                };
+                const sendableIds = new Set(sendableCreators.map((c) => c.id));
+                const alreadyEmailed = approvedCreators.filter((c) => !sendableIds.has(c.id));
+                return (
+                  <>
+                    {/* The ones you can pick come first; everyone already emailed folds away below. */}
+                    <div className="space-y-2">{sendableCreators.map(renderRow)}</div>
+                    {alreadyEmailed.length > 0 && (
+                      <details className="group">
+                        <summary className="w-fit cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground">
+                          Already emailed or queued ({alreadyEmailed.length})
+                        </summary>
+                        <div className="mt-2 space-y-2">{alreadyEmailed.map(renderRow)}</div>
+                      </details>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 

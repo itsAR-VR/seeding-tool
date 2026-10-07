@@ -191,7 +191,8 @@ export default async function DashboardPage() {
   });
   const stuckGroups = groupByCampaign(stuckCreators);
   const stuckTodos: Todo[] = stuckGroups.map((group) => {
-    const where = stuckGroups.length > 1 ? ` in ${group.campaignName}` : "";
+    // Always name the campaign: the link opens that campaign, not every stuck creator.
+    const where = ` in ${group.campaignName}`;
     return {
       count: group.count,
       text: plural(

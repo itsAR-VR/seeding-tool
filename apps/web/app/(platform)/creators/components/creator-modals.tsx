@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -15,6 +15,7 @@ import type {
   SearchSourceKey,
 } from "../hooks/use-creators-state";
 import { sourceLabel } from "./creator-filters";
+import { useModal } from "@/components/use-modal";
 
 // ── Campaign Modal ──────────────────────────────────────────────────────
 
@@ -35,9 +36,12 @@ export function CampaignModal({
   onConfirm,
   onClose,
 }: CampaignModalProps) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  useModal(boxRef, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <Card
+        ref={boxRef}
         className="w-full max-w-md"
         role="dialog"
         aria-modal="true"
@@ -178,12 +182,21 @@ export function SearchModal({
 }: SearchModalProps) {
   const [pendingWords, setPendingWords] = useState("");
   const nothingToSearch = selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim();
+  const boxRef = useRef<HTMLDivElement>(null);
+  useModal(boxRef, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <Card className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden">
+      <Card
+        ref={boxRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="find-creators-title"
+        aria-describedby="find-creators-intro"
+        className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden"
+      >
         <CardHeader className="shrink-0 border-b pb-4">
-          <CardTitle>Find creators</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <CardTitle id="find-creators-title">Find creators</CardTitle>
+          <p id="find-creators-intro" className="mt-1 text-sm text-muted-foreground">
             Type what their content is about. We search Instagram and Collabstr and score each creator against your
             brand.
           </p>

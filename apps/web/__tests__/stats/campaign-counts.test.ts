@@ -24,12 +24,14 @@ import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
 const mocks = vi.hoisted(() => ({
   threadFindMany: vi.fn(),
   ccFindMany: vi.fn(),
+  postFindMany: vi.fn(),
 }));
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     conversationThread: { findMany: mocks.threadFindMany },
     campaignCreator: { findMany: mocks.ccFindMany },
+    contentPost: { findMany: mocks.postFindMany },
   },
 }));
 
@@ -162,9 +164,14 @@ describe("needs-you queries", () => {
       conversationThread: null,
       shippingSnapshots: [],
       shopifyOrder: null,
+      creatorId: "cr-1",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      _count: { mentionAssets: 0 },
     };
+    mocks.postFindMany.mockResolvedValue([]);
     mocks.ccFindMany.mockResolvedValue([
       { ...base, id: "quiet" },
+      { ...base, id: "posted", _count: { mentionAssets: 1 } },
       { ...base, id: "reply", conversationThread: { messages: [{ direction: "inbound" }] } },
       { ...base, id: "address", shippingSnapshots: [{ isActive: false, confirmedAt: null }] },
       { ...base, id: "order", shopifyOrder: { status: "draft_created" } },

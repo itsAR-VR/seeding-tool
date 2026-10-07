@@ -8,12 +8,14 @@ type GiftClaimLinkButtonProps = {
   campaignId: string;
   creatorId: string;
   disabled?: boolean;
+  label?: string;
 };
 
 export function GiftClaimLinkButton({
   campaignId,
   creatorId,
   disabled = false,
+  label = "Copy address link",
 }: GiftClaimLinkButtonProps) {
   const [state, setState] = useState<"idle" | "loading" | "copied">("idle");
 
@@ -55,7 +57,7 @@ export function GiftClaimLinkButton({
         ? "Generating…"
         : state === "copied"
           ? "Copied"
-          : "Copy address link"}
+          : label}
     </Button>
   );
 }

@@ -177,7 +177,7 @@ export default function OrdersPage() {
             .
           </div>
         ) : (
-          <OrdersTable orders={orders.map(toTableRow)} />
+          <OrdersTable orders={orders.map(toTableRow)} campaignId={campaignId} />
         )}
       </section>
     </div>
