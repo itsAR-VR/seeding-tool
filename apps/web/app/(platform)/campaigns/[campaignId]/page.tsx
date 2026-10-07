@@ -15,27 +15,27 @@ import {
 import { TriggerSearchButton } from "./_components/TriggerSearchButton";
 import { GiftClaimLinkButton } from "./_components/GiftClaimLinkButton";
 
-const lifecycleColors: Record<string, string> = {
-  ready: "bg-gray-100 text-gray-800",
-  outreach_sent: "bg-blue-100 text-blue-800",
-  replied: "bg-purple-100 text-purple-800",
-  address_review: "bg-amber-100 text-amber-800",
-  address_confirmed: "bg-green-100 text-green-800",
-  order_created: "bg-teal-100 text-teal-800",
-  shipped: "bg-indigo-100 text-indigo-800",
-  delivered: "bg-emerald-100 text-emerald-800",
-  posted: "bg-pink-100 text-pink-800",
-  completed: "bg-green-200 text-green-900",
-  opted_out: "bg-red-100 text-red-800",
-  stalled: "bg-yellow-100 text-yellow-800",
-};
-
-const reviewColors: Record<string, string> = {
-  pending: "bg-yellow-100 text-yellow-800",
-  approved: "bg-green-100 text-green-800",
-  declined: "bg-red-100 text-red-800",
-  deferred: "bg-gray-100 text-gray-600",
-};
+/** One plain status per creator, combining review and progress. */
+function creatorStatus(c: { reviewStatus: string; lifecycleStatus: string }): { label: string; tone: string } {
+  if (c.reviewStatus === "pending") return { label: "Needs review", tone: "bg-amber-100 text-amber-900" };
+  if (c.reviewStatus === "declined") return { label: "Not a fit", tone: "bg-slate-100 text-slate-700" };
+  if (c.reviewStatus === "deferred") return { label: "Maybe later", tone: "bg-slate-100 text-slate-700" };
+  const byStep: Record<string, { label: string; tone: string }> = {
+    ready: { label: "Ready to email", tone: "bg-slate-100 text-slate-800" },
+    outreach_sent: { label: "Emailed", tone: "bg-blue-100 text-blue-900" },
+    replied: { label: "Replied", tone: "bg-purple-100 text-purple-900" },
+    address_review: { label: "Address to check", tone: "bg-amber-100 text-amber-900" },
+    address_confirmed: { label: "Address in", tone: "bg-green-100 text-green-900" },
+    order_created: { label: "Order made", tone: "bg-teal-100 text-teal-900" },
+    shipped: { label: "Shipped", tone: "bg-indigo-100 text-indigo-900" },
+    delivered: { label: "Delivered", tone: "bg-emerald-100 text-emerald-900" },
+    posted: { label: "Posted", tone: "bg-pink-100 text-pink-900" },
+    completed: { label: "Done", tone: "bg-green-200 text-green-950" },
+    opted_out: { label: "Said no", tone: "bg-red-100 text-red-900" },
+    stalled: { label: "Not right now", tone: "bg-slate-100 text-slate-700" },
+  };
+  return byStep[c.lifecycleStatus] ?? { label: c.lifecycleStatus.replace(/_/g, " "), tone: "bg-slate-100 text-slate-800" };
+}
 
 type PageProps = {
   params: Promise<{ campaignId: string }>;
@@ -44,16 +44,20 @@ type PageProps = {
 
 /** Stat-box filters for the creator list. Keys match the ?filter= query value. */
 const CREATOR_FILTERS: Record<string, { label: string; match: (c: { reviewStatus: string; lifecycleStatus: string }) => boolean }> = {
-  pending: { label: "Pending review", match: (c) => c.reviewStatus === "pending" },
+  pending: { label: "Needs review", match: (c) => c.reviewStatus === "pending" },
   approved: { label: "Approved", match: (c) => c.reviewStatus === "approved" },
-  declined: { label: "Declined", match: (c) => c.reviewStatus === "declined" },
+  declined: { label: "Not a fit", match: (c) => c.reviewStatus === "declined" },
+  to_email: {
+    label: "Ready to email",
+    match: (c) => c.reviewStatus === "approved" && c.lifecycleStatus === "ready",
+  },
   emailed: {
-    label: "Outreach sent",
+    label: "Emailed",
     match: (c) => c.reviewStatus === "approved" && c.lifecycleStatus !== "ready",
   },
   replied: { label: "Replied", match: (c) => c.lifecycleStatus === "replied" },
-  address_review: { label: "Address review", match: (c) => c.lifecycleStatus === "address_review" },
-  address_confirmed: { label: "Address confirmed", match: (c) => c.lifecycleStatus === "address_confirmed" },
+  address_review: { label: "Address to check", match: (c) => c.lifecycleStatus === "address_review" },
+  address_confirmed: { label: "Address in", match: (c) => c.lifecycleStatus === "address_confirmed" },
 };
 
 export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
@@ -120,6 +124,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     total: creators.length,
     pendingReview: creators.filter((c) => c.reviewStatus === "pending").length,
     approved: creators.filter((c) => c.reviewStatus === "approved").length,
+    toEmail: creators.filter((c) => c.reviewStatus === "approved" && c.lifecycleStatus === "ready").length,
     declined: creators.filter((c) => c.reviewStatus === "declined").length,
     outreachSent: creators.filter(
       (c) => c.lifecycleStatus !== "ready" && c.reviewStatus === "approved"
@@ -178,7 +183,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   : "bg-gray-100 text-gray-800"
               }
             >
-              {campaign.status}
+              {({ draft: "Not started", active: "Sending", paused: "Paused", completed: "Finished", archived: "Archived" } as Record<string, string>)[campaign.status] ?? campaign.status}
             </Badge>
           </div>
           {campaign.description && (
@@ -187,36 +192,26 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {outreachBlockers.length === 0 && (
-            <Link href={`/campaigns/${campaignId}/outreach`}>
-              <Button>Email creators →</Button>
+        <nav aria-label="Campaign" className="flex flex-wrap items-center gap-1 text-sm">
+          {stats.pendingReview > 0 && (
+            <Link href={`/campaigns/${campaignId}/review`}>
+              <Button size="sm">Review {stats.pendingReview} new creators</Button>
             </Link>
           )}
-          <Link href={`/campaigns/${campaignId}/analytics`}>
-            <Button variant="ghost" size="sm">📊 Analytics</Button>
-          </Link>
-          <TriggerSearchButton campaignId={campaignId} />
-          {outreachBlockers.length > 0 && (
-            <Button variant="ghost" size="sm" disabled>
-              Email creators (finish setup first)
-            </Button>
-          )}
-          <Link href={`/campaigns/${campaignId}/review`}>
-            <Button variant="ghost" size="sm">
-              Review Queue ({stats.pendingReview})
-            </Button>
-          </Link>
           <Link href={`/campaigns/${campaignId}/orders`}>
-            <Button variant="ghost" size="sm">📦 Orders</Button>
+            <Button variant="ghost" size="sm">Orders</Button>
           </Link>
           <Link href={`/campaigns/${campaignId}/mentions`}>
-            <Button variant="ghost" size="sm">📣 Mentions</Button>
+            <Button variant="ghost" size="sm">Posts</Button>
+          </Link>
+          <Link href={`/campaigns/${campaignId}/analytics`}>
+            <Button variant="ghost" size="sm">Results</Button>
           </Link>
           <Link href={`/campaigns/${campaignId}/seed-list`}>
-            <Button variant="ghost" size="sm">Portfolio Preview</Button>
+            <Button variant="ghost" size="sm">Shareable list</Button>
           </Link>
-        </div>
+          <TriggerSearchButton campaignId={campaignId} />
+        </nav>
       </div>
 
       {outreachBlockers.length === 0 ? (
@@ -224,10 +219,15 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
           href={`/campaigns/${campaignId}/outreach`}
           className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900 transition-colors hover:bg-green-100"
         >
-          <span className="font-medium">Ready to email</span>
-          <span>✓ {campaign.campaignProducts.length} product{campaign.campaignProducts.length === 1 ? "" : "s"}</span>
-          <span>✓ {stats.approved} approved</span>
-          <span>✓ {hasEmailSender ? "Gmail" : "Instagram DMs"} connected</span>
+          <span className="font-medium">
+            {stats.toEmail > 0
+              ? `${stats.toEmail} creator${stats.toEmail === 1 ? " is" : "s are"} ready to email`
+              : "Everyone approved has been emailed"}
+          </span>
+          <span className="text-green-800">
+            {campaign.campaignProducts.length} product{campaign.campaignProducts.length === 1 ? "" : "s"} ·{" "}
+            {hasEmailSender ? "Gmail" : "Instagram DMs"} connected
+          </span>
           <span className="ml-auto font-medium">Email creators →</span>
         </Link>
       ) : (
@@ -239,9 +239,9 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         }
       >
         <CardHeader>
-          <CardTitle className="text-base">Operator readiness</CardTitle>
+          <CardTitle className="text-base">Finish setup before emailing</CardTitle>
           <CardDescription>
-            Draft outreach is only enabled once the campaign has products, at least one approved creator, and a live send channel.
+            You need a product, at least one approved creator, and a connected email account.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -316,40 +316,34 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       </Card>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
+      {/* Progress: one row, each step filters the list below */}
+      <nav aria-label="Filter creators by step" className="flex flex-wrap gap-2">
         {[
-          { label: "Total", value: stats.total, filter: null },
-          { label: "Pending", value: stats.pendingReview, filter: "pending" },
-          { label: "Approved", value: stats.approved, filter: "approved" },
-          { label: "Declined", value: stats.declined, filter: "declined" },
-          { label: "Outreach Sent", value: stats.outreachSent, filter: "emailed" },
+          { label: "All", value: stats.total, filter: null },
+          { label: "Ready to email", value: stats.toEmail, filter: "to_email" },
+          { label: "Emailed", value: stats.outreachSent, filter: "emailed" },
           { label: "Replied", value: stats.replied, filter: "replied" },
-          { label: "Address Review", value: stats.addressReview, filter: "address_review" },
-          { label: "Address Confirmed", value: stats.addressConfirmed, filter: "address_confirmed" },
-        ].map((stat) => {
-          const selected = (stat.filter ?? null) === activeFilter;
+          { label: "Address to check", value: stats.addressReview, filter: "address_review" },
+          { label: "Address in", value: stats.addressConfirmed, filter: "address_confirmed" },
+          ...(stats.pendingReview > 0 ? [{ label: "Needs review", value: stats.pendingReview, filter: "pending" }] : []),
+          ...(stats.declined > 0 ? [{ label: "Not a fit", value: stats.declined, filter: "declined" }] : []),
+        ].map((step) => {
+          const selected = (step.filter ?? null) === activeFilter;
           return (
             <Link
-              key={stat.label}
-              href={stat.filter ? `/campaigns/${campaignId}?filter=${stat.filter}#creators` : `/campaigns/${campaignId}#creators`}
+              key={step.label}
+              href={step.filter ? `/campaigns/${campaignId}?filter=${step.filter}#creators` : `/campaigns/${campaignId}#creators`}
               scroll={false}
-              className="group block"
+              aria-current={selected ? "true" : undefined}
+              className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
+              }`}
             >
-              <Card
-                className={`h-full transition-shadow group-hover:shadow-md ${
-                  selected ? "ring-2 ring-foreground/30" : ""
-                }`}
-              >
-                <CardContent className="p-4">
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                  <p className="text-xs text-muted-foreground">{stat.label}</p>
-                </CardContent>
-              </Card>
+              {step.label} <span className="ml-1 font-semibold tabular-nums">{step.value}</span>
             </Link>
           );
         })}
-      </div>
+      </nav>
 
       {/* Products */}
       <Card>
@@ -410,10 +404,10 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
               </p>
               <div className="flex gap-2">
                 <Link href={`/campaigns/${campaignId}/discover`}>
-                  <Button size="sm">🔍 Discover Creators</Button>
+                  <Button size="sm">Find creators</Button>
                 </Link>
                 <Link href={`/campaigns/${campaignId}/import`}>
-                  <Button size="sm" variant="outline">Import Manually</Button>
+                  <Button size="sm" variant="outline">Add from a list</Button>
                 </Link>
               </div>
             </div>
@@ -423,90 +417,76 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                 <thead>
                   <tr className="border-b text-left">
                     <th className="pb-2 font-medium">Creator</th>
-                    <th className="pb-2 font-medium">Handle</th>
                     <th className="pb-2 font-medium">Followers</th>
-                    <th className="pb-2 font-medium">Review</th>
                     <th className="pb-2 font-medium">Status</th>
                     <th className="pb-2 font-medium">Next step</th>
-                    <th className="pb-2 font-medium">Claim Link</th>
+                    <th className="pb-2 font-medium">Address link</th>
                   </tr>
                 </thead>
                 <tbody>
                   {visibleCreators.map((cc) => {
                     const profile = cc.creator.profiles[0];
+                    const status = creatorStatus(cc);
+                    const pastFirstEmail =
+                      cc.reviewStatus === "approved" && !["ready", "opted_out"].includes(cc.lifecycleStatus);
                     return (
                       <tr key={cc.id} className="border-b last:border-0">
-                        <td className="py-2">
+                        <td className="py-3">
                           <Link href={`/creators/${cc.creatorId}`} className="font-medium hover:underline">
                             {cc.creator.name ?? "Unknown"}
                           </Link>
-                        </td>
-                        <td className="py-2">
-                          {profile ? (
-                            <InstagramHandleLink
-                              handle={profile.handle}
-                              url={profile.url}
-                              className="text-blue-600 hover:underline"
-                            />
-                          ) : (
-                            "—"
+                          {profile && (
+                            <div className="text-muted-foreground">
+                              <InstagramHandleLink
+                                handle={profile.handle}
+                                url={profile.url}
+                                className="hover:text-foreground hover:underline"
+                              />
+                            </div>
                           )}
                         </td>
-                        <td className="py-2">
+                        <td className="py-3 tabular-nums">
                           {profile?.followerCount?.toLocaleString() ?? "—"}
                         </td>
-                        <td className="py-2">
-                          <Badge
-                            className={
-                              reviewColors[cc.reviewStatus] ??
-                              reviewColors.pending
-                            }
-                          >
-                            {cc.reviewStatus}
-                          </Badge>
+                        <td className="py-3">
+                          <Badge className={status.tone}>{status.label}</Badge>
                         </td>
-                        <td className="py-2">
-                          <Badge
-                            className={
-                              lifecycleColors[cc.lifecycleStatus] ??
-                              lifecycleColors.ready
-                            }
-                          >
-                            {cc.lifecycleStatus.replace(/_/g, " ")}
-                          </Badge>
-                        </td>
-                        <td className="py-2">
+                        <td className="py-3">
                           {cc.conversationThread ? (
                             <Link
                               href={`/inbox/${cc.conversationThread.id}`}
                               className="text-blue-600 hover:underline"
                             >
-                              Open conversation →
+                              Open conversation
                             </Link>
                           ) : cc.reviewStatus === "approved" && cc.lifecycleStatus === "ready" ? (
                             <Link
                               href={`/campaigns/${campaignId}/outreach?select=${cc.id}`}
                               className="text-blue-600 hover:underline"
                             >
-                              Email →
+                              Email them
                             </Link>
                           ) : cc.reviewStatus === "pending" ? (
                             <Link
                               href={`/campaigns/${campaignId}/review`}
                               className="text-blue-600 hover:underline"
                             >
-                              Review →
+                              Review
                             </Link>
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="py-2">
-                          <GiftClaimLinkButton
-                            campaignId={campaignId}
-                            creatorId={cc.creatorId}
-                            disabled={cc.reviewStatus !== "approved" || !hasCampaignProducts}
-                          />
+                        <td className="py-3">
+                          {pastFirstEmail ? (
+                            <GiftClaimLinkButton
+                              campaignId={campaignId}
+                              creatorId={cc.creatorId}
+                              disabled={!hasCampaignProducts}
+                            />
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </td>
                       </tr>
                     );

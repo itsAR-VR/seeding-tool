@@ -364,7 +364,7 @@ export default function BrandSettingsPage() {
                   {(approvalThreshold * 100).toFixed(0)}%
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 Creators scoring at or above{" "}
                 <strong>{(approvalThreshold * 100).toFixed(0)}%</strong> are
                 considered a good fit by the AI.{" "}
@@ -376,7 +376,7 @@ export default function BrandSettingsPage() {
               </p>
 
               {/* Visual guide */}
-              <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+              <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted/40 p-3 text-sm text-muted-foreground">
                 <span>
                   🔒 <strong>Conservative (80–95%)</strong> — very tight fit
                   required, fewer creators pass
@@ -396,7 +396,7 @@ export default function BrandSettingsPage() {
 
             {/* Current saved state */}
             {approvalSettings && (
-              <div className="rounded-lg border border-muted bg-muted/20 p-3 text-xs text-muted-foreground">
+              <div className="rounded-lg border border-muted bg-muted/20 p-3 text-sm text-muted-foreground">
                 Current saved settings:{" "}
                 <strong>
                   {approvalSettings.approvalMode === "recommend"

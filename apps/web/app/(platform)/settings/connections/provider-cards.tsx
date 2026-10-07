@@ -68,13 +68,7 @@ export function GmailConnectionCard({
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Outreach emails will be sent from{" "}
-                <strong>
-                  {provider.details?.gmailAddress ??
-                    provider.externalId ??
-                    "your Gmail account"}
-                </strong>
-                .
+                Outreach emails send from this address.
               </p>
             )}
             <Button variant="outline" onClick={onConnect}>
@@ -137,41 +131,39 @@ export function ShopifyConnectionCard({
         <CardDescription>{provider.summary}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <MethodSelector
-          methods={provider.availableMethods}
-          activeMethod={provider.activeMethod}
-          disabled={switching}
-          onChange={onMethodChange}
-        />
+        {!provider.connected && (
+          <MethodSelector
+            methods={provider.availableMethods}
+            activeMethod={provider.activeMethod}
+            disabled={switching}
+            onChange={onMethodChange}
+          />
+        )}
         <FeedbackBanner message={message} />
 
         {provider.connected ? (
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Connected store:{" "}
-              <strong>
-                {provider.details?.storeDomain ?? provider.externalId ?? "Unknown store"}
-              </strong>
-            </p>
             {provider.details?.lastSyncAt && (
               <p className="text-sm text-muted-foreground">
-                Last sync:{" "}
-                <strong>
-                  {new Date(provider.details.lastSyncAt).toLocaleString()}
-                </strong>
-                {typeof provider.details.lastSyncedCount === "number" &&
-                  ` · ${provider.details.lastSyncedCount} products`}
-                {provider.details.truncated ? " · partial sync" : ""}
+                {typeof provider.details.lastSyncedCount === "number"
+                  ? `${provider.details.lastSyncedCount} products`
+                  : "Products"}{" "}
+                last updated{" "}
+                {new Date(provider.details.lastSyncAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+                {provider.details.truncated ? " (some were skipped)" : ""}
               </p>
             )}
             {provider.details?.lastSyncError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-                Last sync failed: {provider.details.lastSyncError}
+                Couldn&apos;t update products: {provider.details.lastSyncError}
               </div>
             )}
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={onSync} disabled={saving}>
-                {saving ? "Syncing..." : "Retry sync"}
+                {saving ? "Updating..." : "Update products"}
               </Button>
               <Button variant="destructive" onClick={onDisconnect} disabled={saving}>
                 {saving ? "Disconnecting..." : "Disconnect"}
@@ -207,14 +199,14 @@ export function ShopifyConnectionCard({
             >
               {saving ? "Connecting..." : "Connect manually"}
             </Button>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Use the Shopify admin domain in the form{" "}
               <code className="font-mono">your-store.myshopify.com</code>.
               Storefront domains like <code className="font-mono">sleepkalm.com</code>{" "}
               will not work with the admin token flow.
             </p>
             <ProviderGuide provider="shopify" />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Tokens are masked in the form and cleared after save. Use a fresh
               Admin API token, then verify the connection state and product sync
               result on this card.
@@ -233,7 +225,7 @@ export function ShopifyConnectionCard({
               disabled={!oauthShop.trim()}
               onClick={onOAuthConnect}
             >
-              Connect with Shopify OAuth
+              Sign in with Shopify
             </Button>
             <ProviderGuide provider="shopify" />
           </div>
@@ -278,13 +270,7 @@ export function InstagramConnectionCard({
         {provider.connected ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Connected account:{" "}
-              <strong>
-                @{provider.details?.instagramUsername ?? provider.externalId ?? "unknown"}
-              </strong>
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Tagged posts and mentions are checked every 15 minutes.
+              Posts, reels, and stories that tag this account show up on the Content page.
             </p>
             <Button variant="destructive" onClick={onDisconnect} disabled={loading}>
               {loading ? "Disconnecting..." : "Disconnect"}
@@ -378,7 +364,7 @@ export function UnipileConnectionCard({
               {saving ? "Saving..." : "Connect Unipile"}
             </Button>
             <ProviderGuide provider="unipile" />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               API keys stay masked in this form. After save, use the connected
               state here as your verification signal before enabling DM sending.
             </p>

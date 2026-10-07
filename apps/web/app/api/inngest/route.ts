@@ -28,9 +28,15 @@ import { stalledDetection } from "@/lib/inngest/functions/stalled-detection";
 import { confirmPosted } from "@/lib/inngest/functions/confirm-posted";
 import { campaignHealthCheck } from "@/lib/inngest/functions/campaign-health-check";
 
-export const { GET, POST, PUT } = serve({
-  client: inngest,
-  functions: [
+import { contentSyncCron, gmailReplySyncCron } from "@/lib/inngest/functions/sync-crons";
+
+// Only jobs that read data are switched on. The rest (follow-ups, reminders,
+// automations, order creation) can send email or create orders on their own,
+// so each gets turned on deliberately after it's been reviewed and tested.
+const REVIEWED_FUNCTIONS = [contentSyncCron, gmailReplySyncCron];
+
+// Kept imported so they're easy to switch on one at a time.
+const NOT_YET_ENABLED = [
     processReply,
     processDmReply,
     scheduleReminders,
@@ -53,5 +59,11 @@ export const { GET, POST, PUT } = serve({
     stalledDetection,
     confirmPosted,
     campaignHealthCheck,
-  ],
+];
+
+export const { GET, POST, PUT } = serve({
+  client: inngest,
+  functions: REVIEWED_FUNCTIONS,
 });
+
+void NOT_YET_ENABLED;
