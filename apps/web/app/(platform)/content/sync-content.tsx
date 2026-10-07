@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { TAP_TARGET_SM } from "@/components/responsive-table";
 
 type SyncResult = { connected: boolean; newPosts: number; updated: number; error?: string };
 
@@ -45,9 +46,9 @@ export function SyncContent() {
   }, [sync]);
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       {status && <span className="text-sm text-muted-foreground">{status}</span>}
-      <Button variant="outline" size="sm" onClick={() => void sync()} disabled={syncing}>
+      <Button variant="outline" size="sm" className={TAP_TARGET_SM} onClick={() => void sync()} disabled={syncing}>
         {syncing ? "Checking..." : "Check for new posts"}
       </Button>
     </div>

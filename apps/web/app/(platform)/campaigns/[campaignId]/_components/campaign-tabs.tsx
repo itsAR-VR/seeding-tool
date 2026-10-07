@@ -24,18 +24,21 @@ const MORE: readonly Tab[] = [
   { label: "Find creators", path: "/discover" },
   { label: "Add from a list", path: "/import" },
   { label: "Products", path: "/products" },
-  { label: "Shareable list", path: "/seed-list" },
 ];
+
+/** Only when its features are on in Settings > Features. */
+const CREATOR_MIX: Tab = { label: "Suggested creator mix", path: "/seed-list" };
 
 function isActive(pathname: string, base: string, path: string): boolean {
   const href = `${base}${path}`;
   return path === "" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function CampaignTabs({ campaignId }: { campaignId: string }) {
+export function CampaignTabs({ campaignId, showCreatorMix }: { campaignId: string; showCreatorMix: boolean }) {
   const pathname = usePathname() ?? "";
   const base = `/campaigns/${campaignId}`;
-  const activeMore = MORE.find((tab) => isActive(pathname, base, tab.path));
+  const more = showCreatorMix ? [...MORE, CREATOR_MIX] : MORE;
+  const activeMore = more.find((tab) => isActive(pathname, base, tab.path));
 
   const tabClass = (active: boolean) =>
     cn(
@@ -68,7 +71,7 @@ export function CampaignTabs({ campaignId }: { campaignId: string }) {
               </span>
             </summary>
             <ul className="absolute left-0 z-20 mt-1 min-w-48 rounded-lg border bg-popover p-1 shadow-md">
-              {MORE.map((tab) => {
+              {more.map((tab) => {
                 const active = activeMore === tab;
                 return (
                   <li key={tab.label}>

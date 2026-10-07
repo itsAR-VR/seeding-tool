@@ -64,10 +64,10 @@ export default function SeedListPreviewPage() {
         if (res.ok && data) {
           setPayload(data);
         } else {
-          setError(data?.error ?? "Couldn't load the suggested list. Refresh the page to try again.");
+          setError(data?.error ?? "Couldn't load the suggested creator mix. Refresh the page to try again.");
         }
       } catch {
-        setError("Couldn't load the suggested list. Check your connection and refresh the page.");
+        setError("Couldn't load the suggested creator mix. Check your connection and refresh the page.");
       } finally {
         setLoading(false);
       }
@@ -76,7 +76,7 @@ export default function SeedListPreviewPage() {
   }, [params.campaignId]);
 
   if (loading) {
-    return <p className="py-12 text-center text-muted-foreground">Loading the suggested list…</p>;
+    return <p className="py-12 text-center text-muted-foreground">Loading the suggested creator mix…</p>;
   }
 
   return (
@@ -91,7 +91,11 @@ export default function SeedListPreviewPage() {
 
       {error ? (
         <Card>
-          <CardContent role="alert" className="space-y-3 pt-6 text-sm text-red-800">
+          {/* Turned off is a setting, not a failure: say it calmly. Only real errors are red. */}
+          <CardContent
+            role={needsFeatureSetting(error) ? "status" : "alert"}
+            className={`space-y-3 pt-6 text-sm ${needsFeatureSetting(error) ? "text-muted-foreground" : "text-red-800"}`}
+          >
             <p>{error}</p>
             {needsFeatureSetting(error) && (
               <Link href="/settings/feature-flags" className={buttonVariants({ size: "sm" })}>

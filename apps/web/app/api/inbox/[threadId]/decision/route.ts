@@ -17,11 +17,13 @@ const DECLINED_REASON = "DECLINED";
 
 /**
  * POST /api/inbox/:threadId/decision
- * Body: { decision: "yes" | "no" }
+ * Body: { decision: "yes" | "no" | "later" | null, undo?: boolean }
  *
  * Records the operator's call on a creator's reply. "no" closes the
- * conversation and adds the email to the do-not-send list; switching back to
- * "yes" lifts only a suppression that this decision created.
+ * conversation and adds the email to the do-not-send list; switching away
+ * from "no" lifts only a suppression that this decision created.
+ * null clears the call (Undo), putting the reply back in "Needs your call".
+ * undo: true restores an earlier answer without recording a new outcome.
  */
 export async function POST(request: NextRequest, context: RouteContext) {
   try {
@@ -29,9 +31,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
     const membership = await getCurrentBrandMembership();
     requireWriteAccess(membership);
 
-    const { decision } = (await request.json()) as { decision?: ReplyDecision };
-    if (decision !== "yes" && decision !== "no" && decision !== "later") {
-      return NextResponse.json({ error: "decision must be yes, no or later" }, { status: 400 });
+    const { decision, undo } = (await request.json()) as { decision?: ReplyDecision | null; undo?: boolean };
+    if (decision !== null && decision !== "yes" && decision !== "no" && decision !== "later") {
+      return NextResponse.json({ error: "decision must be yes, no, later or null" }, { status: 400 });
     }
 
     const thread = await prisma.conversationThread.findFirst({
@@ -67,7 +69,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
       }
     }
 
-    if (decision === "later") {
+    if (decision === null) {
+      // Undo: back to undecided, so it shows in "Needs your call" again.
+      await prisma.campaignCreator.update({
+        where: { id: cc.id },
+        data: {
+          replyDecision: null,
+          replyDecidedAt: null,
+          ...(cc.lifecycleStatus === "opted_out" || cc.lifecycleStatus === "stalled"
+            ? { lifecycleStatus: "replied" }
+            : {}),
+        },
+      });
+      await prisma.conversationThread.update({
+        where: { id: thread.id },
+        data: { status: "open" },
+      });
+    } else if (decision === "later") {
       // Park: close the conversation, no suppression, can be emailed in a future campaign.
       await prisma.campaignCreator.update({
         where: { id: cc.id },
@@ -113,7 +131,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
         where: { id: thread.id },
         data: { status: "open" },
       });
-      if (cc.replyDecision !== "yes") {
+      if (cc.replyDecision !== "yes" && !undo) {
         await recordOutcomeEvent({ campaignCreatorId: cc.id, event: { type: "accepted" } });
       }
     }

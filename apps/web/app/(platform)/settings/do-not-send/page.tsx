@@ -5,6 +5,7 @@ import { AllowAgain } from "./allow-again";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StackedList, StackedRow, WideOnly } from "@/components/responsive-table";
 
 const REASON_LABELS: Record<string, string> = {
   DECLINED: "Said no",
@@ -62,8 +63,34 @@ export default async function DoNotSendPage() {
           {suppressions.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nobody is on the list yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
+            <>
+            <StackedList label="People on the do-not-send list">
+              {suppressions.map((s) => {
+                const creator = byEmail.get(s.email);
+                return (
+                  <StackedRow key={s.id}>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{creator?.name ?? "No name saved"}</p>
+                      {creator?.instagramHandle && (
+                        <p className="truncate text-sm text-muted-foreground">@{creator.instagramHandle}</p>
+                      )}
+                    </div>
+                    <p className="truncate text-sm" title={s.email}>{s.email}</p>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <StatusPill tone={s.reason === "BOUNCE" || s.reason === "COMPLAINT" ? "problem" : "neutral"}>
+                        {REASON_LABELS[s.reason] ?? s.reason}
+                      </StatusPill>
+                      <span className="text-muted-foreground">since {formatDate(s.suppressedAt)}</span>
+                    </div>
+                    {s.brandId && (s.reason === "DECLINED" || s.reason === "REPLY_OPTOUT") ? (
+                      <AllowAgain id={s.id} name={creator?.name ?? s.email} />
+                    ) : null}
+                  </StackedRow>
+                );
+              })}
+            </StackedList>
+            <WideOnly className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Creator</th>
@@ -84,7 +111,7 @@ export default async function DoNotSendPage() {
                           <span className="ml-2 text-muted-foreground">@{creator.instagramHandle}</span>
                         )}
                       </td>
-                      <td className="py-2">{s.email}</td>
+                      <td className="max-w-[16rem] truncate py-2" title={s.email}>{s.email}</td>
                       <td className="py-2">
                         <StatusPill tone={s.reason === "BOUNCE" || s.reason === "COMPLAINT" ? "problem" : "neutral"}>
                           {REASON_LABELS[s.reason] ?? s.reason}
@@ -103,7 +130,8 @@ export default async function DoNotSendPage() {
                 })}
               </tbody>
             </table>
-            </div>
+            </WideOnly>
+            </>
           )}
         </CardContent>
       </Card>

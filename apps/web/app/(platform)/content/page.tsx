@@ -118,7 +118,7 @@ export default async function ContentPage({
               ...(t.key === "all" ? {} : { tab: t.key }),
               ...(since ? { new: "1" } : {}),
             })}`}
-            className={`rounded-full border px-3 py-1 text-sm ${
+            className={`inline-flex min-h-11 items-center rounded-full border px-4 text-sm md:min-h-9 md:px-3 ${
               tab === t.key ? "bg-foreground text-background" : "hover:bg-muted"
             }`}
           >
@@ -139,7 +139,7 @@ export default async function ContentPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 min-[440px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {posts.map((post, index) => {
             const media = pickPostMedia(post, isStoredCopy);
             const rights = RIGHTS_LABELS[post.rightsStatus] ?? RIGHTS_LABELS.none;
@@ -149,6 +149,7 @@ export default async function ContentPage({
                   href={post.permalink ?? post.mediaUrl ?? "#"}
                   target="_blank"
                   rel="noreferrer"
+                  aria-label={`Open this ${post.mediaType === "VIDEO" ? "video" : "post"} on Instagram`}
                   className="relative block aspect-square bg-muted"
                 >
                   <PostThumbnail
@@ -196,13 +197,13 @@ export default async function ContentPage({
                       href={post.mediaUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="block text-sm font-medium underline"
+                      className="flex min-h-11 items-center text-sm font-medium underline md:min-h-0"
                     >
                       Download {post.mediaType === "IMAGE" ? "photo" : "file"}
                     </a>
                   )}
                   {post.metaAdId ? (
-                    <Link href="/ads" className="block text-sm font-medium underline">
+                    <Link href="/ads" className="flex min-h-11 items-center text-sm font-medium underline md:min-h-0">
                       {post.metaAdKind === "partnership" ? "Partnership ad" : "Paused ad"} created · See ads
                     </Link>
                   ) : (

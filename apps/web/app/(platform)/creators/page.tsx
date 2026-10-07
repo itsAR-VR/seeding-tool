@@ -197,6 +197,8 @@ function CreatorsContent() {
           page={state.page}
           totalPages={state.totalPages}
           setPage={state.setPage}
+          pageSize={state.pageSize}
+          setPageSize={state.setPageSize}
           onAddToCampaign={state.handleAddToCampaign}
         />
       )}

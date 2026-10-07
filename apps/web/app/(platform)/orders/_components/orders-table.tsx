@@ -66,7 +66,7 @@ export function OrdersTable({ orders, showCampaign = false }: { orders: readonly
             <th className="px-5 py-3 font-medium">Tracking</th>
             <th className="px-5 py-3 font-medium">Date</th>
             <th className="px-5 py-3 font-medium">
-              <span className="sr-only">Links</span>
+              <span className="sr-only">Actions</span>
             </th>
           </tr>
         </thead>

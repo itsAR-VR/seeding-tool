@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { guessFromIntent, type AiReplyGuess, type ReplyDecision } from "@/lib/inbox/decision";
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { formatDateTime } from "@/lib/format/date";
+import { adjacentReply, type QueueDirection } from "../next-reply";
+import { INBOX_CHANGED_EVENT, decisionLabel, offerUndo, postDecision } from "../decision-actions";
 
 type Message = {
   id: string;
@@ -88,8 +91,17 @@ type BrandData = {
 
 const ADDRESS_LINK = "{address link}";
 
+/** Keyed by thread so moving to the next reply starts fresh (no stale notices or drafts). */
 export default function ThreadDetailPage() {
   const params = useParams<{ threadId: string }>();
+  return <ThreadDetail key={params.threadId} threadId={params.threadId} />;
+}
+
+function isTyping(el: HTMLElement | null) {
+  return Boolean(el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)));
+}
+
+function ThreadDetail({ threadId }: { threadId: string }) {
   const router = useRouter();
   const [thread, setThread] = useState<Thread | null>(null);
   const [, setBrand] = useState<BrandData | null>(null);
@@ -105,12 +117,33 @@ export default function ThreadDetailPage() {
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  // What she just did here ("Marked Not right now."), shown next to "Next reply".
+  const [doneLine, setDoneLine] = useState<string | null>(null);
+  // "Needs your call" queue: the order when this thread opened, and what still waits now.
+  const [queueOrder, setQueueOrder] = useState<string[] | null>(null);
+  const [queueWaiting, setQueueWaiting] = useState<string[]>([]);
+
+  const refreshQueue = useCallback(async () => {
+    try {
+      const res = await fetch("/api/inbox/queue");
+      if (!res.ok) return;
+      const { ids } = (await res.json()) as { ids: string[] };
+      setQueueOrder((prev) => prev ?? ids);
+      setQueueWaiting(ids);
+    } catch {
+      // Keep the last known queue; the inbox list still works.
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshQueue();
+  }, [refreshQueue]);
 
   useEffect(() => {
     async function load() {
       try {
         const [threadRes, brandRes] = await Promise.all([
-          fetch(`/api/inbox/${params.threadId}`),
+          fetch(`/api/inbox/${threadId}`),
           fetch("/api/brands/current"),
         ]);
 
@@ -144,33 +177,33 @@ export default function ThreadDetailPage() {
       }
     }
     load();
-  }, [params.threadId]);
+  }, [threadId]);
 
-  async function reloadThread() {
-    const res = await fetch(`/api/inbox/${params.threadId}`);
+  const reloadThread = useCallback(async () => {
+    const res = await fetch(`/api/inbox/${threadId}`);
     if (res.ok) setThread((await res.json()) as Thread);
-  }
+  }, [threadId]);
 
-  /** Saves the decision. Returns an error message, or null when it saved. */
-  async function saveDecision(decision: ReplyDecision): Promise<string | null> {
-    try {
-      const res = await fetch(`/api/inbox/${params.threadId}/decision`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        return data.error ?? "Couldn't save their answer. Try again.";
+  const saveDecision = (decision: ReplyDecision) => postDecision(threadId, decision);
+
+  // An Undo (from this page or one she already left) changed the inbox: catch up.
+  useEffect(() => {
+    function onChanged(event: Event) {
+      const ids = (event as CustomEvent<string[]>).detail ?? [];
+      if (ids.includes(threadId)) {
+        setDoneLine(null);
+        void reloadThread();
       }
-      return null;
-    } catch {
-      return "Couldn't save their answer. Check your connection and try again.";
+      void refreshQueue();
     }
-  }
+    window.addEventListener(INBOX_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(INBOX_CHANGED_EVENT, onChanged);
+  }, [threadId, reloadThread, refreshQueue]);
 
+  // No confirm: save now, then offer Undo for 6 seconds.
   async function handleDecision(decision: ReplyDecision) {
-    if (decision === "no" && !confirm("Mark as no? They'll go on the do-not-send list and won't be emailed again.")) return;
+    if (!thread) return;
+    const before = thread.campaignCreator.replyDecision ?? null;
     setDeciding(true);
     setDecisionError(null);
     try {
@@ -179,11 +212,42 @@ export default function ThreadDetailPage() {
         setDecisionError(error);
         return;
       }
-      await reloadThread();
+      setDoneLine(`Marked ${decisionLabel(decision)}.`);
+      offerUndo({
+        message:
+          decision === "no"
+            ? `Marked No. Added to the do-not-send list.`
+            : `Marked ${decisionLabel(decision)}.`,
+        previous: { [threadId]: before },
+      });
+      await Promise.all([reloadThread(), refreshQueue()]);
     } finally {
       setDeciding(false);
     }
   }
+
+  const nextId = adjacentReply(queueOrder ?? [], queueWaiting, threadId, "next");
+  const previousId = adjacentReply(queueOrder ?? [], queueWaiting, threadId, "previous");
+
+  // j / k move through the replies that need her call (skipped while typing).
+  const goRef = useRef<(direction: QueueDirection) => void>(() => undefined);
+  goRef.current = (direction) => {
+    const id = direction === "next" ? nextId : previousId;
+    if (id) router.push(`/inbox/${id}`);
+  };
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const el = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      if (document.querySelector("dialog[open]") || el?.closest("dialog") || isTyping(el)) return;
+      const key = event.key.toLowerCase();
+      if (key !== "j" && key !== "k") return;
+      event.preventDefault();
+      goRef.current(key === "j" ? "next" : "previous");
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   async function handleSendReply() {
     if (!replyText.trim() || !thread) return;
@@ -200,7 +264,7 @@ export default function ThreadDetailPage() {
           return;
         }
       }
-      const res = await fetch(`/api/inbox/${params.threadId}/reply`, {
+      const res = await fetch(`/api/inbox/${threadId}/reply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ body: replyText, draftId: suggestionId ?? undefined }),
@@ -225,7 +289,7 @@ export default function ThreadDetailPage() {
       });
       setReplyText("");
       setSuggestionId(null);
-      await reloadThread();
+      await Promise.all([reloadThread(), refreshQueue()]);
     } catch {
       setReplyNotice({ tone: "error", text: "Your reply didn't send. Check your connection and try again." });
       if (autoYes) await reloadThread().catch(() => undefined);
@@ -240,7 +304,7 @@ export default function ThreadDetailPage() {
     setDmSending(true);
     setDmError(null);
     try {
-      const res = await fetch(`/api/inbox/${params.threadId}/send-dm`, {
+      const res = await fetch(`/api/inbox/${threadId}/send-dm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: dmText.trim() }),
@@ -249,7 +313,7 @@ export default function ThreadDetailPage() {
       if (res.ok) {
         setDmText("");
         // Refresh thread
-        const threadRes = await fetch(`/api/inbox/${params.threadId}`);
+        const threadRes = await fetch(`/api/inbox/${threadId}`);
         if (threadRes.ok) {
           setThread((await threadRes.json()) as Thread);
         }
@@ -275,7 +339,7 @@ export default function ThreadDetailPage() {
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
       // Not while a dialog (e.g. Help) is open or the key came from inside one.
       if (document.querySelector("dialog[open]") || el?.closest("dialog")) return;
-      if (el && (el.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName))) return;
+      if (isTyping(el)) return;
       const decision = ({ y: "yes", l: "later", n: "no" } as const)[event.key.toLowerCase() as "y" | "l" | "n"];
       if (!decision) return;
       event.preventDefault();
@@ -324,7 +388,7 @@ export default function ThreadDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold tracking-tight">
@@ -344,9 +408,12 @@ export default function ThreadDetailPage() {
               ` · ${profile.followerCount.toLocaleString()} followers`}
           </p>
         </div>
-        <Button variant="outline" onClick={() => router.push("/inbox")}>
-          Back to inbox
-        </Button>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" onClick={() => router.push("/inbox")}>
+            Back to inbox
+          </Button>
+          <NextReplyButton nextId={nextId} variant="outline" />
+        </div>
       </div>
 
       {/* Their latest message, shown first so the decision below reads in context */}
@@ -380,14 +447,14 @@ export default function ThreadDetailPage() {
           <CardContent className="space-y-3">
             {replyNotice && (
               <div
-                role={replyNotice.tone === "success" ? "status" : "alert"}
-                className={`rounded border p-2 text-sm ${
+                className={`flex flex-wrap items-center justify-between gap-2 rounded border p-2 text-sm ${
                   replyNotice.tone === "success"
                     ? "border-green-200 bg-green-50 text-green-900"
                     : "border-red-200 bg-red-50 text-red-800"
                 }`}
               >
-                {replyNotice.text}
+                <p role={replyNotice.tone === "success" ? "status" : "alert"}>{replyNotice.text}</p>
+                {replyNotice.tone === "success" && <NextReplyButton nextId={nextId} size="sm" />}
               </div>
             )}
             <textarea
@@ -475,6 +542,15 @@ export default function ThreadDetailPage() {
           deciding={deciding}
           error={decisionError}
           onDecide={(d) => void handleDecision(d)}
+          after={
+            doneLine && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+                {/* The Undo toast announces it; this line is the visible next step. */}
+                <p className="font-medium">{doneLine}</p>
+                <NextReplyButton nextId={nextId} size="sm" />
+              </div>
+            )
+          }
         />
       )}
 
@@ -592,19 +668,28 @@ const CHOICES: Array<{ value: ReplyDecision; label: string; key: string }> = [
   { value: "no", label: "No", key: "n" },
 ];
 
-function decisionLabel(decision: ReplyDecision): string {
-  switch (decision) {
-    case "yes":
-      return "Yes";
-    case "later":
-      return "Not right now";
-    case "no":
-      return "No";
-    default: {
-      const unhandled: never = decision;
-      return unhandled;
-    }
+/** "Next reply →" to the next one that needs her call, or a quiet note when none are left. */
+function NextReplyButton({
+  nextId,
+  variant = "default",
+  size = "default",
+}: {
+  nextId: string | null;
+  variant?: "default" | "outline";
+  size?: "default" | "sm";
+}) {
+  if (!nextId) {
+    return (
+      <Button variant={variant} size={size} disabled>
+        No more replies waiting
+      </Button>
+    );
   }
+  return (
+    <Link href={`/inbox/${nextId}`} aria-keyshortcuts="j" className={buttonVariants({ variant, size })}>
+      Next reply <span aria-hidden="true">→</span>
+    </Link>
+  );
 }
 
 /** Their answer: a small segmented choice that sits below the reply, not above it. */
@@ -616,6 +701,7 @@ function DecisionChoice({
   deciding,
   error,
   onDecide,
+  after,
 }: {
   decision: ReplyDecision | null;
   aiGuess: AiReplyGuess | null;
@@ -624,6 +710,7 @@ function DecisionChoice({
   deciding: boolean;
   error: string | null;
   onDecide: (decision: ReplyDecision) => void;
+  after?: React.ReactNode;
 }) {
   const hint = askedToBeRemoved
     ? "They asked us to stop emailing, so they're on the do-not-send list. Pick Yes or Not right now if that's wrong."
@@ -667,9 +754,10 @@ function DecisionChoice({
         </div>
         {decision && <span className="sr-only">Marked {decisionLabel(decision)}.</span>}
         <span className="text-sm text-muted-foreground" aria-hidden="true">
-          Keys: y / l / n
+          Keys: y / l / n, j next
         </span>
       </div>
+      {after}
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
       {error && (
         <p role="alert" className="text-sm text-red-700">

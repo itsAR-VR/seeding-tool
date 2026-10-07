@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { TAP_TARGET_SM } from "@/components/responsive-table";
+import { cn } from "@/lib/utils";
 
 type AdCopy = { message: string; headline: string; link: string };
 
@@ -44,7 +46,7 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
           type="button"
           onClick={() => setOpen(true)}
           aria-describedby={hintId}
-          className="block text-sm text-muted-foreground underline hover:text-foreground"
+          className="block min-h-11 text-left text-sm text-muted-foreground underline hover:text-foreground md:min-h-0"
         >
           Have a partnership ad code?
         </button>
@@ -63,10 +65,10 @@ export function PartnershipCodeAction({ postId }: { postId: string }) {
           value={code}
           onChange={(e) => setCode(e.target.value)}
           placeholder="adcode-..."
-          className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm text-foreground"
+          className="mt-1 w-full min-h-11 rounded border bg-background px-2 py-1 text-sm md:min-h-0 text-foreground"
         />
       </label>
-      <Button size="sm" className="w-full" onClick={() => void create()} disabled={busy || !code.trim()}>
+      <Button size="sm" className={cn("w-full", TAP_TARGET_SM)} onClick={() => void create()} disabled={busy || !code.trim()}>
         {busy ? "Creating..." : "Create paused partnership ad"}
       </Button>
       <p className="text-sm text-muted-foreground">Runs from their handle and yours. Stays paused until you turn it on.</p>
@@ -107,13 +109,13 @@ export function AdAction({ postId, defaults }: { postId: string; defaults: AdCop
 
   if (!open) {
     return (
-      <Button size="sm" className="w-full" onClick={() => setOpen(true)}>
+      <Button size="sm" className={cn("w-full", TAP_TARGET_SM)} onClick={() => setOpen(true)}>
         Create ad
       </Button>
     );
   }
 
-  const field = "mt-1 w-full rounded border bg-background px-2 py-1 text-sm text-foreground";
+  const field = "mt-1 w-full min-h-11 rounded border bg-background px-2 py-1 text-sm md:min-h-0 text-foreground";
   return (
     <div className="space-y-2 rounded-md border p-2">
       <label className="block text-sm text-muted-foreground">
@@ -133,7 +135,7 @@ export function AdAction({ postId, defaults }: { postId: string; defaults: AdCop
         Link
         <input value={copy.link} onChange={(e) => setCopy({ ...copy, link: e.target.value })} className={field} />
       </label>
-      <Button size="sm" className="w-full" onClick={() => void create()} disabled={busy}>
+      <Button size="sm" className={cn("w-full", TAP_TARGET_SM)} onClick={() => void create()} disabled={busy}>
         {busy ? "Creating (up to a minute)..." : "Create paused ad"}
       </Button>
       <p className="text-sm text-muted-foreground">It stays paused. Nothing spends until you turn it on in Ads Manager.</p>

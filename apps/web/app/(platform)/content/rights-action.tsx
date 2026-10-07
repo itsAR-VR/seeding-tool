@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { TAP_TARGET_SM } from "@/components/responsive-table";
+import { cn } from "@/lib/utils";
 import { DEFAULT_RIGHTS_MONTHS, RIGHTS_DURATIONS } from "@/lib/content/rights-options";
 
 type Props = {
@@ -51,7 +53,7 @@ export function RightsAction({ postId, status }: Props) {
 
   if (!open) {
     return (
-      <Button size="sm" variant="outline" className="w-full" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="outline" className={cn("w-full", TAP_TARGET_SM)} onClick={() => setOpen(true)}>
         {status === "requested" ? "Copy request again" : "Request rights"}
       </Button>
     );
@@ -66,7 +68,7 @@ export function RightsAction({ postId, status }: Props) {
             <select
               value={months}
               onChange={(e) => setMonths(Number(e.target.value))}
-              className="mt-1 w-full rounded border bg-background px-2 py-1 text-sm text-foreground"
+              className="mt-1 w-full min-h-11 rounded border bg-background px-2 py-1 text-sm md:min-h-0 text-foreground"
             >
               {RIGHTS_DURATIONS.map((d) => (
                 <option key={d.months} value={d.months}>
@@ -75,14 +77,14 @@ export function RightsAction({ postId, status }: Props) {
               ))}
             </select>
           </label>
-          <Button size="sm" className="w-full" onClick={() => void createRequest()} disabled={busy}>
+          <Button size="sm" className={cn("w-full", TAP_TARGET_SM)} onClick={() => void createRequest()} disabled={busy}>
             {busy ? "Creating..." : "Create request"}
           </Button>
         </>
       ) : (
         <>
           <p className="whitespace-pre-wrap break-words text-sm">{message}</p>
-          <Button size="sm" className="w-full" onClick={() => void copy()}>
+          <Button size="sm" className={cn("w-full", TAP_TARGET_SM)} onClick={() => void copy()}>
             {copied ? "Copied" : "Copy message"}
           </Button>
           <p className="text-sm text-muted-foreground">Send it to them in an Instagram DM.</p>

@@ -25,7 +25,7 @@ export function AllowAgain({ id, name }: { id: string; name: string }) {
 
   if (!confirming) {
     return (
-      <button type="button" onClick={() => setConfirming(true)} className="min-h-9 text-sm font-medium underline">
+      <button type="button" onClick={() => setConfirming(true)} className="min-h-11 text-sm font-medium underline md:min-h-9">
         Allow emails again
       </button>
     );
@@ -33,10 +33,10 @@ export function AllowAgain({ id, name }: { id: string; name: string }) {
   return (
     <span className="flex flex-wrap items-center gap-2 text-sm">
       Email {name} again?
-      <button type="button" disabled={busy} onClick={() => void allow()} className="font-medium underline">
+      <button type="button" disabled={busy} onClick={() => void allow()} className="min-h-11 font-medium underline md:min-h-9">
         {busy ? "Saving..." : "Yes, allow"}
       </button>
-      <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="underline">
+      <button type="button" disabled={busy} onClick={() => setConfirming(false)} className="min-h-11 underline md:min-h-9">
         Keep blocked
       </button>
       {error && <span role="alert" className="text-destructive">{error}</span>}

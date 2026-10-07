@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/brand-access";
+import { getFeatureFlags } from "@/lib/feature-flags";
 import { StatusPill } from "@/components/status-pill";
 import { campaignStatus } from "../_components/campaign-status";
 import { CampaignTabs } from "./_components/campaign-tabs";
@@ -27,10 +28,13 @@ export default async function CampaignLayout({
     throw error;
   }
 
-  const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, brandId },
-    select: { id: true, name: true, description: true, status: true },
-  });
+  const [campaign, flags] = await Promise.all([
+    prisma.campaign.findFirst({
+      where: { id: campaignId, brandId },
+      select: { id: true, name: true, description: true, status: true },
+    }),
+    getFeatureFlags(brandId),
+  ]);
   if (!campaign) notFound();
 
   const status = campaignStatus(campaign.status);
@@ -45,7 +49,11 @@ export default async function CampaignLayout({
           </div>
           {campaign.description && <p className="mt-1 text-muted-foreground">{campaign.description}</p>}
         </div>
-        <CampaignTabs campaignId={campaign.id} />
+        <CampaignTabs
+          campaignId={campaign.id}
+          // Same check as the seed-list API: the mix needs both features on.
+          showCreatorMix={flags.portfolioOptimizerEnabled && flags.decisionEngineScoringEnabled}
+        />
       </header>
       {children}
     </div>

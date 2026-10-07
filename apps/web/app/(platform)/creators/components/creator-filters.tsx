@@ -72,7 +72,7 @@ export function CreatorFilters({
   facets,
 }: FilterProps) {
   return (
-    <section aria-label="Filter creators" className="rounded-xl border bg-card p-5">
+    <section aria-label="Filter creators" className="rounded-xl border bg-card p-4 sm:p-5">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-1.5">
           <label htmlFor="creator-search" className="text-sm font-medium">

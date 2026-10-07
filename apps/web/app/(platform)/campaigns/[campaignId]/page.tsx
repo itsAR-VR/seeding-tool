@@ -18,26 +18,31 @@ import { campaignNextStep } from "./_components/next-step";
 import { loadCampaignPosts } from "./_components/campaign-posts";
 import {
   CREATOR_FILTERS,
-  STAGE_LABELS,
   countCampaignCreators,
-  creatorStage,
   isCreatorFilterKey,
   postCountsByCreator,
-  type CreatorStage,
 } from "@/lib/stats/campaign-counts";
+import {
+  DISPLAY_STAGE_ORDER,
+  STAGE_DISPLAY,
+  countDisplayStages,
+  displayStage,
+  isDisplayStage,
+  stageNextStep,
+  type DisplayStage,
+} from "@/lib/stats/stage-display";
 import { findOutreachWaitingToSend, findStuckCreators } from "@/lib/stats/needs-you";
-
-/** Stages where nobody is waiting on anyone. */
-const NOTHING_TO_DO: ReadonlySet<CreatorStage> = new Set(["said_no", "not_a_fit", "maybe_later", "not_now", "done"]);
 
 /**
  * The Address link column: the copy-link button only while we're waiting on
  * an address (or need a new one after a cancelled order). Otherwise one word on why not.
  */
-function addressLinkNote(stage: CreatorStage): string | null {
+function addressLinkNote(stage: DisplayStage): string | null {
   switch (stage) {
     case "emailed":
+    case "needs_answer":
     case "replied":
+    case "said_yes":
     case "order_cancelled":
       return null;
     case "needs_review":
@@ -58,7 +63,7 @@ function addressLinkNote(stage: CreatorStage): string | null {
     case "delivered":
     case "posted":
     case "done":
-      return "Address in";
+      return "Address received";
     default: {
       const unhandled: never = stage;
       return unhandled;
@@ -74,7 +79,10 @@ type PageProps = {
 export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
   const { campaignId } = await params;
   const { filter } = await searchParams;
-  const activeFilter = isCreatorFilterKey(filter) ? filter : null;
+  // ?filter= is a current stage (the chips), or one of the older filter keys
+  // (stuck from Home, pending, to_email, ...). Stage wins when a key is both.
+  const stageFilter = isDisplayStage(filter) ? filter : null;
+  const legacyFilter = !stageFilter && isCreatorFilterKey(filter) ? filter : null;
 
   let membership;
   try {
@@ -141,11 +149,10 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
 
   if (!campaign) return notFound();
 
-  // Counts and filters share one definition (lib/stats/campaign-counts), so a
-  // chip's number always matches the list it opens. Step chips are "ever
-  // reached": Emailed counts everyone emailed, even if they've replied since.
-  // Each creator's status comes from lib/stats creatorStage: stored status,
-  // reply, gift order, and posts together.
+  // Each creator is at exactly one stage today (lib/stats creatorStage, split
+  // by lib/stats/stage-display), so the chips add up to everyone and a chip's
+  // number always matches the list it opens. Cumulative "so far" numbers live
+  // on Results only.
   const stuckIds = new Set(stuckCreators.map((s) => s.id));
   const postCounts = postCountsByCreator(posts);
   const creators = campaign.campaignCreators.map((cc) => {
@@ -156,12 +163,25 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
       orderStatus: cc.shopifyOrder?.status ?? null,
       postCount: postCounts.get(cc.creatorId) ?? 0,
     };
-    return { ...countable, stage: creatorStage(countable) };
+    return { ...countable, stage: displayStage(countable) };
   });
-  const visibleCreators = activeFilter
-    ? creators.filter(CREATOR_FILTERS[activeFilter].match)
-    : creators;
+  const visibleCreators = stageFilter
+    ? creators.filter((cc) => cc.stage === stageFilter)
+    : legacyFilter
+      ? creators.filter(CREATOR_FILTERS[legacyFilter].match)
+      : creators;
+  const activeFilterLabel = stageFilter
+    ? STAGE_DISPLAY[stageFilter].label
+    : legacyFilter
+      ? CREATOR_FILTERS[legacyFilter].label
+      : null;
   const counts = countCampaignCreators(creators);
+  const stageCounts = countDisplayStages(creators.map((cc) => cc.stage));
+  const stageChips = DISPLAY_STAGE_ORDER.filter(
+    ({ stage, always }) => always || stageCounts[stage] > 0 || stage === stageFilter,
+  ).map(({ stage }) => ({ stage, label: STAGE_DISPLAY[stage].label, value: stageCounts[stage] }));
+  const filterHref = (key: string | null) =>
+    key ? `/campaigns/${campaignId}?filter=${key}#creators` : `/campaigns/${campaignId}#creators`;
   const writtenEmailsWaiting = outreachWaiting.find((g) => g.campaignId === campaignId)?.count ?? 0;
 
   const hasCampaignProducts = campaign.campaignProducts.length > 0;
@@ -256,56 +276,48 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         </section>
       )}
 
-      {/* Progress: one row, each step filters the list below */}
-      <nav aria-label="Filter creators by step" className="flex flex-wrap gap-2">
-        {[
-          { label: "All", value: counts.total, filter: null },
-          { label: CREATOR_FILTERS.to_email.label, value: counts.to_email, filter: "to_email" },
-          { label: CREATOR_FILTERS.emailed.label, value: counts.emailed, filter: "emailed" },
-          { label: CREATOR_FILTERS.replied.label, value: counts.replied, filter: "replied" },
-          { label: CREATOR_FILTERS.address_in.label, value: counts.address_in, filter: "address_in" },
-          { label: CREATOR_FILTERS.order_made.label, value: counts.order_made, filter: "order_made" },
-          { label: CREATOR_FILTERS.posted.label, value: counts.posted, filter: "posted" },
-          // To-do chips: only shown when there's something to do.
-          ...(counts.needs_answer > 0
-            ? [{ label: CREATOR_FILTERS.needs_answer.label, value: counts.needs_answer, filter: "needs_answer" }]
-            : []),
-          ...(counts.address_review > 0
-            ? [{ label: CREATOR_FILTERS.address_review.label, value: counts.address_review, filter: "address_review" }]
-            : []),
-          ...(counts.stuck > 0 ? [{ label: CREATOR_FILTERS.stuck.label, value: counts.stuck, filter: "stuck" }] : []),
-          ...(counts.pending > 0 ? [{ label: CREATOR_FILTERS.pending.label, value: counts.pending, filter: "pending" }] : []),
-          ...(counts.declined > 0 ? [{ label: CREATOR_FILTERS.declined.label, value: counts.declined, filter: "declined" }] : []),
-          ...(counts.order_cancelled > 0
-            ? [{ label: CREATOR_FILTERS.order_cancelled.label, value: counts.order_cancelled, filter: "order_cancelled" }]
-            : []),
-          ...(counts.said_no > 0 ? [{ label: CREATOR_FILTERS.said_no.label, value: counts.said_no, filter: "said_no" }] : []),
-        ].map((step) => {
-          const selected = (step.filter ?? null) === activeFilter;
-          return (
-            <Link
-              key={step.label}
-              href={step.filter ? `/campaigns/${campaignId}?filter=${step.filter}#creators` : `/campaigns/${campaignId}#creators`}
-              scroll={false}
-              aria-current={selected ? "true" : undefined}
-              className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
-              }`}
-            >
-              {step.label} <span className="ml-1 font-semibold tabular-nums">{step.value}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* Where everyone is now: one chip per stage, adding up to All. */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <nav aria-label="Filter creators by where they are now" className="flex flex-wrap gap-2">
+          {[{ stage: null, label: "All", value: counts.total }, ...stageChips].map((chip) => {
+            const selected = chip.stage === stageFilter && !legacyFilter;
+            return (
+              <Link
+                key={chip.label}
+                href={filterHref(chip.stage)}
+                scroll={false}
+                aria-current={selected ? "true" : undefined}
+                className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                  selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
+                }`}
+              >
+                {chip.label} <span className="ml-1 font-semibold tabular-nums">{chip.value}</span>
+              </Link>
+            );
+          })}
+        </nav>
+        {(counts.stuck > 0 || legacyFilter === "stuck") && (
+          <Link
+            href={filterHref("stuck")}
+            scroll={false}
+            aria-current={legacyFilter === "stuck" ? "true" : undefined}
+            className={`text-sm underline-offset-2 hover:underline ${
+              legacyFilter === "stuck" ? "font-semibold text-foreground underline" : "text-blue-600"
+            }`}
+          >
+            {CREATOR_FILTERS.stuck.label} ({counts.stuck})
+          </Link>
+        )}
+      </div>
 
       {/* Creator List */}
       <Card id="creators">
         <CardHeader>
           <CardTitle className="text-base">
-            Creators{activeFilter ? ` · ${CREATOR_FILTERS[activeFilter].label}` : ""}
+            Creators{activeFilterLabel ? ` · ${activeFilterLabel}` : ""}
           </CardTitle>
           <CardDescription>
-            {activeFilter ? (
+            {activeFilterLabel ? (
               <>
                 Showing {visibleCreators.length} of {creators.length}.{" "}
                 <Link href={`/campaigns/${campaignId}#creators`} scroll={false} className="text-blue-600 hover:underline">
@@ -360,7 +372,12 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                   )}
                   {visibleCreators.map((cc) => {
                     const profile = cc.creator.profiles[0];
-                    const status = STAGE_LABELS[cc.stage];
+                    const status = STAGE_DISPLAY[cc.stage];
+                    const next = stageNextStep(cc.stage, {
+                      campaignId,
+                      campaignCreatorId: cc.id,
+                      threadId: cc.conversationThread?.id ?? null,
+                    });
                     const addressNote = addressLinkNote(cc.stage);
                     return (
                       <tr key={cc.id} className="border-b last:border-0">
@@ -387,32 +404,13 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                           <StatusPill tone={status.tone}>{status.label}</StatusPill>
                         </td>
                         <td className="py-3">
-                          {cc.conversationThread ? (
-                            <Link
-                              href={`/inbox/${cc.conversationThread.id}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Open conversation
+                          {next?.href ? (
+                            <Link href={next.href} className="text-blue-600 hover:underline">
+                              {next.label}
                             </Link>
-                          ) : cc.reviewStatus === "approved" && cc.lifecycleStatus === "ready" ? (
-                            <Link
-                              href={`/campaigns/${campaignId}/outreach?select=${cc.id}`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Email them
-                            </Link>
-                          ) : cc.reviewStatus === "pending" ? (
-                            <Link
-                              href={`/campaigns/${campaignId}/review`}
-                              className="text-blue-600 hover:underline"
-                            >
-                              Review
-                            </Link>
-                          ) : NOTHING_TO_DO.has(cc.stage) ? (
-                            <span className="text-muted-foreground">Nothing to do</span>
-                          ) : (
-                            <span className="text-muted-foreground">Waiting on them</span>
-                          )}
+                          ) : next ? (
+                            <span className="text-muted-foreground">{next.label}</span>
+                          ) : null}
                         </td>
                         <td className="py-3">
                           {addressNote ? (

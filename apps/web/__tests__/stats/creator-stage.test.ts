@@ -4,7 +4,6 @@ import {
   CREATOR_STAGES,
   CURRENT_STAGES,
   OFF_PATH_STAGES,
-  STAGE_LABELS,
   countCampaignCreators,
   countCurrentStage,
   countOrders,
@@ -15,6 +14,7 @@ import {
   postCountsByCreator,
   type CountableCreator,
 } from "@/lib/stats/campaign-counts";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
 
 /** A creator whose orders and posts were loaded (none by default). */
 function creator(overrides: Partial<CountableCreator> = {}): CountableCreator {
@@ -25,7 +25,7 @@ describe("creatorStage", () => {
   it("a cancelled order is Order cancelled, not Address in and not an order made", () => {
     const c = creator({ lifecycleStatus: "address_confirmed", orderStatus: "cancelled" });
     expect(creatorStage(c)).toBe("order_cancelled");
-    expect(STAGE_LABELS[creatorStage(c)].label).toBe("Order cancelled");
+    expect(STAGE_DISPLAY[creatorStage(c)].label).toBe("Order cancelled");
     expect(everAddressIn(c)).toBe(false);
     expect(CREATOR_FILTERS.order_made.match(c)).toBe(false);
     expect(countStepsReached([c])).toMatchObject({ ordersMade: 0, ordersCancelled: 1 });

@@ -135,6 +135,7 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
   const [category, setCategory] = useState("");
   const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState<number>(50);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<CreatorFacets>(EMPTY_FACETS);
@@ -207,7 +208,7 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     if (category) params.set("category", category);
     if (source) params.set("source", source);
     params.set("page", page.toString());
-    params.set("limit", "50");
+    params.set("limit", pageSize.toString());
     // Filter options only need loading once; later pages and filters skip them.
     if (!facetsLoadedRef.current) params.set("includeFacets", "1");
 
@@ -250,6 +251,7 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     category,
     source,
     page,
+    pageSize,
   ]);
 
   // The list loads on its own; nothing else waits in front of it.
@@ -258,6 +260,12 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
   }, [fetchCreators]);
 
   useEffect(() => () => listRequestRef.current?.abort(), []);
+
+  /** Changing how many rows show starts again from the first page. */
+  const setPageSize = useCallback((size: number) => {
+    setPageSizeState(size);
+    setPage(1);
+  }, []);
 
   // Approval settings load once, separately, and never hold up the list.
   useEffect(() => {
@@ -647,6 +655,8 @@ export function useCreatorsState({ openSearchOnLoad = false }: { openSearchOnLoa
     setSource,
     page,
     setPage,
+    pageSize,
+    setPageSize,
     totalPages,
     total,
     facets,

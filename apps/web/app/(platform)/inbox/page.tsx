@@ -13,6 +13,7 @@ import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { SyncReplies } from "./sync-replies";
 import { InboxList, type InboxRow } from "./inbox-list";
 import { InboxSearch } from "./inbox-search";
+import { needsYourCall } from "./next-reply";
 
 type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
 
@@ -64,7 +65,7 @@ function tabFor(thread: {
   const decision = thread.campaignCreator.replyDecision;
   if (decision === "no" || decision === "later") return "no";
   if (decision === "yes") return "yes";
-  return thread.messages[0]?.direction === "inbound" ? "needs" : "waiting";
+  return needsYourCall(decision, thread.messages[0]?.direction) ? "needs" : "waiting";
 }
 
 export default async function InboxPage({
@@ -147,7 +148,7 @@ export default async function InboxPage({
       lastMessage: lastMessage ? { direction: lastMessage.direction, body: lastMessage.body.slice(0, 200) } : null,
       updatedAt: new Date(thread.updatedAt).toISOString(),
       decision,
-      needsCall: !decision && lastMessage?.direction === "inbound",
+      needsCall: needsYourCall(decision, lastMessage?.direction),
       askedToBeRemoved:
         decision === "no" &&
         lastMessage?.direction === "inbound" &&

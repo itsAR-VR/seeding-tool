@@ -145,7 +145,7 @@ export function AnalyticsDashboard({ initialData, campaignName }: AnalyticsDashb
         </h2>
         <p className="text-muted-foreground">
           Each creator is counted once, at the step they&apos;re on today, so these numbers can be
-          smaller than the totals above. Someone who replied and then sent their address shows under Address in.
+          smaller than the totals above. Someone who replied and then sent their address shows under Address received.
         </p>
         <ul className="divide-y rounded-xl border bg-card">
           <li className="flex items-center gap-4 px-5 py-2 text-sm text-muted-foreground">

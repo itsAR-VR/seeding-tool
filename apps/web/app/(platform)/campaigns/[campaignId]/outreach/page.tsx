@@ -23,8 +23,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusPill } from "@/components/status-pill";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BUILT_IN_PERSONAS } from "@/lib/ai/personas";
-import { STAGE_LABELS, creatorStage } from "@/lib/stats/campaign-counts";
+import { STAGE_DISPLAY, displayStage, type StageDisplay } from "@/lib/stats/stage-display";
 
 type CampaignCreator = {
   id: string;
@@ -44,14 +45,15 @@ type CampaignCreator = {
 
 type Notice = { tone: "success" | "error"; text: string };
 
-/** Same status words as the campaign Overview (lib/stats creatorStage). */
-function statusLabel(cc: CampaignCreator): string {
-  const stage = creatorStage({
-    ...cc,
-    // Orders come with this list (null = no order); posts don't, so the stored step is used for those.
-    orderStatus: cc.shopifyOrder === undefined ? undefined : (cc.shopifyOrder?.status ?? null),
-  });
-  return stage === "ready" ? "Not emailed yet" : STAGE_LABELS[stage].label;
+/** Same status words and tone as the campaign Overview (lib/stats/stage-display). */
+function statusDisplay(cc: CampaignCreator): StageDisplay {
+  return STAGE_DISPLAY[
+    displayStage({
+      ...cc,
+      // Orders come with this list (null = no order); posts don't, so the stored step is used for those.
+      orderStatus: cc.shopifyOrder === undefined ? undefined : (cc.shopifyOrder?.status ?? null),
+    })
+  ];
 }
 
 type CustomPersona = {
@@ -108,9 +110,14 @@ export default function OutreachPage() {
   // Emails queued by "Send all" go out one every 1 to 3 minutes in the background.
   type QueueState = { waitingIds: string[]; waiting: number; sent: number; nextAt: string | null; finishesAt: string | null };
   const [queue, setQueue] = useState<QueueState | null>(null);
+  const [queueLoaded, setQueueLoaded] = useState(false);
   const loadQueue = useCallback(async () => {
-    const res = await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`);
-    if (res.ok) setQueue((await res.json()) as QueueState);
+    try {
+      const res = await fetch(`/api/outreach/queue?campaignId=${encodeURIComponent(campaignId)}`);
+      if (res.ok) setQueue((await res.json()) as QueueState);
+    } finally {
+      setQueueLoaded(true);
+    }
   }, [campaignId]);
   useEffect(() => {
     void loadQueue();
@@ -261,8 +268,11 @@ export default function OutreachPage() {
   const sendableCreators = approvedCreators.filter(
     (c) => c.lifecycleStatus === "ready" && !queuedIds.has(c.id)
   );
+  // Creators, setup, and the send queue all decide what this page says. Until
+  // every one has loaded, show a neutral "Checking" state, never a blocker.
+  const checking = loadingCreators || setupLoading || !queueLoaded;
   // Nobody approved is left to email: say so plainly instead of showing an empty chooser.
-  const everyoneEmailed = !loadingCreators && approvedCreators.length > 0 && sendableCreators.length === 0;
+  const everyoneEmailed = !checking && approvedCreators.length > 0 && sendableCreators.length === 0;
   const pendingReviewCount = creators.filter((c) => c.reviewStatus === "pending").length;
   const queuedCount = approvedCreators.filter((c) => queuedIds.has(c.id)).length;
   const creatorByCcId = new Map(creators.map((c) => [c.id, c]));
@@ -280,10 +290,14 @@ export default function OutreachPage() {
       (provider) => provider.provider === "unipile" && provider.connected
     ) ?? false;
   const selectedChannelConnected = channel === "email" ? hasGmail : hasUnipile;
-  const draftBlocker = !hasProducts
-    ? "Add a product to this campaign before writing emails."
-    : null;
-  const sendBlocker = !hasProducts
+  const draftBlocker = setupLoading
+    ? null
+    : !hasProducts
+      ? "Add a product to this campaign before writing emails."
+      : null;
+  const sendBlocker = setupLoading
+    ? null
+    : !hasProducts
     ? "Add a product to this campaign before sending."
     : !selectedChannelConnected
       ? channel === "email"
@@ -472,7 +486,16 @@ export default function OutreachPage() {
         </div>
       )}
 
-      {everyoneEmailed ? (
+      {checking ? (
+        <div
+          role="status"
+          aria-busy="true"
+          className="flex items-center gap-3 rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground"
+        >
+          <Skeleton className="h-4 w-4 rounded-full" />
+          Checking your setup…
+        </div>
+      ) : everyoneEmailed ? (
         <div role="status" className="space-y-1 rounded-lg border bg-card px-4 py-3">
           <p className="font-medium">
             {queuedCount > 0
@@ -496,7 +519,7 @@ export default function OutreachPage() {
             </p>
           )}
         </div>
-      ) : !setupLoading && !draftBlocker && !sendBlocker ? (
+      ) : !draftBlocker && !sendBlocker ? (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900">
           <span className="font-medium">Ready to send</span>
           <span>✓ {campaignSetup?.campaignProducts?.length ?? 0} product</span>
@@ -558,9 +581,7 @@ export default function OutreachPage() {
             ))}
           </div>
 
-          {setupLoading ? (
-            <p className="text-sm text-muted-foreground">Checking current setup…</p>
-          ) : draftBlocker || sendBlocker ? (
+          {draftBlocker || sendBlocker ? (
             <div className="flex flex-wrap gap-2">
               {!hasProducts ? (
                 <Link href={`/campaigns/${campaignId}/products`} className={buttonVariants({ variant: "outline" })}>
@@ -589,7 +610,7 @@ export default function OutreachPage() {
         </div>
       )}
 
-      {step === "choose" && !everyoneEmailed && (
+      {step === "choose" && !checking && !everyoneEmailed && (
       <>
       {/* Creator Selection */}
       <Card>
@@ -693,9 +714,11 @@ export default function OutreachPage() {
                         .join(" · ")}
                     </span>
                   </div>
-                  <StatusPill tone={queuedIds.has(cc.id) ? "waiting" : sendable ? "neutral" : "good"}>
-                    {queuedIds.has(cc.id) ? "Queued to send" : statusLabel(cc)}
-                  </StatusPill>
+                  {queuedIds.has(cc.id) ? (
+                    <StatusPill tone="waiting">Queued to send</StatusPill>
+                  ) : (
+                    <StatusPill tone={statusDisplay(cc).tone}>{statusDisplay(cc).label}</StatusPill>
+                  )}
                 </div>
                 );
               })}
@@ -721,7 +744,7 @@ export default function OutreachPage() {
             <Button
               size="lg"
               onClick={generateDrafts}
-              disabled={Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
+              disabled={setupLoading || Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
                 ? "Writing emails…"
@@ -918,7 +941,7 @@ export default function OutreachPage() {
                         </Button>
                         <Button
                           size="sm"
-                          disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || Boolean(sendBlocker)}
+                          disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
                           onClick={async () => {
                             setConfirmingSend(null);
                             startSending(draft.campaignCreatorId);
@@ -958,7 +981,7 @@ export default function OutreachPage() {
                     ) : !draft.error && draft.body ? (
                       <Button
                         size="sm"
-                        disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || Boolean(sendBlocker)}
+                        disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
                         onClick={() => setConfirmingSend(draft.campaignCreatorId)}
                       >
                         {sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") ? "Sending..." : "Send"}
@@ -1043,7 +1066,7 @@ export default function OutreachPage() {
               ) : null}
               <Button
                 disabled={
-                  Boolean(sendBlocker) ||
+                  setupLoading || Boolean(sendBlocker) ||
                   sending ||
                   drafts.filter((d) => !d.error).length === 0
                 }

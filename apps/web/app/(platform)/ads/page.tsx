@@ -5,6 +5,7 @@ import { NoCompanyNotice } from "@/components/no-company-notice";
 import { getAdResults, MetaAdsError, type AdResults } from "@/lib/meta/ads";
 import { StatusPill, type StatusTone } from "@/components/status-pill";
 import { Card, CardContent } from "@/components/ui/card";
+import { StackedField, StackedList, StackedRow, WideOnly } from "@/components/responsive-table";
 import { ChevronDown } from "lucide-react";
 import { PartnershipForm } from "./partnership-form";
 
@@ -106,8 +107,51 @@ export default async function AdsPage() {
               No ads yet. Approve usage rights on a post in <Link href="/content" className="underline">Content</Link>, then click Create ad.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+            <>
+            <StackedList label="Ads">
+              {posts.map((post) => {
+                const r = byAd.get(post.metaAdId!);
+                const image = post.mediaType === "VIDEO" ? post.thumbnailUrl : post.mediaUrl;
+                return (
+                  <StackedRow key={post.id} className="space-y-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {image && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={image} alt="" className="h-12 w-12 shrink-0 rounded object-cover" />
+                      )}
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <p className="truncate font-medium">@{post.username}</p>
+                        <div className="flex flex-wrap gap-1">
+                          <StatusPill tone={(r?.status && STATUS_TONES[r.status]) || "neutral"}>
+                            {r?.status ? (STATUS_LABELS[r.status] ?? r.status) : "Not known yet"}
+                          </StatusPill>
+                          {post.metaAdKind === "partnership" && <StatusPill tone="neutral">Partnership</StatusPill>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <StackedField label="Spend">{money(r?.spend ?? null)}</StackedField>
+                      <StackedField label="Clicks">{r?.clicks ?? "–"}</StackedField>
+                      <StackedField label="Click rate">{r?.ctr != null ? `${r.ctr.toFixed(2)}%` : "–"}</StackedField>
+                      <StackedField label="Cost per click">{money(r?.cpc ?? null)}</StackedField>
+                      <StackedField label="Purchases">{r?.purchases ?? "–"}</StackedField>
+                    </div>
+                    {r && (
+                      <a
+                        href={r.adsManagerUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex min-h-11 items-center text-sm font-medium underline"
+                      >
+                        Open in Ads Manager ↗
+                      </a>
+                    )}
+                  </StackedRow>
+                );
+              })}
+            </StackedList>
+            <WideOnly className="overflow-x-auto">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">Post</th>
@@ -150,7 +194,7 @@ export default async function AdsPage() {
                       <td className="py-2">{r?.purchases ?? "–"}</td>
                       <td className="py-2">
                         {r && (
-                          <a href={r.adsManagerUrl} target="_blank" rel="noreferrer" className="underline">
+                          <a href={r.adsManagerUrl} target="_blank" rel="noreferrer" className="whitespace-nowrap underline">
                             Ads Manager ↗
                           </a>
                         )}
@@ -160,7 +204,8 @@ export default async function AdsPage() {
                 })}
               </tbody>
             </table>
-            </div>
+            </WideOnly>
+            </>
           )}
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
+import { offerUndo, postDecision } from "./decision-actions";
 
 export type InboxRow = {
   id: string;
@@ -52,39 +53,30 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
 
   async function applyBulk(decision: BulkDecision) {
     if (chosen.length === 0) return;
-    const count = `${chosen.length} creator${chosen.length === 1 ? "" : "s"}`;
-    if (
-      decision === "no" &&
-      !confirm(`Mark ${count} as no? They'll go on the do-not-send list and won't be emailed again.`)
-    ) {
-      return;
-    }
     setWorking(true);
     setNotice(null);
-    const results = await Promise.allSettled(
-      chosen.map((id) =>
-        fetch(`/api/inbox/${id}/decision`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ decision }),
-        }).then((res) => {
-          if (!res.ok) throw new Error(String(res.status));
-          return id;
-        })
-      )
-    );
-    const failed = chosen.filter((_, i) => results[i]?.status === "rejected");
-    const done = chosen.length - failed.length;
+    // No confirm: act now, offer Undo. Everything on this tab had no answer yet.
+    const errors = await Promise.all(chosen.map((id) => postDecision(id, decision)));
+    const saved = chosen.filter((_, i) => !errors[i]);
+    const failed = chosen.filter((_, i) => errors[i]);
     const label = decision === "no" ? "said no" : "not right now";
     setSelected(new Set(failed));
-    setNotice(
-      failed.length === 0
-        ? { tone: "success", text: `Marked ${done} as ${label}.` }
-        : {
-            tone: "error",
-            text: `Marked ${done} as ${label}. ${failed.length} didn't save and are still selected. Try again.`,
-          }
-    );
+    if (failed.length > 0) {
+      setNotice({
+        tone: "error",
+        text: `Marked ${saved.length} as ${label}. ${failed.length} didn't save and are still selected. Try again.`,
+      });
+    }
+    if (saved.length > 0) {
+      offerUndo({
+        message:
+          decision === "no"
+            ? `Marked ${saved.length} as said no. Added to the do-not-send list.`
+            : `Marked ${saved.length} as not right now.`,
+        previous: Object.fromEntries(saved.map((id) => [id, null])),
+        onUndone: () => router.refresh(),
+      });
+    }
     setWorking(false);
     router.refresh();
   }

@@ -142,7 +142,7 @@ export default function OrdersPage() {
       {eligible.length > 0 && (
         <section aria-labelledby="eligible-heading" className="space-y-3">
           <h2 id="eligible-heading" className="text-lg font-semibold">
-            Address in, order not started ({eligible.length})
+            Address received, order not started ({eligible.length})
           </h2>
           <ul className="divide-y rounded-xl border bg-card">
             {eligible.map((cc) => (

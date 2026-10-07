@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { StatusPill, type StatusTone } from "@/components/status-pill";
+import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
+import { STAGE_DISPLAY, displayStage, type StageDisplay } from "@/lib/stats/stage-display";
 import { sourceLabel } from "../components/creator-filters";
 
 type ProvenancePayload = {
@@ -52,34 +53,6 @@ type CreatorSummary = {
   }>;
 };
 
-const REVIEW_LABELS: Record<string, string> = {
-  pending: "Waiting for your review",
-  approved: "Approved",
-  declined: "Declined",
-  deferred: "Saved for later",
-};
-
-const PROGRESS_LABELS: Record<string, string> = {
-  ready: "Not emailed yet",
-  outreach_sent: "Emailed",
-  replied: "Replied",
-  address_review: "Address to review",
-  address_confirmed: "Address confirmed",
-  order_created: "Order drafted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  posted: "Posted",
-  completed: "Finished",
-  opted_out: "Asked not to be emailed",
-  stalled: "No reply for a while",
-};
-
-const REPLY_LABELS: Record<string, string> = {
-  yes: "Said yes",
-  no: "Said no",
-  later: "Said maybe later",
-};
-
 const CHECK_LABELS: Record<string, string> = {
   "Validation status unknown": "We couldn't confirm this account is active.",
   "Validation status retry": "We couldn't confirm this account is active yet. We'll try again.",
@@ -92,21 +65,12 @@ function readable(map: Record<string, string>, value: string): string {
   return map[value] ?? value.replace(/_/g, " ");
 }
 
-function campaignStatus(cc: CreatorSummary["campaignCreators"][number]): string {
-  if (cc.reviewStatus !== "approved") return readable(REVIEW_LABELS, cc.reviewStatus);
-  const parts = [readable(PROGRESS_LABELS, cc.lifecycleStatus)];
-  if (cc.replyDecision) parts.push(readable(REPLY_LABELS, cc.replyDecision));
-  return parts.join(". ");
-}
-
-const GOOD_PROGRESS = new Set(["address_confirmed", "order_created", "shipped", "delivered", "posted", "completed"]);
-const WAITING_PROGRESS = new Set(["replied", "address_review", "stalled"]);
-
-function campaignTone(cc: CreatorSummary["campaignCreators"][number]): StatusTone {
-  if (cc.reviewStatus !== "approved") return cc.reviewStatus === "pending" ? "waiting" : "neutral";
-  if (GOOD_PROGRESS.has(cc.lifecycleStatus)) return "good";
-  if (WAITING_PROGRESS.has(cc.lifecycleStatus)) return "waiting";
-  return "neutral";
+/**
+ * Same words and tone as the campaign Overview (lib/stats/stage-display).
+ * Orders and posts aren't loaded here, so the stored step is trusted for those.
+ */
+function campaignStatus(cc: CreatorSummary["campaignCreators"][number]): StageDisplay {
+  return STAGE_DISPLAY[displayStage(cc)];
 }
 
 const backLink = (
@@ -215,7 +179,7 @@ export default function CreatorProvenancePage() {
                   <Link href={`/campaigns/${cc.campaign.id}`} className="block font-medium hover:underline">
                     {cc.campaign.name}
                   </Link>
-                  <StatusPill tone={campaignTone(cc)}>{campaignStatus(cc)}</StatusPill>
+                  <StatusPill tone={campaignStatus(cc).tone}>{campaignStatus(cc).label}</StatusPill>
                 </div>
                 {cc.conversationThread ? (
                   <Link href={`/inbox/${cc.conversationThread.id}`} className="text-blue-700 hover:underline">

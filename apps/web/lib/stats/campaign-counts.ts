@@ -4,11 +4,12 @@
  * Two kinds of number, never mixed:
  *
  * - "Ever reached" (cumulative): how many creators got to a step at some
- *   point, even if they've moved past it since. Summary numbers and the
- *   campaign filter chips use these, so "Emailed 14" means 14 people were
- *   emailed, including the ones who have since replied or posted.
+ *   point, even if they've moved past it since. Only the Results "So far"
+ *   numbers use these, so "Emailed 14" means 14 people were emailed,
+ *   including the ones who have since replied or posted.
  * - "Where they are now" (current): each creator counted once, at the step
- *   they're on today. Only the Results breakdown uses these, and it says so.
+ *   they're on today. The campaign Overview chips (via ./stage-display) and
+ *   the Results breakdown use these.
  *
  * To-do counts ("needs an answer", "address to check", "no progress for 3
  * days", "emails waiting to send") are current by nature: they're what needs
@@ -25,7 +26,6 @@
  */
 
 import type { AnalyticsResponse } from "@/lib/analytics/types";
-import type { StatusTone } from "@/components/status-pill";
 
 // ── Lifecycle steps ──────────────────────────────────────────
 
@@ -132,7 +132,7 @@ export function everReplied(c: CountableCreator): boolean {
 }
 
 /**
- * Address in: we've had their shipping address at some point (checked or not).
+ * Address received: we've had their shipping address at some point (checked or not).
  * Someone whose order was cancelled shows as "Order cancelled" instead.
  */
 export function everAddressIn(c: CountableCreator): boolean {
@@ -193,25 +193,7 @@ export const CREATOR_STAGES = [
 
 export type CreatorStage = (typeof CREATOR_STAGES)[number];
 
-/** Words and tone for each stage. The creator table's Status column shows these. */
-export const STAGE_LABELS: Record<CreatorStage, { label: string; tone: StatusTone }> = {
-  needs_review: { label: "Needs review", tone: "waiting" },
-  not_a_fit: { label: "Not a fit", tone: "neutral" },
-  maybe_later: { label: "Maybe later", tone: "neutral" },
-  ready: { label: "Ready to email", tone: "neutral" },
-  emailed: { label: "Emailed", tone: "good" },
-  replied: { label: "Replied", tone: "good" },
-  address_to_check: { label: "Address to check", tone: "waiting" },
-  address_in: { label: "Address in", tone: "good" },
-  order_made: { label: "Order made", tone: "good" },
-  shipped: { label: "Shipped", tone: "good" },
-  delivered: { label: "Delivered", tone: "good" },
-  posted: { label: "Posted", tone: "good" },
-  done: { label: "Done", tone: "good" },
-  order_cancelled: { label: "Order cancelled", tone: "neutral" },
-  said_no: { label: "Said no", tone: "neutral" },
-  not_now: { label: "Not right now", tone: "neutral" },
-};
+// Words and tone for each stage live in ./stage-display (STAGE_DISPLAY).
 
 /**
  * The one stage a creator is at today. Evidence beats the stored status:
@@ -219,13 +201,13 @@ export const STAGE_LABELS: Record<CreatorStage, { label: string; tone: StatusTon
  * 1. Any post (same source as the Posts tab) means Posted (Done if closed out).
  * 2. Not approved yet: Needs review, Not a fit, or Maybe later.
  * 3. Said no (opted out, or replied no): Said no.
- * 4. A cancelled order: Order cancelled. Not Address in, not an order made.
+ * 4. A cancelled order: Order cancelled. Not Address received, not an order made.
  * 5. Any other order: Order made, Shipped, or Delivered (whichever is furthest
  *    between the order and the stored status).
- * 6. Otherwise the stored status: Not right now, Address to check, Address in,
+ * 6. Otherwise the stored status: Not right now, Address to check, Address received,
  *    Replied, Emailed, Ready to email. When orders and posts were loaded, a
  *    stored order or post step with no order or post on record shows as
- *    Address in, so it never counts as one. When they weren't loaded
+ *    Address received, so it never counts as one. When they weren't loaded
  *    (undefined), the stored step is trusted.
  */
 export function creatorStage(c: CountableCreator): CreatorStage {
@@ -266,7 +248,7 @@ export function countStages(creators: readonly CountableCreator[]): Record<Creat
   return counts;
 }
 
-// ── Campaign chips ───────────────────────────────────────────
+// ── Campaign filters ─────────────────────────────────────────
 
 export const STUCK_AFTER_DAYS = 3;
 
@@ -286,7 +268,7 @@ export type CreatorFilterKey =
   | "said_no"
   | "stuck";
 
-/** Filters for the campaign creator list. A chip's number is always the size of its filtered list. */
+/** Filters for the campaign creator list (?filter=). A count is always the size of its filtered list. Current-stage filters live in ./stage-display. */
 export const CREATOR_FILTERS: Record<CreatorFilterKey, { label: string; match: (c: CountableCreator) => boolean }> = {
   pending: { label: "Needs review", match: (c) => c.reviewStatus === "pending" },
   approved: { label: "Approved", match: (c) => c.reviewStatus === "approved" },
@@ -295,7 +277,7 @@ export const CREATOR_FILTERS: Record<CreatorFilterKey, { label: string; match: (
   emailed: { label: "Emailed", match: everEmailed },
   replied: { label: "Replied", match: everReplied },
   needs_answer: { label: "Needs an answer", match: needsAnswer },
-  address_in: { label: "Address in", match: everAddressIn },
+  address_in: { label: "Address received", match: everAddressIn },
   address_review: { label: "Address to check", match: addressToCheck },
   order_made: { label: "Order made", match: hasOrder },
   posted: { label: "Posted", match: hasPosted },
@@ -366,9 +348,9 @@ export function lifecycleBreakdown(creators: readonly { lifecycleStatus: string 
 /** Rows for "Where everyone is now". Each groups one or more stages; the rest are listed underneath. */
 export const CURRENT_STAGES: readonly { label: string; stages: readonly CreatorStage[] }[] = [
   { label: "Not emailed yet", stages: ["needs_review", "ready"] },
-  { label: "Emailed, no reply yet", stages: ["emailed"] },
+  { label: "Waiting for reply", stages: ["emailed"] },
   { label: "Replied, no address yet", stages: ["replied"] },
-  { label: "Address in", stages: ["address_to_check", "address_in"] },
+  { label: "Address received", stages: ["address_to_check", "address_in"] },
   { label: "Order made", stages: ["order_made"] },
   { label: "Shipped", stages: ["shipped"] },
   { label: "Delivered", stages: ["delivered"] },

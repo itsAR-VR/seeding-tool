@@ -132,7 +132,9 @@ export function KeyboardHelp() {
           <p className="mt-3 text-sm">
             In a conversation: <kbd className="rounded border px-1">y</kbd> they said yes,{" "}
             <kbd className="rounded border px-1">l</kbd> not right now,{" "}
-            <kbd className="rounded border px-1">n</kbd> they said no.
+            <kbd className="rounded border px-1">n</kbd> they said no,{" "}
+            <kbd className="rounded border px-1">j</kbd> next reply that needs you,{" "}
+            <kbd className="rounded border px-1">k</kbd> previous one.
           </p>
         </div>
         <div className="flex justify-end">
