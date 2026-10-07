@@ -75,9 +75,10 @@ function isActive(pathname: string, item: NavItem, findOpen: boolean) {
 
 /** Secondary items to show: Problems only while there are open ones, or while you're on it. */
 function secondaryItems(pathname: string, openProblems: number) {
-  return SECONDARY.filter(
-    (item) => item.href !== PROBLEMS_HREF || openProblems > 0 || matchesPath(pathname, PROBLEMS_HREF),
-  );
+  // Problems always shows so it's easy to find.
+  void pathname;
+  void openProblems;
+  return SECONDARY;
 }
 
 /** Current path plus whether the find panel is open. Reads the URL query, so it needs Suspense. */

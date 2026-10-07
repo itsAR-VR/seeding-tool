@@ -33,7 +33,7 @@ export default async function RightsPage({
   const image = post ? previewImage(post) : null;
   // When there's nothing to approve, the reason is the heading (same as the claim page).
   const closed = !post
-    ? { title: "This link isn't active", body: `Please ask the ${brandName} team for a new one.` }
+    ? { title: "This link isn't active", body: "Please ask the brand that sent it for a new one." }
     : post.rightsStatus === "approved"
       ? {
           title: "You already approved this post",
