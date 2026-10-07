@@ -409,7 +409,10 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   );
   const decision = thread.campaignCreator.replyDecision;
   // A bounce means the address doesn't work, so there's nothing to reply to until it's changed.
-  const bouncedNow = thread.messages[thread.messages.length - 1]?.classification === BOUNCE_CLASSIFICATION;
+  // Still bounced only until a new email is saved (that puts them back to "ready").
+  const bouncedNow =
+    thread.messages[thread.messages.length - 1]?.classification === BOUNCE_CLASSIFICATION &&
+    thread.campaignCreator.lifecycleStatus === "bounced";
   const showReply = thread.channel === "email" && decision !== "no" && !bouncedNow;
   const needsGiftLink = decision === "yes" && !replyText.includes(ADDRESS_LINK);
   const willAutoYes = replyText.includes(ADDRESS_LINK) && !decision;
@@ -457,6 +460,8 @@ function ThreadDetail({ threadId }: { threadId: string }) {
           message={featured}
           creatorName={creatorName}
           creatorId={creator.id}
+          stillBounced={thread.campaignCreator.lifecycleStatus === "bounced"}
+          outreachHref={`/campaigns/${thread.campaignCreator.campaign.id}/outreach?select=${thread.campaignCreator.id}`}
           markingReal={markingReal}
           onRealReply={() => void markRealReply(featured.id)}
         />
@@ -922,16 +927,38 @@ function AutoMessageCard({
   message,
   creatorName,
   creatorId,
+  stillBounced,
+  outreachHref,
   markingReal,
   onRealReply,
 }: {
   message: Message;
   creatorName: string;
   creatorId: string;
+  stillBounced: boolean;
+  outreachHref: string;
   markingReal: boolean;
   onRealReply: () => void;
 }) {
   const bounce = message.classification === BOUNCE_CLASSIFICATION;
+  // Fixed already: a new email was saved, so point at the first email to the new address.
+  if (bounce && !stillBounced) {
+    return (
+      <figure className="space-y-3 rounded-xl border border-dashed bg-card p-5">
+        <figcaption className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <StatusPill tone="neutral">Bounced before</StatusPill>
+          <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
+        </figcaption>
+        <p>
+          <span className="font-medium">A new email is saved for {creatorName}.</span> Send their first email to the new
+          address from Email creators.
+        </p>
+        <Link href={outreachHref} className={buttonVariants({ size: "sm" })}>
+          Email them
+        </Link>
+      </figure>
+    );
+  }
   return (
     <figure
       className={`space-y-3 rounded-xl border p-5 ${bounce ? "border-red-200 bg-red-50" : "border-dashed bg-card"}`}

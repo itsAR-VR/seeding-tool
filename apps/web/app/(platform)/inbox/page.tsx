@@ -192,9 +192,13 @@ export default async function InboxPage({
             // A bounce's own text is mail-server jargon; say what it means instead.
             body:
               lastMessage.classification === "bounce"
-                ? "Your email didn't reach them. The address doesn't work."
+                ? cc.lifecycleStatus === "bounced"
+                  ? "Your email didn't reach them. The address doesn't work."
+                  : "New email saved. Their first email to it hasn't gone out yet."
                 : decodeEntities(lastMessage.body).slice(0, 200),
-            bounce: lastMessage.classification === "bounce",
+            // Only while it's still unfixed; a saved new email clears it.
+            bounce: lastMessage.classification === "bounce" && cc.lifecycleStatus === "bounced",
+            fixed: lastMessage.classification === "bounce" && cc.lifecycleStatus !== "bounced",
           }
         : null,
       updatedAt: new Date(thread.updatedAt).toISOString(),

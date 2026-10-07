@@ -14,7 +14,7 @@ export type InboxRow = {
   name: string;
   campaignId: string;
   campaignName: string;
-  lastMessage: { direction: string; body: string; bounce?: boolean } | null;
+  lastMessage: { direction: string; body: string; bounce?: boolean; fixed?: boolean } | null;
   updatedAt: string;
   decision: string | null;
   needsCall: boolean;
@@ -172,7 +172,9 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
                         : row.lastMessage.direction === "auto"
                           ? row.lastMessage.bounce
                             ? "Bounced: "
-                            : "Automatic reply: "
+                            : row.lastMessage.fixed
+                              ? "Bounced before: "
+                              : "Automatic reply: "
                           : "You wrote: "}
                     </span>
                     {row.lastMessage.body.slice(0, 120)}
