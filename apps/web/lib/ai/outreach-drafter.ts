@@ -45,6 +45,10 @@ export type GenerateDraftParams = {
   channel: DraftChannel;
   additionalContext?: string;
   brandName?: string;
+  /** Who signs it ("Kam"), from the brand kit. Never invented. */
+  senderFirstName?: string | null;
+  /** The brand's last sent first email: the approved wording to reuse. */
+  approvedExample?: string | null;
 };
 
 export type GeneratedDraft = {
@@ -131,8 +135,7 @@ ${creatorInfo}
 
 BRAND: ${brandName || "Our brand"}
 
-CAMPAIGN: ${campaign.name}
-${campaign.description ? `Description: ${campaign.description}` : ""}
+${params.senderFirstName ? `SENDER: ${params.senderFirstName} (write as them; never use any other name)` : "SENDER: the founder (never invent a name)"}
 
 PRODUCTS:
 ${productLines || "  (No specific products listed)"}
@@ -142,8 +145,14 @@ ${channelInstructions}
 
 ${additionalContext ? `ADDITIONAL CONTEXT / TALKING POINTS:\n${additionalContext}` : ""}
 
+${
+  params.approvedExample
+    ? `APPROVED EMAIL (already sent by this brand). Write this same email: keep every sentence word for word and change ONLY the name in the greeting and the "I love your ___ content!" line for this creator:\n"""\n${params.approvedExample}\n"""\n`
+    : ""
+}
 IMPORTANT:
 ${OPENER_RULES}
+- Never mention campaign names, lists, waves, notes, or how you found them. Those are internal.
 - Then say who you are and what the product does in one or two plain sentences, and offer to send it for free.
 - Mention the product(s) naturally, don't just list them
 - Sound like a founder writing one email by hand: short sentences, no hype, no em dashes, no "I hope this finds you well"

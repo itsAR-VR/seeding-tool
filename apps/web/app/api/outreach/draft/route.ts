@@ -7,6 +7,7 @@ import {
   type CampaignInfo,
   type DraftChannel,
 } from "@/lib/ai/outreach-drafter";
+import { getBrandKit } from "@/lib/brand/kit";
 import {
   getBuiltInPersona,
   isBuiltInPersonaId,
@@ -117,6 +118,17 @@ export async function POST(request: NextRequest) {
       select: { name: true },
     });
 
+    // Who signs it, and the brand's last first email that actually went out: new
+    // emails reuse that approved wording instead of inventing a new one.
+    const [kit, lastSent] = await Promise.all([
+      getBrandKit(membership.brandId),
+      prisma.aIDraft.findFirst({
+        where: { type: "outreach", status: "sent", body: { not: "" }, campaignCreator: { campaign: { brandId: membership.brandId } } },
+        orderBy: { updatedAt: "desc" },
+        select: { body: true },
+      }),
+    ]);
+
     // Generate drafts for each creator
     const drafts = await Promise.all(
       campaignCreators.map(async (cc) => {
@@ -179,6 +191,8 @@ export async function POST(request: NextRequest) {
             channel,
             additionalContext,
             brandName: brand?.name,
+            senderFirstName: kit?.senderFirstName || null,
+            approvedExample: lastSent?.body ?? null,
           });
 
           // Saved as soon as it's written, so it survives leaving the page and can be
