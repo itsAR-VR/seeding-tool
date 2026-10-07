@@ -333,6 +333,42 @@ export default function OutreachPage() {
     }
   };
 
+  // Keep checked or edited emails for another day. They come back under
+  // "N emails are already written" and open exactly as saved.
+  const [savingForLater, setSavingForLater] = useState(false);
+  const saveForLater = async () => {
+    const toSave = drafts
+      .filter((d) => !d.error && d.body)
+      .map((d) => ({
+        campaignCreatorId: d.campaignCreatorId,
+        subject: editedDrafts[d.campaignCreatorId]?.subject ?? d.subject ?? null,
+        body: editedDrafts[d.campaignCreatorId]?.body ?? d.body!,
+      }));
+    if (toSave.length === 0) return;
+    setSavingForLater(true);
+    const res = await fetch("/api/outreach/draft/save", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ drafts: toSave }),
+    }).catch(() => null);
+    const data = (await res?.json().catch(() => null)) as { saved?: number; error?: string } | null;
+    setSavingForLater(false);
+    if (!res?.ok) {
+      setNotice({ tone: "error", text: data?.error ?? "Couldn't save them. Try again." });
+      return;
+    }
+    setDrafts([]);
+    setEditedDrafts({});
+    setConfirmingSend(null);
+    setSelectedIds(new Set());
+    setStep("choose");
+    setNotice({
+      tone: "success",
+      text: `Saved ${data?.saved ?? toSave.length} emails. Come back any time and click "Open written emails" to send them.`,
+    });
+    await loadCreators();
+  };
+
   const generateDrafts = async (ids: string[] = Array.from(selectedIds)) => {
     if (ids.length === 0) return;
     if (ids.length > MAX_BATCH_SIZE) {
@@ -1125,16 +1161,9 @@ export default function OutreachPage() {
                   {sendBlocker}
                 </p>
               ) : null}
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setDrafts([]);
-                  setEditedDrafts({});
-                  setConfirmingSend(null);
-                  setStep("choose");
-                }}
-              >
-                Discard
+              {/* Written emails are already saved; this keeps her edits too, for sending another day. */}
+              <Button variant="outline" disabled={savingForLater || sending} onClick={() => void saveForLater()}>
+                {savingForLater ? "Saving..." : "Save and send later"}
               </Button>
               {confirmingSend === "all" ? (
                 <Button variant="ghost" onClick={() => setConfirmingSend(null)}>

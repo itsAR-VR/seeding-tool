@@ -173,6 +173,24 @@ export async function POST(request: NextRequest) {
             brandName: brand?.name,
           });
 
+          // Saved as soon as it's written, so it survives leaving the page and can be
+          // checked today and sent tomorrow. Next time it opens as-is (see "saved" above).
+          if (channel === "email") {
+            try {
+              await prisma.aIDraft.create({
+                data: {
+                  campaignCreatorId: cc.id,
+                  type: "outreach",
+                  status: "draft",
+                  subject: draft.subject,
+                  body: draft.body,
+                },
+              });
+            } catch (error) {
+              console.warn("[outreach/draft] couldn't save the draft", error);
+            }
+          }
+
           return {
             campaignCreatorId: cc.id,
             creatorId: cc.creatorId,
