@@ -13,6 +13,7 @@ import {
   issueGiftClaimLink,
 } from "@/lib/gift-claims/issue";
 import { learnFromSentReply } from "@/lib/inbox/learned-replies";
+import { BOUNCE_CLASSIFICATION } from "@/lib/inbox/auto-messages";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -48,6 +49,23 @@ export async function POST(request: NextRequest, context: RouteContext) {
     });
     if (!thread) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+    }
+
+    // After a bounce, a reply would go nowhere (or, after a new email is saved, as a "Re:"
+    // to someone who never got the first one). The first email goes from Email creators.
+    const latest = await prisma.message.findFirst({
+      where: { threadId: thread.id },
+      orderBy: { createdAt: "desc" },
+      select: { classification: true },
+    });
+    if (latest?.classification === BOUNCE_CLASSIFICATION) {
+      return NextResponse.json(
+        {
+          error:
+            "The last email to this creator bounced. Save a new email on their creator page, then send their first email from Email creators.",
+        },
+        { status: 400 },
+      );
     }
 
     const recipient = thread.campaignCreator.creator.email;

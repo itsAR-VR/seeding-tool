@@ -85,10 +85,13 @@ function latestReal<T extends { direction: string }>(messages: T[]): T | undefin
 
 function tabFor(thread: {
   campaignCreator: { replyDecision: string | null; lifecycleStatus: string };
-  messages: Array<{ direction: string }>;
+  messages: Array<{ direction: string; classification: string | null }>;
 }): Exclude<InboxTab, "all"> {
   const decision = thread.campaignCreator.replyDecision;
-  if (thread.campaignCreator.lifecycleStatus === "bounced") return "bounced";
+  // Stays here until the first email to a new address goes out (then a newer message exists).
+  if (thread.campaignCreator.lifecycleStatus === "bounced" || thread.messages[0]?.classification === "bounce") {
+    return "bounced";
+  }
   if (decision === "no" || decision === "later") return "no";
   if (decision === "yes") return "yes";
   return needsYourCall(decision, latestReal(thread.messages)?.direction) ? "needs" : "waiting";

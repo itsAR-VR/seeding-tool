@@ -409,10 +409,9 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   );
   const decision = thread.campaignCreator.replyDecision;
   // A bounce means the address doesn't work, so there's nothing to reply to until it's changed.
-  // Still bounced only until a new email is saved (that puts them back to "ready").
-  const bouncedNow =
-    thread.messages[thread.messages.length - 1]?.classification === BOUNCE_CLASSIFICATION &&
-    thread.campaignCreator.lifecycleStatus === "bounced";
+  // While a bounce is the latest message there's no reply box: before a new email is
+  // saved there's nowhere to send, and after, the first email goes from Email creators.
+  const bouncedNow = thread.messages[thread.messages.length - 1]?.classification === BOUNCE_CLASSIFICATION;
   const showReply = thread.channel === "email" && decision !== "no" && !bouncedNow;
   const needsGiftLink = decision === "yes" && !replyText.includes(ADDRESS_LINK);
   const willAutoYes = replyText.includes(ADDRESS_LINK) && !decision;
