@@ -177,7 +177,7 @@ export default async function DashboardPage() {
         campaign: { brandId, status: { in: ["draft", "active", "paused"] } },
         reviewStatus: "approved",
         lifecycleStatus: "ready",
-        aiDrafts: { none: { type: "outreach", status: "draft" } },
+        aiDrafts: { none: { type: "outreach", status: "draft", body: { not: "" } } },
       },
       select: { campaign: { select: { id: true, name: true } } },
     }),

@@ -140,11 +140,19 @@ export async function POST(request: NextRequest) {
           })),
         };
 
+        // An empty saved draft (from when the writer returned nothing) is never reused.
+        if (channel === "email") {
+          await prisma.aIDraft.updateMany({
+            where: { campaignCreatorId: cc.id, type: "outreach", status: "draft", body: "" },
+            data: { status: "discarded" },
+          });
+        }
+
         // A pre-written outreach draft for this creator wins over AI writing.
         const saved =
           channel === "email"
             ? await prisma.aIDraft.findFirst({
-                where: { campaignCreatorId: cc.id, type: "outreach", status: "draft" },
+                where: { campaignCreatorId: cc.id, type: "outreach", status: "draft", body: { not: "" } },
                 orderBy: { updatedAt: "desc" },
                 select: { subject: true, body: true },
               })
@@ -175,7 +183,7 @@ export async function POST(request: NextRequest) {
 
           // Saved as soon as it's written, so it survives leaving the page and can be
           // checked today and sent tomorrow. Next time it opens as-is (see "saved" above).
-          if (channel === "email") {
+          if (channel === "email" && draft.body.trim()) {
             try {
               await prisma.aIDraft.create({
                 data: {

@@ -119,7 +119,7 @@ describe("generateOutreachDraft", () => {
     expect(draft.tokens).toBe(45);
   });
 
-  it("uses channel-specific max_completion_tokens", async () => {
+  it("leaves room for reasoning models to write (the cap counts their thinking)", async () => {
     createMock.mockResolvedValueOnce({
       choices: [{ message: { content: "SUBJECT: Test\nBODY:\nTest body" } }],
       usage: { total_tokens: 10 },
@@ -132,7 +132,7 @@ describe("generateOutreachDraft", () => {
 
     expect(createMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        max_completion_tokens: 800,
+        max_completion_tokens: 4000,
       }),
     );
 
@@ -145,7 +145,7 @@ describe("generateOutreachDraft", () => {
 
     expect(createMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        max_completion_tokens: 300,
+        max_completion_tokens: 4000,
       }),
     );
   });
@@ -278,7 +278,7 @@ describe("generateOutreachDraft", () => {
     expect(systemMessage.content).toContain("Example 2:");
   });
 
-  it("handles empty choices array", async () => {
+  it("refuses an empty answer instead of returning a blank email", async () => {
     createMock.mockResolvedValueOnce({
       choices: [],
       usage: { total_tokens: 0 },
@@ -287,11 +287,7 @@ describe("generateOutreachDraft", () => {
     const { generateOutreachDraft } = await import(
       "@/lib/ai/outreach-drafter"
     );
-    const draft = await generateOutreachDraft(
-      makeParams({ channel: "instagram_dm" }),
-    );
-
-    expect(draft.body).toBe("");
-    expect(draft.tokens).toBe(0);
+    // An empty draft is an error, so it's never shown or saved as a blank email.
+    await expect(generateOutreachDraft(makeParams({ channel: "instagram_dm" }))).rejects.toThrow(/Empty draft/);
   });
 });

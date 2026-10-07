@@ -197,7 +197,7 @@ describe("needs-you queries", () => {
     expect(mocks.ccFindMany.mock.calls[0][0].where).toEqual({
       campaign: { brandId: "brand-1", status: { in: ["draft", "active", "paused"] } },
       lifecycleStatus: "ready",
-      aiDrafts: { some: { type: "outreach", status: "draft" } },
+      aiDrafts: { some: { type: "outreach", status: "draft", body: { not: "" } } },
     });
   });
 });

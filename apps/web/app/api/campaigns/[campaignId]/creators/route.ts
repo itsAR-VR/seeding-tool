@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         },
         // Whether a first email is already written and saved (Outreach opens those as-is).
         aiDrafts: {
-          where: { type: "outreach", status: "draft" },
+          where: { type: "outreach", status: "draft", body: { not: "" } },
           select: { id: true },
           take: 1,
         },

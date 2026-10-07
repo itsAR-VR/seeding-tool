@@ -173,16 +173,25 @@ ${
 
   const userPrompt = buildUserPrompt(params);
 
+  // Reasoning models (gpt-5, o-series) count their thinking against the cap. A tight
+  // cap used to be spent entirely on thinking, leaving an empty email, so the cap is
+  // roomy and the thinking is kept short.
+  const reasoning = /^(gpt-5|o\d)/.test(AI_MODEL);
   const completion = await getOpenAI().chat.completions.create({
     model: AI_MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
-    max_completion_tokens: channel === "instagram_dm" ? 300 : 800,
+    max_completion_tokens: 4000,
+    ...(reasoning ? { reasoning_effort: "low" as const } : {}),
   });
 
   const content = completion.choices[0]?.message?.content ?? "";
+  if (!content.trim()) {
+    // Never hand back (or save) an empty email; the caller shows "Couldn't write this email".
+    throw new Error(`Empty draft from ${AI_MODEL} (finish: ${completion.choices[0]?.finish_reason ?? "unknown"})`);
+  }
   const totalTokens = completion.usage?.total_tokens ?? 0;
 
   // Parse subject + body for email

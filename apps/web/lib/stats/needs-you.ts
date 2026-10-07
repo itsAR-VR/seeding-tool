@@ -169,7 +169,7 @@ export async function findOutreachWaitingToSend(brandId: string): Promise<Campai
     where: {
       campaign: { brandId, status: { in: ["draft", "active", "paused"] } },
       lifecycleStatus: "ready",
-      aiDrafts: { some: { type: "outreach", status: "draft" } },
+      aiDrafts: { some: { type: "outreach", status: "draft", body: { not: "" } } },
     },
     select: { campaign: { select: { id: true, name: true } } },
   });

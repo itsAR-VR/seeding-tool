@@ -110,7 +110,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             },
             shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
             shopifyOrder: { select: { status: true } },
-            aiDrafts: { where: { type: "outreach", status: "draft" }, select: { id: true }, take: 1 },
+            aiDrafts: { where: { type: "outreach", status: "draft", body: { not: "" } }, select: { id: true }, take: 1 },
           },
           orderBy: { createdAt: "desc" },
         },
