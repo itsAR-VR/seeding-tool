@@ -20,7 +20,7 @@ import type {
 import { sourceLabel } from "./creator-filters";
 import { useModal } from "@/components/use-modal";
 import { X } from "lucide-react";
-import { AllowanceLeft } from "@/components/allowance-left";
+import { AllowanceLeft, allowanceUsedUp, useSearchAllowance } from "@/components/allowance-left";
 
 // ── Campaign Modal ──────────────────────────────────────────────────────
 
@@ -197,6 +197,7 @@ export function SearchModal({
   const [pendingWords, setPendingWords] = useState("");
   const nothingToSearch =
     selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim();
+  const usedUp = allowanceUsedUp(useSearchAllowance());
   const boxRef = useRef<HTMLDivElement>(null);
   useModal(boxRef, onClose);
   return (
@@ -296,10 +297,10 @@ export function SearchModal({
               <Button
                 onClick={onStartSearch}
                 aria-describedby={
-                  nothingToSearch ? "modal-search-hint" : undefined
+                  nothingToSearch || usedUp ? "modal-search-hint" : undefined
                 }
                 disabled={
-                  nothingToSearch || Boolean(searchLimitValidation.error)
+                  usedUp || nothingToSearch || Boolean(searchLimitValidation.error)
                 }
               >
                 Find creators
@@ -325,12 +326,12 @@ export function SearchModal({
               </>
             )}
           </div>
-          {searchResults.length === 0 && !searching && nothingToSearch && (
+          {searchResults.length === 0 && !searching && (nothingToSearch || usedUp) && (
             <p
               id="modal-search-hint"
               className="mt-2 text-right text-sm text-muted-foreground"
             >
-              Add something to search for
+              {usedUp ? "Search allowance used up for this month" : "Add something to search for"}
             </p>
           )}
           {searchResults.length > 0 &&
@@ -400,6 +401,7 @@ function SearchForm({
   searchLimitWarning: string | null;
   onPendingWordsChange: (text: string) => void;
 }) {
+  const allowance = useSearchAllowance();
   // Only suggest words tied to this brand and its creators; the generic
   // category list (Automotive, Gaming...) is noise for most brands.
   const brandGroups = keywordGroups.filter((g) => g.label !== "Categories");
@@ -486,7 +488,7 @@ function SearchForm({
         <p className="-mt-3 text-sm text-muted-foreground">
           Start with 10 to 25. Bigger searches take longer and use more of your
           search allowance.
-          <AllowanceLeft />
+          <AllowanceLeft allowance={allowance} />
         </p>
       )}
 

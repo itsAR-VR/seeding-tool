@@ -4,8 +4,14 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { safeReturnPath } from "@/lib/safe-return-path";
+import { allowanceText } from "@/components/allowance-left";
 
-type Status = { hasOwnKey: boolean; usesShared: boolean; allowanceLeftPercent?: number | null };
+type Status = {
+  hasOwnKey: boolean;
+  usesShared: boolean;
+  allowanceLeftPercent?: number | null;
+  allowanceResetsAt?: string | null;
+};
 
 function CreatorSearchSettings() {
   const searchParams = useSearchParams();
@@ -75,6 +81,11 @@ function CreatorSearchSettings() {
     await load();
   }
 
+  const allowance =
+    status?.allowanceLeftPercent != null
+      ? { leftPercent: status.allowanceLeftPercent, resetsAt: status.allowanceResetsAt ?? null }
+      : null;
+
   const current = !status
     ? loadFailed
       ? "Couldn't load this. Refresh the page to try again."
@@ -96,14 +107,18 @@ function CreatorSearchSettings() {
 
       <section className="space-y-4 rounded-xl border bg-card p-5">
         <p className="font-medium">{current}</p>
-        {status?.allowanceLeftPercent != null && (
-          <p className="text-sm">
-            <span className="font-semibold tabular-nums">{status.allowanceLeftPercent}%</span> of this month&apos;s
-            search allowance is left.
-            {status.allowanceLeftPercent < 15 ? " Keep searches small until it resets next month." : ""}
+        {allowance && (
+          <p className={allowance.leftPercent <= 0 ? "font-medium text-destructive" : "text-sm"}>
+            {allowanceText(allowance)}
+            {allowance.leftPercent > 0 && allowance.leftPercent < 15
+              ? " Keep searches small until it resets."
+              : ""}
+            {allowance.leftPercent <= 0 && status?.usesShared && !status.hasOwnKey
+              ? " To search before then, add your own key below."
+              : ""}
           </p>
         )}
-        {status?.usesShared && !status.hasOwnKey && (
+        {status?.usesShared && !status.hasOwnKey && (allowance?.leftPercent ?? 1) > 0 && (
           <p className="text-sm text-muted-foreground">You don&apos;t need to do anything. A key is only for running searches on your own account.</p>
         )}
         {/* Wait for the status so people on the included search never see the key form flash open. */}

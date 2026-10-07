@@ -14,7 +14,7 @@ import { LocationInput } from "@/components/location-input";
 import type { CategoryGroups } from "@/components/grouped-category-picker";
 import type { CreatorFacets } from "@/lib/creators/facets";
 import { isCanonicalDiscoveryCategory } from "@/lib/categories/catalog";
-import { AllowanceLeft } from "@/components/allowance-left";
+import { AllowanceLeft, allowanceUsedUp, useSearchAllowance } from "@/components/allowance-left";
 
 type SearchJob = {
   jobId: string;
@@ -147,11 +147,11 @@ export default function DiscoverCreatorsPage() {
     [filters.limit],
   );
 
-  const searchDisabledReason =
-    !loading &&
-    !suggestionsLoading &&
-    selectedWords.length === 0 &&
-    !pendingWords
+  const allowance = useSearchAllowance();
+  const usedUp = allowanceUsedUp(allowance);
+  const searchDisabledReason = usedUp
+    ? "Search allowance used up for this month"
+    : !loading && !suggestionsLoading && selectedWords.length === 0 && !pendingWords
       ? "Add something to search for"
       : null;
 
@@ -436,7 +436,7 @@ export default function DiscoverCreatorsPage() {
               <p className="text-sm text-muted-foreground">
                 Start with 10 to 25. Bigger searches take longer and use more of
                 your search allowance.
-                <AllowanceLeft />
+                <AllowanceLeft allowance={allowance} />
               </p>
             )}
           </div>
@@ -491,6 +491,7 @@ export default function DiscoverCreatorsPage() {
                 searchDisabledReason ? "find-creators-hint" : undefined
               }
               disabled={
+                usedUp ||
                 loading ||
                 suggestionsLoading ||
                 (selectedWords.length === 0 && !pendingWords)

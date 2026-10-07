@@ -13,7 +13,7 @@ import { resolveApifyToken } from "@/lib/apify/token";
  * A percent (not dollars) so a company on the shared account never sees our
  * spending. Null when Apify can't say, which is never a reason to fail the page.
  */
-async function allowanceLeftPercent(brandId: string): Promise<number | null> {
+async function allowance(brandId: string): Promise<{ leftPercent: number; resetsAt: string | null } | null> {
   try {
     const token = await resolveApifyToken(brandId);
     const res = await fetch("https://api.apify.com/v2/users/me/limits", {
@@ -23,12 +23,19 @@ async function allowanceLeftPercent(brandId: string): Promise<number | null> {
     });
     if (!res.ok) return null;
     const body = (await res.json()) as {
-      data?: { limits?: { maxMonthlyUsageUsd?: number }; current?: { monthlyUsageUsd?: number } };
+      data?: {
+        monthlyUsageCycle?: { endAt?: string };
+        limits?: { maxMonthlyUsageUsd?: number };
+        current?: { monthlyUsageUsd?: number };
+      };
     };
     const limit = body.data?.limits?.maxMonthlyUsageUsd;
     const used = body.data?.current?.monthlyUsageUsd;
     if (!limit || used == null) return null;
-    return Math.max(0, Math.min(100, Math.round(((limit - used) / limit) * 100)));
+    return {
+      leftPercent: Math.max(0, Math.min(100, Math.floor(((limit - used) / limit) * 100))),
+      resetsAt: body.data?.monthlyUsageCycle?.endAt ?? null,
+    };
   } catch {
     return null;
   }
@@ -46,7 +53,10 @@ export async function GET() {
     return NextResponse.json({
       hasOwnKey: Boolean(brand.apifyTokenEnc),
       usesShared: brand.useSharedApify,
-      allowanceLeftPercent: ready ? await allowanceLeftPercent(brandId) : null,
+      ...(await (async () => {
+        const a = ready ? await allowance(brandId) : null;
+        return { allowanceLeftPercent: a?.leftPercent ?? null, allowanceResetsAt: a?.resetsAt ?? null };
+      })()),
     });
   } catch (error) {
     if (error instanceof BrandAccessError) return NextResponse.json({ error: error.message }, { status: error.status });

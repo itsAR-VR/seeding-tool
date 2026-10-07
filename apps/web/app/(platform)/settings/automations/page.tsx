@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UnifiedKeywordSelector } from "@/components/unified-keyword-selector";
 import { formatDateTime } from "@/lib/format/date";
+import { allowanceText, useSearchAllowance } from "@/components/allowance-left";
 
 type Automation = {
   id: string;
@@ -54,6 +55,7 @@ function searchingFor(a: Automation) {
 export default function AutomationsPage() {
   const [automations, setAutomations] = useState<Automation[] | null>(null);
   const [searchReady, setSearchReady] = useState(true);
+  const allowance = useSearchAllowance();
   const [words, setWords] = useState<string[]>([]);
   const [pending, setPending] = useState("");
   const [limit, setLimit] = useState("25");
@@ -133,6 +135,10 @@ export default function AutomationsPage() {
           Find new creators on a schedule. New finds are added to Creators for you to review.
         </p>
       </header>
+
+      {searchReady && allowance && allowance.leftPercent <= 0 && (
+        <p className="rounded-xl border bg-card p-4 font-medium text-destructive">{allowanceText(allowance)} Scheduled searches won&apos;t find anyone until then.</p>
+      )}
 
       {!searchReady && (
         <p className="rounded-xl border bg-card p-4">

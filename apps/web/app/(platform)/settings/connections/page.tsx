@@ -13,6 +13,7 @@ import { useSearchParams } from "next/navigation";
 import { AppIcon } from "@/components/app-icon";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { safeReturnPath } from "@/lib/safe-return-path";
+import { allowanceText, allowanceUsedUp, useSearchAllowance } from "@/components/allowance-left";
 
 import {
   type ConnectionOverviewItem,
@@ -64,6 +65,8 @@ function ConnectionsContent({
   const [unipileSaving, setUnipileSaving] = useState(false);
   // Creator search runs on Apify: ready when the company has a key or may use the shared one.
   const [searchReady, setSearchReady] = useState<boolean | null>(null);
+  const searchAllowance = useSearchAllowance();
+  const searchUsedUp = allowanceUsedUp(searchAllowance);
   useEffect(() => {
     void fetch("/api/settings/apify")
       .then((r) => (r.ok ? r.json() : null))
@@ -551,12 +554,25 @@ function ConnectionsContent({
                   Creator search
                 </h2>
                 <ConnectionStatus
-                  connected={searchReady === true}
-                  tone={searchReady === false ? "waiting" : undefined}
-                  label={searchReady === null ? "Checking..." : searchReady ? "Ready" : "Needs a key"}
+                  connected={searchReady === true && !searchUsedUp}
+                  tone={searchReady === false || searchUsedUp ? "waiting" : undefined}
+                  label={
+                    searchReady === null
+                      ? "Checking..."
+                      : !searchReady
+                        ? "Needs a key"
+                        : searchUsedUp
+                          ? "Used up this month"
+                          : "Ready"
+                  }
                 />
               </div>
               <p className="text-muted-foreground">Finds creators on Instagram and Collabstr, with their emails.</p>
+              {searchAllowance && searchReady && (
+                <p className={searchUsedUp ? "text-sm font-medium text-destructive" : "text-sm"}>
+                  {allowanceText(searchAllowance)}
+                </p>
+              )}
             </div>
           </div>
           <div className="border-t px-5 py-4">
