@@ -18,3 +18,13 @@ describe("outreach opener rules", () => {
     expect(OPENER_RULES).toContain("body confidence");
   });
 });
+
+describe("nicheFromNotes", () => {
+  it("reads only the topics from a CSV note, in the opener's words", async () => {
+    const { nicheFromNotes } = await import("@/lib/ai/outreach-drafter");
+    const note = "Kalm Mind | Core 35-65 | Prior: never contacted | Topics: mom, founder, wellness | Band: 5k-50k";
+    expect(nicheFromNotes(note)).toBe("motherhood, business, wellness");
+    expect(nicheFromNotes("no topics here")).toBeNull();
+    expect(nicheFromNotes(null)).toBeNull();
+  });
+});

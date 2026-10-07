@@ -67,6 +67,24 @@ export const OPENER_RULES = `- After the greeting, open with ONE short line in e
 - Word choices: say "fitness" (never "strength", "strength training" or "movement"), "fashion" (never "style"), "wellness" (never "midlife wellness"). Never say "body confidence".
 - Never write a detailed compliment about their mission or who they help (no "I love how you help...").`;
 
+/**
+ * Topics saved in a creator's notes by a CSV import ("Topics: mom, founder"),
+ * as words the opener rules understand. Used when there's no bio or category,
+ * so the opener still says what they post about. Only the topics are read;
+ * the rest of the note (internal tags, history) never reaches the email.
+ */
+export function nicheFromNotes(notes: string | null | undefined): string | null {
+  const raw = notes?.match(/Topics:\s*([^|\n]+)/i)?.[1];
+  if (!raw) return null;
+  const topics = raw
+    .split(",")
+    .map((t) => t.trim().toLowerCase())
+    .filter(Boolean);
+  if (topics.length === 0) return null;
+  const words = topics.map((t) => (t === "mom" || t === "moms" ? "motherhood" : t === "founder" ? "business" : t));
+  return [...new Set(words)].join(", ");
+}
+
 /** Safety net for the opener rules when the model slips. */
 export function tidyOpener(body: string): string {
   return body

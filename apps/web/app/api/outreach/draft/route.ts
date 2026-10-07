@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   generateOutreachDraft,
+  nicheFromNotes,
   type CreatorProfile,
   type CampaignInfo,
   type DraftChannel,
@@ -124,7 +125,8 @@ export async function POST(request: NextRequest) {
           name: cc.creator.name,
           followerCount: cc.creator.followerCount,
           bio: cc.creator.bio,
-          niche: cc.creator.bioCategory,
+          // CSV imports have no bio or category, only topics in their notes.
+          niche: cc.creator.bioCategory ?? nicheFromNotes(cc.creator.notes),
         };
 
         const campaignInfo: CampaignInfo = {
