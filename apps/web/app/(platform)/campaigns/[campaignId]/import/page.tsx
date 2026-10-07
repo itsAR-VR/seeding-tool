@@ -178,6 +178,7 @@ export default function CampaignImportPage() {
               <Button
                 size="sm"
                 onClick={handleImport}
+                aria-describedby={selected.size === 0 && creators.length > 0 ? "import-hint" : undefined}
                 disabled={selected.size === 0 || importing}
               >
                 {importing
@@ -186,6 +187,11 @@ export default function CampaignImportPage() {
               </Button>
             </div>
           </div>
+          {selected.size === 0 && creators.length > 0 && (
+            <p id="import-hint" className="text-sm text-muted-foreground">
+              Pick at least one creator to add
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             Average views is from their latest 12 videos, when we have it.
           </p>

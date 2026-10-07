@@ -81,8 +81,12 @@ const SECTIONS: Array<{ title: string; intro: string; fields: Field[] }> = [
 
 const COUNTRIES = SHIP_COUNTRIES;
 
+const LEAVE_WARNING = "You have unsaved changes. Leave without saving?";
+
 export default function BrandKitPage() {
   const [kit, setKit] = useState<Kit | null>(null);
+  // What's saved on the server, to tell when something changed.
+  const [savedKit, setSavedKit] = useState<Kit | null>(null);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -98,10 +102,42 @@ export default function BrandKitPage() {
         return null;
       })
       .then((data: Kit | null) => {
-        if (data) setKit({ ...data, followUpTemplate: data.followUpTemplate ?? data.defaultFollowUp });
+        if (!data) return;
+        const loaded = { ...data, followUpTemplate: data.followUpTemplate ?? data.defaultFollowUp };
+        setKit(loaded);
+        setSavedKit(loaded);
       })
       .catch(() => setLoadError("Couldn't load your brand kit. Check your connection and refresh the page."));
   }, []);
+
+  const dirty = kit !== null && savedKit !== null && JSON.stringify(kit) !== JSON.stringify(savedKit);
+
+  // Warn before leaving with unsaved changes: closing the tab, reloading, or
+  // clicking a link to another page in the app.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const onClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
+      const link = (event.target as Element | null)?.closest?.("a[href]");
+      if (!(link instanceof HTMLAnchorElement) || link.target === "_blank") return;
+      const url = new URL(link.href, window.location.href);
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
+      if (!window.confirm(LEAVE_WARNING)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    document.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      document.removeEventListener("click", onClick, true);
+    };
+  }, [dirty]);
 
   if (!kit) {
     return loadError ? (
@@ -122,13 +158,19 @@ export default function BrandKitPage() {
     if (!kit) return;
     setSaving(true);
     setNotice(null);
+    const sent = kit;
     const res = await fetch("/api/brand-kit", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(kit),
-    });
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
-    setNotice(res.ok ? { ok: true, text: "Saved." } : { ok: false, text: data?.error ?? "Couldn't save." });
+      body: JSON.stringify(sent),
+    }).catch(() => null);
+    const data = (await res?.json().catch(() => null)) as { error?: string } | null;
+    if (res?.ok) setSavedKit(sent);
+    setNotice(
+      res?.ok
+        ? { ok: true, text: "Saved." }
+        : { ok: false, text: data?.error ?? "Couldn't save. Check your connection and try again." },
+    );
     setSaving(false);
   }
 
@@ -139,7 +181,12 @@ export default function BrandKitPage() {
     form.append("logo", file);
     const res = await fetch("/api/brand-kit/logo", { method: "POST", body: form });
     const data = (await res.json().catch(() => null)) as { logoUrl?: string; error?: string } | null;
-    if (res.ok && data?.logoUrl) setKit({ ...kit!, logoUrl: data.logoUrl });
+    if (res.ok && data?.logoUrl) {
+      // The upload already saved the logo, so it doesn't count as an unsaved change.
+      const logoUrl = data.logoUrl;
+      setKit((cur) => (cur ? { ...cur, logoUrl } : cur));
+      setSavedKit((cur) => (cur ? { ...cur, logoUrl } : cur));
+    }
     else setNotice({ ok: false, text: data?.error ?? "Couldn't upload the logo." });
     setUploading(false);
   }
@@ -240,17 +287,33 @@ export default function BrandKitPage() {
 
       <LearnedReplies />
 
-      <div className="sticky bottom-4 flex items-center gap-4 rounded-xl border bg-background/95 p-4 shadow-sm">
-        <button
-          type="button"
-          onClick={() => void save()}
-          disabled={saving}
-          className="rounded-lg bg-foreground px-5 py-2 font-medium text-background disabled:opacity-50"
+      {dirty || saving ? (
+        <div
+          role="region"
+          aria-label="Unsaved changes"
+          className="sticky bottom-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-background/95 p-4 shadow-sm"
         >
-          {saving ? "Saving..." : "Save brand kit"}
-        </button>
-        {notice && <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>}
-      </div>
+          <p className="mr-auto font-medium">You have unsaved changes</p>
+          {notice && !notice.ok && (
+            <p role="alert" className="text-sm text-red-700">
+              {notice.text}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="rounded-lg bg-foreground px-5 py-2 font-medium text-background disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Save"}
+          </button>
+        </div>
+      ) : notice ? (
+        <p role="status" className={`text-sm ${notice.ok ? "text-green-700" : "text-red-700"}`}>
+          {notice.ok ? "✓ " : ""}
+          {notice.text}
+        </p>
+      ) : null}
     </div>
   );
 }

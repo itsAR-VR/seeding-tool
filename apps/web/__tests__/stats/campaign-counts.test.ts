@@ -19,6 +19,7 @@ import {
   findOutreachWaitingToSend,
   findStuckCreators,
 } from "@/lib/stats/needs-you";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
 
 const mocks = vi.hoisted(() => ({
   threadFindMany: vi.fn(),
@@ -191,5 +192,15 @@ describe("needs-you queries", () => {
       lifecycleStatus: "ready",
       aiDrafts: { some: { type: "outreach", status: "draft" } },
     });
+  });
+});
+
+describe("status words", () => {
+  it("filters and Results rows use the shared STAGE_DISPLAY labels", () => {
+    expect(CREATOR_FILTERS.needs_answer.label).toBe(STAGE_DISPLAY.needs_answer.label);
+    expect(CREATOR_FILTERS.address_review.label).toBe(STAGE_DISPLAY.address_to_check.label);
+    expect(CREATOR_FILTERS.said_no.label).toBe("Said no");
+    expect(CURRENT_STAGES.map((row) => row.label)).toEqual(CURRENT_STAGES.map((row) => STAGE_DISPLAY[row.display].label));
+    expect(CURRENT_STAGES.map((row) => row.label)).not.toContain("Replied, no address yet");
   });
 });

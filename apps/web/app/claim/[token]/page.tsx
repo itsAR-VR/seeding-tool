@@ -58,9 +58,9 @@ export default async function GiftClaimPage({ params }: PageProps) {
             };
 
   return (
-    <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
+    <main className="min-h-screen bg-muted px-4 py-8 text-foreground">
       <div className="mx-auto max-w-xl">
-        <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
+        <div className="rounded-[2rem] border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
           {brand?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={brand.logoUrl} alt={brand.name} className="h-8 w-auto" />
@@ -70,12 +70,12 @@ export default async function GiftClaimPage({ params }: PageProps) {
           {isUnavailable || !claim ? (
             <>
               <h1 className="mt-6 text-3xl font-semibold tracking-tight">{unavailable.title}</h1>
-              <p className="mt-3 text-base leading-7 text-neutral-700">{unavailable.body}</p>
+              <p className="mt-3 text-base leading-7 text-foreground/80">{unavailable.body}</p>
             </>
           ) : (
             <>
               <h1 className="mt-6 text-3xl font-semibold tracking-tight">Claim your gift</h1>
-              <p className="mt-3 text-sm leading-6 text-neutral-700">
+              <p className="mt-3 text-sm leading-6 text-foreground/80">
                 You’re receiving{" "}
                 <span className="font-medium">
                   {claim.campaignProduct?.product.name ?? `a gift from ${brandName}`}

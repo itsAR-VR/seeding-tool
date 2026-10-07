@@ -108,7 +108,7 @@ export default async function CampaignsPage() {
                           .join(", ")}
                       </span>
                     )}
-                    <span>Started {formatDate(campaign.createdAt)}</span>
+                    <span>Created {formatDate(campaign.createdAt)}</span>
                   </div>
                 </CardHeader>
               </Card>

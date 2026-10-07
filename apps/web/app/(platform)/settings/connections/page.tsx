@@ -279,7 +279,7 @@ function ConnectionsContent({
       }));
       setProviderMessage("shopify", {
         tone: "success",
-        text: `Shopify connected to ${savedStoreDomain}.`,
+        text: "Shopify is connected to your store.",
       });
       await refreshConnectionData();
     } catch (saveError) {

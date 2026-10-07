@@ -79,6 +79,7 @@ function CreatorsContent() {
             Everyone you&apos;ve found or imported{state.total > 0 ? `: ${state.total} creators` : ""}.
           </p>
         </div>
+        <div className="space-y-2">
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => {
@@ -94,6 +95,7 @@ function CreatorsContent() {
           <Button
             variant="outline"
             disabled={state.enriching || missingEmail.length === 0}
+            aria-describedby={!state.enriching && missingEmail.length === 0 ? "missing-emails-hint" : undefined}
             onClick={() => void findMissingEmails()}
           >
             {state.enriching ? "Looking up emails..." : `Find missing emails (${missingEmail.length})`}
@@ -101,6 +103,12 @@ function CreatorsContent() {
           <Button variant="ghost" onClick={() => router.push("/creators/identity-review")}>
             Review duplicates
           </Button>
+        </div>
+        {!state.enriching && missingEmail.length === 0 && (
+          <p id="missing-emails-hint" className="text-sm text-muted-foreground">
+            Everyone shown already has an email
+          </p>
+        )}
         </div>
       </div>
 

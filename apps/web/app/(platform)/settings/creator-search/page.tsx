@@ -80,7 +80,7 @@ function CreatorSearchSettings() {
       ? "Couldn't load this. Refresh the page to try again."
       : "Loading..."
     : status.hasOwnKey
-      ? "Searches use your own key, so credit comes from your account."
+      ? "Searches use your own key, so they come out of your Apify account."
       : status.usesShared
         ? "Creator search is included. Seed Scale covers your searches."
         : "Not set up yet. Add a key below to find creators.";
@@ -90,7 +90,7 @@ function CreatorSearchSettings() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Creator search</h1>
         <p className="mt-1 text-muted-foreground">
-          Finding creators and their emails uses creator search credit. Each search uses a little.
+          Finding creators and their emails uses your search allowance. Each search uses a little of it.
         </p>
       </div>
 
@@ -115,13 +115,14 @@ function CreatorSearchSettings() {
               className="mt-1 w-full min-w-0 rounded-lg border px-3 py-2"
             />
             <span className="mt-1 block text-sm text-muted-foreground">
-              This key lets creator search run on your own account, so searches use your credit. To find it, open Apify, go to Settings, then API &amp; Integrations, and copy your personal token.
+              This key lets creator search run on your own account, so searches come out of your Apify account. To find it, open Apify, go to Settings, then API &amp; Integrations, and copy your personal token.
             </span>
           </label>
           <div className="flex flex-wrap items-center gap-4">
             <button
               type="submit"
               disabled={busy || !token.trim()}
+              aria-describedby={!busy && !token.trim() ? "save-key-hint" : undefined}
               className="rounded-lg bg-foreground px-5 py-2 font-medium text-background disabled:opacity-50"
             >
               {busy ? "Checking..." : "Save key"}
@@ -132,6 +133,11 @@ function CreatorSearchSettings() {
               </button>
             )}
           </div>
+          {!busy && !token.trim() && (
+            <p id="save-key-hint" className="text-sm text-muted-foreground">
+              Paste your key above to save it
+            </p>
+          )}
         </form>
         </details>
         {notice && <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>}

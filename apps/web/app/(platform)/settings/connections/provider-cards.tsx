@@ -250,9 +250,15 @@ export function ShopifyConnectionCard({
           <Button
             type="submit"
             disabled={saving || !storeDomain.trim() || !accessToken.trim()}
+            aria-describedby={!storeDomain.trim() || !accessToken.trim() ? "shopify-connect-hint" : undefined}
           >
             {saving ? "Connecting..." : "Connect Shopify"}
           </Button>
+          {(!storeDomain.trim() || !accessToken.trim()) && (
+            <p id="shopify-connect-hint" className="text-sm text-muted-foreground">
+              {!storeDomain.trim() ? "Add your store address first" : "Add your access token first"}
+            </p>
+          )}
           <p className="text-sm text-muted-foreground">
             Both keys stay hidden and are cleared from this form once saved.
           </p>
@@ -271,10 +277,16 @@ export function ShopifyConnectionCard({
           <Button
             variant="outline"
             disabled={!oauthShop.trim()}
+            aria-describedby={!oauthShop.trim() ? "shopify-oauth-hint" : undefined}
             onClick={onOAuthConnect}
           >
             Sign in with Shopify
           </Button>
+          {!oauthShop.trim() && (
+            <p id="shopify-oauth-hint" className="text-sm text-muted-foreground">
+              Add your store address first
+            </p>
+          )}
           <ProviderGuide provider="shopify" />
         </div>
       )}

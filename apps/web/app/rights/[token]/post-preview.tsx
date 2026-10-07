@@ -11,8 +11,8 @@ export function PostPreview({ src }: { src: string | null }) {
 
   if (!src || failed) {
     return (
-      <div className="mt-6 flex aspect-square w-full items-center justify-center rounded-3xl bg-[#f8f3ec] p-6 text-center">
-        <p className="text-sm text-neutral-600">Preview not available</p>
+      <div className="mt-6 flex aspect-square w-full items-center justify-center rounded-3xl bg-muted p-6 text-center">
+        <p className="text-sm text-muted-foreground">Preview not available</p>
       </div>
     );
   }

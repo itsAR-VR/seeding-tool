@@ -8,6 +8,8 @@ import {
   type CreatorStage,
   type ResultsData,
 } from "@/lib/stats/campaign-counts";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
+import { StageHelp } from "@/components/stage-help";
 import { CreatorLeaderboard } from "./creator-leaderboard";
 import { DateRangeFilter } from "./date-range-filter";
 import { CSVExportButton } from "./csv-export-button";
@@ -22,15 +24,6 @@ const COST_LABELS: Record<string, string> = {
   shipping: "Shipping",
   platform_fee: "Fees",
   other: "Other",
-};
-
-/** The short note under the breakdown for people off the main path. */
-const OFF_PATH_WORDS: Record<(typeof OFF_PATH_STAGES)[number], (n: number) => string> = {
-  order_cancelled: (n) => `${n} ${n === 1 ? "order was" : "orders were"} cancelled`,
-  said_no: (n) => `${n} said no`,
-  not_now: (n) => `${n} ${n === 1 ? "isn't" : "aren't"} ready right now`,
-  not_a_fit: (n) => `${n} not a fit`,
-  maybe_later: (n) => `${n} maybe later`,
 };
 
 function plural(n: number, one: string, many: string): string {
@@ -143,10 +136,7 @@ export function AnalyticsDashboard({ initialData, campaignName }: AnalyticsDashb
         <h2 id="stages-heading" className="text-lg font-semibold">
           Where everyone is now
         </h2>
-        <p className="text-muted-foreground">
-          Each creator is counted once, at the step they&apos;re on today, so these numbers can be
-          smaller than the totals above. Someone who replied and then sent their address shows under Address received.
-        </p>
+        <p className="text-muted-foreground">Each creator is counted once, at today&apos;s step.</p>
         <ul className="divide-y rounded-xl border bg-card">
           <li className="flex items-center gap-4 px-5 py-2 text-sm text-muted-foreground">
             <span className="w-44 shrink-0">Step</span>
@@ -172,9 +162,10 @@ export function AnalyticsDashboard({ initialData, campaignName }: AnalyticsDashb
         </ul>
         {offPath.length > 0 && (
           <p className="text-muted-foreground">
-            Also: {offPath.map(({ stage, n }) => OFF_PATH_WORDS[stage](n)).join(", ")}.
+            Also: {offPath.map(({ stage, n }) => `${STAGE_DISPLAY[stage].label} ${n}`).join(" · ")}
           </p>
         )}
+        <StageHelp stages={[...CURRENT_STAGES.map((row) => row.display), ...offPath.map(({ stage }) => stage)]} />
         {typicalTimeToPost != null && (
           <p className="text-muted-foreground">
             Creators usually post {describeHours(typicalTimeToPost)} after the first email.

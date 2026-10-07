@@ -16,6 +16,7 @@ import {
 import { GiftClaimLinkButton } from "./_components/GiftClaimLinkButton";
 import { campaignNextStep } from "./_components/next-step";
 import { loadCampaignPosts } from "./_components/campaign-posts";
+import { STAGE_GROUPS, countStageGroups, groupForFilter } from "./_components/stage-groups";
 import {
   CREATOR_FILTERS,
   countCampaignCreators,
@@ -25,9 +26,8 @@ import {
 import {
   DISPLAY_STAGE_ORDER,
   STAGE_DISPLAY,
-  countDisplayStages,
+  STAGE_HELP,
   displayStage,
-  isDisplayStage,
   stageNextStep,
   type DisplayStage,
 } from "@/lib/stats/stage-display";
@@ -79,10 +79,11 @@ type PageProps = {
 export default async function CampaignDetailPage({ params, searchParams }: PageProps) {
   const { campaignId } = await params;
   const { filter } = await searchParams;
-  // ?filter= is a current stage (the chips), or one of the older filter keys
-  // (stuck from Home, pending, to_email, ...). Stage wins when a key is both.
-  const stageFilter = isDisplayStage(filter) ? filter : null;
-  const legacyFilter = !stageFilter && isCreatorFilterKey(filter) ? filter : null;
+  // ?filter= opens one of the four chip groups. Older keys (a single stage,
+  // pending, to_email, ...) map to their group. "stuck" (from Home) and
+  // "approved" have no group and keep filtering exactly as before.
+  const groupFilter = groupForFilter(filter);
+  const legacyFilter = !groupFilter && isCreatorFilterKey(filter) ? filter : null;
 
   let membership;
   try {
@@ -165,21 +166,21 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     };
     return { ...countable, stage: displayStage(countable) };
   });
-  const visibleCreators = stageFilter
-    ? creators.filter((cc) => cc.stage === stageFilter)
+  const visibleCreators = groupFilter
+    ? creators.filter((cc) => groupFilter.stages.includes(cc.stage))
     : legacyFilter
       ? creators.filter(CREATOR_FILTERS[legacyFilter].match)
       : creators;
-  const activeFilterLabel = stageFilter
-    ? STAGE_DISPLAY[stageFilter].label
+  const activeFilterLabel = groupFilter
+    ? groupFilter.label
     : legacyFilter
       ? CREATOR_FILTERS[legacyFilter].label
       : null;
   const counts = countCampaignCreators(creators);
-  const stageCounts = countDisplayStages(creators.map((cc) => cc.stage));
-  const stageChips = DISPLAY_STAGE_ORDER.filter(
-    ({ stage, always }) => always || stageCounts[stage] > 0 || stage === stageFilter,
-  ).map(({ stage }) => ({ stage, label: STAGE_DISPLAY[stage].label, value: stageCounts[stage] }));
+  const groupCounts = countStageGroups(creators.map((cc) => cc.stage));
+  const groupChips = STAGE_GROUPS.filter(
+    (g) => g.always || groupCounts[g.key] > 0 || g.key === groupFilter?.key,
+  ).map((g) => ({ key: g.key, label: g.label, value: groupCounts[g.key] }));
   const filterHref = (key: string | null) =>
     key ? `/campaigns/${campaignId}?filter=${key}#creators` : `/campaigns/${campaignId}#creators`;
   const writtenEmailsWaiting = outreachWaiting.find((g) => g.campaignId === campaignId)?.count ?? 0;
@@ -276,38 +277,62 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
         </section>
       )}
 
-      {/* Where everyone is now: one chip per stage, adding up to All. */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <nav aria-label="Filter creators by where they are now" className="flex flex-wrap gap-2">
-          {[{ stage: null, label: "All", value: counts.total }, ...stageChips].map((chip) => {
-            const selected = chip.stage === stageFilter && !legacyFilter;
-            return (
-              <Link
-                key={chip.label}
-                href={filterHref(chip.stage)}
-                scroll={false}
-                aria-current={selected ? "true" : undefined}
-                className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                  selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
-                }`}
-              >
-                {chip.label} <span className="ml-1 font-semibold tabular-nums">{chip.value}</span>
-              </Link>
-            );
-          })}
-        </nav>
-        {(counts.stuck > 0 || legacyFilter === "stuck") && (
-          <Link
-            href={filterHref("stuck")}
-            scroll={false}
-            aria-current={legacyFilter === "stuck" ? "true" : undefined}
-            className={`text-sm underline-offset-2 hover:underline ${
-              legacyFilter === "stuck" ? "font-semibold text-foreground underline" : "text-blue-600"
-            }`}
-          >
-            {CREATOR_FILTERS.stuck.label} ({counts.stuck})
-          </Link>
-        )}
+      {/* Where everyone is now: four groups that add up to All. */}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+          <nav aria-label="Filter creators by where they are now" className="flex flex-wrap gap-2">
+            {[{ key: null, label: "All", value: counts.total }, ...groupChips].map((chip) => {
+              const selected = chip.key === (groupFilter?.key ?? null) && !legacyFilter;
+              return (
+                <Link
+                  key={chip.label}
+                  href={filterHref(chip.key)}
+                  scroll={false}
+                  aria-current={selected ? "true" : undefined}
+                  className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                    selected ? "border-foreground bg-foreground text-background" : "bg-card hover:bg-muted"
+                  }`}
+                >
+                  {chip.label} <span className="ml-1 font-semibold tabular-nums">{chip.value}</span>
+                </Link>
+              );
+            })}
+          </nav>
+          {(counts.stuck > 0 || legacyFilter === "stuck") && (
+            <Link
+              href={filterHref("stuck")}
+              scroll={false}
+              aria-current={legacyFilter === "stuck" ? "true" : undefined}
+              className={`text-sm underline-offset-2 hover:underline ${
+                legacyFilter === "stuck" ? "font-semibold text-foreground underline" : "text-blue-600"
+              }`}
+            >
+              {CREATOR_FILTERS.stuck.label} ({counts.stuck})
+            </Link>
+          )}
+        </div>
+        <details className="group text-sm">
+          <summary className="w-fit cursor-pointer text-blue-600 underline-offset-2 hover:underline">
+            What do these mean?
+          </summary>
+          <div className="mt-3 space-y-4 rounded-xl border bg-card p-5">
+            {STAGE_GROUPS.map((g) => (
+              <div key={g.key} className="space-y-2">
+                <h3 className="font-semibold">{g.label}</h3>
+                <dl className="space-y-2">
+                  {DISPLAY_STAGE_ORDER.filter(({ stage }) => g.stages.includes(stage)).map(({ stage }) => (
+                    <div key={stage} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <dt>
+                        <StatusPill tone={STAGE_DISPLAY[stage].tone}>{STAGE_DISPLAY[stage].label}</StatusPill>
+                      </dt>
+                      <dd className="text-muted-foreground">{STAGE_HELP[stage]}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ))}
+          </div>
+        </details>
       </div>
 
       {/* Creator List */}

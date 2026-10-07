@@ -51,12 +51,12 @@ export function VideoUpload({ token }: { token: string }) {
   }
 
   if (status === "done") {
-    return <p className="text-sm text-neutral-700">Got it, thank you!</p>;
+    return <p className="text-sm text-foreground/80">Got it, thank you!</p>;
   }
 
   return (
-    <div className="space-y-3 rounded-3xl border border-neutral-200 p-5">
-      <p className="text-sm leading-6 text-neutral-700">
+    <div className="space-y-3 rounded-3xl border border-border p-5">
+      <p className="text-sm leading-6 text-foreground/80">
         If you still have the original video, could you upload it here? Instagram doesn&apos;t let
         brands use songs in ads, so a version without music helps a lot.
       </p>
@@ -73,7 +73,7 @@ export function VideoUpload({ token }: { token: string }) {
           className="block w-full text-sm"
         />
       </label>
-      {status === "uploading" && <p className="text-sm text-neutral-600">Uploading...</p>}
+      {status === "uploading" && <p className="text-sm text-muted-foreground">Uploading...</p>}
       <div role="alert" aria-live="assertive">
         {error && <p className="text-sm text-red-700">{error}</p>}
       </div>
@@ -138,7 +138,7 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
           required
           minLength={2}
           autoComplete="name"
-          className="mt-1 w-full rounded-2xl border border-neutral-300 px-4 py-3 text-base"
+          className="mt-1 w-full rounded-2xl border border-input bg-background px-4 py-3 text-base"
         />
       </label>
       <div role="alert" aria-live="assertive">
@@ -152,7 +152,7 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
         type="submit"
         disabled={submitting}
         aria-describedby={error ? "rights-error" : undefined}
-        className="w-full rounded-full bg-neutral-950 px-6 py-3 font-medium text-white disabled:opacity-50"
+        className="w-full rounded-full bg-primary px-6 py-3 font-medium text-primary-foreground disabled:opacity-50"
       >
         {submitting ? "Saving..." : "I agree"}
       </button>
@@ -160,7 +160,7 @@ export function RightsForm({ token, askForVideo }: { token: string; askForVideo:
         type="button"
         disabled={submitting}
         onClick={() => void submit("decline")}
-        className="min-h-11 w-full py-3 text-sm text-neutral-600 underline"
+        className="min-h-11 w-full py-3 text-sm text-muted-foreground underline"
       >
         No thanks
       </button>

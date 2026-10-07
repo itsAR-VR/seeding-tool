@@ -111,7 +111,7 @@ export function KeyboardHelp() {
           <h2 id="help-title" className="text-lg font-semibold">How it works</h2>
           <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
             <li>Make a campaign, add a product and creators, then email them.</li>
-            <li>Replies land in the Inbox. Mark each one yes, not now, or no.</li>
+            <li>Replies land in the Inbox. Pick their answer: Yes, Not right now, or No.</li>
             <li>Send a yes the address link. Their gift order appears in Shopify to complete.</li>
             <li>Posts that tag you show up in Content. Ask for rights, then make an ad.</li>
           </ol>
@@ -130,11 +130,11 @@ export function KeyboardHelp() {
             ))}
           </ul>
           <p className="mt-3 text-sm">
-            In a conversation: <kbd className="rounded border px-1">y</kbd> they said yes,{" "}
-            <kbd className="rounded border px-1">l</kbd> not right now,{" "}
-            <kbd className="rounded border px-1">n</kbd> they said no,{" "}
-            <kbd className="rounded border px-1">j</kbd> next reply that needs you,{" "}
-            <kbd className="rounded border px-1">k</kbd> previous one.
+            In a conversation: <kbd className="rounded border px-1">Y</kbd> yes,{" "}
+            <kbd className="rounded border px-1">L</kbd> not right now,{" "}
+            <kbd className="rounded border px-1">N</kbd> no,{" "}
+            <kbd className="rounded border px-1">J</kbd> next reply,{" "}
+            <kbd className="rounded border px-1">K</kbd> previous reply.
           </p>
         </div>
         <div className="flex justify-end">

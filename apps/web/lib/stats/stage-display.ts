@@ -25,8 +25,8 @@ export const STAGE_DISPLAY: Record<DisplayStage, StageDisplay> = {
   maybe_later: { label: "Maybe later", tone: "neutral" },
   ready: { label: "Not emailed yet", tone: "neutral" },
   emailed: { label: "Waiting for reply", tone: "neutral" },
-  needs_answer: { label: "Needs an answer", tone: "waiting" },
-  replied: { label: "Replied", tone: "waiting" },
+  needs_answer: { label: "Needs your answer", tone: "waiting" },
+  replied: { label: "Replied", tone: "neutral" },
   said_yes: { label: "Said yes", tone: "good" },
   address_to_check: { label: "Address to check", tone: "waiting" },
   address_in: { label: "Address received", tone: "good" },
@@ -38,6 +38,28 @@ export const STAGE_DISPLAY: Record<DisplayStage, StageDisplay> = {
   order_cancelled: { label: "Order cancelled", tone: "neutral" },
   said_no: { label: "Said no", tone: "neutral" },
   not_now: { label: "Not right now", tone: "neutral" },
+};
+
+/** One plain sentence per status, for the "What do these mean?" help. */
+export const STAGE_HELP: Record<DisplayStage, string> = {
+  needs_review: "Found by a search. Approve them to email them.",
+  not_a_fit: "You decided they're not right for this campaign.",
+  maybe_later: "Saved for another time.",
+  ready: "Approved and ready for your first email.",
+  emailed: "You emailed them and they haven't replied yet.",
+  needs_answer: "They replied and are waiting on you.",
+  replied: "They replied and you've answered. Waiting on their next message.",
+  said_yes: "They want the gift. Waiting for their address.",
+  address_to_check: "They sent an address that needs a quick look.",
+  address_in: "Their address is in. Next: the gift order.",
+  order_made: "A Shopify order was made for them.",
+  shipped: "Their gift is on the way.",
+  delivered: "Their gift arrived.",
+  posted: "They posted about you.",
+  done: "Nothing left to do for this creator.",
+  order_cancelled: "Their order was cancelled.",
+  said_no: "They said no, or asked to be removed. They won't be emailed again.",
+  not_now: "Not right now. They can be emailed again later.",
 };
 
 /**

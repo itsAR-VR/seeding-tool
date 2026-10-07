@@ -133,9 +133,14 @@ export default function DiscoverCreatorsPage() {
     [filters.limit]
   );
 
+  const searchDisabledReason =
+    !loading && !suggestionsLoading && selectedWords.length === 0 && !pendingWords
+      ? "Add something to search for"
+      : null;
+
   const limitWarning =
     parsedLimit.value && parsedLimit.value > 100
-      ? "More than 100 works, but the search takes longer and uses more creator search credit."
+      ? "More than 100 works, but the search takes longer and uses more of your search allowance."
       : null;
 
   const keywordGroups = useMemo<KeywordGroup[]>(() => {
@@ -441,6 +446,7 @@ export default function DiscoverCreatorsPage() {
           <div className="flex justify-end">
             <Button
               onClick={handleSearch}
+              aria-describedby={searchDisabledReason ? "find-creators-hint" : undefined}
               disabled={
                 loading ||
                 suggestionsLoading ||
@@ -451,6 +457,11 @@ export default function DiscoverCreatorsPage() {
               {loading ? "Searching…" : "Find creators"}
             </Button>
           </div>
+          {searchDisabledReason && (
+            <p id="find-creators-hint" className="text-right text-sm text-muted-foreground">
+              {searchDisabledReason}
+            </p>
+          )}
         </CardContent>
       </Card>
 

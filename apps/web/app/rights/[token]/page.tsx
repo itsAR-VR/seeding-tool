@@ -31,50 +31,56 @@ export default async function RightsPage({
 
   const brandName = post?.brand.name ?? "the brand";
   const image = post ? previewImage(post) : null;
+  // When there's nothing to approve, the reason is the heading (same as the claim page).
+  const closed = !post
+    ? { title: "This link isn't active", body: `Please ask the ${brandName} team for a new one.` }
+    : post.rightsStatus === "approved"
+      ? {
+          title: "You already approved this post",
+          body:
+            post.mediaType === "VIDEO" && !post.mediaUrl
+              ? "Thank you! One more thing below, if you can."
+              : "Thank you! There's nothing left to do here.",
+        }
+      : post.rightsStatus === "declined"
+        ? { title: "Thanks for letting us know", body: "We won't use this post." }
+        : null;
 
   return (
-    <main className="min-h-screen bg-[#f8f3ec] px-4 py-8 text-neutral-950">
+    <main className="min-h-screen bg-muted px-4 py-8 text-foreground">
       <div className="mx-auto max-w-xl">
-        <div className="rounded-[2rem] bg-white p-6 shadow-sm sm:p-8">
+        <div className="rounded-[2rem] border bg-card p-6 text-card-foreground shadow-sm sm:p-8">
           {post?.brand.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={post.brand.logoUrl} alt={brandName} className="h-8 w-auto" />
           ) : (
             <p className="text-xl font-semibold">{post?.brand.name ?? ""}</p>
           )}
-          <h1 className="mt-6 text-3xl font-semibold tracking-tight">Share your post with us</h1>
-
-          {!post ? (
-            <div className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-950">
-              <p className="text-sm leading-6">
-                This link isn&apos;t active. Please ask the {brandName} team for a new one.
-              </p>
-            </div>
-          ) : post.rightsStatus === "approved" ? (
-            <div className="mt-4 space-y-5">
-              <p className="text-sm leading-6 text-neutral-700">
-                Thank you! You already approved this post.
-              </p>
-              {post.mediaType === "VIDEO" && !post.mediaUrl && <VideoUpload token={token} />}
-            </div>
-          ) : post.rightsStatus === "declined" ? (
-            <p className="mt-4 text-sm leading-6 text-neutral-700">
-              Thanks for letting us know. We won&apos;t use this post.
-            </p>
-          ) : (
+          {closed ? (
             <>
+              <h1 className="mt-6 text-3xl font-semibold tracking-tight">{closed.title}</h1>
+              <p className="mt-3 text-base leading-7 text-foreground/80">{closed.body}</p>
+              {post?.rightsStatus === "approved" && post.mediaType === "VIDEO" && !post.mediaUrl && (
+                <div className="mt-5">
+                  <VideoUpload token={token} />
+                </div>
+              )}
+            </>
+          ) : !post ? null : (
+            <>
+              <h1 className="mt-6 text-3xl font-semibold tracking-tight">Share your post with us</h1>
               <PostPreview src={image} />
               {post.permalink && (
                 <a
                   href={post.permalink}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-1 inline-flex min-h-11 items-center text-sm text-neutral-600 underline"
+                  className="mt-1 inline-flex min-h-11 items-center text-sm text-muted-foreground underline"
                 >
                   View post on Instagram
                 </a>
               )}
-              <div className="mt-6 space-y-3 text-sm leading-6 text-neutral-700">
+              <div className="mt-6 space-y-3 text-sm leading-6 text-foreground/80">
                 {rightsTerms(brandName, post.rightsMonths ?? DEFAULT_RIGHTS_MONTHS).map((line) => (
                   <p key={line}>{line}</p>
                 ))}

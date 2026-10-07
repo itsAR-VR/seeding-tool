@@ -12,7 +12,7 @@ import { guessFromIntent, type AiReplyGuess, type ReplyDecision } from "@/lib/in
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
 import { formatDateTime } from "@/lib/format/date";
 import { adjacentReply, type QueueDirection } from "../next-reply";
-import { INBOX_CHANGED_EVENT, decisionLabel, offerUndo, postDecision } from "../decision-actions";
+import { INBOX_CHANGED_EVENT, decisionStatusLabel, offerUndo, postDecision } from "../decision-actions";
 
 type Message = {
   id: string;
@@ -114,12 +114,14 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   const [followUp, setFollowUp] = useState("");
   const [suggestionId, setSuggestionId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
+  // Inline "Send to name@email? Send / Cancel" row, instead of a browser confirm.
+  const [confirmingSend, setConfirmingSend] = useState(false);
   const [deciding, setDeciding] = useState(false);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [replyNotice, setReplyNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
-  // What she just did here ("Marked Not right now."), shown next to "Next reply".
+  // What she just did here ("Saved: Not right now."), shown next to "Next reply".
   const [doneLine, setDoneLine] = useState<string | null>(null);
-  // "Needs your call" queue: the order when this thread opened, and what still waits now.
+  // "Needs your answer" queue: the order when this thread opened, and what still waits now.
   const [queueOrder, setQueueOrder] = useState<string[] | null>(null);
   const [queueWaiting, setQueueWaiting] = useState<string[]>([]);
 
@@ -212,12 +214,11 @@ function ThreadDetail({ threadId }: { threadId: string }) {
         setDecisionError(error);
         return;
       }
-      setDoneLine(`Marked ${decisionLabel(decision)}.`);
+      const status = decisionStatusLabel(decision);
+      setDoneLine(`Saved: ${status}.`);
       offerUndo({
         message:
-          decision === "no"
-            ? `Marked No. Added to the do-not-send list.`
-            : `Marked ${decisionLabel(decision)}.`,
+          decision === "no" ? `Saved: ${status}. Added to the do-not-send list.` : `Saved: ${status}.`,
         previous: { [threadId]: before },
       });
       await Promise.all([reloadThread(), refreshQueue()]);
@@ -229,7 +230,7 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   const nextId = adjacentReply(queueOrder ?? [], queueWaiting, threadId, "next");
   const previousId = adjacentReply(queueOrder ?? [], queueWaiting, threadId, "previous");
 
-  // j / k move through the replies that need her call (skipped while typing).
+  // j / k move through the replies that need her answer (skipped while typing).
   const goRef = useRef<(direction: QueueDirection) => void>(() => undefined);
   goRef.current = (direction) => {
     const id = direction === "next" ? nextId : previousId;
@@ -251,9 +252,9 @@ function ThreadDetail({ threadId }: { threadId: string }) {
 
   async function handleSendReply() {
     if (!replyText.trim() || !thread) return;
+    setConfirmingSend(false);
     // A gift link only makes sense for a yes; record it first so the gift flow stays right.
     const autoYes = replyText.includes(ADDRESS_LINK) && !thread.campaignCreator.replyDecision;
-    if (!confirm(autoYes ? "Send this reply? This also marks their answer as Yes." : "Send this reply?")) return;
     setReplySending(true);
     setReplyNotice(null);
     try {
@@ -274,7 +275,7 @@ function ThreadDetail({ threadId }: { threadId: string }) {
         const reason = data.error ?? "Your reply didn't send. Try again.";
         setReplyNotice({
           tone: "error",
-          text: autoYes ? `${reason} Their answer is now marked Yes.` : reason,
+          text: autoYes ? `${reason} Their answer is now ${decisionStatusLabel("yes")}.` : reason,
         });
         if (autoYes) await reloadThread();
         return;
@@ -283,8 +284,8 @@ function ThreadDetail({ threadId }: { threadId: string }) {
         tone: "success",
         text: replyText.includes(ADDRESS_LINK)
           ? autoYes
-            ? "Reply sent with their private address link. We marked their answer as Yes."
-            : "Reply sent with their private address link."
+            ? `Reply sent with their gift link. Their answer is now ${decisionStatusLabel("yes")}.`
+            : "Reply sent with their gift link."
           : "Reply sent.",
       });
       setReplyText("");
@@ -384,6 +385,16 @@ function ThreadDetail({ threadId }: { threadId: string }) {
   const pendingAddresses = thread.campaignCreator.shippingSnapshots.filter(
     (s) => !s.confirmedAt && !s.isActive
   );
+  const decision = thread.campaignCreator.replyDecision;
+  const showReply = thread.channel === "email" && decision !== "no";
+  const needsGiftLink = decision === "yes" && !replyText.includes(ADDRESS_LINK);
+  const willAutoYes = replyText.includes(ADDRESS_LINK) && !decision;
+
+  /** One click: start from the gift-link message, or add the link to what she wrote. */
+  function addGiftLink() {
+    setConfirmingSend(false);
+    setReplyText((text) => (text.trim() ? `${text.trimEnd()}\n\n${ADDRESS_LINK}` : followUp));
+  }
 
   return (
     <div className="space-y-6">
@@ -436,12 +447,39 @@ function ThreadDetail({ threadId }: { threadId: string }) {
       )}
       {!featured && <p className="text-muted-foreground">No messages in this conversation yet.</p>}
 
-      {/* Email reply */}
-      {thread.channel === "email" && thread.campaignCreator.replyDecision !== "no" && (
+      {/* Step 1: their answer, right under their message (keys y / l / n) */}
+      {latestInbound && (
+        <DecisionChoice
+          step={showReply ? 1 : null}
+          decision={thread.campaignCreator.replyDecision}
+          aiGuess={guessFromIntent(latestInbound.classification)}
+          confidence={latestInbound.confidence}
+          askedToBeRemoved={
+            thread.campaignCreator.replyDecision === "no" &&
+            latestInbound.classification === OPT_OUT_CLASSIFICATION
+          }
+          deciding={deciding}
+          error={decisionError}
+          onDecide={(d) => void handleDecision(d)}
+          after={
+            doneLine && (
+              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+                {/* The Undo toast announces it; this line is the visible next step. */}
+                <p className="font-medium">{doneLine}</p>
+                <NextReplyButton nextId={nextId} size="sm" />
+              </div>
+            )
+          }
+        />
+      )}
+
+      {/* Step 2: the reply */}
+      {showReply && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              {suggestionId ? "Suggested reply (edit it before sending)" : "Your reply"}
+            <CardTitle className="flex items-center gap-2 text-base">
+              {latestInbound && <StepNumber n={2} />}
+              {suggestionId ? "Your reply (suggested, edit it before sending)" : "Your reply"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -457,30 +495,55 @@ function ThreadDetail({ threadId }: { threadId: string }) {
                 {replyNotice.tone === "success" && <NextReplyButton nextId={nextId} size="sm" />}
               </div>
             )}
+            {needsGiftLink && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                <p>They said yes. This reply doesn&apos;t have their gift link yet.</p>
+                <Button size="sm" variant="outline" onClick={addGiftLink}>
+                  Add the gift link
+                </Button>
+              </div>
+            )}
             <textarea
               className="w-full min-h-40 rounded-md border p-3 text-sm leading-relaxed"
               value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
+              onChange={(e) => {
+                setReplyText(e.target.value);
+                setConfirmingSend(false);
+              }}
               placeholder="Write your reply…"
               aria-label="Your reply"
             />
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm text-muted-foreground">
-                {replyText.includes(ADDRESS_LINK)
-                  ? `${ADDRESS_LINK} becomes their private link to add a shipping address.`
-                  : `To: ${creator.email ?? "no email on file"}`}
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                {!replyText.includes(ADDRESS_LINK) && (
-                  <Button variant="ghost" onClick={() => setReplyText(followUp)}>
-                    Use the gift link message
+            {confirmingSend ? (
+              <SendConfirm
+                to={creator.email ?? creatorName}
+                alsoMarksYes={willAutoYes}
+                sending={replySending}
+                onSend={() => void handleSendReply()}
+                onCancel={() => setConfirmingSend(false)}
+              />
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">
+                  {replyText.includes(ADDRESS_LINK)
+                    ? `${ADDRESS_LINK} becomes their private gift link to add a shipping address.`
+                    : `To: ${creator.email ?? "no email on file"}`}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {!replyText.includes(ADDRESS_LINK) && !decision && (
+                    <Button variant="ghost" onClick={() => setReplyText(followUp)}>
+                      Use the gift link message
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => setConfirmingSend(true)}
+                    disabled={replySending || !replyText.trim()}
+                    className="px-5"
+                  >
+                    {replySending ? "Sending…" : "Send reply"}
                   </Button>
-                )}
-                <Button onClick={handleSendReply} disabled={replySending || !replyText.trim()} className="px-5">
-                  {replySending ? "Sending…" : "Send reply"}
-                </Button>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -529,37 +592,12 @@ function ThreadDetail({ threadId }: { threadId: string }) {
         </Card>
       )}
 
-      {/* Their answer: a quiet, compact choice below the reply (keys y / l / n) */}
-      {latestInbound && (
-        <DecisionChoice
-          decision={thread.campaignCreator.replyDecision}
-          aiGuess={guessFromIntent(latestInbound.classification)}
-          confidence={latestInbound.confidence}
-          askedToBeRemoved={
-            thread.campaignCreator.replyDecision === "no" &&
-            latestInbound.classification === OPT_OUT_CLASSIFICATION
-          }
-          deciding={deciding}
-          error={decisionError}
-          onDecide={(d) => void handleDecision(d)}
-          after={
-            doneLine && (
-              <div className="flex flex-wrap items-center gap-3 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
-                {/* The Undo toast announces it; this line is the visible next step. */}
-                <p className="font-medium">{doneLine}</p>
-                <NextReplyButton nextId={nextId} size="sm" />
-              </div>
-            )
-          }
-        />
-      )}
-
       {/* Pending Address Snapshot */}
       {pendingAddresses.length > 0 && (
         <Card className="border-teal-200 bg-teal-50">
           <CardHeader>
             <CardTitle className="text-base text-teal-900">
-              Address to review
+              Address to check
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -692,8 +730,67 @@ function NextReplyButton({
   );
 }
 
-/** Their answer: a small segmented choice that sits below the reply, not above it. */
+/** Small round step number ("1", "2") so the order on the page reads at a glance. */
+function StepNumber({ n }: { n: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background"
+    >
+      {n}
+    </span>
+  );
+}
+
+/** The inline check before a reply goes out: "Send to name@email? Send / Cancel". */
+function SendConfirm({
+  to,
+  alsoMarksYes,
+  sending,
+  onSend,
+  onCancel,
+}: {
+  to: string;
+  alsoMarksYes: boolean;
+  sending: boolean;
+  onSend: () => void;
+  onCancel: () => void;
+}) {
+  const sendRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    sendRef.current?.focus();
+  }, []);
+  return (
+    <div
+      role="group"
+      aria-label="Confirm send"
+      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+    >
+      <p className="text-sm">
+        Send to <span className="font-medium">{to}</span>?
+        {alsoMarksYes && <span className="text-muted-foreground"> This also saves their answer as Yes.</span>}
+      </p>
+      <div className="flex gap-2">
+        <Button ref={sendRef} onClick={onSend} disabled={sending} className="px-5">
+          {sending ? "Sending…" : "Send"}
+        </Button>
+        <Button variant="outline" onClick={onCancel} disabled={sending}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** Step 1, their answer: a compact segmented choice right under their message. */
 function DecisionChoice({
+  step,
   decision,
   aiGuess,
   confidence,
@@ -703,6 +800,8 @@ function DecisionChoice({
   onDecide,
   after,
 }: {
+  /** Step number when the reply box follows, or null when this is the only step. */
+  step: number | null;
   decision: ReplyDecision | null;
   aiGuess: AiReplyGuess | null;
   confidence: number | null;
@@ -727,7 +826,8 @@ function DecisionChoice({
   return (
     <section aria-labelledby="their-answer" className="space-y-2 px-1">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 id="their-answer" className="text-sm font-medium">
+        <h2 id="their-answer" className="flex items-center gap-2 text-base font-semibold">
+          {step != null && <StepNumber n={step} />}
           Their answer
         </h2>
         <div role="group" aria-labelledby="their-answer" className="inline-flex rounded-lg border bg-card p-0.5">
@@ -752,11 +852,11 @@ function DecisionChoice({
             );
           })}
         </div>
-        {decision && <span className="sr-only">Marked {decisionLabel(decision)}.</span>}
-        <span className="text-sm text-muted-foreground" aria-hidden="true">
-          Keys: y / l / n, j next
-        </span>
+        {decision && <span className="text-sm text-muted-foreground">Now: {decisionStatusLabel(decision)}</span>}
       </div>
+      <p className="text-sm text-muted-foreground" aria-hidden="true">
+        Shortcuts: Y yes, L not right now, N no, J next reply
+      </p>
       {after}
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
       {error && (

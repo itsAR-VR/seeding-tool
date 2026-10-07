@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { BrandAccessError, getCurrentBrandMembership } from "@/lib/integrations/brand-access";
 import { STUCK_AFTER_DAYS } from "@/lib/stats/campaign-counts";
 import { findStuckCreators } from "@/lib/stats/needs-you";
+import { STAGE_DISPLAY, type DisplayStage } from "@/lib/stats/stage-display";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate, formatDateTime } from "@/lib/format/date";
 import { ProblemsList } from "./_components/problems-list";
@@ -11,17 +12,23 @@ import { ProblemsList } from "./_components/problems-list";
 /** Most rows a section loads, so a long backlog never slows the page. */
 const MAX_ROWS = 50;
 
-const PROGRESS_LABELS: Record<string, string> = {
-  ready: "Not emailed yet",
-  outreach_sent: "Emailed",
-  replied: "Replied",
-  address_review: "Address to review",
-  address_confirmed: "Address confirmed",
-  order_created: "Order drafted",
-  shipped: "Shipped",
-  delivered: "Delivered",
-  stalled: "No reply for a while",
+/** Stored step to the status words used everywhere else (lib/stats/stage-display). */
+const PROGRESS_STAGES: Record<string, DisplayStage> = {
+  ready: "ready",
+  outreach_sent: "emailed",
+  replied: "replied",
+  address_review: "address_to_check",
+  address_confirmed: "address_in",
+  order_created: "order_made",
+  shipped: "shipped",
+  delivered: "delivered",
+  stalled: "not_now",
 };
+
+function progressLabel(lifecycleStatus: string): string {
+  const stage = PROGRESS_STAGES[lifecycleStatus];
+  return stage ? STAGE_DISPLAY[stage].label : lifecycleStatus.replace(/_/g, " ");
+}
 
 const PROVIDER_NAMES: Record<string, string> = {
   gmail: "Gmail",
@@ -120,7 +127,7 @@ export default async function ProblemsPage() {
                   <span className="min-w-0">
                     <span className="block font-medium">{creatorName(cc.creator)}</span>
                     <span className="block text-muted-foreground">
-                      {PROGRESS_LABELS[cc.lifecycleStatus] ?? cc.lifecycleStatus.replace(/_/g, " ")}, last change{" "}
+                      {progressLabel(cc.lifecycleStatus)}, last change{" "}
                       {formatDate(cc.updatedAt)}
                     </span>
                   </span>

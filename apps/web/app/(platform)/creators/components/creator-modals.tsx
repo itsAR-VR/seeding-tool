@@ -83,11 +83,20 @@ export function CampaignModal({
                 Start a campaign
               </Link>
             ) : (
-              <Button onClick={onConfirm} disabled={!selectedCampaignId || addingToCampaign}>
+              <Button
+                onClick={onConfirm}
+                disabled={!selectedCampaignId || addingToCampaign}
+                aria-describedby={!selectedCampaignId ? "add-to-campaign-hint" : undefined}
+              >
                 {addingToCampaign ? "Adding..." : "Add to campaign"}
               </Button>
             )}
           </div>
+          {campaigns.length > 0 && !selectedCampaignId && (
+            <p id="add-to-campaign-hint" className="text-right text-sm text-muted-foreground">
+              Pick a campaign first
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -168,6 +177,7 @@ export function SearchModal({
   onNewSearch,
 }: SearchModalProps) {
   const [pendingWords, setPendingWords] = useState("");
+  const nothingToSearch = selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <Card className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden">
@@ -243,8 +253,9 @@ export function SearchModal({
             {searchResults.length === 0 && !searching && (
               <Button
                 onClick={onStartSearch}
+                aria-describedby={nothingToSearch ? "modal-search-hint" : undefined}
                 disabled={
-                  (selectedKeywords.length === 0 && !pendingWords && !searchUsernames.trim()) ||
+                  nothingToSearch ||
                   Boolean(searchLimitValidation.error)
                 }
               >
@@ -259,6 +270,7 @@ export function SearchModal({
                 </Button>
                 <Button
                   onClick={onImportSelected}
+                  aria-describedby={selectedResults.size === 0 ? "modal-import-hint" : undefined}
                   disabled={selectedResults.size === 0 || importing}
                 >
                   {importing
@@ -268,6 +280,16 @@ export function SearchModal({
               </>
             )}
           </div>
+          {searchResults.length === 0 && !searching && nothingToSearch && (
+            <p id="modal-search-hint" className="mt-2 text-right text-sm text-muted-foreground">
+              Add something to search for
+            </p>
+          )}
+          {searchResults.length > 0 && !searching && selectedResults.size === 0 && (
+            <p id="modal-import-hint" className="mt-2 text-right text-sm text-muted-foreground">
+              Pick at least one creator
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -395,7 +417,7 @@ function SearchForm({
         <p className="-mt-3 text-sm text-amber-700">{searchLimitWarning}</p>
       ) : (
         <p className="-mt-3 text-sm text-muted-foreground">
-          Start with 10 to 25. Bigger searches take longer and use more search credit.
+          Start with 10 to 25. Bigger searches take longer and use more of your search allowance.
         </p>
       )}
 

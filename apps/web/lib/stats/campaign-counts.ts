@@ -11,7 +11,7 @@
  *   they're on today. The campaign Overview chips (via ./stage-display) and
  *   the Results breakdown use these.
  *
- * To-do counts ("needs an answer", "address to check", "no progress for 3
+ * To-do counts ("needs your answer", "address to check", "no progress for 3
  * days", "emails waiting to send") are current by nature: they're what needs
  * you right now. Home, the campaign page, and System status all read them
  * from here so the numbers match everywhere.
@@ -26,6 +26,14 @@
  */
 
 import type { AnalyticsResponse } from "@/lib/analytics/types";
+// Circular with ./stage-display (which imports creatorStage from here). Labels
+// below read STAGE_DISPLAY through getters, so they never run at load time.
+import { STAGE_DISPLAY, type DisplayStage } from "./stage-display";
+
+/** The status word for a stage, read when used (see the import note above). */
+function stageLabel(stage: DisplayStage): string {
+  return STAGE_DISPLAY[stage].label;
+}
 
 // ── Lifecycle steps ──────────────────────────────────────────
 
@@ -205,7 +213,7 @@ export type CreatorStage = (typeof CREATOR_STAGES)[number];
  * 5. Any other order: Order made, Shipped, or Delivered (whichever is furthest
  *    between the order and the stored status).
  * 6. Otherwise the stored status: Not right now, Address to check, Address received,
- *    Replied, Emailed, Ready to email. When orders and posts were loaded, a
+ *    Replied, Waiting for reply, Not emailed yet. When orders and posts were loaded, a
  *    stored order or post step with no order or post on record shows as
  *    Address received, so it never counts as one. When they weren't loaded
  *    (undefined), the stored step is trusted.
@@ -269,20 +277,20 @@ export type CreatorFilterKey =
   | "stuck";
 
 /** Filters for the campaign creator list (?filter=). A count is always the size of its filtered list. Current-stage filters live in ./stage-display. */
-export const CREATOR_FILTERS: Record<CreatorFilterKey, { label: string; match: (c: CountableCreator) => boolean }> = {
-  pending: { label: "Needs review", match: (c) => c.reviewStatus === "pending" },
+export const CREATOR_FILTERS: Record<CreatorFilterKey, { readonly label: string; match: (c: CountableCreator) => boolean }> = {
+  pending: { get label() { return stageLabel("needs_review"); }, match: (c) => c.reviewStatus === "pending" },
   approved: { label: "Approved", match: (c) => c.reviewStatus === "approved" },
-  declined: { label: "Not a fit", match: (c) => c.reviewStatus === "declined" },
-  to_email: { label: "Ready to email", match: readyToEmail },
+  declined: { get label() { return stageLabel("not_a_fit"); }, match: (c) => c.reviewStatus === "declined" },
+  to_email: { get label() { return stageLabel("ready"); }, match: readyToEmail },
   emailed: { label: "Emailed", match: everEmailed },
-  replied: { label: "Replied", match: everReplied },
-  needs_answer: { label: "Needs an answer", match: needsAnswer },
-  address_in: { label: "Address received", match: everAddressIn },
-  address_review: { label: "Address to check", match: addressToCheck },
-  order_made: { label: "Order made", match: hasOrder },
-  posted: { label: "Posted", match: hasPosted },
-  order_cancelled: { label: "Order cancelled", match: (c) => creatorStage(c) === "order_cancelled" },
-  said_no: { label: "Said no", match: (c) => creatorStage(c) === "said_no" },
+  replied: { get label() { return stageLabel("replied"); }, match: everReplied },
+  needs_answer: { get label() { return stageLabel("needs_answer"); }, match: needsAnswer },
+  address_in: { get label() { return stageLabel("address_in"); }, match: everAddressIn },
+  address_review: { get label() { return stageLabel("address_to_check"); }, match: addressToCheck },
+  order_made: { get label() { return stageLabel("order_made"); }, match: hasOrder },
+  posted: { get label() { return stageLabel("posted"); }, match: hasPosted },
+  order_cancelled: { get label() { return stageLabel("order_cancelled"); }, match: (c) => creatorStage(c) === "order_cancelled" },
+  said_no: { get label() { return stageLabel("said_no"); }, match: (c) => creatorStage(c) === "said_no" },
   stuck: { label: `No progress for ${STUCK_AFTER_DAYS} days`, match: (c) => c.stuck === true },
 };
 
@@ -345,17 +353,32 @@ export function lifecycleBreakdown(creators: readonly { lifecycleStatus: string 
   return breakdown;
 }
 
-/** Rows for "Where everyone is now". Each groups one or more stages; the rest are listed underneath. */
-export const CURRENT_STAGES: readonly { label: string; stages: readonly CreatorStage[] }[] = [
-  { label: "Not emailed yet", stages: ["needs_review", "ready"] },
-  { label: "Waiting for reply", stages: ["emailed"] },
-  { label: "Replied, no address yet", stages: ["replied"] },
-  { label: "Address received", stages: ["address_to_check", "address_in"] },
-  { label: "Order made", stages: ["order_made"] },
-  { label: "Shipped", stages: ["shipped"] },
-  { label: "Delivered", stages: ["delivered"] },
-  { label: "Posted", stages: ["posted"] },
-  { label: "Done", stages: ["done"] },
+/**
+ * Rows for "Where everyone is now". Each groups one or more stages under the
+ * words of its `display` stage (STAGE_DISPLAY); the rest are listed underneath.
+ */
+export type CurrentStageRow = { readonly display: DisplayStage; readonly label: string; readonly stages: readonly CreatorStage[] };
+
+function currentRow(display: DisplayStage, stages: readonly CreatorStage[]): CurrentStageRow {
+  return {
+    display,
+    get label() {
+      return stageLabel(display);
+    },
+    stages,
+  };
+}
+
+export const CURRENT_STAGES: readonly CurrentStageRow[] = [
+  currentRow("ready", ["needs_review", "ready"]),
+  currentRow("emailed", ["emailed"]),
+  currentRow("replied", ["replied"]),
+  currentRow("address_in", ["address_to_check", "address_in"]),
+  currentRow("order_made", ["order_made"]),
+  currentRow("shipped", ["shipped"]),
+  currentRow("delivered", ["delivered"]),
+  currentRow("posted", ["posted"]),
+  currentRow("done", ["done"]),
 ];
 
 /** Stages off the main path, shown as a short note under the breakdown. */

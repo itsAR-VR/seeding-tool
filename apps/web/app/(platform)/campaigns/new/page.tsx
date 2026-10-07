@@ -119,17 +119,28 @@ export default function NewCampaignPage() {
               <p role="alert" className="text-sm text-red-700">{error}</p>
             )}
 
-            <div className="flex gap-3">
-              <Button type="submit" disabled={loading || !name.trim()}>
-                {loading ? "Creating…" : "Create campaign"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => router.push("/campaigns")}
-              >
-                Cancel
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-3">
+                <Button
+                  type="submit"
+                  disabled={loading || !name.trim()}
+                  aria-describedby={!name.trim() ? "create-campaign-hint" : undefined}
+                >
+                  {loading ? "Creating…" : "Create campaign"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/campaigns")}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {!name.trim() && (
+                <p id="create-campaign-hint" className="text-sm text-muted-foreground">
+                  Add a name first
+                </p>
+              )}
             </div>
           </form>
         </CardContent>

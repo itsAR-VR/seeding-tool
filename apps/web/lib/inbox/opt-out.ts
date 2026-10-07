@@ -1,7 +1,7 @@
 /**
  * Spotting replies that plainly ask to stop being emailed ("unsubscribe",
  * "take me off your list"). These are handled automatically so they never
- * sit in "Needs your call". Deliberately conservative: anything with a
+ * sit in "Needs your answer". Deliberately conservative: anything with a
  * question, a hedge, a redirect or a negation is left for a person.
  */
 

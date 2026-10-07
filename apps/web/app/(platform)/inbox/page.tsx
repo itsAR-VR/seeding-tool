@@ -9,7 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
+import { STAGE_DISPLAY, type DisplayStage } from "@/lib/stats/stage-display";
+import { StageHelp } from "@/components/stage-help";
 import { SyncReplies } from "./sync-replies";
 import { InboxList, type InboxRow } from "./inbox-list";
 import { InboxSearch } from "./inbox-search";
@@ -17,12 +18,23 @@ import { needsYourCall } from "./next-reply";
 
 type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
 
+// Keys stay as they are so old links (?tab=needs) keep working.
 const TABS: Array<{ key: InboxTab; label: string }> = [
-  { key: "needs", label: "Needs your call" },
-  { key: "waiting", label: "Waiting on them" },
-  { key: "yes", label: "Said yes" },
-  { key: "no", label: "No or later" },
+  { key: "needs", label: STAGE_DISPLAY.needs_answer.label },
+  { key: "waiting", label: STAGE_DISPLAY.emailed.label },
+  { key: "yes", label: STAGE_DISPLAY.said_yes.label },
+  { key: "no", label: `${STAGE_DISPLAY.not_now.label} or no` },
   { key: "all", label: "All" },
+];
+
+/** The statuses the inbox shows, for "What do these mean?". */
+const INBOX_STAGES: readonly DisplayStage[] = [
+  "needs_answer",
+  "emailed",
+  "said_yes",
+  "address_to_check",
+  "not_now",
+  "said_no",
 ];
 
 const MAX_QUERY_LENGTH = 100;
@@ -52,10 +64,14 @@ function searchWhere(q: string): Prisma.ConversationThreadWhereInput {
   };
 }
 
-function tabHref(tab: InboxTab, q: string): string {
-  const params = new URLSearchParams({ tab });
+/** Inbox link that keeps the search and campaign filter. Pass tab null to leave it out. */
+function inboxHref({ tab, q, campaign }: { tab: string | null; q: string; campaign: string | null }): string {
+  const params = new URLSearchParams();
+  if (tab) params.set("tab", tab);
   if (q) params.set("q", q);
-  return `/inbox?${params.toString()}`;
+  if (campaign) params.set("campaign", campaign);
+  const query = params.toString();
+  return query ? `/inbox?${query}` : "/inbox";
 }
 
 function tabFor(thread: {
@@ -71,9 +87,9 @@ function tabFor(thread: {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string }>;
+  searchParams: Promise<{ tab?: string; q?: string; campaign?: string }>;
 }) {
-  const { tab: tabParam, q: rawQuery } = await searchParams;
+  const { tab: tabParam, q: rawQuery, campaign: campaignParam } = await searchParams;
   const q = (rawQuery ?? "").trim().slice(0, MAX_QUERY_LENGTH);
   let membership;
   try {
@@ -97,8 +113,22 @@ export default async function InboxPage({
     throw error;
   }
 
+  // ?campaign=<id>: only this campaign's threads. Unknown or other-brand ids are ignored.
+  const onlyCampaign = campaignParam
+    ? await prisma.campaign.findFirst({
+        where: { id: campaignParam, brandId: membership.brandId },
+        select: { id: true, name: true },
+      })
+    : null;
+  const campaignId = onlyCampaign?.id ?? null;
+  const href = (tab: string | null, query = q) => inboxHref({ tab, q: query, campaign: campaignId });
+
+  const scope: Prisma.ConversationThreadWhereInput = {
+    brandId: membership.brandId,
+    ...(campaignId ? { campaignCreator: { campaignId } } : {}),
+  };
   const threads = await prisma.conversationThread.findMany({
-    where: q ? { AND: [{ brandId: membership.brandId }, searchWhere(q)] } : { brandId: membership.brandId },
+    where: q ? { AND: [scope, searchWhere(q)] } : scope,
     include: {
       campaignCreator: {
         include: {
@@ -149,10 +179,6 @@ export default async function InboxPage({
       updatedAt: new Date(thread.updatedAt).toISOString(),
       decision,
       needsCall: needsYourCall(decision, lastMessage?.direction),
-      askedToBeRemoved:
-        decision === "no" &&
-        lastMessage?.direction === "inbound" &&
-        lastMessage.classification === OPT_OUT_CLASSIFICATION,
       hasDraft: cc.aiDrafts.length > 0,
       addressToConfirm: cc.shippingSnapshots.length > 0 && cc._count.shippingSnapshots === 0,
     };
@@ -187,11 +213,26 @@ export default async function InboxPage({
         <InboxSearch initialQuery={q} />
       </Suspense>
 
+      {onlyCampaign && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="inline-flex items-center gap-1 rounded-full border bg-card py-1 pl-3 pr-1">
+            Only: <span className="font-medium">{onlyCampaign.name}</span>
+            <Link
+              href={inboxHref({ tab: tabParam ?? null, q, campaign: null })}
+              aria-label={`Show all campaigns, not only ${onlyCampaign.name}`}
+              className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <span aria-hidden="true">×</span>
+            </Link>
+          </span>
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2 border-b pb-3">
         {TABS.map((t) => (
           <Link
             key={t.key}
-            href={tabHref(t.key, q)}
+            href={href(t.key)}
             className={`rounded-full px-3 py-1 text-sm transition-colors ${
               activeTab === t.key
                 ? "bg-foreground text-background"
@@ -204,6 +245,8 @@ export default async function InboxPage({
         ))}
       </div>
 
+      <StageHelp stages={INBOX_STAGES} />
+
       {decided.length > 0 && (
         <p className="text-sm text-muted-foreground">
           The AI guessed yes or no the same way you did {aiMatches} of {decided.length} times.
@@ -215,7 +258,7 @@ export default async function InboxPage({
           {q ? (
             <>
               No conversations match in this tab.{" "}
-              <Link href={tabHref("all", q)} className="underline hover:text-foreground">
+              <Link href={href("all")} className="underline hover:text-foreground">
                 See all matches
               </Link>
             </>
@@ -237,7 +280,7 @@ export default async function InboxPage({
             </CardDescription>
             <div className="pt-2 text-sm">
               <Link
-                href={tabParam ? `/inbox?tab=${encodeURIComponent(tabParam)}` : "/inbox"}
+                href={href(tabParam ?? null, "")}
                 className="font-medium text-blue-600 hover:underline"
               >
                 Clear search
@@ -248,7 +291,7 @@ export default async function InboxPage({
       ) : threads.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No conversations yet</CardTitle>
+            <CardTitle>{onlyCampaign ? `No conversations in ${onlyCampaign.name} yet` : "No conversations yet"}</CardTitle>
             <CardDescription>
               When you email creators and they reply, the conversation shows up here. Start by
               emailing creators from a campaign. Replies come in through Gmail, so connect it first

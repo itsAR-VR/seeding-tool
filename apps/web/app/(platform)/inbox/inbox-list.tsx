@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
-import { offerUndo, postDecision } from "./decision-actions";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
+import { decisionStatusLabel, offerUndo, postDecision } from "./decision-actions";
 
 export type InboxRow = {
   id: string;
@@ -17,7 +18,6 @@ export type InboxRow = {
   updatedAt: string;
   decision: string | null;
   needsCall: boolean;
-  askedToBeRemoved: boolean;
   hasDraft: boolean;
   addressToConfirm: boolean;
 };
@@ -25,8 +25,8 @@ export type InboxRow = {
 type BulkDecision = "no" | "later";
 
 /**
- * The conversation list. On "Needs your call" each row gets a checkbox so
- * several replies can be marked "Not right now" or "Said no" in one go.
+ * The conversation list. On "Needs your answer" each row gets a checkbox so
+ * several replies can be answered "Not right now" or "No" in one go.
  */
 export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[]; selectable: boolean; showNeedsPill: boolean }) {
   const router = useRouter();
@@ -59,7 +59,7 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
     const errors = await Promise.all(chosen.map((id) => postDecision(id, decision)));
     const saved = chosen.filter((_, i) => !errors[i]);
     const failed = chosen.filter((_, i) => errors[i]);
-    const label = decision === "no" ? "said no" : "not right now";
+    const label = decisionStatusLabel(decision);
     setSelected(new Set(failed));
     if (failed.length > 0) {
       setNotice({
@@ -71,8 +71,8 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
       offerUndo({
         message:
           decision === "no"
-            ? `Marked ${saved.length} as said no. Added to the do-not-send list.`
-            : `Marked ${saved.length} as not right now.`,
+            ? `Marked ${saved.length} as ${label}. Added to the do-not-send list.`
+            : `Marked ${saved.length} as ${label}.`,
         previous: Object.fromEntries(saved.map((id) => [id, null])),
         onUndone: () => router.refresh(),
       });
@@ -116,7 +116,7 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
               disabled={working || chosen.length === 0}
               onClick={() => void applyBulk("no")}
             >
-              Said no
+              No
             </Button>
           </div>
         </div>
@@ -156,16 +156,12 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate font-medium">{row.name}</p>
-                  {row.decision === "yes" && <StatusPill tone="good">Said yes</StatusPill>}
-                  {row.askedToBeRemoved ? (
-                    <StatusPill tone="neutral">Asked to be removed</StatusPill>
-                  ) : (
-                    row.decision === "no" && <StatusPill tone="neutral">Said no</StatusPill>
-                  )}
-                  {row.decision === "later" && <StatusPill tone="neutral">Not right now</StatusPill>}
-                  {row.needsCall && showNeedsPill && <StatusPill tone="waiting">Needs your call</StatusPill>}
+                  {row.decision === "yes" && <Pill stage="said_yes" />}
+                  {row.decision === "no" && <Pill stage="said_no" />}
+                  {row.decision === "later" && <Pill stage="not_now" />}
+                  {row.needsCall && showNeedsPill && <Pill stage="needs_answer" />}
                   {row.hasDraft && <StatusPill tone="neutral">Reply drafted</StatusPill>}
-                  {row.addressToConfirm && <StatusPill tone="waiting">Address to check</StatusPill>}
+                  {row.addressToConfirm && <Pill stage="address_to_check" />}
                 </div>
                 {row.lastMessage && (
                   <p className="mt-1 truncate text-muted-foreground">
@@ -190,4 +186,10 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
       </ul>
     </div>
   );
+}
+
+/** A status pill in the shared words and tone (lib/stats/stage-display). */
+function Pill({ stage }: { stage: "said_yes" | "said_no" | "not_now" | "needs_answer" | "address_to_check" }) {
+  const { label, tone } = STAGE_DISPLAY[stage];
+  return <StatusPill tone={tone}>{label}</StatusPill>;
 }

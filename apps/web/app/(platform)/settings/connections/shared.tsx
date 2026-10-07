@@ -110,6 +110,16 @@ export function ConnectionStatus({
   );
 }
 
+/**
+ * The "Connected to ..." line. Shopify's raw .myshopify.com address means
+ * nothing to most people, so it says "your Shopify store" instead.
+ */
+function connectedSummary(provider: ConnectionOverviewItem): string | null {
+  if (!provider.summary || provider.summary === "Connected") return null;
+  if (provider.provider === "shopify") return "Connected to your Shopify store";
+  return provider.summary;
+}
+
 /** Shared card frame: app icon, name, what it's for, and status in words. */
 export function ProviderCardShell({
   provider,
@@ -130,8 +140,8 @@ export function ProviderCardShell({
             <ConnectionStatus connected={provider.connected} />
           </div>
           <p className="text-muted-foreground">{PROVIDER_PURPOSE[provider.provider]}</p>
-          {provider.connected && provider.summary && provider.summary !== "Connected" && (
-            <p className="break-words text-sm font-medium">{provider.summary}</p>
+          {provider.connected && connectedSummary(provider) && (
+            <p className="break-words text-sm font-medium">{connectedSummary(provider)}</p>
           )}
         </div>
       </div>

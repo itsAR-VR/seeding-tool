@@ -18,12 +18,12 @@ describe("stage display", () => {
     expect(new Set(DISPLAY_STAGE_ORDER.map((s) => s.stage))).toEqual(new Set(Object.keys(STAGE_DISPLAY)));
   });
 
-  it("splits replies into needs an answer, said yes, and replied", () => {
+  it("splits replies into needs your answer, said yes, and replied", () => {
     expect(displayStage(creator({ lifecycleStatus: "replied", latestMessageDirection: "inbound" }))).toBe("needs_answer");
     expect(displayStage(creator({ lifecycleStatus: "replied", replyDecision: "yes" }))).toBe("said_yes");
     expect(displayStage(creator({ lifecycleStatus: "replied", latestMessageDirection: "outbound" }))).toBe("replied");
     expect(displayStage(creator({ lifecycleStatus: "outreach_sent" }))).toBe("emailed");
-    expect(STAGE_DISPLAY.replied.tone).toBe("waiting");
+    expect(STAGE_DISPLAY.replied.tone).toBe("neutral");
     expect(STAGE_DISPLAY.address_in.label).toBe("Address received");
   });
 

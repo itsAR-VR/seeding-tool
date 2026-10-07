@@ -3,6 +3,7 @@
 import { toast } from "sonner";
 import { showUndoToast } from "@/components/undo-toast";
 import type { ReplyDecision } from "@/lib/inbox/decision";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
 
 /** Fired after an Undo lands, with the thread ids it touched, so open pages can reload. */
 export const INBOX_CHANGED_EVENT = "seedscale:inbox-changed";
@@ -29,6 +30,7 @@ export async function postDecision(
   }
 }
 
+/** The short button word for a decision: Yes / Not right now / No. */
 export function decisionLabel(decision: ReplyDecision): string {
   switch (decision) {
     case "yes":
@@ -37,6 +39,22 @@ export function decisionLabel(decision: ReplyDecision): string {
       return "Not right now";
     case "no":
       return "No";
+    default: {
+      const unhandled: never = decision;
+      return unhandled;
+    }
+  }
+}
+
+/** The status words once a decision is saved: Said yes / Not right now / Said no. */
+export function decisionStatusLabel(decision: ReplyDecision): string {
+  switch (decision) {
+    case "yes":
+      return STAGE_DISPLAY.said_yes.label;
+    case "later":
+      return STAGE_DISPLAY.not_now.label;
+    case "no":
+      return STAGE_DISPLAY.said_no.label;
     default: {
       const unhandled: never = decision;
       return unhandled;
@@ -55,7 +73,7 @@ export function offerUndo({
   onUndone,
 }: {
   message: string;
-  /** Thread id to the answer it had before (null = still needed her call). */
+  /** Thread id to the answer it had before (null = still needed her answer). */
   previous: Record<string, ReplyDecision | null>;
   onUndone?: () => void;
 }) {

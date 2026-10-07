@@ -1,7 +1,7 @@
 /**
  * The database queries behind Home's "needs you" rows. Home, the campaign
  * page, and System status all call these, so they always agree. The rules
- * themselves (what "needs an answer" or "address to check" means) live in
+ * themselves (what "Needs your answer" or "Address to check" means) live in
  * ./campaign-counts.ts.
  */
 
@@ -13,8 +13,8 @@ const FINISHED_STATUSES = ["posted", "completed", "opted_out", "closed"];
 
 /**
  * Number of creators whose newest message is from them with no decision yet.
- * Home shows this as "need an answer"; the campaign page's "Needs an answer"
- * chip is the same rule for one campaign.
+ * Home shows this as "N creators need your answer"; the campaign page's
+ * "Needs your answer" chip is the same rule for one campaign.
  */
 export async function countNeedsAnswer(brandId: string): Promise<number> {
   const threads = await prisma.conversationThread.findMany({

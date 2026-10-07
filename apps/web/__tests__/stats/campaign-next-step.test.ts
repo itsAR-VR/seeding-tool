@@ -16,7 +16,7 @@ describe("campaignNextStep", () => {
   it("puts replies first", () => {
     expect(campaignNextStep({ ...none, needsAnswer: 2, readyToEmail: 4, draftOrders: 1 })).toEqual({
       label: "Answer 2 replies",
-      href: "/inbox",
+      href: "/inbox?campaign=c1",
     });
   });
 

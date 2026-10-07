@@ -1,9 +1,9 @@
 /**
- * "Needs your call" queue helpers, shared by the inbox list, the thread page
+ * "Needs your answer" queue helpers, shared by the inbox list, the thread page
  * and GET /api/inbox/queue so "Next reply" walks the same order as the tab.
  */
 
-/** A reply needs her call when nobody has answered it and the creator wrote last. */
+/** A reply needs her answer when nobody has answered it and the creator wrote last. */
 export function needsYourCall(decision: string | null, lastMessageDirection: string | null | undefined): boolean {
   return !decision && lastMessageDirection === "inbound";
 }

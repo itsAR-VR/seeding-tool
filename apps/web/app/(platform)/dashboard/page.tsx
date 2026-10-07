@@ -205,14 +205,14 @@ export default async function DashboardPage() {
   const todos: Todo[] = [
     {
       count: repliesToAnswer,
-      text: plural(repliesToAnswer, "creator replied and needs an answer", "creators replied and need an answer"),
+      text: plural(repliesToAnswer, "creator needs your answer", "creators need your answer"),
       action: "Open inbox",
       href: "/inbox",
     },
     ...outreachTodos,
     {
       count: addressesToConfirm,
-      text: plural(addressesToConfirm, "shipping address needs a quick check", "shipping addresses need a quick check"),
+      text: plural(addressesToConfirm, "address to check", "addresses to check"),
       action: "Open inbox",
       href: "/inbox",
     },

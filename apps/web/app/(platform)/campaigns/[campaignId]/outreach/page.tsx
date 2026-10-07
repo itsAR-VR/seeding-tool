@@ -273,6 +273,8 @@ export default function OutreachPage() {
   const checking = loadingCreators || setupLoading || !queueLoaded;
   // Nobody approved is left to email: say so plainly instead of showing an empty chooser.
   const everyoneEmailed = !checking && approvedCreators.length > 0 && sendableCreators.length === 0;
+  // The 1 → 2 steps only help while there's something to choose or send.
+  const showSteps = !(everyoneEmailed && drafts.length === 0);
   const pendingReviewCount = creators.filter((c) => c.reviewStatus === "pending").length;
   const queuedCount = approvedCreators.filter((c) => queuedIds.has(c.id)).length;
   const creatorByCcId = new Map(creators.map((c) => [c.id, c]));
@@ -433,15 +435,17 @@ export default function OutreachPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-semibold tracking-tight">Email creators</h2>
-        <ol className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-label="Steps">
-          <li className={step === "choose" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "choose" ? "step" : undefined}>
-            1. Choose creators
-          </li>
-          <li aria-hidden className="text-muted-foreground">→</li>
-          <li className={step === "review" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "review" ? "step" : undefined}>
-            2. Review and send
-          </li>
-        </ol>
+        {showSteps && (
+          <ol className="mt-3 flex flex-wrap items-center gap-3 text-sm" aria-label="Steps">
+            <li className={step === "choose" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "choose" ? "step" : undefined}>
+              1. Choose creators
+            </li>
+            <li aria-hidden className="text-muted-foreground">→</li>
+            <li className={step === "review" ? "font-semibold" : "text-muted-foreground"} aria-current={step === "review" ? "step" : undefined}>
+              2. Review and send
+            </li>
+          </ol>
+        )}
       </div>
 
       {queue && queue.waiting > 0 && (
@@ -726,24 +730,33 @@ export default function OutreachPage() {
           )}
 
           <div className="sticky bottom-4 mt-4 flex items-center justify-end gap-3 rounded-lg border bg-background/95 p-3 shadow-sm backdrop-blur">
-            <span className="mr-auto text-sm text-muted-foreground">
+            <span id="write-emails-hint" className="mr-auto text-sm text-muted-foreground">
               {selectedIds.size === 0
                 ? "Click a creator to select them"
                 : `${selectedIds.size} selected`}
             </span>
             {draftBlocker ? (
-              <span className="text-sm font-medium text-amber-700">
+              <span id="write-emails-blocker" className="text-sm font-medium text-amber-700">
                 {draftBlocker}
               </span>
             ) : null}
             {selectedIds.size > MAX_BATCH_SIZE && (
-              <span className="text-sm font-medium text-red-700">
+              <span id="write-emails-limit" className="text-sm font-medium text-red-700">
                 Up to {MAX_BATCH_SIZE} at a time. Unselect {selectedIds.size - MAX_BATCH_SIZE} creator{selectedIds.size - MAX_BATCH_SIZE !== 1 ? "s" : ""}.
               </span>
             )}
             <Button
               size="lg"
               onClick={generateDrafts}
+              aria-describedby={
+                [
+                  "write-emails-hint",
+                  draftBlocker ? "write-emails-blocker" : null,
+                  selectedIds.size > MAX_BATCH_SIZE ? "write-emails-limit" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              }
               disabled={setupLoading || Boolean(draftBlocker) || selectedIds.size === 0 || generating || selectedIds.size > MAX_BATCH_SIZE}
             >
               {generating
@@ -941,6 +954,7 @@ export default function OutreachPage() {
                         </Button>
                         <Button
                           size="sm"
+                          aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
                           disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
                           onClick={async () => {
                             setConfirmingSend(null);
@@ -981,6 +995,7 @@ export default function OutreachPage() {
                     ) : !draft.error && draft.body ? (
                       <Button
                         size="sm"
+                        aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
                         disabled={sendingIds.has(draft.campaignCreatorId) || sendingIds.has("all") || setupLoading || Boolean(sendBlocker)}
                         onClick={() => setConfirmingSend(draft.campaignCreatorId)}
                       >
@@ -1044,7 +1059,7 @@ export default function OutreachPage() {
 
             <div className="flex justify-end gap-2 pt-4 border-t">
               {sendBlocker ? (
-                <p className="mr-auto text-sm font-medium text-amber-700">
+                <p id="send-all-blocker" className="mr-auto text-sm font-medium text-amber-700">
                   {sendBlocker}
                 </p>
               ) : null}
@@ -1065,6 +1080,7 @@ export default function OutreachPage() {
                 </Button>
               ) : null}
               <Button
+                aria-describedby={sendBlocker ? "send-all-blocker" : undefined}
                 disabled={
                   setupLoading || Boolean(sendBlocker) ||
                   sending ||

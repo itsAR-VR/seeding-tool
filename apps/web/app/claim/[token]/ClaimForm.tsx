@@ -94,7 +94,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
           Thank you! We&apos;ll let you know when it ships. Here&apos;s what we&apos;ll ship to:
         </p>
         {submitted && (
-          <address className="mt-3 rounded-2xl bg-white p-4 text-base not-italic leading-7 text-neutral-950">
+          <address className="mt-3 rounded-2xl bg-card p-4 text-base not-italic leading-7 text-card-foreground">
             {submitted.fullName}
             <br />
             {submitted.line1}
@@ -147,7 +147,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
       </div>
 
       <label className="block text-sm font-medium">
-        Phone number <span className="font-normal text-neutral-500">(optional)</span>
+        Phone number <span className="font-normal text-muted-foreground">(optional)</span>
         <input
           name="phone"
           type="tel"
@@ -165,7 +165,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
             value={country}
             onChange={(e) => setCountry(e.target.value)}
             autoComplete="country"
-            className="mt-1 w-full rounded-xl border bg-white px-3 py-3 text-base"
+            className="mt-1 w-full rounded-xl border border-input bg-background px-3 py-3 text-base"
           >
             {shipCountries.map((code) => (
               <option key={code} value={code}>
@@ -191,7 +191,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
       </label>
 
       <label className="block text-sm font-medium">
-        Apartment, suite, etc. <span className="font-normal text-neutral-500">(optional)</span>
+        Apartment, suite, etc. <span className="font-normal text-muted-foreground">(optional)</span>
         <input
           name="line2"
           autoComplete="address-line2"
@@ -239,7 +239,7 @@ export function ClaimForm({ token, brandName, shipCountries }: ClaimFormProps) {
         </label>
       </div>
 
-      <div className="rounded-2xl bg-neutral-50 p-4 text-sm leading-6 text-neutral-700">
+      <div className="rounded-2xl bg-muted p-4 text-sm leading-6 text-foreground/80">
         <p>
           We only use these details to ship your gift. Submitting this form
           doesn&apos;t give {brandName} rights to any of your content.

@@ -26,7 +26,10 @@ function n(count: number, one: string, many: string): string {
 export function campaignNextStep(input: NextStepInput): NextStep {
   const base = `/campaigns/${input.campaignId}`;
   if (input.needsAnswer > 0) {
-    return { label: `Answer ${n(input.needsAnswer, "reply", "replies")}`, href: "/inbox" };
+    return {
+      label: `Answer ${n(input.needsAnswer, "reply", "replies")}`,
+      href: `/inbox?campaign=${encodeURIComponent(input.campaignId)}`,
+    };
   }
   if (input.writtenEmailsWaiting > 0) {
     return {

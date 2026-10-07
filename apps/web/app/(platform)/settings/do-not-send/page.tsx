@@ -3,17 +3,24 @@ import { getCurrentBrandMembership, BrandAccessError } from "@/lib/integrations/
 import { NoCompanyNotice } from "@/components/no-company-notice";
 import { AllowAgain } from "./allow-again";
 import { StatusPill } from "@/components/status-pill";
+import { STAGE_DISPLAY } from "@/lib/stats/stage-display";
 import { formatDate } from "@/lib/format/date";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StackedList, StackedRow, WideOnly } from "@/components/responsive-table";
 
 const REASON_LABELS: Record<string, string> = {
-  DECLINED: "Said no",
+  DECLINED: STAGE_DISPLAY.said_no.label,
   UNSUBSCRIBE: "Unsubscribed",
-  REPLY_OPTOUT: "Asked to be removed",
+  // A reply opt-out is a "Said no"; the detail says how.
+  REPLY_OPTOUT: STAGE_DISPLAY.said_no.label,
   BOUNCE: "Email bounced",
   COMPLAINT: "Marked as spam",
   MANUAL: "Added manually",
+};
+
+/** Extra words after the pill, where the reason needs more than the status. */
+const REASON_DETAILS: Record<string, string> = {
+  REPLY_OPTOUT: "Asked to be removed",
 };
 
 export default async function DoNotSendPage() {
@@ -46,7 +53,7 @@ export default async function DoNotSendPage() {
         <h1 className="text-3xl font-bold tracking-tight">Do-not-send list</h1>
         <p className="text-muted-foreground">
           These people are never emailed again by your brand, from any campaign. Someone lands here when you
-          mark &ldquo;They said no&rdquo;, they unsubscribe, or their email bounces.
+          mark their answer as &ldquo;No&rdquo;, they unsubscribe, or their email bounces.
         </p>
       </div>
 
@@ -56,7 +63,7 @@ export default async function DoNotSendPage() {
             {suppressions.length} {suppressions.length === 1 ? "person" : "people"}
           </CardTitle>
           <CardDescription>
-            You can allow emails again for anyone you marked &ldquo;no&rdquo;. People who clicked unsubscribe or whose email bounced stay blocked.
+            You can allow emails again for anyone who said no. People who clicked unsubscribe or whose email bounced stay blocked.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -80,6 +87,7 @@ export default async function DoNotSendPage() {
                       <StatusPill tone={s.reason === "BOUNCE" || s.reason === "COMPLAINT" ? "problem" : "neutral"}>
                         {REASON_LABELS[s.reason] ?? s.reason}
                       </StatusPill>
+                      {REASON_DETAILS[s.reason] && <span>{REASON_DETAILS[s.reason]}</span>}
                       <span className="text-muted-foreground">since {formatDate(s.suppressedAt)}</span>
                     </div>
                     {s.brandId && (s.reason === "DECLINED" || s.reason === "REPLY_OPTOUT") ? (
@@ -116,6 +124,9 @@ export default async function DoNotSendPage() {
                         <StatusPill tone={s.reason === "BOUNCE" || s.reason === "COMPLAINT" ? "problem" : "neutral"}>
                           {REASON_LABELS[s.reason] ?? s.reason}
                         </StatusPill>
+                        {REASON_DETAILS[s.reason] && (
+                          <span className="ml-2 text-muted-foreground">{REASON_DETAILS[s.reason]}</span>
+                        )}
                       </td>
                       <td className="py-2 text-muted-foreground">
                         {formatDate(s.suppressedAt)}

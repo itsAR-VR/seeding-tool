@@ -60,7 +60,7 @@ function bareAddress(header: string): string {
 
 /**
  * Replies that arrived before opt-outs were handled automatically still sit in
- * "Needs your call". Apply the same conservative rule to undecided email
+ * "Needs your answer". Apply the same conservative rule to undecided email
  * threads whose latest message is the creator asking to be removed. Safe to
  * run every sync: once handled, a thread has a decision and is skipped.
  */
@@ -207,7 +207,7 @@ export async function syncRepliesForBrand(
             confidence: guess?.confidence ?? 0,
           });
         } catch (error) {
-          // Leave it in "Needs your call" rather than half-handled silently.
+          // Leave it in "Needs your answer" rather than half-handled silently.
           log("error", "gmail.sync.opt_out_failed", {
             messageId: message.id,
             error: error instanceof Error ? error.message : String(error),
