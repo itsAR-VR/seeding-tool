@@ -105,7 +105,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
             conversationThread: {
               select: {
                 id: true,
-                messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
+                messages: { where: { direction: { not: "auto" } }, orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
               },
             },
             shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
@@ -225,6 +225,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     (value): value is { label: string; href: string; cta: string } => Boolean(value)
   );
 
+  const bouncedCreators = creators.filter((cc) => cc.stage === "bounced");
   const nextStep = campaignNextStep({
     campaignId,
     needsAnswer: counts.needs_answer,
@@ -234,6 +235,11 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
     draftOrders,
     pendingReview: counts.pending,
     totalCreators: counts.total,
+    bounced: bouncedCreators.length,
+    bouncedCreatorId: bouncedCreators.length === 1 ? bouncedCreators[0].creatorId : null,
+    addressIn: creators.filter((cc) => cc.stage === "address_in").length,
+    ordersCancelled: creators.filter((cc) => cc.stage === "order_cancelled").length,
+    maybeLater: creators.filter((cc) => cc.stage === "maybe_later").length,
   });
   // Only show a column when at least one creator has something in it.
   const showFollowers = creators.some((cc) => cc.creator.profiles[0]?.followerCount != null);

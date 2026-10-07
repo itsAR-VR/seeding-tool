@@ -66,3 +66,11 @@ describe("bounces", () => {
     expect(isBounce({ from: "kim@example.com", subject: "Re: better sleep", body: "My address is 12 Main St" })).toBe(false);
   });
 });
+
+describe("email text", () => {
+  it("turns HTML codes back into what they typed", async () => {
+    const { decodeEntities } = await import("@/lib/format/html-entities");
+    expect(decodeEntities("Run Coaching &amp; Sports Nutrition &#39;26 &lt;3")).toBe("Run Coaching & Sports Nutrition '26 <3");
+    expect(decodeEntities("AT&T stays")).toBe("AT&T stays");
+  });
+});

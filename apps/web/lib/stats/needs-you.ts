@@ -20,7 +20,7 @@ const FINISHED_STATUSES = ["posted", "completed", "opted_out", "closed", "bounce
 export async function countNeedsAnswer(brandId: string): Promise<number> {
   const threads = await prisma.conversationThread.findMany({
     where: { brandId, campaignCreator: { replyDecision: null } },
-    select: { messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } } },
+    select: { messages: { where: { direction: { not: "auto" } }, orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } } },
   });
   return threads.filter((t) => needsAnswer({ replyDecision: null, latestMessageDirection: t.messages[0]?.direction }))
     .length;
@@ -35,7 +35,7 @@ export async function countNeedsAnswerByCampaign(brandId: string): Promise<Map<s
     where: { brandId, campaignCreator: { replyDecision: null } },
     select: {
       campaignCreator: { select: { campaignId: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
+      messages: { where: { direction: { not: "auto" } }, orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
     },
   });
   const counts = new Map<string, number>();
@@ -89,7 +89,7 @@ export async function findStuckCreators(
       campaign: { select: { id: true, name: true } },
       creator: { select: { name: true, instagramHandle: true } },
       conversationThread: {
-        select: { messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } } },
+        select: { messages: { where: { direction: { not: "auto" } }, orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } } },
       },
       shippingSnapshots: { select: { isActive: true, confirmedAt: true } },
       shopifyOrder: { select: { status: true } },

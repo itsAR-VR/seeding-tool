@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { decodeEntities } from "@/lib/format/html-entities";
 
 export type InboundMessagePayload = {
   externalMessageId: string;
@@ -23,7 +24,7 @@ export function normalizeInboundMessage(raw: {
   bodyHtml?: string;
   internalDate?: string;
 }): InboundMessagePayload {
-  let body = raw.body ?? "";
+  let body = decodeEntities(raw.body ?? "");
 
   // Strip common quoted text patterns
   body = body
@@ -37,7 +38,7 @@ export function normalizeInboundMessage(raw: {
     externalMessageId: raw.id,
     fromAddress: raw.from,
     toAddress: raw.to,
-    subject: raw.subject,
+    subject: raw.subject ? decodeEntities(raw.subject) : raw.subject,
     body,
     bodyHtml: raw.bodyHtml,
     receivedAt: raw.internalDate

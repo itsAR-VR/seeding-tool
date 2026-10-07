@@ -408,7 +408,9 @@ function ThreadDetail({ threadId }: { threadId: string }) {
     (s) => !s.confirmedAt && !s.isActive
   );
   const decision = thread.campaignCreator.replyDecision;
-  const showReply = thread.channel === "email" && decision !== "no";
+  // A bounce means the address doesn't work, so there's nothing to reply to until it's changed.
+  const bouncedNow = thread.messages[thread.messages.length - 1]?.classification === BOUNCE_CLASSIFICATION;
+  const showReply = thread.channel === "email" && decision !== "no" && !bouncedNow;
   const needsGiftLink = decision === "yes" && !replyText.includes(ADDRESS_LINK);
   const willAutoYes = replyText.includes(ADDRESS_LINK) && !decision;
 

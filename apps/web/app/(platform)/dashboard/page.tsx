@@ -141,6 +141,7 @@ export default async function DashboardPage() {
     toEmailRows,
     toAnswerByCampaign,
     unwrittenRows,
+    bouncedRows,
   ] = await Promise.all([
     countNeedsAnswer(brandId),
     prisma.shopifyOrder.count({
@@ -180,6 +181,11 @@ export default async function DashboardPage() {
       },
       select: { campaign: { select: { id: true, name: true } } },
     }),
+    // Emails that bounced: they need a new address before anything else can happen.
+    prisma.campaignCreator.findMany({
+      where: { campaign: { brandId }, lifecycleStatus: "bounced" },
+      select: { creatorId: true, campaign: { select: { id: true, name: true } } },
+    }),
   ]);
   const toEmailByCampaign = new Map(toEmailRows.map((r) => [r.campaignId, r._count._all]));
 
@@ -216,6 +222,23 @@ export default async function DashboardPage() {
     href: `/campaigns/${group.campaignId}/outreach`,
   }));
 
+  const bouncedTodos: Todo[] = groupByCampaign(bouncedRows).map((group) => {
+    const inGroup = bouncedRows.filter((r) => r.campaign.id === group.campaignId);
+    return {
+      count: group.count,
+      text: plural(
+        group.count,
+        `email in ${group.campaignName} bounced`,
+        `emails in ${group.campaignName} bounced`,
+      ),
+      action: group.count === 1 ? "Find a new address" : "Find new addresses",
+      href:
+        group.count === 1
+          ? `/creators/${inGroup[0].creatorId}`
+          : `/campaigns/${group.campaignId}?filter=bounced#creators`,
+    };
+  });
+
   const stuckGroups = groupByCampaign(stuckCreators);
   const now = daysAgo(0).getTime();
   const stuckTodos: Todo[] = stuckGroups.map((group) => {
@@ -246,6 +269,7 @@ export default async function DashboardPage() {
       action: "Open inbox",
       href: "/inbox",
     },
+    ...bouncedTodos,
     ...outreachTodos,
     ...unwrittenTodos,
     {

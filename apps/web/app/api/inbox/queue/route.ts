@@ -15,7 +15,7 @@ export async function GET() {
       where: { brandId: membership.brandId, campaignCreator: { replyDecision: null } },
       select: {
         id: true,
-        messages: { orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
+        messages: { where: { direction: { not: "auto" } }, orderBy: { createdAt: "desc" }, take: 1, select: { direction: true } },
       },
       orderBy: { updatedAt: "desc" },
     });

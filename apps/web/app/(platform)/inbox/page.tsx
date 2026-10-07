@@ -15,12 +15,15 @@ import { SyncReplies } from "./sync-replies";
 import { InboxList, type InboxRow } from "./inbox-list";
 import { InboxSearch } from "./inbox-search";
 import { needsYourCall } from "./next-reply";
+import { decodeEntities } from "@/lib/format/html-entities";
 
-type InboxTab = "needs" | "waiting" | "yes" | "no" | "all";
+type InboxTab = "needs" | "bounced" | "waiting" | "yes" | "no" | "all";
 
 // Keys stay as they are so old links (?tab=needs) keep working.
 const TABS: Array<{ key: InboxTab; label: string }> = [
   { key: "needs", label: STAGE_DISPLAY.needs_answer.label },
+  // Only shows when someone's email bounced: their fix is a new address, not an answer.
+  { key: "bounced", label: STAGE_DISPLAY.bounced.label },
   { key: "waiting", label: STAGE_DISPLAY.emailed.label },
   { key: "yes", label: STAGE_DISPLAY.said_yes.label },
   { key: "no", label: "Said no or not now" },
@@ -30,6 +33,7 @@ const TABS: Array<{ key: InboxTab; label: string }> = [
 /** The statuses the inbox shows, for "What do these mean?". */
 const INBOX_STAGES: readonly DisplayStage[] = [
   "needs_answer",
+  "bounced",
   "emailed",
   "said_yes",
   "address_to_check",
@@ -74,14 +78,20 @@ function inboxHref({ tab, q, campaign }: { tab: string | null; q: string; campai
   return query ? `/inbox?${query}` : "/inbox";
 }
 
+/** Their latest message a person wrote: auto-replies and bounces don't count as replies. */
+function latestReal<T extends { direction: string }>(messages: T[]): T | undefined {
+  return messages.find((m) => m.direction !== "auto");
+}
+
 function tabFor(thread: {
-  campaignCreator: { replyDecision: string | null };
+  campaignCreator: { replyDecision: string | null; lifecycleStatus: string };
   messages: Array<{ direction: string }>;
 }): Exclude<InboxTab, "all"> {
   const decision = thread.campaignCreator.replyDecision;
+  if (thread.campaignCreator.lifecycleStatus === "bounced") return "bounced";
   if (decision === "no" || decision === "later") return "no";
   if (decision === "yes") return "yes";
-  return needsYourCall(decision, thread.messages[0]?.direction) ? "needs" : "waiting";
+  return needsYourCall(decision, latestReal(thread.messages)?.direction) ? "needs" : "waiting";
 }
 
 export default async function InboxPage({
@@ -149,15 +159,16 @@ export default async function InboxPage({
           },
         },
       },
+      // A few, so a reply still counts when an auto-reply came in after it.
       messages: {
         orderBy: { createdAt: "desc" },
-        take: 1,
+        take: 5,
       },
     },
     orderBy: { updatedAt: "desc" },
   });
 
-  const counts: Record<InboxTab, number> = { needs: 0, waiting: 0, yes: 0, no: 0, all: threads.length };
+  const counts: Record<InboxTab, number> = { needs: 0, bounced: 0, waiting: 0, yes: 0, no: 0, all: threads.length };
   for (const t of threads) counts[tabFor(t)]++;
   const activeTab: InboxTab = TABS.some((t) => t.key === tabParam)
     ? (tabParam as InboxTab)
@@ -182,13 +193,13 @@ export default async function InboxPage({
             body:
               lastMessage.classification === "bounce"
                 ? "Your email didn't reach them. The address doesn't work."
-                : lastMessage.body.slice(0, 200),
+                : decodeEntities(lastMessage.body).slice(0, 200),
             bounce: lastMessage.classification === "bounce",
           }
         : null,
       updatedAt: new Date(thread.updatedAt).toISOString(),
       decision,
-      needsCall: needsYourCall(decision, lastMessage?.direction),
+      needsCall: needsYourCall(decision, latestReal(thread.messages)?.direction),
       hasDraft: cc.aiDrafts.length > 0,
       addressToConfirm: cc.shippingSnapshots.length > 0 && cc._count.shippingSnapshots === 0,
     };
@@ -239,7 +250,7 @@ export default async function InboxPage({
       )}
 
       <div className="flex flex-wrap gap-2 border-b pb-3">
-        {TABS.map((t) => (
+        {TABS.filter((t) => t.key !== "bounced" || counts.bounced > 0 || activeTab === "bounced").map((t) => (
           <Link
             key={t.key}
             href={href(t.key)}

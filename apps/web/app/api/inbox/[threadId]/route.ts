@@ -5,6 +5,7 @@ import {
   BrandAccessError,
 } from "@/lib/integrations/brand-access";
 import { DEFAULT_FOLLOW_UP_TEMPLATE, getBrandKit } from "@/lib/brand/kit";
+import { decodeEntities } from "@/lib/format/html-entities";
 
 type RouteContext = { params: Promise<{ threadId: string }> };
 
@@ -45,6 +46,12 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     const kit = await getBrandKit(membership.brandId);
     return NextResponse.json({
       ...thread,
+      // Mail saved before decoding existed can still hold "&amp;"; show what they typed.
+      messages: thread.messages.map((m) => ({
+        ...m,
+        body: decodeEntities(m.body),
+        subject: m.subject ? decodeEntities(m.subject) : m.subject,
+      })),
       followUpTemplate: kit?.followUpTemplate ?? DEFAULT_FOLLOW_UP_TEMPLATE,
     });
   } catch (error) {

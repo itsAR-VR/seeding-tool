@@ -87,8 +87,7 @@ async function handleBounce(brandId: string, raw: RawMail): Promise<boolean> {
   });
   if (matches.length === 0) return false;
 
-  let stored = false;
-  for (const cc of matches) {
+  for (const [index, cc] of matches.entries()) {
     if (cc.creator.email) await addSuppression(cc.creator.email, "BOUNCE", brandId);
     // addSuppression marks them opted out; "bounced" is the truer word and has its own next step.
     await prisma.campaignCreator.update({ where: { id: cc.id }, data: { lifecycleStatus: "bounced" } });
@@ -96,13 +95,16 @@ async function handleBounce(brandId: string, raw: RawMail): Promise<boolean> {
       where: { campaignCreatorId: cc.id, status: { in: ["draft", "approved"] } },
       data: { status: "discarded" },
     });
-    if (!stored && cc.conversationThread) {
+    // On every conversation it affects (one per campaign), so each can resend once the
+    // address changes. Message ids are unique, so the second copy gets its own.
+    if (cc.conversationThread) {
+      const normalized = normalizeInboundMessage(raw);
       await persistMessage(cc.conversationThread.id, {
-        ...normalizeInboundMessage(raw),
+        ...normalized,
+        externalMessageId: index === 0 ? normalized.externalMessageId : `${normalized.externalMessageId}:${cc.id}`,
         direction: AUTO_DIRECTION,
         classification: BOUNCE_CLASSIFICATION,
       });
-      stored = true;
     }
   }
   log("info", "gmail.sync.bounce_handled", { brandId, creators: matches.length });
