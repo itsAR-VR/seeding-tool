@@ -4,7 +4,7 @@ vi.mock("@/lib/outreach/send-pipeline", () => ({ sendOutreachBatch: vi.fn() }));
 import { spacedSendTimes, MIN_GAP_MS, MAX_GAP_MS } from "@/lib/outreach/queue";
 
 describe("spaced outreach sending", () => {
-  it("starts now and spaces each email 1 to 3 minutes apart", () => {
+  it("starts now and spaces each email 3 minutes apart", () => {
     const start = new Date("2026-10-07T14:00:00Z");
     let i = 0;
     const seq = [0, 1, 0.5, 0.25];
@@ -14,6 +14,7 @@ describe("spaced outreach sending", () => {
       const gap = times[k].getTime() - times[k - 1].getTime();
       expect(gap).toBeGreaterThanOrEqual(MIN_GAP_MS);
       expect(gap).toBeLessThanOrEqual(MAX_GAP_MS);
+      expect(gap).toBe(3 * 60_000);
     }
   });
 });

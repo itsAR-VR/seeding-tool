@@ -111,7 +111,7 @@ export default function OutreachPage() {
   const [channel, setChannel] = useState<"email" | "instagram_dm">("email");
   const [additionalContext, setAdditionalContext] = useState("");
   const [drafts, setDrafts] = useState<GeneratedDraft[]>([]);
-  // Emails queued by "Send all" go out one every 1 to 3 minutes in the background.
+  // Emails queued by "Send all" go out one every 3 minutes in the background.
   type QueueState = { waitingIds: string[]; waiting: number; sent: number; nextAt: string | null; finishesAt: string | null };
   const [queue, setQueue] = useState<QueueState | null>(null);
   const [queueLoaded, setQueueLoaded] = useState(false);
@@ -1210,7 +1210,7 @@ export default function OutreachPage() {
                       setStep("choose");
                       setNotice({
                         tone: "success",
-                        text: `${data.queued ?? payload.length} emails are queued. They go out one every 1 to 3 minutes${
+                        text: `${data.queued ?? payload.length} emails are queued. They go out one every 3 minutes${
                           data.finishesAt ? `, finishing around ${clock(data.finishesAt)}` : ""
                         }. You can close this page.`,
                       });

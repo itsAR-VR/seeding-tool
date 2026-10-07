@@ -10,7 +10,7 @@ import {
 
 /**
  * POST /api/outreach/queue — "Send all": queue emails to go out one every
- * 1 to 3 minutes. Body: { campaignId, drafts }. Only fires from a click.
+ * 3 minutes. Body: { campaignId, drafts }. Only fires from a click.
  */
 export async function POST(request: NextRequest) {
   try {

@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { sendOutreachBatch, type DraftToSend } from "@/lib/outreach/send-pipeline";
 
-/** Gap between queued emails: a random 1 to 3 minutes, so batches look hand-sent. */
-export const MIN_GAP_MS = 60_000;
+/** Gap between queued emails: 3 minutes each, so a batch goes out at a steady, hand-sent pace. */
+export const MIN_GAP_MS = 180_000;
 export const MAX_GAP_MS = 180_000;
 
 export function spacedSendTimes(count: number, start: Date, random: () => number = Math.random): Date[] {
