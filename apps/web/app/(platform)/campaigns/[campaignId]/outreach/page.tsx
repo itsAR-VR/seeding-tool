@@ -427,41 +427,6 @@ export default function OutreachPage() {
     }));
   };
 
-  type SendResponse = {
-    sent?: number;
-    failed?: number;
-    noContact?: number;
-    error?: string;
-    results?: Array<{ campaignCreatorId: string; status: string; error?: string }>;
-  };
-
-  // Show the outcome inline, drop sent drafts, and refresh creator statuses.
-  const handleSendResult = async (data: SendResponse, ok: boolean) => {
-    if (!ok) {
-      setNotice({ tone: "error", text: data.error || "Send failed. Nothing was sent." });
-      return;
-    }
-    const sentIds = new Set(
-      (data.results ?? []).filter((r) => r.status === "sent").map((r) => r.campaignCreatorId)
-    );
-    const failures = (data.results ?? []).filter((r) => r.status !== "sent");
-    setDrafts((prev) => {
-        const left = prev.filter((d) => !sentIds.has(d.campaignCreatorId));
-        if (left.length === 0) setStep("choose");
-        return left;
-      });
-    setSelectedIds((prev) => new Set([...prev].filter((id) => !sentIds.has(id))));
-    const sent = data.sent ?? sentIds.size;
-    setNotice(
-      failures.length === 0
-        ? { tone: "success", text: `Sent ${sent} email${sent === 1 ? "" : "s"}${senderAddress ? ` from ${senderAddress}` : ""}.` }
-        : {
-            tone: "error",
-            text: `Sent ${sent}, ${failures.length} not sent: ${failures[0]?.error ?? "we didn't get a reason"}`,
-          }
-    );
-    await loadCreators();
-  };
 
   return (
     <div className="space-y-6">
@@ -1035,12 +1000,15 @@ export default function OutreachPage() {
                             setConfirmingSend(null);
                             startSending(draft.campaignCreatorId);
                             try {
-                              const res = await fetch("/api/outreach/send", {
+                              // One email joins the same line as "Send all", so sends stay
+                              // 3 minutes apart however they're pressed.
+                              const res = await fetch("/api/outreach/queue", {
                                 method: "POST",
                                 headers: {
                                   "Content-Type": "application/json",
                                 },
                                 body: JSON.stringify({
+                                  campaignId,
                                   drafts: [
                                     {
                                       campaignCreatorId: draft.campaignCreatorId,
@@ -1055,8 +1023,27 @@ export default function OutreachPage() {
                                   ],
                                 }),
                               });
-                              const data = (await res.json().catch(() => ({}))) as SendResponse;
-                              await handleSendResult(data, res.ok);
+                              const data = (await res.json().catch(() => ({}))) as {
+                                finishesAt?: string | null;
+                                error?: string;
+                              };
+                              if (!res.ok) {
+                                setNotice({ tone: "error", text: data.error || "Couldn't send it. Nothing was sent." });
+                              } else {
+                                setDrafts((prev) => {
+                                  const left = prev.filter((d) => d.campaignCreatorId !== draft.campaignCreatorId);
+                                  if (left.length === 0) setStep("choose");
+                                  return left;
+                                });
+                                setSelectedIds((prev) => new Set([...prev].filter((id) => id !== draft.campaignCreatorId)));
+                                setNotice({
+                                  tone: "success",
+                                  text: `@${draft.creatorHandle}'s email is in line to send${
+                                    data.finishesAt ? ` at about ${clock(data.finishesAt)}` : ""
+                                  }, 3 minutes after the one before it.`,
+                                });
+                                await loadQueue();
+                              }
                             } catch {
                               setNotice({ tone: "error", text: "Send failed. Nothing was sent." });
                             } finally {
