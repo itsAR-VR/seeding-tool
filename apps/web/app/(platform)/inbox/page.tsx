@@ -178,7 +178,11 @@ export default async function InboxPage({
       lastMessage: lastMessage
         ? {
             direction: lastMessage.direction,
-            body: lastMessage.body.slice(0, 200),
+            // A bounce's own text is mail-server jargon; say what it means instead.
+            body:
+              lastMessage.classification === "bounce"
+                ? "Your email didn't reach them. The address doesn't work."
+                : lastMessage.body.slice(0, 200),
             bounce: lastMessage.classification === "bounce",
           }
         : null,
