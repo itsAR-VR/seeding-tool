@@ -10,7 +10,7 @@ import { STUCK_AFTER_DAYS, addressToCheck, needsAnswer } from "./campaign-counts
 import { displayStage, type DisplayStage } from "./stage-display";
 
 /** Statuses where a creator is finished, so a quiet week isn't a problem. */
-const FINISHED_STATUSES = ["posted", "completed", "opted_out", "closed"];
+const FINISHED_STATUSES = ["posted", "completed", "opted_out", "closed", "bounced"];
 
 /**
  * Number of creators whose newest message is from them with no decision yet.

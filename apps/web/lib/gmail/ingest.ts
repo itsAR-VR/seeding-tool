@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { resolveProviderCredential } from "@/lib/integrations/state";
 import { getGmailAccessToken } from "@/lib/gmail/token";
 import { decrypt } from "@/lib/encryption";
+import type { AutoHeaders } from "@/lib/inbox/auto-messages";
 
 type GmailMessageHeader = {
   name: string;
@@ -32,6 +33,17 @@ type GmailMessage = {
 function decodeBase64Url(data: string): string {
   const padded = data.replace(/-/g, "+").replace(/_/g, "/");
   return Buffer.from(padded, "base64").toString("utf-8");
+}
+
+/** The headers that mark automatic mail (auto-replies and bounces). */
+function autoHeaders(headers: GmailMessageHeader[]): AutoHeaders {
+  return {
+    autoSubmitted: getHeader(headers, "Auto-Submitted") || undefined,
+    precedence: getHeader(headers, "Precedence") || undefined,
+    xAutoreply: getHeader(headers, "X-Autoreply") || undefined,
+    xAutoresponse: getHeader(headers, "X-Autorespond") || undefined,
+    failedRecipients: getHeader(headers, "X-Failed-Recipients") || undefined,
+  };
 }
 
 /**
@@ -158,6 +170,7 @@ export async function fetchNewMessages(
       body: text || html.replace(/<[^>]*>/g, " ").trim(),
       bodyHtml: html || undefined,
       internalDate: gmailMsg.internalDate,
+      headers: autoHeaders(headers),
     });
   }
 

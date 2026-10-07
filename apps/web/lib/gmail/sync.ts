@@ -8,6 +8,15 @@ import { aiLabelingEnabled } from "@/lib/inbox/decision";
 import { createSuggestedReply } from "@/lib/inbox/suggest-reply";
 import { isClearOptOut, isStoredOptOut, OPT_OUT_CLASSIFICATION, type ReplyGuess } from "@/lib/inbox/opt-out";
 import { addSuppression } from "@/lib/compliance/suppression";
+import {
+  AUTO_DIRECTION,
+  AUTO_REPLY_CLASSIFICATION,
+  BOUNCE_CLASSIFICATION,
+  HUMAN_REPLY_CLASSIFICATION,
+  bouncedAddresses,
+  isAutoReply,
+  isBounce,
+} from "@/lib/inbox/auto-messages";
 
 /** How far back each sync looks for creator replies. */
 const SYNC_QUERY = "in:inbox newer_than:7d";
@@ -51,6 +60,127 @@ async function handleOptOut(input: {
     brandId: input.brandId,
     campaignCreatorId: input.campaignCreatorId,
   });
+}
+
+type RawMail = Awaited<ReturnType<typeof fetchNewMessages>>[number];
+
+/**
+ * A bounce: the address didn't work. Each creator we emailed there is marked
+ * "Email bounced" (next step: find another email), the bounce is kept on their
+ * conversation, unsent drafts are dropped, and the address goes on the
+ * do-not-send list so nothing else is sent to it.
+ */
+async function handleBounce(brandId: string, raw: RawMail): Promise<boolean> {
+  const addresses = bouncedAddresses(raw);
+  if (addresses.length === 0) return false;
+  const matches = await prisma.campaignCreator.findMany({
+    where: {
+      campaign: { brandId },
+      lifecycleStatus: { notIn: ["ready", "bounced"] },
+      creator: { OR: addresses.map((a) => ({ email: { equals: a, mode: "insensitive" as const } })) },
+    },
+    select: {
+      id: true,
+      creator: { select: { email: true } },
+      conversationThread: { select: { id: true } },
+    },
+  });
+  if (matches.length === 0) return false;
+
+  let stored = false;
+  for (const cc of matches) {
+    if (cc.creator.email) await addSuppression(cc.creator.email, "BOUNCE", brandId);
+    // addSuppression marks them opted out; "bounced" is the truer word and has its own next step.
+    await prisma.campaignCreator.update({ where: { id: cc.id }, data: { lifecycleStatus: "bounced" } });
+    await prisma.aIDraft.updateMany({
+      where: { campaignCreatorId: cc.id, status: { in: ["draft", "approved"] } },
+      data: { status: "discarded" },
+    });
+    if (!stored && cc.conversationThread) {
+      await persistMessage(cc.conversationThread.id, {
+        ...normalizeInboundMessage(raw),
+        direction: AUTO_DIRECTION,
+        classification: BOUNCE_CLASSIFICATION,
+      });
+      stored = true;
+    }
+  }
+  log("info", "gmail.sync.bounce_handled", { brandId, creators: matches.length });
+  return true;
+}
+
+/** Our latest email in a thread before a given time, for "came back within minutes". */
+async function msSinceOurEmail(threadId: string, at: Date): Promise<number | null> {
+  const ours = await prisma.message.findFirst({
+    where: { threadId, direction: "outbound", createdAt: { lte: at } },
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true },
+  });
+  return ours ? at.getTime() - ours.createdAt.getTime() : null;
+}
+
+/**
+ * Auto-replies stored as real replies before detection existed (like a
+ * "thanks for your email, I'll get back to you" sent the same minute) are
+ * moved out of "Needs your answer". Stored mail has no headers and its
+ * createdAt is when the sync saw it, so the window is wider than for new mail.
+ */
+export async function backfillAutoReplies(brandId: string): Promise<number> {
+  const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  const candidates = await prisma.message.findMany({
+    where: {
+      direction: "inbound",
+      createdAt: { gte: since },
+      thread: { brandId },
+      // Spelled out so unlabeled (null) messages are still checked.
+      OR: [{ classification: null }, { classification: { not: HUMAN_REPLY_CLASSIFICATION } }],
+    },
+    select: {
+      id: true,
+      threadId: true,
+      fromAddress: true,
+      subject: true,
+      body: true,
+      createdAt: true,
+      thread: { select: { campaignCreatorId: true, campaignCreator: { select: { replyDecision: true } } } },
+    },
+    take: 200,
+  });
+  let moved = 0;
+  for (const m of candidates) {
+    if (m.thread.campaignCreator.replyDecision) continue; // someone already decided; leave it be
+    const sinceOurs = await msSinceOurEmail(m.threadId, m.createdAt);
+    const auto = isAutoReply(
+      { from: m.fromAddress ?? "", subject: m.subject ?? "", body: m.body },
+      { sinceOurEmailMs: sinceOurs, withinMs: 20 * 60 * 1000 },
+    );
+    if (!auto) continue;
+    await markAutoReply(m.id, m.threadId, m.thread.campaignCreatorId, m.createdAt);
+    moved++;
+  }
+  return moved;
+}
+
+/**
+ * Store a message as an auto-reply and undo what treating it as a reply did:
+ * the suggested answer drafted for it, and "replied" when it was their only message.
+ */
+async function markAutoReply(messageId: string, threadId: string, campaignCreatorId: string, at: Date) {
+  await prisma.message.update({
+    where: { id: messageId },
+    data: { direction: AUTO_DIRECTION, classification: AUTO_REPLY_CLASSIFICATION },
+  });
+  await prisma.aIDraft.updateMany({
+    where: { campaignCreatorId, type: "reply", status: "draft", createdAt: { gte: at } },
+    data: { status: "discarded" },
+  });
+  const realReplies = await prisma.message.count({ where: { threadId, direction: "inbound" } });
+  if (realReplies === 0) {
+    await prisma.campaignCreator.updateMany({
+      where: { id: campaignCreatorId, lifecycleStatus: "replied" },
+      data: { lifecycleStatus: "outreach_sent", lastReplyAt: null },
+    });
+  }
 }
 
 function bareAddress(header: string): string {
@@ -138,15 +268,37 @@ export async function syncRepliesForBrand(
     for (const raw of raws) {
       if (bareAddress(raw.from) === alias.address.toLowerCase()) continue;
 
+      // A bounce arrives in its own thread from the mail server, so match it by address.
+      if (isBounce(raw)) {
+        try {
+          if (await handleBounce(brandId, raw)) processed++;
+        } catch (error) {
+          log("error", "gmail.sync.bounce_failed", {
+            brandId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        continue;
+      }
+
       const thread = await resolveThreadByExternalId(raw.threadId);
       if (!thread || thread.brandId !== brandId) continue;
+
+      const arrivedAt = raw.internalDate ? new Date(parseInt(raw.internalDate)) : new Date();
+      const auto = isAutoReply(raw, { sinceOurEmailMs: await msSinceOurEmail(thread.id, arrivedAt) });
 
       // INVARIANT: Message dedupe on externalId prevents replay duplicates.
       const { message, created } = await persistMessage(thread.id, {
         ...normalizeInboundMessage(raw),
-        direction: "inbound",
+        direction: auto ? AUTO_DIRECTION : "inbound",
+        ...(auto ? { classification: AUTO_REPLY_CLASSIFICATION } : {}),
       });
       if (!created) continue;
+      // Kept on the conversation, but it isn't a reply: no "replied", no answer needed.
+      if (auto) {
+        processed++;
+        continue;
+      }
 
       // AI guess only (shown next to the operator's yes/no buttons); it never
       // acts on its own. The one exception is a clear opt-out, handled below.
@@ -245,6 +397,16 @@ export async function syncRepliesForBrand(
         });
       }
     }
+  }
+
+  // Auto-replies saved as replies before detection existed.
+  try {
+    await backfillAutoReplies(brandId);
+  } catch (error) {
+    log("error", "gmail.sync.auto_reply_backfill_failed", {
+      brandId,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   // Older "take me off your list" replies get the same automatic handling.

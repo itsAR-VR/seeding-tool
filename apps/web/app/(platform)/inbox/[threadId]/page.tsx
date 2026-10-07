@@ -7,9 +7,11 @@ import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
+import { StatusPill } from "@/components/status-pill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { guessFromIntent, type AiReplyGuess, type ReplyDecision } from "@/lib/inbox/decision";
 import { OPT_OUT_CLASSIFICATION } from "@/lib/inbox/opt-out";
+import { AUTO_DIRECTION, BOUNCE_CLASSIFICATION } from "@/lib/inbox/auto-messages";
 import { formatDateTime } from "@/lib/format/date";
 import { adjacentReply, type QueueDirection } from "../next-reply";
 import { INBOX_CHANGED_EVENT, decisionStatusLabel, offerUndo, postDecision } from "../decision-actions";
@@ -184,6 +186,24 @@ function ThreadDetail({ threadId }: { threadId: string }) {
     const res = await fetch(`/api/inbox/${threadId}`);
     if (res.ok) setThread((await res.json()) as Thread);
   }, [threadId]);
+
+  // "It's a real reply": undo the auto-reply guess so it needs her answer again.
+  const [markingReal, setMarkingReal] = useState(false);
+  async function markRealReply(messageId: string) {
+    setMarkingReal(true);
+    const res = await fetch(`/api/inbox/${threadId}/real-reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messageId }),
+    }).catch(() => null);
+    setMarkingReal(false);
+    if (!res?.ok) {
+      setDoneLine("Couldn't change it. Try again.");
+      return;
+    }
+    await reloadThread();
+    void refreshQueue();
+  }
 
   const saveDecision = (decision: ReplyDecision) => postDecision(threadId, decision);
 
@@ -430,7 +450,16 @@ function ThreadDetail({ threadId }: { threadId: string }) {
       </div>
 
       {/* Their latest message, shown first so the decision below reads in context */}
-      {featured && (
+      {featured && featured.direction === AUTO_DIRECTION && (
+        <AutoMessageCard
+          message={featured}
+          creatorName={creatorName}
+          creatorId={creator.id}
+          markingReal={markingReal}
+          onRealReply={() => void markRealReply(featured.id)}
+        />
+      )}
+      {featured && featured.direction !== AUTO_DIRECTION && (
         <figure className="rounded-xl border bg-card p-5 shadow-sm">
           <figcaption className="text-sm text-muted-foreground">
             <span className="font-medium text-foreground">
@@ -681,11 +710,19 @@ function ThreadDetail({ threadId }: { threadId: string }) {
             {earlier.map((msg) => (
               <li
                 key={msg.id}
-                className={`rounded-lg p-3 ${msg.direction === "inbound" ? "bg-muted/50" : "ml-8 bg-blue-50"}`}
+                className={`rounded-lg p-3 ${
+                  msg.direction === "inbound" ? "bg-muted/50" : msg.direction === AUTO_DIRECTION ? "border border-dashed" : "ml-8 bg-blue-50"
+                }`}
               >
                 <p className="mb-1 text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    {msg.direction === "inbound" ? `${creatorName} wrote` : "You wrote"}
+                    {msg.direction === "inbound"
+                      ? `${creatorName} wrote`
+                      : msg.direction === AUTO_DIRECTION
+                        ? msg.classification === BOUNCE_CLASSIFICATION
+                          ? "Bounced: the mail server wrote"
+                          : `Automatic reply from ${creatorName}`
+                        : "You wrote"}
                   </span>
                   {msg.fromAddress && msg.direction === "inbound" && ` from ${msg.fromAddress}`}
                   {", "}
@@ -871,5 +908,69 @@ function DecisionChoice({
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * A message no person wrote: an auto-reply ("thanks for your email, I'll get
+ * back to you") or a bounce. Says plainly what it means and what to do, so it
+ * never reads as a reply that needs an answer.
+ */
+function AutoMessageCard({
+  message,
+  creatorName,
+  creatorId,
+  markingReal,
+  onRealReply,
+}: {
+  message: Message;
+  creatorName: string;
+  creatorId: string;
+  markingReal: boolean;
+  onRealReply: () => void;
+}) {
+  const bounce = message.classification === BOUNCE_CLASSIFICATION;
+  return (
+    <figure
+      className={`space-y-3 rounded-xl border p-5 ${bounce ? "border-red-200 bg-red-50" : "border-dashed bg-card"}`}
+    >
+      <figcaption className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <StatusPill tone={bounce ? "problem" : "neutral"}>{bounce ? "Email bounced" : "Automatic reply"}</StatusPill>
+        <time dateTime={message.createdAt}>{formatDateTime(message.createdAt)}</time>
+      </figcaption>
+      {bounce ? (
+        <>
+          <p className="text-red-900">
+            <span className="font-medium">Your email didn&apos;t reach {creatorName}.</span> The address doesn&apos;t
+            work, so it&apos;s on the do-not-send list and they won&apos;t be emailed there again.
+          </p>
+          <Link href={`/creators/${creatorId}`} className={buttonVariants({ size: "sm" })}>
+            Find another email
+          </Link>
+          <details className="text-sm">
+            <summary className="w-fit cursor-pointer text-muted-foreground hover:text-foreground">
+              Show the mail server&apos;s message
+            </summary>
+            <p className="mt-2 whitespace-pre-wrap text-muted-foreground">{message.body}</p>
+          </details>
+        </>
+      ) : (
+        <>
+          <p>
+            <span className="font-medium">{creatorName}&apos;s email sent this automatically</span>, so it doesn&apos;t
+            count as a reply. You&apos;re still waiting on them.
+          </p>
+          <blockquote className="whitespace-pre-wrap rounded-lg bg-muted/50 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+            {message.body}
+          </blockquote>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button size="sm" variant="outline" disabled={markingReal} onClick={onRealReply}>
+              {markingReal ? "Moving..." : "It's a real reply"}
+            </Button>
+            <span className="text-sm text-muted-foreground">Moves it to Needs your answer.</span>
+          </div>
+        </>
+      )}
+    </figure>
   );
 }

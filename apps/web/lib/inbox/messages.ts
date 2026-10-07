@@ -56,7 +56,7 @@ export function normalizeInboundMessage(raw: {
 export async function persistMessage(
   threadId: string,
   payload: InboundMessagePayload & {
-    direction: "inbound" | "outbound";
+    direction: "inbound" | "outbound" | "auto";
     classification?: string;
     confidence?: number;
   }

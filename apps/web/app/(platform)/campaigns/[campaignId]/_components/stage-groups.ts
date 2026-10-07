@@ -26,6 +26,7 @@ export const STAGE_GROUPS: readonly StageGroup[] = [
       "needs_review",
       "maybe_later",
       "ready",
+      "bounced",
       "needs_answer",
       "address_to_check",
       "address_in",

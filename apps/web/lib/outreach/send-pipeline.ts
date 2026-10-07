@@ -25,6 +25,7 @@ import { DailyLimitExceededError } from "@/lib/outreach/errors";
 import { isInEarlyWarmup } from "@/lib/outreach/warmup";
 import { escapeHtml } from "@/lib/outreach/html-escape";
 import { renderPersonalTemplate } from "@/lib/outreach/templates/personal";
+import { BOUNCE_CLASSIFICATION } from "@/lib/inbox/auto-messages";
 
 export type DraftToSend = {
   campaignCreatorId: string;
@@ -100,6 +101,7 @@ export async function sendOutreachBatch(
       select: {
         id: true,
         creatorId: true,
+        lifecycleStatus: true,
         campaign: {
           select: {
             senderAlias: {
@@ -158,7 +160,26 @@ export async function sendOutreachBatch(
     //   have accepted the send before local persistence failed (thread is
     //   marked "sending" just before the Gmail call). NOT safe to resend.
     // No thread → new send.
+    // A bounced email never arrived. Once their address is changed (lifecycle back
+    // to "ready"), the same conversation is reused for one new send, but only
+    // while the bounce is still its latest message and no send is mid-flight.
+    let reuseThreadId: string | null = null;
     if (campaignCreator.conversationThread) {
+      const existingThread = campaignCreator.conversationThread;
+      const latest = await prisma.message.findFirst({
+        where: { threadId: existingThread.id },
+        orderBy: { createdAt: "desc" },
+        select: { classification: true },
+      });
+      if (
+        campaignCreator.lifecycleStatus === "ready" &&
+        latest?.classification === BOUNCE_CLASSIFICATION &&
+        existingThread.status !== "sending"
+      ) {
+        reuseThreadId = existingThread.id;
+      }
+    }
+    if (campaignCreator.conversationThread && !reuseThreadId) {
       const existingThread = campaignCreator.conversationThread;
       const hasOutboundMessage = await prisma.message.findFirst({
         where: { threadId: existingThread.id, direction: "outbound" },
@@ -240,14 +261,20 @@ export async function sendOutreachBatch(
         // Status lifecycle: "preparing" → "sending" (just before the Gmail
         // call) → "open" (after the outbound message is persisted). The retry
         // path above only deletes empty threads still in "preparing".
-        const thread = await prisma.conversationThread.create({
-          data: {
-            brandId,
-            campaignCreatorId: draft.campaignCreatorId,
-            channel: "email",
-            status: "preparing",
-          },
-        });
+        const thread = reuseThreadId
+          ? await prisma.conversationThread.update({
+              where: { id: reuseThreadId },
+              // The new address starts a new Gmail thread; replies match on the new id.
+              data: { status: "preparing", externalThreadId: null },
+            })
+          : await prisma.conversationThread.create({
+              data: {
+                brandId,
+                campaignCreatorId: draft.campaignCreatorId,
+                channel: "email",
+                status: "preparing",
+              },
+            });
 
         // Resolve HTML body: use provided, or wrap plain text in base template
         let resolvedBodyHtml = draft.bodyHtml;

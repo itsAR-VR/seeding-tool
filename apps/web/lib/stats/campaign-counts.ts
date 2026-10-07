@@ -51,6 +51,7 @@ export const LIFECYCLE_STATUSES = [
   "completed",
   "opted_out",
   "stalled",
+  "bounced",
 ] as const;
 
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
@@ -186,6 +187,7 @@ export const CREATOR_STAGES = [
   "maybe_later",
   "ready",
   "emailed",
+  "bounced",
   "replied",
   "address_to_check",
   "address_in",
@@ -225,6 +227,8 @@ export function creatorStage(c: CountableCreator): CreatorStage {
   if (c.reviewStatus === "declined") return "not_a_fit";
   if (c.reviewStatus === "deferred") return "maybe_later";
 
+  // Before "said no": a bounce also puts the address on the do-not-send list, but they never got the email.
+  if (c.lifecycleStatus === "bounced") return "bounced";
   if (saidNo(c)) return "said_no";
   if (c.orderStatus === "cancelled") return "order_cancelled";
 
@@ -383,6 +387,7 @@ export const CURRENT_STAGES: readonly CurrentStageRow[] = [
 
 /** Stages off the main path, shown as a short note under the breakdown. */
 export const OFF_PATH_STAGES = [
+  "bounced",
   "order_cancelled",
   "said_no",
   "not_now",

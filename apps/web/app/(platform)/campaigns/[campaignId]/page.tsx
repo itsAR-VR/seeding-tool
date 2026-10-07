@@ -47,6 +47,7 @@ function addressLinkNote(stage: DisplayStage): string | null {
     case "needs_review":
     case "maybe_later":
     case "ready":
+    case "bounced":
     case "emailed":
     case "needs_answer":
     case "replied":
@@ -411,6 +412,7 @@ export default async function CampaignDetailPage({ params, searchParams }: PageP
                       campaignCreatorId: cc.id,
                       threadId: cc.conversationThread?.id ?? null,
                       hasWrittenEmail: cc.aiDrafts.length > 0,
+                      creatorId: cc.creatorId,
                     });
                     const addressNote = addressLinkNote(cc.stage);
                     return (

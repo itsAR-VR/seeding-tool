@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -9,6 +9,7 @@ import { StatusPill } from "@/components/status-pill";
 import { formatDate } from "@/lib/format/date";
 import { STAGE_DISPLAY, displayStage, type StageDisplay } from "@/lib/stats/stage-display";
 import { sourceLabel } from "../components/creator-filters";
+import { ChangeEmail } from "./change-email";
 
 type ProvenancePayload = {
   creator: {
@@ -89,23 +90,24 @@ export default function CreatorProvenancePage() {
   const [summary, setSummary] = useState<CreatorSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [summaryRes, res] = await Promise.all([
-          fetch(`/api/creators/${params.creatorId}/summary`),
-          fetch(`/api/creators/${params.creatorId}/provenance`),
-        ]);
-        if (summaryRes.ok) setSummary((await summaryRes.json()) as CreatorSummary);
-        if (res.ok) setPayload((await res.json()) as ProvenancePayload);
-      } catch {
-        // Falls through to the "couldn't load" message below.
-      } finally {
-        setLoading(false);
-      }
+  const [saved, setSaved] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    try {
+      const [summaryRes, res] = await Promise.all([
+        fetch(`/api/creators/${params.creatorId}/summary`),
+        fetch(`/api/creators/${params.creatorId}/provenance`),
+      ]);
+      if (summaryRes.ok) setSummary((await summaryRes.json()) as CreatorSummary);
+      if (res.ok) setPayload((await res.json()) as ProvenancePayload);
+    } catch {
+      // Falls through to the "couldn't load" message below.
+    } finally {
+      setLoading(false);
     }
-    void load();
   }, [params.creatorId]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   if (loading) {
     return (
@@ -134,6 +136,7 @@ export default function CreatorProvenancePage() {
     );
   }
 
+  const bounced = summary.campaignCreators.some((cc) => cc.lifecycleStatus === "bounced");
   const checks = payload?.riskFlags ?? [];
   const touches = payload?.discoveryTouches ?? [];
   const otherProfiles = payload?.identity?.profiles ?? [];
@@ -154,9 +157,24 @@ export default function CreatorProvenancePage() {
             .filter(Boolean)
             .join(" · ")}
         </p>
-        {summary.optedOut && (
+        {summary.optedOut && !bounced && (
           <p role="status" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
             On the do-not-send list. We won&apos;t email this creator.
+          </p>
+        )}
+        <ChangeEmail
+          key={summary.email ?? "none"}
+          creatorId={summary.id}
+          currentEmail={summary.email}
+          bounced={bounced}
+          onSaved={(message) => {
+            setSaved(message);
+            void load();
+          }}
+        />
+        {saved && (
+          <p role="status" className="text-sm text-green-800">
+            {saved}
           </p>
         )}
       </div>

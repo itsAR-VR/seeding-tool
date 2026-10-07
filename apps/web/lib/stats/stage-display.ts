@@ -25,6 +25,7 @@ export const STAGE_DISPLAY: Record<DisplayStage, StageDisplay> = {
   maybe_later: { label: "Maybe later", tone: "neutral" },
   ready: { label: "Not emailed yet", tone: "neutral" },
   emailed: { label: "Waiting for reply", tone: "neutral" },
+  bounced: { label: "Email bounced", tone: "problem" },
   needs_answer: { label: "Needs your answer", tone: "waiting" },
   replied: { label: "You answered", tone: "neutral" },
   said_yes: { label: "Said yes", tone: "good" },
@@ -47,6 +48,7 @@ export const STAGE_HELP: Record<DisplayStage, string> = {
   maybe_later: "Saved for another time.",
   ready: "Approved and ready for your first email.",
   emailed: "You emailed them and they haven't replied yet.",
+  bounced: "Your email didn't reach them: the address doesn't work. Find another email for them.",
   needs_answer: "They replied and are waiting on you.",
   replied: "They replied and you've answered. Waiting on their next message.",
   said_yes: "They want the gift. Waiting for their address.",
@@ -70,6 +72,7 @@ export const DISPLAY_STAGE_ORDER: readonly { stage: DisplayStage; always: boolea
   { stage: "needs_review", always: false },
   { stage: "ready", always: true },
   { stage: "emailed", always: true },
+  { stage: "bounced", always: false },
   { stage: "needs_answer", always: true },
   { stage: "replied", always: false },
   { stage: "said_yes", always: false },
@@ -123,7 +126,13 @@ export type StageNextStep = { label: string; href: string | null } | null;
  */
 export function stageNextStep(
   stage: DisplayStage,
-  ctx: { campaignId: string; campaignCreatorId: string; threadId: string | null; hasWrittenEmail?: boolean },
+  ctx: {
+    campaignId: string;
+    campaignCreatorId: string;
+    threadId: string | null;
+    hasWrittenEmail?: boolean;
+    creatorId?: string;
+  },
 ): StageNextStep {
   const base = `/campaigns/${ctx.campaignId}`;
   const conversation = ctx.threadId ? `/inbox/${ctx.threadId}` : "/inbox";
@@ -138,6 +147,8 @@ export function stageNextStep(
     case "emailed":
     case "replied":
       return { label: "Waiting on them", href: null };
+    case "bounced":
+      return { label: "Find another email", href: ctx.creatorId ? `/creators/${ctx.creatorId}` : conversation };
     case "needs_answer":
       return { label: "Answer them", href: conversation };
     case "said_yes":

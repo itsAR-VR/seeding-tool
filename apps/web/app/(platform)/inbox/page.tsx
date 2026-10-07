@@ -175,7 +175,13 @@ export default async function InboxPage({
       name: cc.creator.name ?? cc.creator.profiles[0]?.handle ?? "Unknown creator",
       campaignId: cc.campaign.id,
       campaignName: cc.campaign.name,
-      lastMessage: lastMessage ? { direction: lastMessage.direction, body: lastMessage.body.slice(0, 200) } : null,
+      lastMessage: lastMessage
+        ? {
+            direction: lastMessage.direction,
+            body: lastMessage.body.slice(0, 200),
+            bounce: lastMessage.classification === "bounce",
+          }
+        : null,
       updatedAt: new Date(thread.updatedAt).toISOString(),
       decision,
       needsCall: needsYourCall(decision, lastMessage?.direction),

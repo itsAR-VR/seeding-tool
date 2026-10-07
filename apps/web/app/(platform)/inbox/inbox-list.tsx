@@ -14,7 +14,7 @@ export type InboxRow = {
   name: string;
   campaignId: string;
   campaignName: string;
-  lastMessage: { direction: string; body: string } | null;
+  lastMessage: { direction: string; body: string; bounce?: boolean } | null;
   updatedAt: string;
   decision: string | null;
   needsCall: boolean;
@@ -162,11 +162,18 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
                   {row.needsCall && showNeedsPill && <Pill stage="needs_answer" />}
                   {row.hasDraft && <StatusPill tone="neutral">Reply drafted</StatusPill>}
                   {row.addressToConfirm && <Pill stage="address_to_check" />}
+                  {row.lastMessage?.bounce && <Pill stage="bounced" />}
                 </div>
                 {row.lastMessage && (
                   <p className="mt-1 truncate text-muted-foreground">
                     <span className="font-medium text-foreground/80">
-                      {row.lastMessage.direction === "inbound" ? "They wrote: " : "You wrote: "}
+                      {row.lastMessage.direction === "inbound"
+                        ? "They wrote: "
+                        : row.lastMessage.direction === "auto"
+                          ? row.lastMessage.bounce
+                            ? "Bounced: "
+                            : "Automatic reply: "
+                          : "You wrote: "}
                     </span>
                     {row.lastMessage.body.slice(0, 120)}
                   </p>
@@ -189,7 +196,11 @@ export function InboxList({ rows, selectable, showNeedsPill }: { rows: InboxRow[
 }
 
 /** A status pill in the shared words and tone (lib/stats/stage-display). */
-function Pill({ stage }: { stage: "said_yes" | "said_no" | "not_now" | "needs_answer" | "address_to_check" }) {
+function Pill({
+  stage,
+}: {
+  stage: "said_yes" | "said_no" | "not_now" | "needs_answer" | "address_to_check" | "bounced";
+}) {
   const { label, tone } = STAGE_DISPLAY[stage];
   return <StatusPill tone={tone}>{label}</StatusPill>;
 }
